@@ -183,7 +183,7 @@ export default function SavedStories() {
                                 </Badge>
                               ) : (
                                 <Badge variant="outline" className="text-gray-500">
-                                  Expires in {formatDistanceToNow(new Date(savedStory.expiresAt || ''))}
+                                  Temporary
                                 </Badge>
                               )}
                             </div>

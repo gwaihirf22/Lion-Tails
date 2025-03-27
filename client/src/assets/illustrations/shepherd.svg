@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800px" height="600px" viewBox="0 0 800 600" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <!-- Sky background -->
+  <rect x="0" y="0" width="800" height="350" fill="#a6caed" />
+  
+  <!-- Rolling hills -->
+  <path d="M0,300 Q200,200 400,300 Q600,400 800,300 L800,600 L0,600 Z" fill="#7ab372" />
+  <path d="M0,350 Q100,300 200,350 Q300,400 400,350 Q500,300 600,350 Q700,400 800,350 L800,600 L0,600 Z" fill="#5a9258" />
+  
+  <!-- Sun -->
+  <circle cx="150" cy="120" r="60" fill="#f9d71c" />
+  <circle cx="150" cy="120" r="50" fill="#f9f0a0" />
+  
+  <!-- Clouds -->
+  <path d="M500,100 Q525,80 550,100 T600,100 T650,100 T700,100 Q725,80 750,100 Q775,120 750,140 Q775,160 750,180 Q725,200 700,180 T650,180 T600,180 T550,180 Q525,200 500,180 Q475,160 500,140 Q475,120 500,100 Z" fill="white" />
+  <path d="M300,150 Q325,130 350,150 T400,150 T450,150 Q475,130 500,150 Q525,170 500,190 Q525,210 500,230 Q475,250 450,230 T400,230 T350,230 Q325,250 300,230 Q275,210 300,190 Q275,170 300,150 Z" fill="white" />
+  
+  <!-- Shepherd -->
+  <ellipse cx="400" cy="400" rx="25" ry="80" fill="#d4aa7d" transform="rotate(10 400 400)" /> <!-- Staff -->
+  <circle cx="350" cy="320" r="20" fill="#e8c39e" /> <!-- Head -->
+  <path d="M350,340 L335,390 L365,390 Z" fill="#614b35" /> <!-- Robe upper -->
+  <rect x="335" y="390" width="30" height="50" fill="#614b35" /> <!-- Robe lower -->
+  <ellipse cx="320" cy="430" rx="10" ry="5" fill="#8b572a" /> <!-- Left foot -->
+  <ellipse cx="380" cy="430" rx="10" ry="5" fill="#8b572a" /> <!-- Right foot -->
+  
+  <!-- Sheep -->
+  <!-- Sheep 1 -->
+  <ellipse cx="250" cy="450" rx="25" ry="15" fill="white" />
+  <circle cx="225" cy="435" r="15" fill="white" />
+  <ellipse cx="240" cy="465" rx="8" ry="15" fill="white" transform="rotate(-30 240 465)" /> <!-- Leg 1 -->
+  <ellipse cx="260" cy="465" rx="8" ry="15" fill="white" transform="rotate(30 260 465)" /> <!-- Leg 2 -->
+  
+  <!-- Sheep 2 -->
+  <ellipse cx="450" cy="480" rx="25" ry="15" fill="white" />
+  <circle cx="425" cy="465" r="15" fill="white" />
+  <ellipse cx="440" cy="495" rx="8" ry="15" fill="white" transform="rotate(-30 440 495)" /> <!-- Leg 1 -->
+  <ellipse cx="460" cy="495" rx="8" ry="15" fill="white" transform="rotate(30 460 495)" /> <!-- Leg 2 -->
+  
+  <!-- Sheep 3 -->
+  <ellipse cx="550" cy="450" rx="25" ry="15" fill="white" />
+  <circle cx="525" cy="435" r="15" fill="white" />
+  <ellipse cx="540" cy="465" rx="8" ry="15" fill="white" transform="rotate(-30 540 465)" /> <!-- Leg 1 -->
+  <ellipse cx="560" cy="465" rx="8" ry="15" fill="white" transform="rotate(30 560 465)" /> <!-- Leg 2 -->
+  
+  <!-- Sheep 4 (small lamb) -->
+  <ellipse cx="350" cy="470" rx="15" ry="10" fill="white" />
+  <circle cx="335" cy="460" r="10" fill="white" />
+  <ellipse cx="345" cy="480" rx="5" ry="10" fill="white" transform="rotate(-30 345 480)" /> <!-- Leg 1 -->
+  <ellipse cx="355" cy="480" rx="5" ry="10" fill="white" transform="rotate(30 355 480)" /> <!-- Leg 2 -->
+  
+  <!-- Small flowers -->
+  <circle cx="200" cy="500" r="5" fill="#f0a93c" />
+  <circle cx="200" cy="500" r="2" fill="#f04c41" />
+  <circle cx="600" cy="520" r="5" fill="#f0a93c" />
+  <circle cx="600" cy="520" r="2" fill="#f04c41" />
+  <circle cx="650" cy="480" r="5" fill="#f0a93c" />
+  <circle cx="650" cy="480" r="2" fill="#f04c41" />
+  <circle cx="300" cy="520" r="5" fill="#f0a93c" />
+  <circle cx="300" cy="520" r="2" fill="#f04c41" />
+  
+  <!-- Trees on the hills -->
+  <path d="M700,320 L700,370" stroke="#5d4037" stroke-width="10" fill="none" />
+  <path d="M670,320 Q700,280 730,320" fill="#2e7d32" />
+  <path d="M670,300 Q700,260 730,300" fill="#2e7d32" />
+  <path d="M670,280 Q700,240 730,280" fill="#2e7d32" />
+  
+  <path d="M150,280 L150,330" stroke="#5d4037" stroke-width="10" fill="none" />
+  <path d="M120,280 Q150,240 180,280" fill="#2e7d32" />
+  <path d="M120,260 Q150,220 180,260" fill="#2e7d32" />
+  <path d="M120,240 Q150,200 180,240" fill="#2e7d32" />
+</svg>

@@ -6,10 +6,57 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
+// Import biblical illustrations
+import noahArkImage from "@/assets/illustrations/noah-ark.svg";
+import shepherdImage from "@/assets/illustrations/shepherd.svg";
+import danielLionsImage from "@/assets/illustrations/daniel-lions.svg";
+import gardenEdenImage from "@/assets/illustrations/garden-eden.svg";
+
 interface StoryDisplayProps {
   story: StoryResponse;
   storyId?: string;
 }
+
+// Function to select the right biblical image based on story content
+const getBiblicalImage = (title: string, content: string): string => {
+  const titleAndContent = (title + " " + content).toLowerCase();
+  
+  if (titleAndContent.includes("noah") || 
+      titleAndContent.includes("ark") || 
+      titleAndContent.includes("flood") || 
+      titleAndContent.includes("rainbow")) {
+    return noahArkImage;
+  }
+  
+  if (titleAndContent.includes("shepherd") || 
+      titleAndContent.includes("sheep") || 
+      titleAndContent.includes("lamb") || 
+      titleAndContent.includes("david") || 
+      titleAndContent.includes("flock")) {
+    return shepherdImage;
+  }
+  
+  if (titleAndContent.includes("daniel") || 
+      titleAndContent.includes("lion") || 
+      titleAndContent.includes("den") || 
+      titleAndContent.includes("king darius")) {
+    return danielLionsImage;
+  }
+  
+  if (titleAndContent.includes("garden") || 
+      titleAndContent.includes("eden") || 
+      titleAndContent.includes("adam") || 
+      titleAndContent.includes("eve") || 
+      titleAndContent.includes("serpent") || 
+      titleAndContent.includes("snake") || 
+      titleAndContent.includes("apple") || 
+      titleAndContent.includes("fruit")) {
+    return gardenEdenImage;
+  }
+  
+  // Default to shepherd image if no specific theme is detected
+  return shepherdImage;
+};
 
 export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
   const [isPrinting, setIsPrinting] = useState(false);
@@ -241,15 +288,13 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
         >
           <h4 className="text-xl font-bold mb-5 text-center">{story.title}</h4>
           
-          {story.imagePrompt && (
-            <div className="flex justify-center mb-8">
+          <div className="flex justify-center mb-8">
               <img 
-                src={`https://images.unsplash.com/photo-1620336655052-b57986f5a26a?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80`} 
-                alt="Story illustration" 
+                src={getBiblicalImage(story.title, story.content)}
+                alt="Biblical story illustration" 
                 className="rounded-lg shadow-md max-w-full h-auto" 
               />
             </div>
-          )}
           
           {paragraphs.map((paragraph, index) => (
             <p key={index} className="mb-3 leading-relaxed">{paragraph}</p>

@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800px" height="600px" viewBox="0 0 800 600" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <!-- Sky background -->
+  <rect x="0" y="0" width="800" height="600" fill="#cae8fd" />
+  
+  <!-- Distant mountains -->
+  <path d="M0,150 L100,120 L200,200 L300,150 L400,170 L500,120 L600,180 L700,140 L800,190 L800,600 L0,600 Z" fill="#d0ebf5" />
+  
+  <!-- Middle ground -->
+  <path d="M0,220 L200,250 L400,230 L600,240 L800,220 L800,600 L0,600 Z" fill="#b5e1f5" />
+  
+  <!-- Garden ground -->
+  <path d="M0,280 Q200,250 400,280 Q600,310 800,280 L800,600 L0,600 Z" fill="#a6d8a8" />
+  
+  <!-- River -->
+  <path d="M350,280 Q400,290 450,280 Q455,350 460,380 Q480,450 440,500 Q400,550 420,600" fill="#7bbce7" />
+  <path d="M380,450 Q400,460 420,450" stroke="#9fceec" stroke-width="3" fill="none" />
+  <path d="M370,490 Q390,500 410,490" stroke="#9fceec" stroke-width="3" fill="none" />
+  <path d="M370,530 Q390,540 410,530" stroke="#9fceec" stroke-width="3" fill="none" />
+  
+  <!-- Large central tree (Tree of Knowledge) -->
+  <path d="M400,400 L400,500" stroke="#8b4513" stroke-width="25" fill="none" />
+  <path d="M400,420 L370,370" stroke="#8b4513" stroke-width="10" fill="none" />
+  <path d="M400,420 L430,370" stroke="#8b4513" stroke-width="10" fill="none" />
+  <path d="M400,450 L360,420" stroke="#8b4513" stroke-width="8" fill="none" />
+  <path d="M400,450 L440,420" stroke="#8b4513" stroke-width="8" fill="none" />
+  
+  <circle cx="350" cy="350" r="50" fill="#2e7d32" />
+  <circle cx="450" cy="350" r="50" fill="#2e7d32" />
+  <circle cx="390" cy="310" r="50" fill="#2e7d32" />
+  <circle cx="410" cy="310" r="50" fill="#2e7d32" />
+  <circle cx="400" cy="270" r="60" fill="#2e7d32" />
+  
+  <!-- Red apple in the tree -->
+  <circle cx="420" cy="330" r="15" fill="#d32f2f" />
+  <path d="M420,315 L425,305" stroke="#4b9e47" stroke-width="2" fill="none" />
+  
+  <!-- Various small trees and plants -->
+  <!-- Tree 1 -->
+  <path d="M150,480 L150,520" stroke="#5d4037" stroke-width="12" fill="none" />
+  <circle cx="150" cy="450" r="40" fill="#43a047" />
+  
+  <!-- Tree 2 -->
+  <path d="M250,500 L250,540" stroke="#5d4037" stroke-width="10" fill="none" />
+  <circle cx="250" cy="470" r="35" fill="#388e3c" />
+  
+  <!-- Tree 3 -->
+  <path d="M650,490 L650,530" stroke="#5d4037" stroke-width="15" fill="none" />
+  <circle cx="650" cy="450" r="45" fill="#2e7d32" />
+  
+  <!-- Bush 1 -->
+  <circle cx="550" cy="510" r="30" fill="#4caf50" />
+  
+  <!-- Bush 2 -->
+  <circle cx="320" cy="520" r="25" fill="#4caf50" />
+  
+  <!-- Flowers -->
+  <circle cx="200" cy="550" r="5" fill="#f3e5f5" />
+  <circle cx="200" cy="550" r="2" fill="#ffc107" />
+  
+  <circle cx="220" cy="560" r="5" fill="#e1bee7" />
+  <circle cx="220" cy="560" r="2" fill="#ffc107" />
+  
+  <circle cx="500" cy="570" r="5" fill="#f8bbd0" />
+  <circle cx="500" cy="570" r="2" fill="#ffc107" />
+  
+  <circle cx="520" cy="565" r="5" fill="#f8bbd0" />
+  <circle cx="520" cy="565" r="2" fill="#ffc107" />
+  
+  <circle cx="540" cy="575" r="5" fill="#f8bbd0" />
+  <circle cx="540" cy="575" r="2" fill="#ffc107" />
+  
+  <!-- Animals -->
+  <!-- Butterfly -->
+  <path d="M610,350 Q630,330 610,310 Q590,330 610,350 Z" fill="#ce93d8" />
+  <path d="M610,350 Q590,330 610,310 Q630,330 610,350 Z" fill="#ba68c8" />
+  <path d="M610,330 L615,335" stroke="#000000" stroke-width="1" fill="none" />
+  <path d="M610,330 L605,335" stroke="#000000" stroke-width="1" fill="none" />
+  
+  <!-- Snake around the tree -->
+  <path d="M430,460 Q450,450 470,460 Q480,480 470,500 Q450,510 440,490 Q430,470 430,460 Z" fill="#689f38" />
+  <ellipse cx="475" cy="465" rx="3" ry="2" fill="#000000" /> <!-- Eye -->
+  <path d="M480,470 Q485,472 490,470" stroke="#000000" stroke-width="1" fill="none" /> <!-- Mouth -->
+  
+  <!-- Adam and Eve (simple silhouettes) -->
+  <!-- Adam -->
+  <circle cx="300" cy="470" r="15" fill="#795548" /> <!-- Head -->
+  <path d="M300,485 L300,530" stroke="#795548" stroke-width="10" fill="none" /> <!-- Body -->
+  <path d="M300,505 L280,515" stroke="#795548" stroke-width="5" fill="none" /> <!-- Left arm -->
+  <path d="M300,505 L320,515" stroke="#795548" stroke-width="5" fill="none" /> <!-- Right arm -->
+  <path d="M300,530 L290,560" stroke="#795548" stroke-width="5" fill="none" /> <!-- Left leg -->
+  <path d="M300,530 L310,560" stroke="#795548" stroke-width="5" fill="none" /> <!-- Right leg -->
+  
+  <!-- Eve -->
+  <circle cx="500" cy="470" r="15" fill="#8d6e63" /> <!-- Head -->
+  <path d="M500,485 L500,530" stroke="#8d6e63" stroke-width="8" fill="none" /> <!-- Body -->
+  <path d="M500,505 L480,515" stroke="#8d6e63" stroke-width="5" fill="none" /> <!-- Left arm -->
+  <path d="M500,505 L520,515" stroke="#8d6e63" stroke-width="5" fill="none" /> <!-- Right arm -->
+  <path d="M500,530 L490,560" stroke="#8d6e63" stroke-width="5" fill="none" /> <!-- Left leg -->
+  <path d="M500,530 L510,560" stroke="#8d6e63" stroke-width="5" fill="none" /> <!-- Right leg -->
+  
+  <!-- Sun rays -->
+  <circle cx="700" cy="100" r="40" fill="#ffeb3b" />
+  <path d="M700,40 L700,10" stroke="#ffeb3b" stroke-width="3" fill="none" />
+  <path d="M700,160 L700,190" stroke="#ffeb3b" stroke-width="3" fill="none" />
+  <path d="M640,100 L610,100" stroke="#ffeb3b" stroke-width="3" fill="none" />
+  <path d="M760,100 L790,100" stroke="#ffeb3b" stroke-width="3" fill="none" />
+  <path d="M657,57 L636,36" stroke="#ffeb3b" stroke-width="3" fill="none" />
+  <path d="M743,143 L764,164" stroke="#ffeb3b" stroke-width="3" fill="none" />
+  <path d="M657,143 L636,164" stroke="#ffeb3b" stroke-width="3" fill="none" />
+  <path d="M743,57 L764,36" stroke="#ffeb3b" stroke-width="3" fill="none" />
+</svg>

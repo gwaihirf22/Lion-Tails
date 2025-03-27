@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800px" height="600px" viewBox="0 0 800 600" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <!-- Sky background -->
+  <rect x="0" y="0" width="800" height="400" fill="#a6d4f2" />
+  
+  <!-- Water -->
+  <rect x="0" y="400" width="800" height="200" fill="#2d78b9" />
+  <path d="M0,400 Q100,380 200,400 Q300,420 400,400 Q500,380 600,400 Q700,420 800,400 L800,600 L0,600 Z" fill="#2d78b9" />
+  
+  <!-- Sun -->
+  <circle cx="700" cy="100" r="60" fill="#f9d71c" />
+  <circle cx="700" cy="100" r="50" fill="#f9f0a0" />
+  
+  <!-- Rainbow -->
+  <path d="M100,200 Q400,50 700,200" stroke="#e84c3d" stroke-width="15" fill="none" />
+  <path d="M125,225 Q400,90 675,225" stroke="#f0c419" stroke-width="15" fill="none" />
+  <path d="M150,250 Q400,130 650,250" stroke="#4fba6f" stroke-width="15" fill="none" />
+  <path d="M175,275 Q400,170 625,275" stroke="#447bb7" stroke-width="15" fill="none" />
+  
+  <!-- Ark -->
+  <path d="M200,370 Q400,320 600,370 L600,450 Q400,400 200,450 Z" fill="#8b4513" />
+  <rect x="225" y="345" width="350" height="30" fill="#5c2c0b" />
+  <rect x="380" y="300" width="40" height="45" fill="#5c2c0b" />
+  
+  <!-- Animals -->
+  <!-- Giraffe -->
+  <ellipse cx="265" cy="330" rx="15" ry="10" fill="#e6a94c" />
+  <rect x="260" y="340" width="10" height="25" fill="#e6a94c" />
+  <rect x="260" y="310" width="5" height="20" fill="#e6a94c" />
+  
+  <!-- Elephant -->
+  <ellipse cx="325" cy="335" rx="20" ry="15" fill="#8c8c8c" />
+  <path d="M315,325 C305,320 305,310 315,305" stroke="#8c8c8c" stroke-width="5" fill="none" />
+  
+  <!-- Lion -->
+  <circle cx="375" cy="330" r="15" fill="#c19a57" />
+  <circle cx="375" cy="330" r="10" fill="#e6c888" />
+  
+  <!-- Dove with olive branch -->
+  <ellipse cx="550" cy="300" rx="15" ry="10" fill="white" />
+  <path d="M565,300 L575,290" stroke="#4fba6f" stroke-width="2" fill="none" />
+  <ellipse cx="577" cy="290" rx="5" ry="3" fill="#4fba6f" />
+  
+  <!-- Small waves -->
+  <path d="M100,420 Q125,410 150,420 Q175,430 200,420" stroke="#5aa6dd" stroke-width="3" fill="none" />
+  <path d="M300,430 Q325,420 350,430 Q375,440 400,430" stroke="#5aa6dd" stroke-width="3" fill="none" />
+  <path d="M500,420 Q525,410 550,420 Q575,430 600,420" stroke="#5aa6dd" stroke-width="3" fill="none" />
+  <path d="M650,440 Q675,430 700,440 Q725,450 750,440" stroke="#5aa6dd" stroke-width="3" fill="none" />
+</svg>

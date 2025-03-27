@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800px" height="600px" viewBox="0 0 800 600" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <!-- Cave background -->
+  <rect x="0" y="0" width="800" height="600" fill="#554234" />
+  <path d="M100,100 Q400,0 700,100 Q800,150 800,300 Q750,450 700,500 Q400,600 100,500 Q0,450 0,300 Q50,150 100,100 Z" fill="#765d49" />
+  <path d="M150,150 Q400,70 650,150 Q740,250 650,350 Q400,450 150,350 Q60,250 150,150 Z" fill="#857254" />
+  
+  <!-- Light beam from above -->
+  <path d="M350,0 L350,100 L450,100 L450,0 Z" fill="#fffbeb" fill-opacity="0.3" />
+  
+  <!-- Daniel (in center) -->
+  <circle cx="400" cy="250" r="30" fill="#e8c39e" /> <!-- Head -->
+  <ellipse cx="400" cy="320" rx="40" ry="50" fill="#d2b790" /> <!-- Body/robe -->
+  <rect x="380" y="290" width="10" height="40" fill="#e8c39e" /> <!-- Left arm -->
+  <rect x="410" y="290" width="10" height="40" fill="#e8c39e" /> <!-- Right arm -->
+  <rect x="385" y="370" width="10" height="30" fill="#e8c39e" /> <!-- Left leg -->
+  <rect x="405" y="370" width="10" height="30" fill="#e8c39e" /> <!-- Right leg -->
+  <path d="M380,240 C385,235 395,235 400,240" stroke="#3a1f04" stroke-width="2" fill="none" /> <!-- Left eyebrow -->
+  <path d="M400,240 C405,235 415,235 420,240" stroke="#3a1f04" stroke-width="2" fill="none" /> <!-- Right eyebrow -->
+  <ellipse cx="390" cy="245" rx="2" ry="3" fill="#3a1f04" /> <!-- Left eye -->
+  <ellipse cx="410" cy="245" rx="2" ry="3" fill="#3a1f04" /> <!-- Right eye -->
+  <path d="M395,255 C398,260 402,260 405,255" stroke="#3a1f04" stroke-width="2" fill="none" /> <!-- Mouth -->
+  <path d="M370,230 C380,220 390,215 400,230 C410,215 420,220 430,230" fill="#5e3b18" /> <!-- Hair -->
+  <path d="M390,330 L385,350 L415,350 L410,330 Z" fill="#c19a57" /> <!-- Belt -->
+
+  <!-- Lion 1 (left) -->
+  <circle cx="250" cy="350" r="35" fill="#c19a57" /> <!-- Head -->
+  <path d="M230,320 C240,310 260,310 270,320" stroke="#c19a57" stroke-width="15" fill="none" /> <!-- Mane top -->
+  <path d="M215,330 C220,320 225,315 235,325" stroke="#c19a57" stroke-width="10" fill="none" /> <!-- Mane left -->
+  <path d="M285,330 C280,320 275,315 265,325" stroke="#c19a57" stroke-width="10" fill="none" /> <!-- Mane right -->
+  <ellipse cx="250" cy="400" rx="30" ry="25" fill="#d8c095" /> <!-- Body -->
+  <ellipse cx="235" cy="345" rx="4" ry="6" fill="#3a1f04" /> <!-- Left eye -->
+  <ellipse cx="265" cy="345" rx="4" ry="6" fill="#3a1f04" /> <!-- Right eye -->
+  <path d="M245,355 L250,365 L255,355" fill="#3a1f04" /> <!-- Nose -->
+  <path d="M250,365 L250,370" stroke="#3a1f04" stroke-width="2" fill="none" /> <!-- Mouth line -->
+  <path d="M240,370 Q250,375 260,370" stroke="#3a1f04" stroke-width="1" fill="none" /> <!-- Mouth curve -->
+  <ellipse cx="220" cy="420" rx="8" ry="15" fill="#d8c095" transform="rotate(20 220 420)" /> <!-- Front left leg -->
+  <ellipse cx="280" cy="420" rx="8" ry="15" fill="#d8c095" transform="rotate(-20 280 420)" /> <!-- Front right leg -->
+  <path d="M225,395 L215,375" stroke="#d8c095" stroke-width="8" fill="none" /> <!-- Tail -->
+  <circle cx="215" cy="375" r="5" fill="#c19a57" /> <!-- Tail tuft -->
+
+  <!-- Lion 2 (right) -->
+  <circle cx="550" cy="350" r="35" fill="#c19a57" /> <!-- Head -->
+  <path d="M530,320 C540,310 560,310 570,320" stroke="#c19a57" stroke-width="15" fill="none" /> <!-- Mane top -->
+  <path d="M515,330 C520,320 525,315 535,325" stroke="#c19a57" stroke-width="10" fill="none" /> <!-- Mane left -->
+  <path d="M585,330 C580,320 575,315 565,325" stroke="#c19a57" stroke-width="10" fill="none" /> <!-- Mane right -->
+  <ellipse cx="550" cy="400" rx="30" ry="25" fill="#d8c095" /> <!-- Body -->
+  <ellipse cx="535" cy="345" rx="4" ry="6" fill="#3a1f04" /> <!-- Left eye -->
+  <ellipse cx="565" cy="345" rx="4" ry="6" fill="#3a1f04" /> <!-- Right eye -->
+  <path d="M545,355 L550,365 L555,355" fill="#3a1f04" /> <!-- Nose -->
+  <path d="M550,365 L550,370" stroke="#3a1f04" stroke-width="2" fill="none" /> <!-- Mouth line -->
+  <path d="M540,370 Q550,375 560,370" stroke="#3a1f04" stroke-width="1" fill="none" /> <!-- Mouth curve -->
+  <ellipse cx="520" cy="420" rx="8" ry="15" fill="#d8c095" transform="rotate(20 520 420)" /> <!-- Front left leg -->
+  <ellipse cx="580" cy="420" rx="8" ry="15" fill="#d8c095" transform="rotate(-20 580 420)" /> <!-- Front right leg -->
+  <path d="M575,395 L585,375" stroke="#d8c095" stroke-width="8" fill="none" /> <!-- Tail -->
+  <circle cx="585" cy="375" r="5" fill="#c19a57" /> <!-- Tail tuft -->
+
+  <!-- Bones scattered on ground -->
+  <path d="M300,450 L320,470" stroke="white" stroke-width="5" fill="none" />
+  <path d="M300,470 L320,450" stroke="white" stroke-width="5" fill="none" />
+  <path d="M480,460 L500,480" stroke="white" stroke-width="5" fill="none" />
+  <path d="M480,480 L500,460" stroke="white" stroke-width="5" fill="none" />
+
+  <!-- Praying hands -->
+  <path d="M395,290 Q400,280 405,290" stroke="#e8c39e" stroke-width="10" fill="#e8c39e" />
+</svg>
