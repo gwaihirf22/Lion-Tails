@@ -7,10 +7,16 @@ import { StoryResponse } from "@shared/schema";
 export default function Story() {
   const [location, navigate] = useLocation();
   const [storyData, setStoryData] = useState<StoryResponse | null>(null);
+  const [storyId, setStoryId] = useState<string | null>(null);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const dataParam = urlParams.get("data");
+    const idParam = urlParams.get("id");
+    
+    if (idParam) {
+      setStoryId(idParam);
+    }
     
     if (dataParam) {
       try {
@@ -47,7 +53,7 @@ export default function Story() {
         </div>
       </div>
       
-      <StoryDisplay story={storyData} />
+      <StoryDisplay story={storyData} storyId={storyId || undefined} />
     </div>
   );
 }

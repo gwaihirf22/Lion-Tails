@@ -6,6 +6,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import Story from "@/pages/Story";
 import Music from "@/pages/Music";
+import SavedStories from "@/pages/SavedStories";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
@@ -15,6 +16,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/story" component={Story} />
       <Route path="/music" component={Music} />
+      <Route path="/saved-stories" component={SavedStories} />
       <Route component={NotFound} />
     </Switch>
   );

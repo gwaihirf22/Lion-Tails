@@ -44,10 +44,10 @@ export default function Header() {
             </li>
             <li>
               <Link 
-                href="/story" 
-                className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/story' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
+                href="/saved-stories" 
+                className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/saved-stories' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
               >
-                Story
+                My Stories
               </Link>
             </li>
           </ul>

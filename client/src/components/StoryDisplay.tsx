@@ -1,15 +1,42 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StoryResponse } from "@shared/schema";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface StoryDisplayProps {
   story: StoryResponse;
+  storyId?: string;
 }
 
-export default function StoryDisplay({ story }: StoryDisplayProps) {
+export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showExpiryAlert, setShowExpiryAlert] = useState(true);
   const storyContentRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+
+  // Check if story is favorited when storyId changes
+  useEffect(() => {
+    const checkFavoriteStatus = async () => {
+      if (!storyId) return;
+      
+      try {
+        const response = await apiRequest('GET', `/api/stories/${storyId}`);
+        if (response.ok) {
+          const storyData = await response.json();
+          setIsFavorite(storyData.isFavorite);
+        }
+      } catch (error) {
+        console.error('Error checking favorite status:', error);
+      }
+    };
+    
+    checkFavoriteStatus();
+  }, [storyId]);
 
   const handlePrint = () => {
     setIsPrinting(true);
@@ -94,15 +121,90 @@ export default function StoryDisplay({ story }: StoryDisplayProps) {
     element.click();
     document.body.removeChild(element);
   };
+  
+  // Toggle favorite status
+  const handleToggleFavorite = async () => {
+    if (!storyId) return;
+    
+    try {
+      setIsLoading(true);
+      const newFavoriteStatus = !isFavorite;
+      
+      const response = await apiRequest('PUT', `/api/stories/${storyId}/favorite`, {
+        isFavorite: newFavoriteStatus
+      });
+      
+      if (response.ok) {
+        setIsFavorite(newFavoriteStatus);
+        toast({
+          title: newFavoriteStatus ? "Story Favorited" : "Removed from Favorites",
+          description: newFavoriteStatus 
+            ? "This story will be saved permanently."
+            : "This story will be automatically deleted after one year if not favorited again.",
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling favorite status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update favorite status.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const paragraphs = story.content.split('\n').filter(para => para.trim() !== '');
 
   return (
     <Card className="bg-white/95 rounded-2xl shadow-xl">
       <CardContent className="p-6">
+        {/* Expiry Alert */}
+        {showExpiryAlert && storyId && (
+          <Alert className="mb-4 bg-blue-50 border border-blue-100">
+            <AlertDescription className="flex items-center justify-between">
+              <div>
+                <span className="text-sm">
+                  Stories are automatically saved for one year. {isFavorite 
+                    ? "This story is favorited and will be kept indefinitely." 
+                    : "Favorite this story to keep it indefinitely."}
+                </span>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 w-6 p-0 rounded-full" 
+                onClick={() => setShowExpiryAlert(false)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-2xl font-heading font-bold text-textDark">Your Bedtime Story</h3>
           <div className="flex space-x-2">
+            {storyId && (
+              <Button 
+                onClick={handleToggleFavorite} 
+                disabled={isLoading}
+                variant="outline" 
+                size="sm"
+                className={`p-2 ${isFavorite 
+                  ? "bg-yellow-100 text-yellow-600 hover:bg-yellow-200" 
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"} rounded-lg transition duration-200`}
+                title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" width="24" height="24" viewBox="0 0 24 24" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+              </Button>
+            )}
             <Button 
               onClick={handlePrint} 
               disabled={isPrinting}
