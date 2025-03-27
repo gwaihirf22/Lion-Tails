@@ -1,11 +1,75 @@
-import OpenAI from "openai";
-import { StoryRequest, StoryResponse, Song } from "@shared/schema";
-import { getBibleVerseByTheme } from "../data/bibleVerses";
+import { DeepseekAPI } from '@deepseek/api';
+import { StoryRequest, StoryResponse } from "@shared/schema";
+import { getDemoStory } from "./demoStories";
 import { getBiblicalEventStoryTemplate } from "../data/storyTemplates";
-import { v4 as uuidv4 } from "uuid";
+import { getBibleVerseByTheme } from "../data/bibleVerses";
 
-// the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "demo-key" });
+const deepseek = new DeepseekAPI(process.env.DEEPSEEK_API_KEY);
+
+export async function generateStory(request: StoryRequest): Promise<StoryResponse> {
+  const { childName, gender, animal, theme, biblicalEvent } = request;
+
+  const storyTemplate = biblicalEvent ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
+  const bibleVerse = getBibleVerseByTheme(theme);
+
+  try {
+    if (process.env.DEEPSEEK_API_KEY === undefined || process.env.DEEPSEEK_API_KEY === "demo-key") {
+      return getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
+    }
+
+    const prompt = buildStoryPrompt(childName, gender, animal, theme, biblicalEvent, storyTemplate);
+
+    const response = await deepseek.chat.completions.create({
+      model: "deepseek-chat",
+      messages: [
+        { 
+          role: "system", 
+          content: `You are a Christian children's bedtime story author. Create wholesome, faith-based stories with moral lessons suitable for young children. Include Christian themes and values.
+
+          The story should be approximately 1000 words long. The child should learn a moral lesson that aligns with Biblical teachings.
+
+          Format your response as valid JSON with the following structure:
+          {
+            "title": "Story title",
+            "content": "The full story content with proper paragraphs",
+            "imagePrompt": "A short description for an illustration of a key scene"
+          }`
+        },
+        { role: "user", content: prompt }
+      ],
+      response_format: { type: "json_object" }
+    });
+
+    const messageContent = response.choices[0].message.content || '{}';
+    const jsonContent = JSON.parse(messageContent);
+
+    return {
+      title: jsonContent.title,
+      content: jsonContent.content,
+      bibleVerse: bibleVerse,
+      imagePrompt: jsonContent.imagePrompt
+    };
+  } catch (error) {
+    console.error("Error generating story with Deepseek:", error);
+    return getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
+  }
+}
+
+function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null): string {
+  let prompt = `Write a Christian bedtime story for a ${gender} named ${childName} who loves ${animal}s. The story should teach about ${theme}.`;
+
+  if (biblicalEvent && biblicalEvent !== 'none') {
+    if (storyTemplate) {
+      prompt += ` The story should be based on the biblical story of ${biblicalEvent}. Use this template as inspiration: ${storyTemplate}`;
+    } else {
+      prompt += ` The story should be based on the biblical story of ${biblicalEvent}.`;
+    }
+  }
+
+  prompt += ` The child should be the main character in the story and interact with ${animal}s. The story should be approximately 1000 words and include a clear moral lesson at the end that relates to Christian values.`;
+
+  return prompt;
+}
 
 // Common Christian chord progressions (for demo mode)
 const commonChordProgressions = [
@@ -153,88 +217,14 @@ const commonChords = {
   }
 };
 
-export async function generateStory(request: StoryRequest): Promise<StoryResponse> {
-  const { childName, gender, animal, theme, biblicalEvent } = request;
-  
-  // If we're using a biblical event template, get that
-  const storyTemplate = biblicalEvent ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
-  
-  // Get a relevant Bible verse for the theme
-  const bibleVerse = getBibleVerseByTheme(theme);
-  
-  try {
-    // If no API key is set, return a demo story
-    if (process.env.OPENAI_API_KEY === undefined || process.env.OPENAI_API_KEY === "demo-key") {
-      return getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
-    }
-
-    const prompt = buildStoryPrompt(childName, gender, animal, theme, biblicalEvent, storyTemplate);
-    
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { 
-          role: "system", 
-          content: `You are a Christian children's bedtime story author. Create wholesome, faith-based stories with moral lessons suitable for young children. Include Christian themes and values.
-          
-          The story should be approximately 1000 words long. The child should learn a moral lesson that aligns with Biblical teachings.
-          
-          Format your response as valid JSON with the following structure:
-          {
-            "title": "Story title",
-            "content": "The full story content with proper paragraphs",
-            "imagePrompt": "A short description for an illustration of a key scene"
-          }`
-        },
-        { role: "user", content: prompt }
-      ],
-      response_format: { type: "json_object" }
-    });
-
-    // Ensure we have valid content before parsing
-    const messageContent = response.choices[0].message.content || '{}';
-    const jsonContent = JSON.parse(messageContent);
-    
-    return {
-      title: jsonContent.title,
-      content: jsonContent.content,
-      bibleVerse: bibleVerse,
-      imagePrompt: jsonContent.imagePrompt
-    };
-  } catch (error) {
-    console.error("Error generating story with OpenAI:", error);
-    
-    // Fallback to demo story if there's an error
-    return getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
-  }
-}
-
-function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null): string {
-  let prompt = `Write a Christian bedtime story for a ${gender} named ${childName} who loves ${animal}s. The story should teach about ${theme}.`;
-  
-  // Only include biblical event details if it's provided and not 'none'
-  if (biblicalEvent && biblicalEvent !== 'none') {
-    if (storyTemplate) {
-      prompt += ` The story should be based on the biblical story of ${biblicalEvent}. Use this template as inspiration: ${storyTemplate}`;
-    } else {
-      prompt += ` The story should be based on the biblical story of ${biblicalEvent}.`;
-    }
-  }
-  
-  prompt += ` The child should be the main character in the story and interact with ${animal}s. The story should be approximately 1000 words and include a clear moral lesson at the end that relates to Christian values.`;
-  
-  return prompt;
-}
-
 function getDemoStory(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, bibleVerse: { text: string, reference: string }): StoryResponse {
   let title;
   let content;
-  
-  // Handle "none" value the same as undefined or no biblical event
+
   if (biblicalEvent === "none") {
     biblicalEvent = undefined;
   }
-  
+
   if (biblicalEvent === "noahs-ark") {
     title = `${childName}'s Brave Journey on Noah's Ark`;
     content = `Once upon a time, there was a little child named ${childName} who loved ${animal}s more than anything in the world. Every night before bed, ${childName}'s mother would tell stories from the Bible, and ${childName}'s favorite was always the story of Noah's Ark.
@@ -513,6 +503,7 @@ As ${childName} helped mix the cookie dough, they spotted a ${animal} outside th
 
 ${childName} smiled. With God's help, they would practice ${theme} today and every day, turning the dream lessons into real-life habits of the heart.`;
   }
+
 
   return {
     title,
