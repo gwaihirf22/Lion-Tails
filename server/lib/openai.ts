@@ -28,9 +28,11 @@ export async function generateStory(request: StoryRequest): Promise<StoryRespons
     }
     
     // The system prompt that defines what kind of response we want
-    const systemPrompt = `You are a Christian children's bedtime story author. Create wholesome, faith-based stories with moral lessons suitable for young children. Include Christian themes and values.
+    const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author. Create wholesome, faith-based stories with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
 
-    The story should be approximately 1000 words long. The child should learn a moral lesson that aligns with Biblical teachings.
+    IMPORTANT: Strictly adhere to traditional orthodox Christian teachings from mainstream denominations (Catholic, Orthodox, Protestant). Do NOT include theological concepts from Mormon, Jehovah's Witness, or other non-traditional denominations. Avoid heterodox or non-scriptural doctrines. Focus only on teachings directly from the Bible that are accepted across traditional Christianity.
+
+    The story should be approximately 1000 words long. The child should learn a moral lesson that aligns with Biblical teachings from traditional Christian orthodoxy.
 
     Format your response as valid JSON with the following structure:
     {
@@ -97,7 +99,7 @@ export async function generateStory(request: StoryRequest): Promise<StoryRespons
 }
 
 function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null): string {
-  let prompt = `Write a Christian bedtime story for a ${gender} named ${childName} who loves ${animal}s. The story should teach about ${theme}.`;
+  let prompt = `Write a traditional orthodox Christian bedtime story for a ${gender} named ${childName} who loves ${animal}s. The story should teach about ${theme}.`;
 
   if (biblicalEvent && biblicalEvent !== 'none') {
     if (storyTemplate) {
@@ -107,7 +109,9 @@ function buildStoryPrompt(childName: string, gender: string = "boy", animal: str
     }
   }
 
-  prompt += ` The child should be the main character in the story and interact with ${animal}s. The story should be approximately 1000 words and include a clear moral lesson at the end that relates to Christian values.`;
+  prompt += ` The child should be the main character in the story and interact with ${animal}s. The story should be approximately 1000 words and include a clear moral lesson at the end that relates to traditional Christian values.`;
+  
+  prompt += ` IMPORTANT: Ensure the story adheres ONLY to traditional orthodox Christian theology (Catholic, Orthodox, Protestant). Avoid ANY theological concepts from Mormon, Jehovah's Witness, or other non-traditional denominations. Focus on biblical teachings accepted in mainstream Christianity.`;
 
   return prompt;
 }

@@ -4,7 +4,7 @@ export default function Footer() {
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col md:flex-row justify-between items-center">
           <div className="mb-4 md:mb-0">
-            <h3 className="text-xl font-heading font-bold">Dreamy Tales</h3>
+            <h3 className="text-xl font-heading font-bold">Lion Tails</h3>
             <p className="text-sm">Nurturing faith through stories</p>
           </div>
           <div className="flex space-x-4">
@@ -29,7 +29,7 @@ export default function Footer() {
           </div>
         </div>
         <div className="mt-4 text-center text-sm">
-          <p>© {new Date().getFullYear()} Dreamy Tales. All stories are generated locally and do not store any personal information.</p>
+          <p>© {new Date().getFullYear()} Lion Tails. All stories are generated locally and do not store any personal information.</p>
         </div>
       </div>
     </footer>
