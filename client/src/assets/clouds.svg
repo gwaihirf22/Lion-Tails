@@ -1,0 +1,13 @@
+<svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <pattern id="clouds" patternUnits="userSpaceOnUse" width="200" height="200" viewBox="0 0 200 200">
+      <circle fill="#ffffff" fill-opacity="0.2" cx="40" cy="40" r="15"/>
+      <circle fill="#ffffff" fill-opacity="0.2" cx="60" cy="45" r="18"/>
+      <circle fill="#ffffff" fill-opacity="0.2" cx="50" cy="30" r="20"/>
+      <circle fill="#ffffff" fill-opacity="0.2" cx="160" cy="160" r="15"/>
+      <circle fill="#ffffff" fill-opacity="0.2" cx="180" cy="165" r="18"/>
+      <circle fill="#ffffff" fill-opacity="0.2" cx="170" cy="150" r="20"/>
+    </pattern>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#clouds)"/>
+</svg>
