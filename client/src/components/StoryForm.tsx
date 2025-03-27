@@ -24,6 +24,7 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
     resolver: zodResolver(storyRequestSchema),
     defaultValues: {
       childName: "",
+      gender: "boy",
       animal: "",
       theme: "",
       biblicalEvent: "",
@@ -55,6 +56,38 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                         className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
                         {...field} 
                       />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="gender"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">Child's Gender</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-heart">
+                          <path d="M7 3C4.239 3 2 5.216 2 7.95c0 2.207.875 7.445 9.488 12.74a.985.985 0 0 0 1.024 0C21.125 15.395 22 10.157 22 7.95 22 5.216 19.761 3 17 3s-5 3-5 3-2.239-3-5-3z" />
+                        </svg>
+                      </span>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                          <SelectValue placeholder="Select gender" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="boy">Boy</SelectItem>
+                          <SelectItem value="girl">Girl</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </FormControl>
                   <FormMessage />

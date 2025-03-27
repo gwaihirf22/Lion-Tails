@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Aslan Lion Icon -->
+  <defs>
+    <radialGradient id="lionMane" cx="50%" cy="50%" r="60%" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F9C74F"/>
+      <stop offset="80%" stop-color="#E68E13"/>
+      <stop offset="100%" stop-color="#C27A0E"/>
+    </radialGradient>
+  </defs>
+  
+  <!-- Lion's mane -->
+  <circle cx="50" cy="47" r="35" fill="url(#lionMane)" />
+  
+  <!-- Lion's face -->
+  <circle cx="50" cy="50" r="22" fill="#F9D87E" />
+  
+  <!-- Eyes -->
+  <ellipse cx="42" cy="44" rx="3" ry="4" fill="#33272A" />
+  <ellipse cx="58" cy="44" rx="3" ry="4" fill="#33272A" />
+  
+  <!-- Nose -->
+  <path d="M50 52 Q53 57 50 59 Q47 57 50 52z" fill="#A05F35" />
+  
+  <!-- Mouth -->
+  <path d="M47 60 Q50 63 53 60" fill="none" stroke="#A05F35" stroke-width="1.5" />
+  
+  <!-- Whiskers -->
+  <line x1="35" y1="55" x2="45" y2="56" stroke="#B88C4A" stroke-width="1.5" />
+  <line x1="35" y1="58" x2="45" y2="58" stroke="#B88C4A" stroke-width="1.5" />
+  <line x1="35" y1="61" x2="45" y2="60" stroke="#B88C4A" stroke-width="1.5" />
+  
+  <line x1="65" y1="55" x2="55" y2="56" stroke="#B88C4A" stroke-width="1.5" />
+  <line x1="65" y1="58" x2="55" y2="58" stroke="#B88C4A" stroke-width="1.5" />
+  <line x1="65" y1="61" x2="55" y2="60" stroke="#B88C4A" stroke-width="1.5" />
+  
+  <!-- Ears -->
+  <path d="M35 27 Q37 17 45 30" fill="#E68E13" />
+  <path d="M65 27 Q63 17 55 30" fill="#E68E13" />
+</svg>

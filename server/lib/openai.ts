@@ -7,7 +7,7 @@ import { getBiblicalEventStoryTemplate } from "../data/storyTemplates";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "demo-key" });
 
 export async function generateStory(request: StoryRequest): Promise<StoryResponse> {
-  const { childName, animal, theme, biblicalEvent } = request;
+  const { childName, gender, animal, theme, biblicalEvent } = request;
   
   // If we're using a biblical event template, get that
   const storyTemplate = biblicalEvent ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
@@ -18,10 +18,10 @@ export async function generateStory(request: StoryRequest): Promise<StoryRespons
   try {
     // If no API key is set, return a demo story
     if (process.env.OPENAI_API_KEY === undefined || process.env.OPENAI_API_KEY === "demo-key") {
-      return getDemoStory(childName, animal, theme, biblicalEvent, bibleVerse);
+      return getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
     }
 
-    const prompt = buildStoryPrompt(childName, animal, theme, biblicalEvent, storyTemplate);
+    const prompt = buildStoryPrompt(childName, gender, animal, theme, biblicalEvent, storyTemplate);
     
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -58,12 +58,12 @@ export async function generateStory(request: StoryRequest): Promise<StoryRespons
     console.error("Error generating story with OpenAI:", error);
     
     // Fallback to demo story if there's an error
-    return getDemoStory(childName, animal, theme, biblicalEvent, bibleVerse);
+    return getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
   }
 }
 
-function buildStoryPrompt(childName: string, animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null): string {
-  let prompt = `Write a Christian bedtime story for a child named ${childName} who loves ${animal}s. The story should teach about ${theme}.`;
+function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null): string {
+  let prompt = `Write a Christian bedtime story for a ${gender} named ${childName} who loves ${animal}s. The story should teach about ${theme}.`;
   
   // Only include biblical event details if it's provided and not 'none'
   if (biblicalEvent && biblicalEvent !== 'none') {
@@ -79,7 +79,7 @@ function buildStoryPrompt(childName: string, animal: string, theme: string, bibl
   return prompt;
 }
 
-function getDemoStory(childName: string, animal: string, theme: string, biblicalEvent: string | undefined, bibleVerse: { text: string, reference: string }): StoryResponse {
+function getDemoStory(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, bibleVerse: { text: string, reference: string }): StoryResponse {
   let title;
   let content;
   
@@ -94,9 +94,9 @@ function getDemoStory(childName: string, animal: string, theme: string, biblical
 
 "Mommy," ${childName} would ask, "do you think Noah was scared when God told him to build such a big boat?"
 
-His mother smiled gently. "I'm sure Noah felt afraid sometimes, just like we all do. But Noah trusted God, and that's what made him brave."
+${gender === 'boy' ? 'His' : 'Her'} mother smiled gently. "I'm sure Noah felt afraid sometimes, just like we all do. But Noah trusted God, and that's what made him brave."
 
-That night, after his mother tucked him into bed and kissed him goodnight, ${childName} drifted off to sleep. In his dreams, he found himself standing in a vast field, where a kind-looking man with a long beard was measuring wood for a massive structure.
+That night, after ${gender === 'boy' ? 'his' : 'her'} mother tucked ${gender === 'boy' ? 'him' : 'her'} into bed and kissed ${gender === 'boy' ? 'him' : 'her'} goodnight, ${childName} drifted off to sleep. In ${gender === 'boy' ? 'his' : 'her'} dreams, ${gender === 'boy' ? 'he' : 'she'} found ${gender === 'boy' ? 'himself' : 'herself'} standing in a vast field, where a kind-looking man with a long beard was measuring wood for a massive structure.
 
 "Hello there, young one," the man said when he noticed ${childName}. "I'm Noah. Would you like to help me build God's ark?"
 

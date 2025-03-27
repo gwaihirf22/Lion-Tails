@@ -19,6 +19,10 @@ export type User = typeof users.$inferSelect;
 // Schema for story generation
 export const storyRequestSchema = z.object({
   childName: z.string().min(1, "Child's name is required"),
+  gender: z.enum(["boy", "girl"], {
+    required_error: "Please select a gender",
+    invalid_type_error: "Gender must be 'boy' or 'girl'",
+  }),
   animal: z.string().min(1, "Favorite animal is required"),
   theme: z.string().min(1, "Theme is required"),
   biblicalEvent: z.string().optional(),

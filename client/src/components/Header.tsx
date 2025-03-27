@@ -1,18 +1,28 @@
 import { Link, useLocation } from "wouter";
+// Using relative path for the SVG
+import aslanIcon from "../assets/aslan-lion.svg";
 
 export default function Header() {
   const [location] = useLocation();
 
+  // Here are some faith-based name options:
+  // "Faith & Fables" - combines faith with storytelling
+  // "Parables & Prayers" - emphasizes the teaching aspect
+  // "Little Shepherd Stories" - reference to Jesus as the Good Shepherd
+  // "Lion's Heart Tales" - references Aslan/Jesus symbolism
+  // "Faithful Dreamers" - combines faith with imagination
+  // Let's use "Lion's Heart Tales" for now
+  
   return (
     <header className="bg-primary/90 shadow-md">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <img 
-            src="https://images.unsplash.com/photo-1559526324-593bc073d938?ixlib=rb-1.2.1&auto=format&fit=crop&w=100&q=80" 
-            alt="Dreamy Tales Logo" 
-            className="w-12 h-12 rounded-full"
+            src={aslanIcon} 
+            alt="Lion's Heart Tales Logo" 
+            className="w-12 h-12 rounded-full object-cover bg-white p-1"
           />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-white">Dreamy Tales</h1>
+          <h1 className="text-2xl md:text-3xl font-heading font-bold text-white">Lion's Heart Tales</h1>
         </div>
         <nav>
           <ul className="flex space-x-4 font-heading">
