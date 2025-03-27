@@ -25,9 +25,9 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
     defaultValues: {
       childName: "",
       gender: "boy",
-      animal: "",
-      theme: "",
-      biblicalEvent: "",
+      animal: "lion", // Default to lion (our app's mascot)
+      theme: "courage", // Default theme
+      biblicalEvent: "noahs-ark", // Default to Noah's Ark since it's fully available
     },
   });
 
@@ -176,7 +176,7 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
               name="biblicalEvent"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-sm font-medium">Biblical Event (Optional)</FormLabel>
+                  <FormLabel className="text-sm font-medium">Biblical Event</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
@@ -189,22 +189,25 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                         defaultValue={field.value}
                       >
                         <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                          <SelectValue placeholder="Select a Biblical event (optional)" />
+                          <SelectValue placeholder="Select a Biblical event" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">None (Original Story)</SelectItem>
                           <SelectItem value="noahs-ark">Noah's Ark</SelectItem>
                           <SelectItem value="david-goliath">David and Goliath</SelectItem>
-                          <SelectItem value="good-samaritan">The Good Samaritan</SelectItem>
-                          <SelectItem value="prodigal-son">The Prodigal Son</SelectItem>
-                          <SelectItem value="jonah">Jonah and the Whale</SelectItem>
-                          <SelectItem value="creation">Creation Story</SelectItem>
-                          <SelectItem value="daniel-lions">Daniel in the Lion's Den</SelectItem>
-                          <SelectItem value="moses">Moses and the Red Sea</SelectItem>
+                          <SelectItem value="good-samaritan">The Good Samaritan (coming soon)</SelectItem>
+                          <SelectItem value="prodigal-son">The Prodigal Son (coming soon)</SelectItem>
+                          <SelectItem value="jonah">Jonah and the Whale (coming soon)</SelectItem>
+                          <SelectItem value="creation">Creation Story (coming soon)</SelectItem>
+                          <SelectItem value="daniel-lions">Daniel in the Lion's Den (coming soon)</SelectItem>
+                          <SelectItem value="moses">Moses and the Red Sea (coming soon)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </FormControl>
+                  <div className="text-xs text-secondary/70 mt-1">
+                    Currently, only Noah's Ark and David & Goliath stories are fully available. 
+                    More biblical stories will be added soon!
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}

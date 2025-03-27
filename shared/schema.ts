@@ -25,7 +25,7 @@ export const storyRequestSchema = z.object({
   }),
   animal: z.string().min(1, "Favorite animal is required"),
   theme: z.string().min(1, "Theme is required"),
-  biblicalEvent: z.string().optional(),
+  biblicalEvent: z.string().min(1, "Biblical event is required"),
 });
 
 export type StoryRequest = z.infer<typeof storyRequestSchema>;

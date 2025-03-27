@@ -1,101 +1,16 @@
-import { createNewChat, sendMessage } from 'deepseek-api';
 import { StoryRequest, StoryResponse } from "@shared/schema";
 import { getBiblicalEventStoryTemplate } from "../data/storyTemplates";
 import { getBibleVerseByTheme } from "../data/bibleVerses";
 
-// DeepSeek requires a token rather than an API key
-const deepseekToken = process.env.DEEPSEEK_API_KEY;
-
+// Simple version that just uses pre-written demo stories
 export async function generateStory(request: StoryRequest): Promise<StoryResponse> {
   const { childName, gender, animal, theme, biblicalEvent } = request;
-
+  
   const storyTemplate = biblicalEvent ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
   const bibleVerse = getBibleVerseByTheme(theme);
 
-  try {
-    if (!deepseekToken || deepseekToken === "demo-key") {
-      return getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
-    }
-
-    const prompt = buildStoryPrompt(childName, gender, animal, theme, biblicalEvent, storyTemplate);
-    
-    // Create a new chat session with DeepSeek
-    const chatID = await createNewChat(deepseekToken);
-    
-    if (typeof chatID !== 'string') {
-      console.error("Failed to create DeepSeek chat:", chatID.error);
-      return getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
-    }
-    
-    // The system prompt that defines what kind of response we want
-    const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author. Create wholesome, faith-based stories with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
-
-    IMPORTANT: Strictly adhere to traditional orthodox Christian teachings from mainstream denominations (Catholic, Orthodox, Protestant). Do NOT include theological concepts from Mormon, Jehovah's Witness, or other non-traditional denominations. Avoid heterodox or non-scriptural doctrines. Focus only on teachings directly from the Bible that are accepted across traditional Christianity.
-
-    The story should be approximately 1000 words long. The child should learn a moral lesson that aligns with Biblical teachings from traditional Christian orthodoxy.
-
-    Format your response as valid JSON with the following structure:
-    {
-      "title": "Story title",
-      "content": "The full story content with proper paragraphs",
-      "imagePrompt": "A short description for an illustration of a key scene"
-    }`;
-    
-    // Send the system message first to define the role
-    let responseData = '';
-    await sendMessage(systemPrompt, {
-      id: chatID,
-      token: deepseekToken,
-    }, (chunk) => {
-      // We can ignore the system message response
-    });
-    
-    // Now send the actual prompt for the story
-    await sendMessage(prompt, {
-      id: chatID,
-      token: deepseekToken,
-    }, (chunk) => {
-      if (chunk.type === 'message') {
-        responseData += chunk.content || '';
-      }
-    });
-    
-    // Try to parse the response as JSON
-    let jsonContent;
-    try {
-      // The response might be wrapped in markdown code blocks, so try to extract JSON
-      const jsonMatch = responseData.match(/```json([\s\S]*?)```/) || 
-                         responseData.match(/```([\s\S]*?)```/) ||
-                         [null, responseData];
-      
-      const jsonString = jsonMatch[1] ? jsonMatch[1].trim() : responseData.trim();
-      jsonContent = JSON.parse(jsonString);
-    } catch (parseError) {
-      console.error("Error parsing DeepSeek response as JSON:", parseError);
-      console.log("Raw response:", responseData);
-      
-      // If we can't parse as JSON, extract title and content manually
-      const titleMatch = responseData.match(/["']title["']\s*:\s*["']([^"']+)["']/);
-      const contentMatch = responseData.match(/["']content["']\s*:\s*["']([^"']+)["']/);
-      const imagePromptMatch = responseData.match(/["']imagePrompt["']\s*:\s*["']([^"']+)["']/);
-      
-      jsonContent = {
-        title: titleMatch ? titleMatch[1] : `${childName}'s Biblical Adventure`,
-        content: contentMatch ? contentMatch[1] : responseData,
-        imagePrompt: imagePromptMatch ? imagePromptMatch[1] : `A child named ${childName} with ${animal}s in a biblical setting`
-      };
-    }
-
-    return {
-      title: jsonContent.title || `${childName}'s Biblical Adventure`,
-      content: jsonContent.content || responseData,
-      bibleVerse: bibleVerse,
-      imagePrompt: jsonContent.imagePrompt || `A child named ${childName} with ${animal}s in a biblical setting`
-    };
-  } catch (error) {
-    console.error("Error generating story with Deepseek:", error);
-    return getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
-  }
+  // Just use the demo story
+  return getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
 }
 
 function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null): string {
