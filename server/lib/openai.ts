@@ -1,10 +1,157 @@
 import OpenAI from "openai";
-import { StoryRequest, StoryResponse } from "@shared/schema";
+import { StoryRequest, StoryResponse, Song } from "@shared/schema";
 import { getBibleVerseByTheme } from "../data/bibleVerses";
 import { getBiblicalEventStoryTemplate } from "../data/storyTemplates";
+import { v4 as uuidv4 } from "uuid";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "demo-key" });
+
+// Common Christian chord progressions (for demo mode)
+const commonChordProgressions = [
+  ['G', 'D', 'Em', 'C'],
+  ['C', 'G', 'Am', 'F'],
+  ['D', 'A', 'Bm', 'G'],
+  ['E', 'B', 'C#m', 'A'],
+  ['F', 'C', 'Dm', 'Bb'],
+];
+
+// Common guitar chords with fingering information
+const commonChords = {
+  'G': {
+    name: 'G',
+    fingering: {
+      string1: 3, // 3rd fret on high E
+      string2: 0, // open B
+      string3: 0, // open G
+      string4: 0, // open D
+      string5: 2, // 2nd fret on A
+      string6: 3, // 3rd fret on low E
+    }
+  },
+  'C': {
+    name: 'C',
+    fingering: {
+      string1: 0, // open high E
+      string2: 1, // 1st fret on B
+      string3: 0, // open G
+      string4: 2, // 2nd fret on D
+      string5: 3, // 3rd fret on A
+      string6: -1, // don't play low E
+    }
+  },
+  'D': {
+    name: 'D',
+    fingering: {
+      string1: 2, // 2nd fret on high E
+      string2: 3, // 3rd fret on B
+      string3: 2, // 2nd fret on G
+      string4: 0, // open D
+      string5: -1, // don't play A
+      string6: -1, // don't play low E
+    }
+  },
+  'A': {
+    name: 'A',
+    fingering: {
+      string1: 0, // open high E
+      string2: 2, // 2nd fret on B
+      string3: 2, // 2nd fret on G
+      string4: 2, // 2nd fret on D
+      string5: 0, // open A
+      string6: -1, // don't play low E
+    }
+  },
+  'E': {
+    name: 'E',
+    fingering: {
+      string1: 0, // open high E
+      string2: 0, // open B
+      string3: 1, // 1st fret on G
+      string4: 2, // 2nd fret on D
+      string5: 2, // 2nd fret on A
+      string6: 0, // open low E
+    }
+  },
+  'F': {
+    name: 'F',
+    fingering: {
+      string1: 1, // 1st fret on high E
+      string2: 1, // 1st fret on B
+      string3: 2, // 2nd fret on G
+      string4: 3, // 3rd fret on D
+      string5: 3, // 3rd fret on A
+      string6: 1, // 1st fret on low E (barre)
+    },
+    barres: [{ fromString: 1, toString: 6, fret: 1 }]
+  },
+  'Am': {
+    name: 'Am',
+    fingering: {
+      string1: 0, // open high E
+      string2: 1, // 1st fret on B
+      string3: 2, // 2nd fret on G
+      string4: 2, // 2nd fret on D
+      string5: 0, // open A
+      string6: -1, // don't play low E
+    }
+  },
+  'Em': {
+    name: 'Em',
+    fingering: {
+      string1: 0, // open high E
+      string2: 0, // open B
+      string3: 0, // open G
+      string4: 2, // 2nd fret on D
+      string5: 2, // 2nd fret on A
+      string6: 0, // open low E
+    }
+  },
+  'Dm': {
+    name: 'Dm',
+    fingering: {
+      string1: 1, // 1st fret on high E
+      string2: 3, // 3rd fret on B
+      string3: 2, // 2nd fret on G
+      string4: 0, // open D
+      string5: -1, // don't play A
+      string6: -1, // don't play low E
+    }
+  },
+  'Bm': {
+    name: 'Bm',
+    fingering: {
+      string1: 2, // 2nd fret on high E
+      string2: 3, // 3rd fret on B
+      string3: 4, // 4th fret on G
+      string4: 4, // 4th fret on D
+      string5: 2, // 2nd fret on A
+      string6: -1, // don't play low E
+    }
+  },
+  'C#m': {
+    name: 'C#m',
+    fingering: {
+      string1: 4, // 4th fret on high E
+      string2: 5, // 5th fret on B
+      string3: 6, // 6th fret on G
+      string4: 6, // 6th fret on D
+      string5: 4, // 4th fret on A
+      string6: -1, // don't play low E
+    }
+  },
+  'Bb': {
+    name: 'Bb',
+    fingering: {
+      string1: 1, // 1st fret on high E
+      string2: 3, // 3rd fret on B
+      string3: 3, // 3rd fret on G
+      string4: 3, // 3rd fret on D
+      string5: 1, // 1st fret on A
+      string6: -1, // don't play low E
+    }
+  }
+};
 
 export async function generateStory(request: StoryRequest): Promise<StoryResponse> {
   const { childName, gender, animal, theme, biblicalEvent } = request;

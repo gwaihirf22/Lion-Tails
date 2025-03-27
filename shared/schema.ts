@@ -43,15 +43,56 @@ export const storyResponseSchema = z.object({
 
 export type StoryResponse = z.infer<typeof storyResponseSchema>;
 
-// Schema for songs
+// Schema for saved stories
+export const savedStorySchema = z.object({
+  id: z.string(),
+  story: storyResponseSchema,
+  request: storyRequestSchema,
+  createdAt: z.string(), // ISO date string
+  isFavorite: z.boolean().default(false),
+  expiresAt: z.string().optional(), // ISO date string
+});
+
+export type SavedStory = z.infer<typeof savedStorySchema>;
+
+// Schema for songs with chord diagrams
+export const chordDiagramSchema = z.object({
+  name: z.string(),
+  fingering: z.object({
+    string1: z.number(),
+    string2: z.number(),
+    string3: z.number(),
+    string4: z.number(),
+    string5: z.number(),
+    string6: z.number(),
+  }),
+  barres: z.array(z.object({
+    fromString: z.number(),
+    toString: z.number(),
+    fret: z.number(),
+  })).optional(),
+  position: z.number().optional(),
+});
+
+export type ChordDiagram = z.infer<typeof chordDiagramSchema>;
+
+// Verse schema with lyrics and chords
+export const verseSchema = z.object({
+  lyrics: z.array(z.string()),
+  chords: z.array(z.string())
+});
+
+export type Verse = z.infer<typeof verseSchema>;
+
+// Updated song schema
 export const songSchema = z.object({
   id: z.string(),
   title: z.string(),
-  lyrics: z.array(z.object({
-    text: z.string(),
-    chord: z.string().optional(),
-  })),
-  chords: z.array(z.string()),
+  artist: z.string(),
+  verses: z.array(verseSchema),
+  chorus: verseSchema.nullable(),
+  bridge: verseSchema.nullable(),
+  chords: z.array(chordDiagramSchema),
   backgroundColor: z.string().optional(),
 });
 
