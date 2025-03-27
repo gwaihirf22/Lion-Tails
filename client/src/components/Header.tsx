@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
-// Using relative path for the SVG
-import aslanIcon from "../assets/aslan-lion.svg";
+// Import the SVG as an asset
+import aslanIcon from "@/assets/aslan-lion.svg";
 
 export default function Header() {
   const [location] = useLocation();
