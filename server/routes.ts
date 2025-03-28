@@ -5,6 +5,7 @@ import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, hero
 import { heroesOfFaithData } from "./data/heroesOfFaith";
 import { generateStory } from "./lib/openai";
 import { generateSongChords } from "./lib/songGenerator";
+import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { songs } from "./data/songs";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -420,6 +421,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting hero of faith:", error);
       res.status(500).json({ message: "Failed to delete hero of faith" });
+    }
+  });
+
+  // Analyze an image with OpenAI Vision API
+  app.post("/api/analyze-image", async (req, res) => {
+    try {
+      const { image } = req.body;
+      
+      if (!image || typeof image !== 'string') {
+        return res.status(400).json({ message: "Valid image data is required" });
+      }
+      
+      // Analyze the image with OpenAI
+      const analysis = await analyzeImageWithOpenAI(image);
+      
+      res.json({ analysis });
+    } catch (error) {
+      console.error("Error analyzing image:", error);
+      res.status(500).json({ message: "Failed to analyze image" });
     }
   });
 

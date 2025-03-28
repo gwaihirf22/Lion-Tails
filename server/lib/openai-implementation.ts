@@ -223,6 +223,64 @@ function downloadImage(url: string, filepath: string): Promise<void> {
   });
 }
 
+// Function to analyze an image with OpenAI Vision API
+export async function analyzeImageWithOpenAI(imageBase64: string): Promise<string> {
+  try {
+    // Get the user's API key (if they provided one)
+    const apiKey = await storage.getUserOpenAIKey();
+    
+    // Check if we have any API key to use (user's or environment)
+    if (!apiKey && !process.env.OPENAI_API_KEY) {
+      console.error("OpenAI API key not found for image analysis");
+      throw new Error("OpenAI API key not found");
+    }
+
+    // Call OpenAI API with a fresh client using the appropriate API key
+    const openaiClient = getOpenAIClient(apiKey || undefined);
+    
+    // System prompt that defines what kind of analysis we want
+    const systemPrompt = `You are a helpful Christian children's content analyzer. 
+    Analyze the provided image and describe it in detail, focusing on:
+    1. What's happening in the image
+    2. Who appears to be in the image
+    3. The setting and atmosphere
+    4. Any potential biblical or Christian themes present
+    5. How this image might connect to Biblical stories or principles
+    6. How this image could be used in a children's Bible story
+    
+    Keep your description child-friendly and appropriate for young readers. Aim for 3-4 paragraphs of analysis.`;
+    
+    // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+    const response = await openaiClient.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { 
+          role: "user", 
+          content: [
+            { type: "text", text: "Please analyze this image in detail:" },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${imageBase64}`
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 1000
+    });
+    
+    // Extract the response content
+    const analysisText = response.choices[0].message.content || 'Could not analyze the image.';
+    return analysisText;
+    
+  } catch (error) {
+    console.error("Error analyzing image with OpenAI:", error);
+    throw error;
+  }
+}
+
 function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular", heroOfFaith?: string | undefined): string {
   let storyFormat = "bedtime story";
   if (storyType === "poem") {

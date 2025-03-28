@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
-// Import the Lion book image
-import lionBookIcon from "@/assets/lion-book.jpg";
+// Import the Lion Tails image
+import lionTailsIcon from "@/assets/lion-tails-icon.jpg";
 
 export default function Header() {
   const [location] = useLocation();
@@ -8,15 +8,15 @@ export default function Header() {
   // App name: "Lion Tails" - references Aslan/Jesus symbolism with a simple, memorable name that kids can easily remember
   
   return (
-    <header className="bg-primary/90 shadow-md">
+    <header className="bg-primary/80 backdrop-blur-sm shadow-md">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <img 
-            src={lionBookIcon} 
+            src={lionTailsIcon} 
             alt="Lion Tails Logo" 
-            className="w-12 h-12 rounded-full object-cover bg-white p-1"
+            className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-md"
           />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-white">Lion Tails</h1>
+          <h1 className="text-2xl md:text-3xl font-heading font-bold text-white drop-shadow-sm">Lion Tails</h1>
         </div>
         <nav>
           <ul className="flex space-x-3 font-heading text-sm md:text-base">
@@ -58,6 +58,14 @@ export default function Header() {
                 className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/heroes-of-faith' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
               >
                 Heroes
+              </Link>
+            </li>
+            <li>
+              <Link 
+                href="/image-analysis" 
+                className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/image-analysis' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
+              >
+                Images
               </Link>
             </li>
             <li>

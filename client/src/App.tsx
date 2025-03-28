@@ -10,6 +10,7 @@ import SavedStories from "@/pages/SavedStories";
 import Settings from "@/pages/Settings";
 import Characters from "@/pages/Characters";
 import HeroesOfFaith from "@/pages/HeroesOfFaith";
+import ImageAnalysis from "@/pages/ImageAnalysis";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/settings" component={Settings} />
       <Route path="/characters" component={Characters} />
       <Route path="/heroes-of-faith" component={HeroesOfFaith} />
+      <Route path="/image-analysis" component={ImageAnalysis} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -34,7 +36,9 @@ function App() {
       <div className="min-h-screen flex flex-col font-body text-textDark">
         <Header />
         <main className="flex-grow container mx-auto p-4 md:px-8 md:py-6">
-          <Router />
+          <div className="content-container rounded-lg shadow-lg p-4 md:p-6">
+            <Router />
+          </div>
         </main>
         <Footer />
       </div>

@@ -14,3 +14,33 @@ export async function generateStory(storyRequest: StoryRequest): Promise<StoryRe
     throw error;
   }
 }
+
+// Function to convert a file to base64 format
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      const base64String = reader.result as string;
+      // Remove the prefix (e.g., "data:image/jpeg;base64,")
+      const base64Content = base64String.split(',')[1];
+      resolve(base64Content);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+}
+
+// Function to analyze an image with OpenAI
+export async function analyzeImage(imageBase64: string): Promise<string> {
+  try {
+    const response = await apiRequest('POST', '/api/analyze-image', { image: imageBase64 });
+    if (!response.ok) {
+      throw new Error('Failed to analyze image');
+    }
+    const data = await response.json();
+    return data.analysis;
+  } catch (error) {
+    console.error('Error analyzing image:', error);
+    throw error;
+  }
+}

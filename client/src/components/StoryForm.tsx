@@ -77,9 +77,9 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
   }, [useTimeTravel, form]);
 
   return (
-    <Card className="bg-white/95 rounded-2xl shadow-xl">
+    <Card className="content-container rounded-2xl shadow-lg">
       <CardContent className="p-6">
-        <h3 className="text-2xl font-heading font-bold mb-4 text-textDark">Create Your Story</h3>
+        <h3 className="text-2xl font-heading font-bold mb-4 text-secondary text-center">Create Your Biblical Adventure</h3>
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -391,8 +391,8 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
               )}
             />
 
-            <div className="p-4 bg-secondary/10 rounded-lg border border-secondary/20">
-              <div className="flex items-start space-x-2">
+            <div className="p-5 bg-gradient-to-br from-secondary/10 to-primary/5 rounded-lg border border-secondary/20 shadow-sm mt-2">
+              <div className="flex items-start space-x-3">
                 <Checkbox 
                   id="useTimeTravel" 
                   checked={useTimeTravel} 
@@ -402,12 +402,13 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                 <div className="space-y-1">
                   <label
                     htmlFor="useTimeTravel"
-                    className="font-medium text-sm cursor-pointer"
+                    className="font-medium text-base cursor-pointer text-secondary"
                   >
                     Enable Time Travel Mode
                   </label>
-                  <p className="text-xs text-muted-foreground">
-                    Use one of your saved characters to travel back in time and witness biblical events
+                  <p className="text-sm text-gray-600">
+                    Create stories where your characters travel back in time to witness biblical events or meet Heroes of Faith. 
+                    <a href="/characters" className="ml-1 text-primary font-medium hover:underline">Create a character</a> first.
                   </p>
                 </div>
               </div>
@@ -457,7 +458,10 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                       </FormControl>
                       {characters.length === 0 && !charactersLoading && (
                         <FormDescription className="mt-2">
-                          <a href="/characters" className="text-primary underline underline-offset-2">
+                          <a href="/characters" className="text-primary font-medium hover:underline flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                              <path d="M12 5v14M5 12h14"/>
+                            </svg>
                             Create your first time traveler
                           </a>
                         </FormDescription>
@@ -471,7 +475,7 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
             
             <Button 
               type="submit" 
-              className="w-full py-3 px-4 bg-secondary hover:bg-secondary/90 text-white font-medium rounded-lg transition duration-200 flex items-center justify-center"
+              className="w-full py-4 px-4 mt-4 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white font-medium rounded-xl shadow-lg transition duration-200 flex items-center justify-center"
               disabled={loading}
             >
               {loading ? (

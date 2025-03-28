@@ -36,23 +36,52 @@ export default function Home() {
     <div>
       {/* Hero Section */}
       <section className="mb-8 text-center">
-        <div className="max-w-3xl mx-auto bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 relative overflow-hidden" 
-             style={{ 
-               backgroundImage: `url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxkZWZzPjxwYXR0ZXJuIGlkPSJjbG91ZHMiIHBhdHRlcm5Vbml0cz0idXNlclNwYWNlT25Vc2UiIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiB2aWV3Qm94PSIwIDAgMjAwIDIwMCI+PGNpcmNsZSBmaWxsPSIjZmZmZmZmIiBmaWxsLW9wYWNpdHk9IjAuMiIgY3g9IjQwIiBjeT0iNDAiIHI9IjE1Ii8+PGNpcmNsZSBmaWxsPSIjZmZmZmZmIiBmaWxsLW9wYWNpdHk9IjAuMiIgY3g9IjYwIiBjeT0iNDUiIHI9IjE4Ii8+PGNpcmNsZSBmaWxsPSIjZmZmZmZmIiBmaWxsLW9wYWNpdHk9IjAuMiIgY3g9IjUwIiBjeT0iMzAiIHI9IjIwIi8+PGNpcmNsZSBmaWxsPSIjZmZmZmZmIiBmaWxsLW9wYWNpdHk9IjAuMiIgY3g9IjE2MCIgY3k9IjE2MCIgcj0iMTUiLz48Y2lyY2xlIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4yIiBjeD0iMTgwIiBjeT0iMTY1IiByPSIxOCIvPjxjaXJjbGUgZmlsbD0iI2ZmZmZmZiIgZmlsbC1vcGFjaXR5PSIwLjIiIGN4PSIxNzAiIGN5PSIxNTAiIHI9IjIwIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2Nsb3VkcykiLz48L3N2Zz4=')` 
-             }}>
-          <h2 className="text-3xl md:text-4xl font-heading font-bold mb-4 text-secondary">Christian Bedtime Stories</h2>
+        <div className="max-w-3xl mx-auto content-container rounded-2xl shadow-xl p-6 relative overflow-hidden">
+          <h2 className="text-3xl md:text-4xl font-heading font-bold mb-4 text-secondary drop-shadow-sm">Lion Tails: Christian Bedtime Stories</h2>
           <p className="text-lg mb-6">Create beautiful faith-based stories for your little ones, filled with Biblical wisdom and heartwarming lessons.</p>
-          <div className="flex justify-center">
-            <div className="animate-[float_6s_ease-in-out_infinite] w-32 h-32 mr-4">
-              <img src="https://images.unsplash.com/photo-1512820790803-83ca734da794?ixlib=rb-1.2.1&auto=format&fit=crop&w=150&q=80" alt="Child with Bible" className="w-full h-full object-cover rounded-full shadow-md" />
+          <div className="flex flex-col md:flex-row justify-center items-center gap-4">
+            <div className="flex-1 p-4">
+              <div className="animate-[float_6s_ease-in-out_infinite] w-48 h-48 mx-auto">
+                <img src="/images/bible-image.jpg" alt="Bible" className="w-full h-full object-cover rounded-full shadow-lg border-2 border-white" />
+              </div>
             </div>
-            <div className="animate-[float_6s_ease-in-out_infinite] w-32 h-32 animation-delay-1000" style={{ animationDelay: "2s" }}>
-              <img src="https://images.unsplash.com/photo-1504544750208-dc0358e63f7f?ixlib=rb-1.2.1&auto=format&fit=crop&w=150&q=80" alt="Open Bible" className="w-full h-full object-cover rounded-full shadow-md" />
+            <div className="flex-1 p-4">
+              <div className="bg-white/70 backdrop-blur-sm rounded-lg p-4 shadow-md">
+                <h3 className="text-xl font-heading font-bold mb-2">Features:</h3>
+                <ul className="text-left space-y-2">
+                  <li className="flex items-center">
+                    <span className="text-primary mr-2">✓</span> 
+                    <span>Personalized bedtime stories with your child's name</span>
+                  </li>
+                  <li className="flex items-center">
+                    <span className="text-primary mr-2">✓</span> 
+                    <span>Biblical wisdom and moral lessons</span>
+                  </li>
+                  <li className="flex items-center">
+                    <span className="text-primary mr-2">✓</span> 
+                    <span>Time travel adventures to Bible events</span>
+                  </li>
+                  <li className="flex items-center">
+                    <span className="text-primary mr-2">✓</span> 
+                    <span>Discover Heroes of Faith from history</span>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
-          <div className="mt-6">
-            <Button variant="outline" className="bg-primary text-white hover:bg-primary/90 border-none" onClick={() => navigate("/music")}>
+          <div className="mt-6 flex flex-wrap justify-center gap-4">
+            <Button 
+              className="bg-primary text-white hover:bg-primary/90 border-none shadow-md"
+              onClick={() => navigate("/music")}
+            >
               Check Out Music & Chords
+            </Button>
+            <Button 
+              variant="outline"
+              className="bg-white/50 backdrop-blur-sm hover:bg-white/70 shadow-md"
+              onClick={() => navigate("/heroes-of-faith")}
+            >
+              Explore Heroes of Faith
             </Button>
           </div>
         </div>
@@ -60,14 +89,14 @@ export default function Home() {
 
       {/* Story Generation Info */}
       <div className="max-w-4xl mx-auto mb-8">
-        <div className="bg-white/90 rounded-xl shadow-md p-4 text-center">
-          <div className="inline-block bg-secondary/10 px-3 py-1 rounded-full text-secondary font-medium text-sm mb-2">
+        <div className="content-container rounded-xl shadow-lg p-6 text-center">
+          <div className="inline-block bg-secondary/20 px-4 py-2 rounded-full text-secondary font-medium text-sm mb-3">
             ✨ AI-Powered Stories
           </div>
-          <h3 className="text-xl font-heading font-bold mb-2">Your First 50 Stories Are Free!</h3>
+          <h3 className="text-2xl font-heading font-bold mb-2">Your First 50 Stories Are Free!</h3>
           <p className="text-gray-700 mb-2">
             Enjoy 50 free AI-generated stories to start, plus 10 more each month. Want unlimited stories?
-            Add your own OpenAI API key in the <a href="/settings" className="text-secondary hover:underline">Settings</a> page.
+            Add your own OpenAI API key in the <a href="/settings" className="text-secondary hover:underline font-medium">Settings</a> page.
           </p>
         </div>
       </div>
