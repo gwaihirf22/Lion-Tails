@@ -91,8 +91,8 @@ export async function generateStory(request: StoryRequest): Promise<StoryRespons
       };
     }
     
-    // For regular stories without OpenAI
-    if (!userApiKey) {
+    // For regular stories when no API key is available (neither user nor environment)
+    if (!userApiKey && !process.env.OPENAI_API_KEY) {
       // Handle edge case where childName is undefined
       const safeChildName = childName || "Child";
       const safeGender = gender || "boy";
@@ -110,6 +110,7 @@ export async function generateStory(request: StoryRequest): Promise<StoryRespons
         }
       }
       
+      console.log("No API key available, using demo story");
       return getDemoStory(safeChildName, safeGender, safeAnimal, safeTheme, biblicalEvent, bibleVerse, heroOfFaithName);
     }
     

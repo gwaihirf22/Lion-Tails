@@ -13,6 +13,13 @@ import { v4 as uuidv4 } from 'uuid';
 function getOpenAIClient(apiKey?: string | null) {
   // Use the provided key if available, otherwise use the system key
   const key = apiKey || process.env.OPENAI_API_KEY;
+  
+  if (!key) {
+    console.error("No OpenAI API key available");
+    throw new Error("OpenAI API key not found");
+  }
+  
+  console.log("Using OpenAI client with API key:", key ? "API key is set" : "No API key available");
   return new OpenAI({ apiKey: key });
 }
 
@@ -72,7 +79,9 @@ Format your response as valid JSON with the following structure:
     
     // Use a model with broader availability (gpt-3.5-turbo) to avoid permission issues
     // We'll use the user's model if provided, otherwise fall back to gpt-3.5-turbo
+    // Using a more widely available model to ensure compatibility
     const model = userModel || "gpt-3.5-turbo";
+    console.log("Using OpenAI model:", model);
     
     // Call OpenAI API with a fresh client using the appropriate API key
     const openaiClient = getOpenAIClient(userApiKey || undefined);
