@@ -280,6 +280,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Search for songs
+  app.get("/api/songs/search", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      
+      if (!query || query.length < 2) {
+        return res.status(400).json({ message: "Search query must be at least 2 characters" });
+      }
+      
+      const results = searchSongs(query);
+      res.json(results);
+    } catch (error) {
+      console.error("Error searching songs:", error);
+      res.status(500).json({ message: "Failed to search songs" });
+    }
+  });
+  
+  // Get popular songs
+  app.get("/api/songs/popular", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string || "10");
+      const results = getPopularSongs(limit);
+      res.json(results);
+    } catch (error) {
+      console.error("Error fetching popular songs:", error);
+      res.status(500).json({ message: "Failed to fetch popular songs" });
+    }
+  });
+  
+  // Get song by ID
+  app.get("/api/songs/:id", async (req, res) => {
+    try {
+      const songId = req.params.id;
+      const song = findSongById(songId);
+      
+      if (!song) {
+        return res.status(404).json({ message: "Song not found" });
+      }
+      
+      res.json(song);
+    } catch (error) {
+      console.error("Error fetching song:", error);
+      res.status(500).json({ message: "Failed to fetch song" });
+    }
+  });
+  
   // API routes for OpenAI settings
   
   // Get user's OpenAI API key (note: we never return the actual key for security, just if it exists)

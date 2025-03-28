@@ -69,10 +69,17 @@ export default function SongSearch({ onSave }: SongSearchProps) {
       });
 
       // Call API to generate chords for the selected song
-      const response = await apiRequest(
-        "GET", 
-        `/api/songs/find/${selectedSong.id}/generate-chords`
-      );
+      const response = await fetch("/api/generate-chords", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: selectedSong.title,
+          lyrics: selectedSong.lyrics.split("\n"),
+          artist: selectedSong.artist || "Unknown Artist",
+        }),
+      });
 
       if (!response.ok) throw new Error("Failed to generate chords");
 
