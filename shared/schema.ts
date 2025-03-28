@@ -40,14 +40,13 @@ export type Character = z.infer<typeof characterSchema>;
 
 // Schema for story generation with optional fields
 export const storyRequestSchema = z.object({
-  // Required fields
-  childName: z.string().min(1, "Character name is required"),
+  // Fields that are conditionally required based on useTimeTravel
+  childName: z.string().min(1, "Character name is required").optional(),
   gender: z.enum(["boy", "girl"], {
-    required_error: "Please select a gender",
     invalid_type_error: "Gender must be 'boy' or 'girl'",
-  }),
+  }).optional(),
   // Optional fields with defaults or optional values
-  animal: z.string().default("lion"),
+  animal: z.string().default("lion").optional(),
   theme: z.string().default("faith"),
   biblicalEvent: z.string().default("none"),
   useTimeTravel: z.boolean().default(false),
@@ -61,6 +60,16 @@ export const storyRequestSchema = z.object({
     hobby: z.string().optional(),
     personality: z.string().optional(),
   }).optional(),
+}).refine((data) => {
+  // If time travel is enabled, characterId is required
+  if (data.useTimeTravel) {
+    return !!data.characterId;
+  }
+  // If time travel is disabled, childName and gender are required
+  return !!data.childName && !!data.gender;
+}, {
+  message: "Character selection is required for time travel mode. Child's name and gender are required otherwise.",
+  path: ["characterId"]
 });
 
 export type StoryRequest = z.infer<typeof storyRequestSchema>;

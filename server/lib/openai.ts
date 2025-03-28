@@ -87,11 +87,11 @@ export async function generateStory(request: StoryRequest): Promise<StoryRespons
     } catch (error) {
       console.error("Error generating story with OpenAI:", error);
       // Fall back to demo story if OpenAI fails
-      return getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
+      return getDemoStory(childName || "Child", gender || "boy", animal || "lion", theme, biblicalEvent, bibleVerse);
     }
   } else {
     // User has exceeded their free quota, return a demo story with a message
-    const demoStory = getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
+    const demoStory = getDemoStory(childName || "Child", gender || "boy", animal || "lion", theme, biblicalEvent, bibleVerse);
     
     // Add a message to the story about reaching the quota
     demoStory.content = `[You have reached your free story quota. Please add your own OpenAI API key to continue generating unique stories, or enjoy our pre-written stories until your next free stories become available.]\n\n${demoStory.content}`;

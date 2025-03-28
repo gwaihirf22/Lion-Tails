@@ -32,7 +32,7 @@ export async function generateStoryWithOpenAI(request: StoryRequest): Promise<St
       throw new Error("OpenAI API key not found");
     }
 
-    const prompt = buildStoryPrompt(childName, gender, animal, theme, biblicalEvent, storyTemplate, useTimeTravel, character);
+    const prompt = buildStoryPrompt(childName || "Child", gender || "boy", animal || "lion", theme, biblicalEvent, storyTemplate, useTimeTravel, character);
     
     // System prompt that defines what kind of response we want
     const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author. Create wholesome, faith-based stories with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
@@ -190,7 +190,7 @@ function downloadImage(url: string, filepath: string): Promise<void> {
   });
 }
 
-function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null, useTimeTravel?: boolean, character?: any): string {
+function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any): string {
   let prompt = `Write a traditional orthodox Christian bedtime story for a ${gender} named ${childName} who loves ${animal}s. The story should teach about ${theme}.`;
 
   if (biblicalEvent && biblicalEvent !== 'none') {

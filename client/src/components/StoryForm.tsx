@@ -54,8 +54,12 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
   useEffect(() => {
     form.setValue("useTimeTravel", useTimeTravel);
     
-    // Clear character selection when time travel is disabled
-    if (!useTimeTravel) {
+    if (useTimeTravel) {
+      // In time travel mode, child's name, gender, and animal are optional
+      // (they will be handled by the character's details)
+      form.clearErrors(['childName', 'gender', 'animal']);
+    } else {
+      // Clear character selection when time travel is disabled
       form.setValue("characterId", undefined);
     }
   }, [useTimeTravel, form]);
@@ -67,100 +71,105 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="childName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">Child's Name</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-user-round">
-                          <circle cx="12" cy="8" r="5" /><path d="M20 21a8 8 0 1 0-16 0" />
-                        </svg>
-                      </span>
-                      <Input 
-                        placeholder="Enter child's name" 
-                        className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
-                        {...field} 
-                      />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="gender"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">Child's Gender</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-heart">
-                          <path d="M7 3C4.239 3 2 5.216 2 7.95c0 2.207.875 7.445 9.488 12.74a.985.985 0 0 0 1.024 0C21.125 15.395 22 10.157 22 7.95 22 5.216 19.761 3 17 3s-5 3-5 3-2.239-3-5-3z" />
-                        </svg>
-                      </span>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                          <SelectValue placeholder="Select gender" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="boy">Boy</SelectItem>
-                          <SelectItem value="girl">Girl</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="animal"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">Favorite Animal</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-dog">
-                          <path d="M10 5.172C10 3.782 8.423 2.679 6.5 3c-2.823.47-4.113 6.006-4 7 .08.703 1.725 1.722 3.656 1 1.261-.472 1.96-1.45 2.344-2.5" /><path d="M14.267 5.172c0-1.39 1.577-2.493 3.5-2.172 2.823.47 4.113 6.006 4 7-.08.703-1.725 1.722-3.656 1-1.261-.472-1.855-1.45-2.239-2.5" /><path d="M8 14v.5" /><path d="M16 14v.5" /><path d="M11.25 16.25h1.5L12 17l-.75-.75Z" /><path d="M4.42 11.247A13.152 13.152 0 0 0 4 14.556C4 17.59 7 20 12 20s8-2.41 8-5.444c0-1.135-.134-2.252-.396-3.309" />
-                        </svg>
-                      </span>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                          <SelectValue placeholder="Select an animal" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="lion">Lion</SelectItem>
-                          <SelectItem value="lamb">Lamb</SelectItem>
-                          <SelectItem value="dove">Dove</SelectItem>
-                          <SelectItem value="fish">Fish</SelectItem>
-                          <SelectItem value="sheep">Sheep</SelectItem>
-                          <SelectItem value="camel">Camel</SelectItem>
-                          <SelectItem value="dog">Dog</SelectItem>
-                          <SelectItem value="cat">Cat</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Only show child fields when time travel is disabled */}
+            {!useTimeTravel && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="childName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">Child's Name</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-user-round">
+                              <circle cx="12" cy="8" r="5" /><path d="M20 21a8 8 0 1 0-16 0" />
+                            </svg>
+                          </span>
+                          <Input 
+                            placeholder="Enter child's name" 
+                            className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
+                            {...field} 
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="gender"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">Child's Gender</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-heart">
+                              <path d="M7 3C4.239 3 2 5.216 2 7.95c0 2.207.875 7.445 9.488 12.74a.985.985 0 0 0 1.024 0C21.125 15.395 22 10.157 22 7.95 22 5.216 19.761 3 17 3s-5 3-5 3-2.239-3-5-3z" />
+                            </svg>
+                          </span>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
+                            <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                              <SelectValue placeholder="Select gender" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="boy">Boy</SelectItem>
+                              <SelectItem value="girl">Girl</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="animal"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">Favorite Animal</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-dog">
+                              <path d="M10 5.172C10 3.782 8.423 2.679 6.5 3c-2.823.47-4.113 6.006-4 7 .08.703 1.725 1.722 3.656 1 1.261-.472 1.96-1.45 2.344-2.5" /><path d="M14.267 5.172c0-1.39 1.577-2.493 3.5-2.172 2.823.47 4.113 6.006 4 7-.08.703-1.725 1.722-3.656 1-1.261-.472-1.855-1.45-2.239-2.5" /><path d="M8 14v.5" /><path d="M16 14v.5" /><path d="M11.25 16.25h1.5L12 17l-.75-.75Z" /><path d="M4.42 11.247A13.152 13.152 0 0 0 4 14.556C4 17.59 7 20 12 20s8-2.41 8-5.444c0-1.135-.134-2.252-.396-3.309" />
+                            </svg>
+                          </span>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
+                            <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                              <SelectValue placeholder="Select an animal" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="lion">Lion</SelectItem>
+                              <SelectItem value="lamb">Lamb</SelectItem>
+                              <SelectItem value="dove">Dove</SelectItem>
+                              <SelectItem value="fish">Fish</SelectItem>
+                              <SelectItem value="sheep">Sheep</SelectItem>
+                              <SelectItem value="camel">Camel</SelectItem>
+                              <SelectItem value="dog">Dog</SelectItem>
+                              <SelectItem value="cat">Cat</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
             
             <FormField
               control={form.control}

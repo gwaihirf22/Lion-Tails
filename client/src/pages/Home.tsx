@@ -44,10 +44,10 @@ export default function Home() {
           <p className="text-lg mb-6">Create beautiful faith-based stories for your little ones, filled with Biblical wisdom and heartwarming lessons.</p>
           <div className="flex justify-center">
             <div className="animate-[float_6s_ease-in-out_infinite] w-32 h-32 mr-4">
-              <img src="https://images.unsplash.com/photo-1579890002580-841359ca1aab?ixlib=rb-1.2.1&auto=format&fit=crop&w=150&q=80" alt="Sleeping child" className="w-full h-full object-cover rounded-full shadow-md" />
+              <img src="https://images.unsplash.com/photo-1512820790803-83ca734da794?ixlib=rb-1.2.1&auto=format&fit=crop&w=150&q=80" alt="Child with Bible" className="w-full h-full object-cover rounded-full shadow-md" />
             </div>
             <div className="animate-[float_6s_ease-in-out_infinite] w-32 h-32 animation-delay-1000" style={{ animationDelay: "2s" }}>
-              <img src="https://images.unsplash.com/photo-1531386151447-fd76ad50012f?ixlib=rb-1.2.1&auto=format&fit=crop&w=150&q=80" alt="Star night sky" className="w-full h-full object-cover rounded-full shadow-md" />
+              <img src="https://images.unsplash.com/photo-1504544750208-dc0358e63f7f?ixlib=rb-1.2.1&auto=format&fit=crop&w=150&q=80" alt="Open Bible" className="w-full h-full object-cover rounded-full shadow-md" />
             </div>
           </div>
           <div className="mt-6">

@@ -276,12 +276,27 @@ export default function Settings() {
                   <SelectValue placeholder="Select model" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gpt-4o-mini">GPT-4o Mini (Recommended)</SelectItem>
-                  <SelectItem value="gpt-4o-mini-tts">GPT-4o Mini TTS</SelectItem>
+                  {hasStoredKey ? (
+                    <>
+                      <SelectItem value="gpt-4o">GPT-4o (Premium)</SelectItem>
+                      <SelectItem value="gpt-4-turbo">GPT-4 Turbo (Premium)</SelectItem>
+                      <SelectItem value="gpt-4">GPT-4 (Premium)</SelectItem>
+                      <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Faster)</SelectItem>
+                      <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
+                      <SelectItem value="gpt-4o-mini-tts">GPT-4o Mini TTS</SelectItem>
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="gpt-4o-mini">GPT-4o Mini (Recommended)</SelectItem>
+                      <SelectItem value="gpt-4o-mini-tts">GPT-4o Mini TTS</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-2">
-                Select which OpenAI model to use for story generation. Models have different capabilities and pricing.
+                {hasStoredKey 
+                  ? "With your own API key, you can access premium models like GPT-4o. Premium models may result in higher quality stories but will use more of your API credits."
+                  : "Without your own API key, only basic models are available. Add your OpenAI API key to unlock premium models."}
               </p>
             </div>
           </CardContent>
