@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
-// Import the SVG as an asset
-import aslanIcon from "@/assets/aslan-lion.svg";
+// Import the Lion book image
+import lionBookIcon from "@/assets/lion-book.jpg";
 
 export default function Header() {
   const [location] = useLocation();
@@ -12,7 +12,7 @@ export default function Header() {
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <img 
-            src={aslanIcon} 
+            src={lionBookIcon} 
             alt="Lion Tails Logo" 
             className="w-12 h-12 rounded-full object-cover bg-white p-1"
           />

@@ -26,6 +26,8 @@ interface StoryFormProps {
 
 export default function StoryForm({ onSubmit, loading = false }: StoryFormProps) {
   const [useTimeTravel, setUseTimeTravel] = useState(false);
+  const [hasSelectedBiblicalEvent, setHasSelectedBiblicalEvent] = useState(false);
+  const [hasSelectedHeroOfFaith, setHasSelectedHeroOfFaith] = useState(false);
   
   // Fetch characters for selection
   const { data: characters = [], isLoading: charactersLoading } = useQuery<Character[]>({
@@ -288,8 +290,19 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                         </svg>
                       </span>
                       <Select
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          if (value !== "none") {
+                            setHasSelectedBiblicalEvent(true);
+                            // Reset Hero of Faith if Biblical Event is selected
+                            form.setValue("heroOfFaith", "none");
+                            setHasSelectedHeroOfFaith(false);
+                          } else {
+                            setHasSelectedBiblicalEvent(false);
+                          }
+                        }}
                         defaultValue={field.value}
+                        disabled={hasSelectedHeroOfFaith}
                       >
                         <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
                           <SelectValue placeholder="Select a Bible story if desired" />
@@ -335,8 +348,19 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                         </svg>
                       </span>
                       <Select
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          if (value !== "none") {
+                            setHasSelectedHeroOfFaith(true);
+                            // Reset Biblical Event if Hero of Faith is selected
+                            form.setValue("biblicalEvent", "none");
+                            setHasSelectedBiblicalEvent(false);
+                          } else {
+                            setHasSelectedHeroOfFaith(false);
+                          }
+                        }}
                         defaultValue={field.value}
+                        disabled={hasSelectedBiblicalEvent}
                       >
                         <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
                           <SelectValue placeholder="Select a Christian hero if desired" />
