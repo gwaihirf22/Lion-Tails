@@ -20,7 +20,7 @@ interface StoryStats {
 export default function Settings() {
   const { toast } = useToast();
   const [apiKey, setApiKey] = useState("");
-  const [selectedModel, setSelectedModel] = useState("gpt-4o");
+  const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
   const [hasStoredKey, setHasStoredKey] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -276,10 +276,8 @@ export default function Settings() {
                   <SelectValue placeholder="Select model" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gpt-4o">GPT-4o (Recommended)</SelectItem>
-                  <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
-                  <SelectItem value="gpt-4">GPT-4</SelectItem>
-                  <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Faster, less detailed)</SelectItem>
+                  <SelectItem value="gpt-4o-mini">GPT-4o Mini (Recommended)</SelectItem>
+                  <SelectItem value="gpt-4o-mini-tts">GPT-4o Mini TTS</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-2">

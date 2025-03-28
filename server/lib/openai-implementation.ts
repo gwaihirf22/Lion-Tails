@@ -55,8 +55,9 @@ Format your response as valid JSON with the following structure:
     }`;
     
     // Get the user's preferred model or use the default
+    // Using gpt-4o-mini since original gpt-4o is not available
     const userModel = await storage.getUserOpenAIModel();
-    const model = userModel || "gpt-4o";
+    const model = userModel || "gpt-4o-mini";
     
     // Call OpenAI API with a fresh client using the current API key
     const openaiClient = getOpenAIClient();

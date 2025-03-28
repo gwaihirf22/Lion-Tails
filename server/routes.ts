@@ -282,7 +282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/settings/openai-model", async (req, res) => {
     try {
       const model = await storage.getUserOpenAIModel();
-      res.json({ model: model || 'gpt-4o' });
+      res.json({ model: model || 'gpt-4o-mini' });
     } catch (error) {
       console.error("Error fetching OpenAI model:", error);
       res.status(500).json({ message: "Failed to fetch model setting" });
