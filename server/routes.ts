@@ -427,14 +427,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Analyze an image with OpenAI Vision API
   app.post("/api/analyze-image", async (req, res) => {
     try {
-      const { image } = req.body;
+      const { imageBase64 } = req.body;
       
-      if (!image || typeof image !== 'string') {
+      if (!imageBase64 || typeof imageBase64 !== 'string') {
         return res.status(400).json({ message: "Valid image data is required" });
       }
       
       // Analyze the image with OpenAI
-      const analysis = await analyzeImageWithOpenAI(image);
+      const analysis = await analyzeImageWithOpenAI(imageBase64);
       
       res.json({ analysis });
     } catch (error) {

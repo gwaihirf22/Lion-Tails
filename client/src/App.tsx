@@ -34,10 +34,10 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen flex flex-col font-body text-textDark">
+      <div className="min-h-screen flex flex-col font-body text-textDark bg-transparent">
         <Header />
         <main className="flex-grow container mx-auto p-4 md:px-8 md:py-6">
-          <div className="content-container rounded-lg shadow-lg p-4 md:p-6">
+          <div className="content-container rounded-2xl shadow-xl p-4 md:p-6 border border-primary/10">
             <Router />
           </div>
         </main>

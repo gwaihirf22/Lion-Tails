@@ -8,22 +8,22 @@ export default function Header() {
   // App name: "Lion Tails" - references Aslan/Jesus symbolism with a simple, memorable name that kids can easily remember
   
   return (
-    <header className="bg-primary/80 backdrop-blur-sm shadow-md">
+    <header className="bg-primary/60 backdrop-blur-md shadow-lg border-b border-white/10">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-3">
           <img 
             src={appIcon} 
             alt="Lion Tails Logo" 
-            className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-md"
+            className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-lg"
           />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-white drop-shadow-sm">Lion Tails</h1>
+          <h1 className="text-2xl md:text-3xl font-heading font-bold text-white drop-shadow-lg">Lion Tails</h1>
         </div>
         <nav>
-          <ul className="flex space-x-3 font-heading text-sm md:text-base">
+          <ul className="flex space-x-2 font-heading text-sm md:text-base">
             <li>
               <Link 
                 href="/" 
-                className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
+                className={`text-white hover:text-accent/90 duration-200 px-3 py-1.5 rounded-full ${location === '/' ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
               >
                 Home
               </Link>
@@ -31,7 +31,7 @@ export default function Header() {
             <li>
               <Link 
                 href="/music" 
-                className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/music' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
+                className={`text-white hover:text-accent/90 duration-200 px-3 py-1.5 rounded-full ${location === '/music' ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
               >
                 Music
               </Link>
@@ -39,7 +39,7 @@ export default function Header() {
             <li>
               <Link 
                 href="/saved-stories" 
-                className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/saved-stories' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
+                className={`text-white hover:text-accent/90 duration-200 px-3 py-1.5 rounded-full ${location === '/saved-stories' ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
               >
                 My Stories
               </Link>
@@ -47,7 +47,7 @@ export default function Header() {
             <li>
               <Link 
                 href="/characters" 
-                className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/characters' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
+                className={`text-white hover:text-accent/90 duration-200 px-3 py-1.5 rounded-full ${location === '/characters' ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
               >
                 Characters
               </Link>
@@ -55,16 +55,15 @@ export default function Header() {
             <li>
               <Link 
                 href="/heroes-of-faith" 
-                className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/heroes-of-faith' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
+                className={`text-white hover:text-accent/90 duration-200 px-3 py-1.5 rounded-full ${location === '/heroes-of-faith' ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
               >
                 Heroes
               </Link>
             </li>
-
             <li>
               <Link 
                 href="/settings" 
-                className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/settings' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
+                className={`text-white hover:text-accent/90 duration-200 px-3 py-1.5 rounded-full ${location === '/settings' ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
               >
                 Settings
               </Link>

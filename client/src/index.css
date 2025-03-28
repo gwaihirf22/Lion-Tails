@@ -19,6 +19,7 @@
 
 @layer utilities {
   .content-container {
-    @apply bg-white/90 backdrop-blur-sm;
+    @apply bg-white/85 backdrop-blur-md;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   }
 }
