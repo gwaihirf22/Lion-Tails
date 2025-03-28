@@ -4,9 +4,11 @@ import { getBiblicalEventStoryTemplate } from "../data/storyTemplates";
 import { getBibleVerseByTheme } from "../data/bibleVerses";
 import { storage } from "../storage";
 
-// Initialize OpenAI API client
+// Function to get an OpenAI client with the current API key
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+function getOpenAIClient() {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
 
 export async function generateStoryWithOpenAI(request: StoryRequest): Promise<StoryResponse> {
   const { childName, gender, animal, theme, biblicalEvent } = request;
@@ -45,8 +47,9 @@ Format your response as valid JSON with the following structure:
     const userModel = await storage.getUserOpenAIModel();
     const model = userModel || "gpt-4o";
     
-    // Call OpenAI API
-    const response = await openai.chat.completions.create({
+    // Call OpenAI API with a fresh client using the current API key
+    const openaiClient = getOpenAIClient();
+    const response = await openaiClient.chat.completions.create({
       model: model,
       messages: [
         { role: "system", content: systemPrompt },
