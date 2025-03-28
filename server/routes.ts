@@ -117,23 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(song);
   });
   
-  // Search for songs
-  app.get("/api/songs/search", (req, res) => {
-    const query = req.query.q as string;
-    if (!query) {
-      return res.status(400).json({ message: "Search query is required" });
-    }
-    
-    const results = searchSongs(query);
-    res.json(results);
-  });
-  
-  // Get popular songs
-  app.get("/api/songs/popular", (req, res) => {
-    const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
-    const popularSongs = getPopularSongs(limit);
-    res.json(popularSongs);
-  });
+  // These routes are implemented below with async/await
   
   // Find song lyrics by ID and generate chords
   app.get("/api/songs/find/:id/generate-chords", async (req, res) => {
