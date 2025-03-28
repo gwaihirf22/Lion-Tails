@@ -10,15 +10,21 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Function to get an OpenAI client with the current API key
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-function getOpenAIClient() {
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+function getOpenAIClient(apiKey?: string | null) {
+  // Use the provided key if available, otherwise use the system key
+  const key = apiKey || process.env.OPENAI_API_KEY;
+  return new OpenAI({ apiKey: key });
 }
 
 export async function generateStoryWithOpenAI(request: StoryRequest): Promise<StoryResponse> {
-  const { childName, gender, animal, theme, biblicalEvent, useTimeTravel, characterId } = request;
+  const { childName, gender, animal, theme, biblicalEvent, useTimeTravel, characterId, storyType } = request;
 
   const storyTemplate = biblicalEvent ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
   const bibleVerse = getBibleVerseByTheme(theme);
+  
+  // Get user's API key and model upfront
+  const userApiKey = await storage.getUserOpenAIKey();
+  const userModel = await storage.getUserOpenAIModel();
   
   // Get character information if time travel is enabled
   let character = undefined;
@@ -27,12 +33,13 @@ export async function generateStoryWithOpenAI(request: StoryRequest): Promise<St
   }
 
   try {
-    if (!process.env.OPENAI_API_KEY) {
+    // Check if we have any API key to use (user's or environment)
+    if (!userApiKey && !process.env.OPENAI_API_KEY) {
       console.error("OpenAI API key not found");
       throw new Error("OpenAI API key not found");
     }
 
-    const prompt = buildStoryPrompt(childName || "Child", gender || "boy", animal || "lion", theme, biblicalEvent, storyTemplate, useTimeTravel, character);
+    const prompt = buildStoryPrompt(childName || "Child", gender || "boy", animal || "lion", theme, biblicalEvent, storyTemplate, useTimeTravel, character, storyType || "regular");
     
     // System prompt that defines what kind of response we want
     const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author. Create wholesome, faith-based stories with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
@@ -54,13 +61,12 @@ Format your response as valid JSON with the following structure:
       "imagePrompt": "A short description for an illustration of a key scene in the biblical style"
     }`;
     
-    // Get the user's preferred model or use the default
     // Using gpt-4o-mini since original gpt-4o is not available
-    const userModel = await storage.getUserOpenAIModel();
+    // We already retrieved userModel earlier
     const model = userModel || "gpt-4o-mini";
     
-    // Call OpenAI API with a fresh client using the current API key
-    const openaiClient = getOpenAIClient();
+    // Call OpenAI API with a fresh client using the appropriate API key
+    const openaiClient = getOpenAIClient(userApiKey || undefined);
     const response = await openaiClient.chat.completions.create({
       model: model,
       messages: [
@@ -94,13 +100,17 @@ Format your response as valid JSON with the following structure:
     // Get the image prompt
     const imagePrompt = jsonContent.imagePrompt || `A child named ${childName} with ${animal}s in a biblical setting`;
     
-    // Generate an image for the story
+    // Generate an image for the story only if the user is using their own API key
+    // gpt-4o-mini doesn't support image generation, so we need to check if we're using a custom key
     let imageUrl = null;
-    try {
-      imageUrl = await generateStoryImage(imagePrompt);
-    } catch (imageError) {
-      console.error("Error generating story image:", imageError);
-      // Continue without an image if there's an error
+    // We already retrieved the userApiKey earlier
+    if (userApiKey) {
+      try {
+        imageUrl = await generateStoryImage(imagePrompt);
+      } catch (imageError) {
+        console.error("Error generating story image:", imageError);
+        // Continue without an image if there's an error
+      }
     }
     
     // Return the story with the bible verse and image
@@ -120,7 +130,11 @@ Format your response as valid JSON with the following structure:
 // Function to generate an image for a story using DALL-E
 export async function generateStoryImage(imagePrompt: string): Promise<string | undefined> {
   try {
-    if (!process.env.OPENAI_API_KEY) {
+    // Get the user's API key (if they provided one)
+    const apiKey = await storage.getUserOpenAIKey();
+    
+    // Check if we have any API key to use (user's or environment)
+    if (!apiKey && !process.env.OPENAI_API_KEY) {
       console.error("OpenAI API key not found for image generation");
       return undefined;
     }
@@ -138,8 +152,9 @@ export async function generateStoryImage(imagePrompt: string): Promise<string | 
     // Append biblical art style to the prompt
     const enhancedPrompt = `${imagePrompt}. Render in a beautiful, child-friendly biblical illustration style with soft colors.`;
     
-    // Call DALL-E API to generate the image
-    const openaiClient = getOpenAIClient();
+    // Call DALL-E API to generate the image with user's key if available
+    // Convert null to undefined if needed
+    const openaiClient = getOpenAIClient(apiKey || undefined);
     const response = await openaiClient.images.generate({
       model: "dall-e-3",
       prompt: enhancedPrompt,
@@ -190,8 +205,15 @@ function downloadImage(url: string, filepath: string): Promise<void> {
   });
 }
 
-function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any): string {
-  let prompt = `Write a traditional orthodox Christian bedtime story for a ${gender} named ${childName} who loves ${animal}s. The story should teach about ${theme}.`;
+function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular"): string {
+  let storyFormat = "bedtime story";
+  if (storyType === "poem") {
+    storyFormat = "bedtime poem with rhyming verses";
+  } else if (storyType === "moral") {
+    storyFormat = "moral bedtime story with a clear ethical lesson";
+  }
+
+  let prompt = `Write a traditional orthodox Christian ${storyFormat} for a ${gender} named ${childName} who loves ${animal}s. The story should teach about ${theme}.`;
 
   if (biblicalEvent && biblicalEvent !== 'none') {
     if (storyTemplate) {

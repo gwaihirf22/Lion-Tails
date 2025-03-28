@@ -45,6 +45,7 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
       animal: "lion", // Default to lion (our app's mascot)
       theme: "courage", // Default theme
       biblicalEvent: "noahs-ark", // Default to Noah's Ark since it's fully available
+      storyType: "regular", // Default to regular bedtime story
       useTimeTravel: false,
       characterId: undefined,
     },
@@ -160,6 +161,14 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                               <SelectItem value="camel">Camel</SelectItem>
                               <SelectItem value="dog">Dog</SelectItem>
                               <SelectItem value="cat">Cat</SelectItem>
+                              <SelectItem value="elephant">Elephant</SelectItem>
+                              <SelectItem value="giraffe">Giraffe</SelectItem>
+                              <SelectItem value="tiger">Tiger</SelectItem>
+                              <SelectItem value="bear">Bear</SelectItem>
+                              <SelectItem value="donkey">Donkey</SelectItem>
+                              <SelectItem value="fox">Fox</SelectItem>
+                              <SelectItem value="whale">Whale</SelectItem>
+                              <SelectItem value="rabbit">Rabbit</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -200,6 +209,15 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                           <SelectItem value="patience">Patience</SelectItem>
                           <SelectItem value="faith">Faith</SelectItem>
                           <SelectItem value="honesty">Honesty</SelectItem>
+                          <SelectItem value="humility">Humility</SelectItem>
+                          <SelectItem value="love">Love</SelectItem>
+                          <SelectItem value="joy">Joy</SelectItem>
+                          <SelectItem value="peace">Peace</SelectItem>
+                          <SelectItem value="trust">Trust</SelectItem>
+                          <SelectItem value="wisdom">Wisdom</SelectItem>
+                          <SelectItem value="prayer">Prayer</SelectItem>
+                          <SelectItem value="gentleness">Gentleness</SelectItem>
+                          <SelectItem value="self-control">Self-Control</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -209,6 +227,42 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
               )}
             />
             
+            <FormField
+              control={form.control}
+              name="storyType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">Story Type</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-book">
+                          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+                        </svg>
+                      </span>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                          <SelectValue placeholder="Select a story type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="regular">Regular Bedtime Story</SelectItem>
+                          <SelectItem value="poem">Bedtime Poem</SelectItem>
+                          <SelectItem value="moral">Moral Bedtime Story</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </FormControl>
+                  <div className="text-xs text-secondary/70 mt-1">
+                    Choose what type of bedtime story you'd like to create.
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="biblicalEvent"
@@ -347,7 +401,9 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-wand-sparkles mr-2">
                     <path d="m6 17-5-5 5-5" /><path d="m19 17-5-5 5-5" /><path d="M12 12v9" /><path d="M12 3v9" /><path d="M12 12h9" /><path d="M3 12h9" /><path d="m17 12 5 5-5 5" /><path d="m7 12 5 5-5 5" />
                   </svg> 
-                  Create Bedtime Story
+                  {form.watch("storyType") === "poem" ? "Create Bedtime Poem" : 
+                  form.watch("storyType") === "moral" ? "Create Moral Bedtime Story" : 
+                  "Create Bedtime Story"}
                 </>
               )}
             </Button>
