@@ -62,16 +62,72 @@ export const songs: Song[] = [
   {
     id: "this-little-light",
     title: "This Little Light of Mine",
-    lyrics: [
-      { text: "This little light of mine,", chord: "C" },
-      { text: "I'm gonna let it shine.", chord: "G7" },
-      { text: "This little light of mine,", chord: "C" },
-      { text: "I'm gonna let it shine.", chord: "G7" },
-      { text: "This little light of mine,", chord: "C" },
-      { text: "I'm gonna let it shine.", chord: "F" },
-      { text: "Let it shine, let it shine, let it shine.", chord: "C G7 C" }
+    artist: "Harry Dixon Loes",
+    verses: [
+      {
+        lyrics: [
+          "This little light of mine,",
+          "I'm gonna let it shine.",
+          "This little light of mine,",
+          "I'm gonna let it shine.",
+          "This little light of mine,",
+          "I'm gonna let it shine."
+        ],
+        chords: ["C", "G7", "C", "G7", "C", "F"]
+      }
     ],
-    chords: ["C", "G7", "F"],
+    chorus: {
+      lyrics: ["Let it shine, let it shine, let it shine."],
+      chords: ["C G7 C"]
+    },
+    bridge: null,
+    chords: [
+      {
+        name: "C",
+        fingering: {
+          string1: 0,
+          string2: 1,
+          string3: 0,
+          string4: 2,
+          string5: 3,
+          string6: -1
+        },
+        barres: [],
+        position: 1
+      },
+      {
+        name: "G7",
+        fingering: {
+          string1: 1,
+          string2: 0,
+          string3: 0,
+          string4: 0,
+          string5: 2,
+          string6: 3
+        },
+        barres: [],
+        position: 1
+      },
+      {
+        name: "F",
+        fingering: {
+          string1: 1,
+          string2: 1,
+          string3: 2,
+          string4: 3,
+          string5: 3,
+          string6: 1
+        },
+        barres: [
+          {
+            fromString: 1,
+            toString: 6,
+            fret: 1
+          }
+        ],
+        position: 1
+      }
+    ],
     backgroundColor: "bg-secondary/10"
   },
   {
