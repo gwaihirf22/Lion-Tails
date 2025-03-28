@@ -7,6 +7,7 @@ import { generateStory } from "./lib/openai";
 import { generateSongChords } from "./lib/songGenerator";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { songs } from "./data/songs";
+import { searchSongs, findSongById, getPopularSongs } from "./lib/songSearch";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { v4 as uuidv4 } from "uuid";
@@ -114,6 +115,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Song not found" });
     }
     res.json(song);
+  });
+  
+  // Search for songs
+  app.get("/api/songs/search", (req, res) => {
+    const query = req.query.q as string;
+    if (!query) {
+      return res.status(400).json({ message: "Search query is required" });
+    }
+    
+    const results = searchSongs(query);
+    res.json(results);
+  });
+  
+  // Get popular songs
+  app.get("/api/songs/popular", (req, res) => {
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+    const popularSongs = getPopularSongs(limit);
+    res.json(popularSongs);
+  });
+  
+  // Find song lyrics by ID and generate chords
+  app.get("/api/songs/find/:id/generate-chords", async (req, res) => {
+    try {
+      const songEntry = findSongById(req.params.id);
+      
+      if (!songEntry) {
+        return res.status(404).json({ message: "Song not found" });
+      }
+      
+      // Generate chords for the found song
+      const songWithChords = await generateSongChords(songEntry.title, songEntry.lyrics);
+      
+      // Save the song with chords
+      const savedSong = await storage.createSong(songWithChords);
+      
+      res.json(savedSong);
+    } catch (error) {
+      console.error("Error finding song and generating chords:", error);
+      res.status(500).json({ message: "Failed to generate chords for the song" });
+    }
   });
 
   // Generate a story
