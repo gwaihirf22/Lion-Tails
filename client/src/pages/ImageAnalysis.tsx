@@ -11,7 +11,7 @@ import appIconImage from "@assets/image.jpg";
 
 export default function ImageAnalysis() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>('');
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -146,11 +146,13 @@ export default function ImageAnalysis() {
                 </div>
               ) : selectedImage ? (
                 <div className="flex flex-col items-center">
-                  <img 
-                    src={imagePreview} 
-                    alt="Selected preview" 
-                    className="max-h-64 max-w-full object-contain mb-4" 
-                  />
+                  {imagePreview && (
+                    <img 
+                      src={imagePreview} 
+                      alt="Selected preview" 
+                      className="max-h-64 max-w-full object-contain mb-4" 
+                    />
+                  )}
                   <span className="text-gray-500">Click to change image</span>
                 </div>
               ) : (

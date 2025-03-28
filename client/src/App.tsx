@@ -15,6 +15,9 @@ import ImageAnalysis from "@/pages/ImageAnalysis";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
+// Import the background image
+import lionTailsBackground from "@assets/Lion tails.jpg";
+
 function Router() {
   return (
     <Switch>
@@ -32,12 +35,34 @@ function Router() {
 }
 
 function App() {
+  // Style for app background
+  const appBackgroundStyle = {
+    backgroundImage: `url(${lionTailsBackground})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundAttachment: 'fixed',
+    backgroundRepeat: 'no-repeat',
+    position: 'relative' as const,
+  };
+
+  // Style for overlay to improve text readability
+  const overlayStyle = {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    zIndex: -1,
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen flex flex-col font-body text-textDark bg-transparent">
+      <div className="min-h-screen flex flex-col font-body text-textDark" style={appBackgroundStyle}>
+        <div style={overlayStyle}></div>
         <Header />
-        <main className="flex-grow container mx-auto p-4 md:px-8 md:py-6">
-          <div className="content-container rounded-2xl shadow-xl p-4 md:p-6 border border-primary/10">
+        <main className="flex-grow container mx-auto p-4 md:px-8 md:py-6 relative z-10">
+          <div className="content-container rounded-2xl shadow-xl p-4 md:p-6 border border-primary/10 bg-white/80 backdrop-blur-sm">
             <Router />
           </div>
         </main>
