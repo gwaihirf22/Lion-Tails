@@ -1,49 +1,107 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="800px" height="600px" viewBox="0 0 800 600" version="1.1" xmlns="http://www.w3.org/2000/svg">
-  <!-- Sky background -->
-  <rect x="0" y="0" width="800" height="400" fill="#a6d4f2" />
-  
-  <!-- Water -->
-  <rect x="0" y="400" width="800" height="200" fill="#2d78b9" />
-  <path d="M0,400 Q100,380 200,400 Q300,420 400,400 Q500,380 600,400 Q700,420 800,400 L800,600 L0,600 Z" fill="#2d78b9" />
-  
-  <!-- Sun -->
-  <circle cx="700" cy="100" r="60" fill="#f9d71c" />
-  <circle cx="700" cy="100" r="50" fill="#f9f0a0" />
-  
-  <!-- Rainbow -->
-  <path d="M100,200 Q400,50 700,200" stroke="#e84c3d" stroke-width="15" fill="none" />
-  <path d="M125,225 Q400,90 675,225" stroke="#f0c419" stroke-width="15" fill="none" />
-  <path d="M150,250 Q400,130 650,250" stroke="#4fba6f" stroke-width="15" fill="none" />
-  <path d="M175,275 Q400,170 625,275" stroke="#447bb7" stroke-width="15" fill="none" />
-  
-  <!-- Ark -->
-  <path d="M200,370 Q400,320 600,370 L600,450 Q400,400 200,450 Z" fill="#8b4513" />
-  <rect x="225" y="345" width="350" height="30" fill="#5c2c0b" />
-  <rect x="380" y="300" width="40" height="45" fill="#5c2c0b" />
-  
-  <!-- Animals -->
-  <!-- Giraffe -->
-  <ellipse cx="265" cy="330" rx="15" ry="10" fill="#e6a94c" />
-  <rect x="260" y="340" width="10" height="25" fill="#e6a94c" />
-  <rect x="260" y="310" width="5" height="20" fill="#e6a94c" />
-  
-  <!-- Elephant -->
-  <ellipse cx="325" cy="335" rx="20" ry="15" fill="#8c8c8c" />
-  <path d="M315,325 C305,320 305,310 315,305" stroke="#8c8c8c" stroke-width="5" fill="none" />
-  
-  <!-- Lion -->
-  <circle cx="375" cy="330" r="15" fill="#c19a57" />
-  <circle cx="375" cy="330" r="10" fill="#e6c888" />
-  
-  <!-- Dove with olive branch -->
-  <ellipse cx="550" cy="300" rx="15" ry="10" fill="white" />
-  <path d="M565,300 L575,290" stroke="#4fba6f" stroke-width="2" fill="none" />
-  <ellipse cx="577" cy="290" rx="5" ry="3" fill="#4fba6f" />
-  
-  <!-- Small waves -->
-  <path d="M100,420 Q125,410 150,420 Q175,430 200,420" stroke="#5aa6dd" stroke-width="3" fill="none" />
-  <path d="M300,430 Q325,420 350,430 Q375,440 400,430" stroke="#5aa6dd" stroke-width="3" fill="none" />
-  <path d="M500,420 Q525,410 550,420 Q575,430 600,420" stroke="#5aa6dd" stroke-width="3" fill="none" />
-  <path d="M650,440 Q675,430 700,440 Q725,450 750,440" stroke="#5aa6dd" stroke-width="3" fill="none" />
+    <title>Noah's Ark</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <!-- Sky Background -->
+        <rect fill="#4A90E2" x="0" y="0" width="800" height="250"></rect>
+        
+        <!-- Sun -->
+        <circle fill="#F8E71C" cx="700" cy="80" r="50"></circle>
+        <circle fill="#FFFFFF" cx="700" cy="80" r="30" opacity="0.5"></circle>
+        
+        <!-- Dark Storm Clouds -->
+        <path d="M0,100 C50,80 100,120 150,90 C200,60 250,100 300,70 C350,40 400,90 450,60 C500,30 550,80 600,50 C650,20 700,70 750,40 C800,10 850,60 900,30 L900,250 L0,250 Z" fill="#5A6978" opacity="0.8"></path>
+        
+        <!-- Light Rain -->
+        <line x1="100" y1="120" x2="90" y2="150" stroke="#FFFFFF" stroke-width="2" opacity="0.7"></line>
+        <line x1="200" y1="140" x2="190" y2="170" stroke="#FFFFFF" stroke-width="2" opacity="0.7"></line>
+        <line x1="300" y1="130" x2="290" y2="160" stroke="#FFFFFF" stroke-width="2" opacity="0.7"></line>
+        <line x1="400" y1="150" x2="390" y2="180" stroke="#FFFFFF" stroke-width="2" opacity="0.7"></line>
+        <line x1="500" y1="120" x2="490" y2="150" stroke="#FFFFFF" stroke-width="2" opacity="0.7"></line>
+        <line x1="600" y1="140" x2="590" y2="170" stroke="#FFFFFF" stroke-width="2" opacity="0.7"></line>
+        <line x1="150" y1="130" x2="140" y2="160" stroke="#FFFFFF" stroke-width="2" opacity="0.7"></line>
+        <line x1="250" y1="150" x2="240" y2="180" stroke="#FFFFFF" stroke-width="2" opacity="0.7"></line>
+        <line x1="350" y1="120" x2="340" y2="150" stroke="#FFFFFF" stroke-width="2" opacity="0.7"></line>
+        <line x1="450" y1="140" x2="440" y2="170" stroke="#FFFFFF" stroke-width="2" opacity="0.7"></line>
+        <line x1="550" y1="130" x2="540" y2="160" stroke="#FFFFFF" stroke-width="2" opacity="0.7"></line>
+        <line x1="650" y1="150" x2="640" y2="180" stroke="#FFFFFF" stroke-width="2" opacity="0.7"></line>
+        
+        <!-- Water -->
+        <rect fill="#0070BA" x="0" y="250" width="800" height="350"></rect>
+        
+        <!-- Water Waves -->
+        <path d="M0,280 C50,260 100,300 150,280 C200,260 250,300 300,280 C350,260 400,300 450,280 C500,260 550,300 600,280 C650,260 700,300 750,280 C800,260 850,300 900,280" stroke="#FFFFFF" stroke-width="2" opacity="0.5"></path>
+        <path d="M0,320 C50,300 100,340 150,320 C200,300 250,340 300,320 C350,300 400,340 450,320 C500,300 550,340 600,320 C650,300 700,340 750,320 C800,300 850,340 900,320" stroke="#FFFFFF" stroke-width="2" opacity="0.5"></path>
+        <path d="M0,360 C50,340 100,380 150,360 C200,340 250,380 300,360 C350,340 400,380 450,360 C500,340 550,380 600,360 C650,340 700,380 750,360 C800,340 850,380 900,360" stroke="#FFFFFF" stroke-width="2" opacity="0.5"></path>
+        
+        <!-- Noah's Ark Hull -->
+        <path d="M200,300 L600,300 C620,300 640,310 650,330 L650,390 C640,410 620,420 600,420 L200,420 C180,420 160,410 150,390 L150,330 C160,310 180,300 200,300 Z" fill="#8B572A"></path>
+        
+        <!-- Ark Structure (House-like) -->
+        <rect fill="#A0522D" x="220" y="250" width="360" height="50"></rect>
+        <path d="M200,250 L400,200 L600,250" stroke="#A0522D" stroke-width="30" fill="none" stroke-linejoin="round"></path>
+        
+        <!-- Windows -->
+        <circle fill="#F8E71C" cx="250" cy="350" r="15"></circle>
+        <circle fill="#F8E71C" cx="350" cy="350" r="15"></circle>
+        <circle fill="#F8E71C" cx="450" cy="350" r="15"></circle>
+        <circle fill="#F8E71C" cx="550" cy="350" r="15"></circle>
+        
+        <!-- Door -->
+        <rect fill="#6D4C41" x="380" y="370" width="40" height="50"></rect>
+        
+        <!-- Noah -->
+        <circle fill="#FFCC99" cx="350" cy="445" r="20"></circle> <!-- Head -->
+        <rect fill="#8B4513" x="340" y="465" width="20" height="40"></rect> <!-- Body -->
+        <rect fill="#FFCC99" x="330" y="465" width="10" height="25"></rect> <!-- Left Arm -->
+        <rect fill="#FFCC99" x="360" y="465" width="10" height="25"></rect> <!-- Right Arm -->
+        <path d="M345,505 L345,535" stroke="#8B4513" stroke-width="8"></path> <!-- Left Leg -->
+        <path d="M355,505 L355,535" stroke="#8B4513" stroke-width="8"></path> <!-- Right Leg -->
+        <path d="M330,445 C325,440 320,445 325,450" stroke="#8B4513" stroke-width="2" fill="none"></path> <!-- Beard -->
+        <path d="M340,445 C335,440 330,445 335,450" stroke="#8B4513" stroke-width="2" fill="none"></path> <!-- Beard -->
+        <path d="M350,445 C345,440 340,445 345,450" stroke="#8B4513" stroke-width="2" fill="none"></path> <!-- Beard -->
+        <path d="M360,445 C355,440 350,445 355,450" stroke="#8B4513" stroke-width="2" fill="none"></path> <!-- Beard -->
+        <path d="M370,445 C365,440 360,445 365,450" stroke="#8B4513" stroke-width="2" fill="none"></path> <!-- Beard -->
+        
+        <!-- Animals Peeking Out -->
+        
+        <!-- Giraffe -->
+        <circle fill="#F9BF3B" cx="250" cy="240" r="10"></circle> <!-- Head -->
+        <path d="M250,250 C245,270 245,280 250,300" stroke="#F9BF3B" stroke-width="6" fill="none"></path> <!-- Neck -->
+        <circle fill="#F9BF3B" cx="250" cy="250" r="3"></circle> <!-- Ear -->
+        <circle fill="#8B4513" cx="247" cy="238" r="2"></circle> <!-- Eye -->
+        <circle fill="#8B4513" cx="253" cy="238" r="2"></circle> <!-- Eye -->
+        <path d="M245,240 L240,235" stroke="#8B4513" stroke-width="2"></path> <!-- Horn -->
+        <path d="M255,240 L260,235" stroke="#8B4513" stroke-width="2"></path> <!-- Horn -->
+        <path d="M243,245 C248,245 252,245 257,245" stroke="#8B4513" stroke-width="1"></path> <!-- Mouth -->
+        
+        <!-- Elephant -->
+        <circle fill="#A9A9A9" cx="450" cy="240" r="15"></circle> <!-- Head -->
+        <path d="M450,255 C445,260 445,265 450,270" stroke="#A9A9A9" stroke-width="10" fill="none"></path> <!-- Trunk -->
+        <path d="M435,235 L425,220" stroke="#A9A9A9" stroke-width="8"></path> <!-- Left Ear -->
+        <path d="M465,235 L475,220" stroke="#A9A9A9" stroke-width="8"></path> <!-- Right Ear -->
+        <circle fill="#000000" cx="445" cy="235" r="2"></circle> <!-- Left Eye -->
+        <circle fill="#000000" cx="455" cy="235" r="2"></circle> <!-- Right Eye -->
+        
+        <!-- Lion -->
+        <circle fill="#D4A354" cx="550" cy="240" r="12"></circle> <!-- Head -->
+        <path d="M535,240 C530,235 530,230 535,228" stroke="#D4A354" stroke-width="3" fill="none"></path> <!-- Mane -->
+        <path d="M540,235 C535,230 535,225 540,223" stroke="#D4A354" stroke-width="3" fill="none"></path> <!-- Mane -->
+        <path d="M545,230 C540,225 540,220 545,218" stroke="#D4A354" stroke-width="3" fill="none"></path> <!-- Mane -->
+        <path d="M550,228 C545,223 545,218 550,216" stroke="#D4A354" stroke-width="3" fill="none"></path> <!-- Mane -->
+        <path d="M555,230 C550,225 550,220 555,218" stroke="#D4A354" stroke-width="3" fill="none"></path> <!-- Mane -->
+        <path d="M560,235 C555,230 555,225 560,223" stroke="#D4A354" stroke-width="3" fill="none"></path> <!-- Mane -->
+        <path d="M565,240 C560,235 560,230 565,228" stroke="#D4A354" stroke-width="3" fill="none"></path> <!-- Mane -->
+        <circle fill="#000000" cx="545" cy="238" r="2"></circle> <!-- Left Eye -->
+        <circle fill="#000000" cx="555" cy="238" r="2"></circle> <!-- Right Eye -->
+        <path d="M547,245 C550,247 553,245 553,245" stroke="#000000" stroke-width="1"></path> <!-- Mouth -->
+        
+        <!-- Rainbow Appearing -->
+        <path d="M50,150 C200,50 600,50 750,150" stroke="#FF0000" stroke-width="10" opacity="0.7" stroke-linecap="round"></path>
+        <path d="M75,175 C200,75 600,75 725,175" stroke="#FF9900" stroke-width="10" opacity="0.7" stroke-linecap="round"></path>
+        <path d="M100,200 C200,100 600,100 700,200" stroke="#FFFF00" stroke-width="10" opacity="0.7" stroke-linecap="round"></path>
+        <path d="M125,225 C200,125 600,125 675,225" stroke="#33CC33" stroke-width="10" opacity="0.7" stroke-linecap="round"></path>
+        <path d="M150,250 C200,150 600,150 650,250" stroke="#3366FF" stroke-width="10" opacity="0.7" stroke-linecap="round"></path>
+        <path d="M175,275 C200,175 600,175 625,275" stroke="#9933FF" stroke-width="10" opacity="0.7" stroke-linecap="round"></path>
+    </g>
 </svg>

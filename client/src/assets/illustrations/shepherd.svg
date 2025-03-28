@@ -1,71 +1,78 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="800px" height="600px" viewBox="0 0 800 600" version="1.1" xmlns="http://www.w3.org/2000/svg">
-  <!-- Sky background -->
-  <rect x="0" y="0" width="800" height="350" fill="#a6caed" />
-  
-  <!-- Rolling hills -->
-  <path d="M0,300 Q200,200 400,300 Q600,400 800,300 L800,600 L0,600 Z" fill="#7ab372" />
-  <path d="M0,350 Q100,300 200,350 Q300,400 400,350 Q500,300 600,350 Q700,400 800,350 L800,600 L0,600 Z" fill="#5a9258" />
-  
-  <!-- Sun -->
-  <circle cx="150" cy="120" r="60" fill="#f9d71c" />
-  <circle cx="150" cy="120" r="50" fill="#f9f0a0" />
-  
-  <!-- Clouds -->
-  <path d="M500,100 Q525,80 550,100 T600,100 T650,100 T700,100 Q725,80 750,100 Q775,120 750,140 Q775,160 750,180 Q725,200 700,180 T650,180 T600,180 T550,180 Q525,200 500,180 Q475,160 500,140 Q475,120 500,100 Z" fill="white" />
-  <path d="M300,150 Q325,130 350,150 T400,150 T450,150 Q475,130 500,150 Q525,170 500,190 Q525,210 500,230 Q475,250 450,230 T400,230 T350,230 Q325,250 300,230 Q275,210 300,190 Q275,170 300,150 Z" fill="white" />
-  
-  <!-- Shepherd -->
-  <ellipse cx="400" cy="400" rx="25" ry="80" fill="#d4aa7d" transform="rotate(10 400 400)" /> <!-- Staff -->
-  <circle cx="350" cy="320" r="20" fill="#e8c39e" /> <!-- Head -->
-  <path d="M350,340 L335,390 L365,390 Z" fill="#614b35" /> <!-- Robe upper -->
-  <rect x="335" y="390" width="30" height="50" fill="#614b35" /> <!-- Robe lower -->
-  <ellipse cx="320" cy="430" rx="10" ry="5" fill="#8b572a" /> <!-- Left foot -->
-  <ellipse cx="380" cy="430" rx="10" ry="5" fill="#8b572a" /> <!-- Right foot -->
-  
-  <!-- Sheep -->
-  <!-- Sheep 1 -->
-  <ellipse cx="250" cy="450" rx="25" ry="15" fill="white" />
-  <circle cx="225" cy="435" r="15" fill="white" />
-  <ellipse cx="240" cy="465" rx="8" ry="15" fill="white" transform="rotate(-30 240 465)" /> <!-- Leg 1 -->
-  <ellipse cx="260" cy="465" rx="8" ry="15" fill="white" transform="rotate(30 260 465)" /> <!-- Leg 2 -->
-  
-  <!-- Sheep 2 -->
-  <ellipse cx="450" cy="480" rx="25" ry="15" fill="white" />
-  <circle cx="425" cy="465" r="15" fill="white" />
-  <ellipse cx="440" cy="495" rx="8" ry="15" fill="white" transform="rotate(-30 440 495)" /> <!-- Leg 1 -->
-  <ellipse cx="460" cy="495" rx="8" ry="15" fill="white" transform="rotate(30 460 495)" /> <!-- Leg 2 -->
-  
-  <!-- Sheep 3 -->
-  <ellipse cx="550" cy="450" rx="25" ry="15" fill="white" />
-  <circle cx="525" cy="435" r="15" fill="white" />
-  <ellipse cx="540" cy="465" rx="8" ry="15" fill="white" transform="rotate(-30 540 465)" /> <!-- Leg 1 -->
-  <ellipse cx="560" cy="465" rx="8" ry="15" fill="white" transform="rotate(30 560 465)" /> <!-- Leg 2 -->
-  
-  <!-- Sheep 4 (small lamb) -->
-  <ellipse cx="350" cy="470" rx="15" ry="10" fill="white" />
-  <circle cx="335" cy="460" r="10" fill="white" />
-  <ellipse cx="345" cy="480" rx="5" ry="10" fill="white" transform="rotate(-30 345 480)" /> <!-- Leg 1 -->
-  <ellipse cx="355" cy="480" rx="5" ry="10" fill="white" transform="rotate(30 355 480)" /> <!-- Leg 2 -->
-  
-  <!-- Small flowers -->
-  <circle cx="200" cy="500" r="5" fill="#f0a93c" />
-  <circle cx="200" cy="500" r="2" fill="#f04c41" />
-  <circle cx="600" cy="520" r="5" fill="#f0a93c" />
-  <circle cx="600" cy="520" r="2" fill="#f04c41" />
-  <circle cx="650" cy="480" r="5" fill="#f0a93c" />
-  <circle cx="650" cy="480" r="2" fill="#f04c41" />
-  <circle cx="300" cy="520" r="5" fill="#f0a93c" />
-  <circle cx="300" cy="520" r="2" fill="#f04c41" />
-  
-  <!-- Trees on the hills -->
-  <path d="M700,320 L700,370" stroke="#5d4037" stroke-width="10" fill="none" />
-  <path d="M670,320 Q700,280 730,320" fill="#2e7d32" />
-  <path d="M670,300 Q700,260 730,300" fill="#2e7d32" />
-  <path d="M670,280 Q700,240 730,280" fill="#2e7d32" />
-  
-  <path d="M150,280 L150,330" stroke="#5d4037" stroke-width="10" fill="none" />
-  <path d="M120,280 Q150,240 180,280" fill="#2e7d32" />
-  <path d="M120,260 Q150,220 180,260" fill="#2e7d32" />
-  <path d="M120,240 Q150,200 180,240" fill="#2e7d32" />
+    <title>Shepherd with Sheep</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <!-- Sky -->
+        <rect fill="#B6D7EF" x="0" y="0" width="800" height="250"></rect>
+        
+        <!-- Hills -->
+        <path d="M0,250 C100,200 200,230 300,210 C400,190 500,220 600,200 C700,180 800,220 800,250 L800,600 L0,600 L0,250" fill="#8BC34A"></path>
+        
+        <!-- Distant Mountains -->
+        <path d="M0,250 L200,150 L300,200 L400,100 L500,180 L600,120 L800,250" fill="#9E9E9E" opacity="0.5"></path>
+        
+        <!-- Sun -->
+        <circle fill="#FFD54F" cx="700" cy="100" r="60"></circle>
+        <circle fill="#FFECB3" cx="700" cy="100" r="45"></circle>
+        
+        <!-- Clouds -->
+        <circle fill="#FFFFFF" cx="200" cy="100" r="30" opacity="0.8"></circle>
+        <circle fill="#FFFFFF" cx="230" cy="90" r="25" opacity="0.8"></circle>
+        <circle fill="#FFFFFF" cx="250" cy="110" r="20" opacity="0.8"></circle>
+        
+        <circle fill="#FFFFFF" cx="500" cy="150" r="30" opacity="0.8"></circle>
+        <circle fill="#FFFFFF" cx="530" cy="140" r="25" opacity="0.8"></circle>
+        <circle fill="#FFFFFF" cx="550" cy="160" r="20" opacity="0.8"></circle>
+        
+        <!-- Tree -->
+        <rect fill="#795548" x="650" y="320" width="20" height="80"></rect>
+        <circle fill="#43A047" cx="660" cy="300" r="40"></circle>
+        <circle fill="#43A047" cx="630" cy="280" r="30"></circle>
+        <circle fill="#43A047" cx="690" cy="280" r="30"></circle>
+        
+        <!-- Shepherd -->
+        <circle fill="#FFCC99" cx="400" cy="320" r="25"></circle> <!-- Head -->
+        <rect fill="#795548" x="380" y="345" width="40" height="125"></rect> <!-- Body/Robe -->
+        <rect fill="#5D4037" x="380" y="420" width="15" height="70"></rect> <!-- Left Leg -->
+        <rect fill="#5D4037" x="405" y="420" width="15" height="70"></rect> <!-- Right Leg -->
+        <rect fill="#FFCC99" x="350" y="355" width="20" height="50"></rect> <!-- Left Arm -->
+        <rect fill="#FFCC99" x="430" y="355" width="20" height="50"></rect> <!-- Right Arm -->
+        
+        <!-- Shepherd's Staff -->
+        <path d="M350,355 L330,415 L250,480" stroke="#A1887F" stroke-width="8" stroke-linecap="round"></path>
+        <path d="M250,480 C240,475 235,460 245,450" stroke="#A1887F" stroke-width="8" stroke-linecap="round"></path>
+        
+        <!-- Sheep (Group 1) -->
+        <circle fill="#FFFFFF" cx="150" cy="450" r="25"></circle> <!-- Body -->
+        <circle fill="#E0E0E0" cx="150" cy="430" r="15"></circle> <!-- Head -->
+        <rect fill="#616161" x="140" y="470" width="8" height="30"></rect> <!-- Left Leg -->
+        <rect fill="#616161" x="152" y="470" width="8" height="30"></rect> <!-- Right Leg -->
+        
+        <circle fill="#FFFFFF" cx="200" cy="470" r="25"></circle> <!-- Body -->
+        <circle fill="#E0E0E0" cx="200" cy="450" r="15"></circle> <!-- Head -->
+        <rect fill="#616161" x="190" y="490" width="8" height="30"></rect> <!-- Left Leg -->
+        <rect fill="#616161" x="202" y="490" width="8" height="30"></rect> <!-- Right Leg -->
+        
+        <!-- Sheep (Group 2) -->
+        <circle fill="#FFFFFF" cx="500" cy="480" r="25"></circle> <!-- Body -->
+        <circle fill="#E0E0E0" cx="500" cy="460" r="15"></circle> <!-- Head -->
+        <rect fill="#616161" x="490" y="500" width="8" height="30"></rect> <!-- Left Leg -->
+        <rect fill="#616161" x="502" y="500" width="8" height="30"></rect> <!-- Right Leg -->
+        
+        <circle fill="#FFFFFF" cx="550" cy="450" r="25"></circle> <!-- Body -->
+        <circle fill="#E0E0E0" cx="550" cy="430" r="15"></circle> <!-- Head -->
+        <rect fill="#616161" x="540" y="470" width="8" height="30"></rect> <!-- Left Leg -->
+        <rect fill="#616161" x="552" y="470" width="8" height="30"></rect> <!-- Right Leg -->
+        
+        <circle fill="#FFFFFF" cx="590" cy="480" r="25"></circle> <!-- Body -->
+        <circle fill="#E0E0E0" cx="590" cy="460" r="15"></circle> <!-- Head -->
+        <rect fill="#616161" x="580" y="500" width="8" height="30"></rect> <!-- Left Leg -->
+        <rect fill="#616161" x="592" y="500" width="8" height="30"></rect> <!-- Right Leg -->
+        
+        <!-- Small Lamb near Shepherd -->
+        <circle fill="#FFFFFF" cx="450" cy="450" r="20"></circle> <!-- Body -->
+        <circle fill="#E0E0E0" cx="450" cy="435" r="12"></circle> <!-- Head -->
+        <rect fill="#616161" x="442" y="465" width="6" height="25"></rect> <!-- Left Leg -->
+        <rect fill="#616161" x="452" y="465" width="6" height="25"></rect> <!-- Right Leg -->
+    </g>
 </svg>

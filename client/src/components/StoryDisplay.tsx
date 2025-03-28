@@ -11,7 +11,7 @@ import noahArkImage from "@/assets/illustrations/noah-ark.svg";
 import shepherdImage from "@/assets/illustrations/shepherd.svg";
 import danielLionsImage from "@/assets/illustrations/daniel-lions.svg";
 import gardenEdenImage from "@/assets/illustrations/garden-eden.svg";
-import defaultLionImage from "@/assets/illustrations/lion-tails.jpg";
+import defaultStoryImage from "@/assets/attached/default-story-image.png";
 
 interface StoryDisplayProps {
   story: StoryResponse;
@@ -55,8 +55,8 @@ const getBiblicalImage = (title: string, content: string): string => {
     return gardenEdenImage;
   }
   
-  // Default to the Lion Tails image as a primary default
-  return defaultLionImage;
+  // Default to our provided default image
+  return defaultStoryImage;
 };
 
 export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {

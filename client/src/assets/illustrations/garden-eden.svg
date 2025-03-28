@@ -1,112 +1,134 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="800px" height="600px" viewBox="0 0 800 600" version="1.1" xmlns="http://www.w3.org/2000/svg">
-  <!-- Sky background -->
-  <rect x="0" y="0" width="800" height="600" fill="#cae8fd" />
-  
-  <!-- Distant mountains -->
-  <path d="M0,150 L100,120 L200,200 L300,150 L400,170 L500,120 L600,180 L700,140 L800,190 L800,600 L0,600 Z" fill="#d0ebf5" />
-  
-  <!-- Middle ground -->
-  <path d="M0,220 L200,250 L400,230 L600,240 L800,220 L800,600 L0,600 Z" fill="#b5e1f5" />
-  
-  <!-- Garden ground -->
-  <path d="M0,280 Q200,250 400,280 Q600,310 800,280 L800,600 L0,600 Z" fill="#a6d8a8" />
-  
-  <!-- River -->
-  <path d="M350,280 Q400,290 450,280 Q455,350 460,380 Q480,450 440,500 Q400,550 420,600" fill="#7bbce7" />
-  <path d="M380,450 Q400,460 420,450" stroke="#9fceec" stroke-width="3" fill="none" />
-  <path d="M370,490 Q390,500 410,490" stroke="#9fceec" stroke-width="3" fill="none" />
-  <path d="M370,530 Q390,540 410,530" stroke="#9fceec" stroke-width="3" fill="none" />
-  
-  <!-- Large central tree (Tree of Knowledge) -->
-  <path d="M400,400 L400,500" stroke="#8b4513" stroke-width="25" fill="none" />
-  <path d="M400,420 L370,370" stroke="#8b4513" stroke-width="10" fill="none" />
-  <path d="M400,420 L430,370" stroke="#8b4513" stroke-width="10" fill="none" />
-  <path d="M400,450 L360,420" stroke="#8b4513" stroke-width="8" fill="none" />
-  <path d="M400,450 L440,420" stroke="#8b4513" stroke-width="8" fill="none" />
-  
-  <circle cx="350" cy="350" r="50" fill="#2e7d32" />
-  <circle cx="450" cy="350" r="50" fill="#2e7d32" />
-  <circle cx="390" cy="310" r="50" fill="#2e7d32" />
-  <circle cx="410" cy="310" r="50" fill="#2e7d32" />
-  <circle cx="400" cy="270" r="60" fill="#2e7d32" />
-  
-  <!-- Red apple in the tree -->
-  <circle cx="420" cy="330" r="15" fill="#d32f2f" />
-  <path d="M420,315 L425,305" stroke="#4b9e47" stroke-width="2" fill="none" />
-  
-  <!-- Various small trees and plants -->
-  <!-- Tree 1 -->
-  <path d="M150,480 L150,520" stroke="#5d4037" stroke-width="12" fill="none" />
-  <circle cx="150" cy="450" r="40" fill="#43a047" />
-  
-  <!-- Tree 2 -->
-  <path d="M250,500 L250,540" stroke="#5d4037" stroke-width="10" fill="none" />
-  <circle cx="250" cy="470" r="35" fill="#388e3c" />
-  
-  <!-- Tree 3 -->
-  <path d="M650,490 L650,530" stroke="#5d4037" stroke-width="15" fill="none" />
-  <circle cx="650" cy="450" r="45" fill="#2e7d32" />
-  
-  <!-- Bush 1 -->
-  <circle cx="550" cy="510" r="30" fill="#4caf50" />
-  
-  <!-- Bush 2 -->
-  <circle cx="320" cy="520" r="25" fill="#4caf50" />
-  
-  <!-- Flowers -->
-  <circle cx="200" cy="550" r="5" fill="#f3e5f5" />
-  <circle cx="200" cy="550" r="2" fill="#ffc107" />
-  
-  <circle cx="220" cy="560" r="5" fill="#e1bee7" />
-  <circle cx="220" cy="560" r="2" fill="#ffc107" />
-  
-  <circle cx="500" cy="570" r="5" fill="#f8bbd0" />
-  <circle cx="500" cy="570" r="2" fill="#ffc107" />
-  
-  <circle cx="520" cy="565" r="5" fill="#f8bbd0" />
-  <circle cx="520" cy="565" r="2" fill="#ffc107" />
-  
-  <circle cx="540" cy="575" r="5" fill="#f8bbd0" />
-  <circle cx="540" cy="575" r="2" fill="#ffc107" />
-  
-  <!-- Animals -->
-  <!-- Butterfly -->
-  <path d="M610,350 Q630,330 610,310 Q590,330 610,350 Z" fill="#ce93d8" />
-  <path d="M610,350 Q590,330 610,310 Q630,330 610,350 Z" fill="#ba68c8" />
-  <path d="M610,330 L615,335" stroke="#000000" stroke-width="1" fill="none" />
-  <path d="M610,330 L605,335" stroke="#000000" stroke-width="1" fill="none" />
-  
-  <!-- Snake around the tree -->
-  <path d="M430,460 Q450,450 470,460 Q480,480 470,500 Q450,510 440,490 Q430,470 430,460 Z" fill="#689f38" />
-  <ellipse cx="475" cy="465" rx="3" ry="2" fill="#000000" /> <!-- Eye -->
-  <path d="M480,470 Q485,472 490,470" stroke="#000000" stroke-width="1" fill="none" /> <!-- Mouth -->
-  
-  <!-- Adam and Eve (simple silhouettes) -->
-  <!-- Adam -->
-  <circle cx="300" cy="470" r="15" fill="#795548" /> <!-- Head -->
-  <path d="M300,485 L300,530" stroke="#795548" stroke-width="10" fill="none" /> <!-- Body -->
-  <path d="M300,505 L280,515" stroke="#795548" stroke-width="5" fill="none" /> <!-- Left arm -->
-  <path d="M300,505 L320,515" stroke="#795548" stroke-width="5" fill="none" /> <!-- Right arm -->
-  <path d="M300,530 L290,560" stroke="#795548" stroke-width="5" fill="none" /> <!-- Left leg -->
-  <path d="M300,530 L310,560" stroke="#795548" stroke-width="5" fill="none" /> <!-- Right leg -->
-  
-  <!-- Eve -->
-  <circle cx="500" cy="470" r="15" fill="#8d6e63" /> <!-- Head -->
-  <path d="M500,485 L500,530" stroke="#8d6e63" stroke-width="8" fill="none" /> <!-- Body -->
-  <path d="M500,505 L480,515" stroke="#8d6e63" stroke-width="5" fill="none" /> <!-- Left arm -->
-  <path d="M500,505 L520,515" stroke="#8d6e63" stroke-width="5" fill="none" /> <!-- Right arm -->
-  <path d="M500,530 L490,560" stroke="#8d6e63" stroke-width="5" fill="none" /> <!-- Left leg -->
-  <path d="M500,530 L510,560" stroke="#8d6e63" stroke-width="5" fill="none" /> <!-- Right leg -->
-  
-  <!-- Sun rays -->
-  <circle cx="700" cy="100" r="40" fill="#ffeb3b" />
-  <path d="M700,40 L700,10" stroke="#ffeb3b" stroke-width="3" fill="none" />
-  <path d="M700,160 L700,190" stroke="#ffeb3b" stroke-width="3" fill="none" />
-  <path d="M640,100 L610,100" stroke="#ffeb3b" stroke-width="3" fill="none" />
-  <path d="M760,100 L790,100" stroke="#ffeb3b" stroke-width="3" fill="none" />
-  <path d="M657,57 L636,36" stroke="#ffeb3b" stroke-width="3" fill="none" />
-  <path d="M743,143 L764,164" stroke="#ffeb3b" stroke-width="3" fill="none" />
-  <path d="M657,143 L636,164" stroke="#ffeb3b" stroke-width="3" fill="none" />
-  <path d="M743,57 L764,36" stroke="#ffeb3b" stroke-width="3" fill="none" />
+    <title>Garden of Eden</title>
+    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <!-- Sky -->
+        <rect fill="#B3E5FC" x="0" y="0" width="800" height="250"></rect>
+        
+        <!-- Sun -->
+        <circle fill="#FFD54F" cx="650" cy="100" r="60"></circle>
+        <circle fill="#FFECB3" cx="650" cy="100" r="45"></circle>
+        
+        <!-- Clouds -->
+        <circle fill="#FFFFFF" cx="100" cy="100" r="30" opacity="0.8"></circle>
+        <circle fill="#FFFFFF" cx="130" cy="90" r="25" opacity="0.8"></circle>
+        <circle fill="#FFFFFF" cx="150" cy="110" r="20" opacity="0.8"></circle>
+        
+        <circle fill="#FFFFFF" cx="400" cy="80" r="25" opacity="0.8"></circle>
+        <circle fill="#FFFFFF" cx="430" cy="70" r="20" opacity="0.8"></circle>
+        <circle fill="#FFFFFF" cx="450" cy="90" r="15" opacity="0.8"></circle>
+        
+        <!-- Distant Mountains -->
+        <path d="M0,250 L150,180 L250,220 L350,150 L450,200 L550,150 L650,220 L800,180 L800,250 Z" fill="#90CAF9" opacity="0.5"></path>
+        
+        <!-- Grass Ground -->
+        <rect fill="#66BB6A" x="0" y="250" width="800" height="350"></rect>
+        
+        <!-- River -->
+        <path d="M350,250 C300,300 500,350 450,400 C400,450 500,500 400,600" fill="#4FC3F7" opacity="0.7"></path>
+        
+        <!-- River Banks -->
+        <path d="M350,250 C320,280 330,300 320,320 C310,340 300,380 280,400 C260,420 300,450 280,470 C260,490 280,520 260,550 C240,580 220,600 220,600 L0,600 L0,250 Z" fill="#81C784" opacity="0.5"></path>
+        <path d="M450,400 C480,420 470,450 500,470 C530,490 520,520 550,550 C580,580 600,600 600,600 L800,600 L800,250 L550,250 C520,280 510,300 520,320 C530,340 540,350 520,370 L450,400" fill="#81C784" opacity="0.5"></path>
+        
+        <!-- Trees -->
+        <!-- Tree 1 (big) -->
+        <rect fill="#795548" x="150" y="300" width="20" height="100"></rect>
+        <circle fill="#2E7D32" cx="160" cy="250" r="50"></circle>
+        <circle fill="#388E3C" cx="120" cy="270" r="40"></circle>
+        <circle fill="#388E3C" cx="200" cy="270" r="40"></circle>
+        <circle fill="#388E3C" cx="160" cy="210" r="30"></circle>
+        
+        <!-- Tree 2 -->
+        <rect fill="#795548" x="600" y="350" width="15" height="80"></rect>
+        <circle fill="#2E7D32" cx="608" cy="310" r="40"></circle>
+        <circle fill="#388E3C" cx="580" cy="330" r="30"></circle>
+        <circle fill="#388E3C" cx="635" cy="330" r="30"></circle>
+        
+        <!-- Tree 3 -->
+        <rect fill="#795548" x="500" y="320" width="12" height="70"></rect>
+        <circle fill="#2E7D32" cx="506" cy="290" r="30"></circle>
+        <circle fill="#388E3C" cx="486" cy="300" r="20"></circle>
+        <circle fill="#388E3C" cx="526" cy="300" r="20"></circle>
+        
+        <!-- Tree 4 -->
+        <rect fill="#795548" x="250" y="340" width="15" height="75"></rect>
+        <circle fill="#2E7D32" cx="258" cy="300" r="35"></circle>
+        <circle fill="#388E3C" cx="235" cy="320" r="25"></circle>
+        <circle fill="#388E3C" cx="280" cy="320" r="25"></circle>
+        
+        <!-- Tree 5 (Special Tree of Knowledge) -->
+        <rect fill="#5D4037" x="400" y="300" width="18" height="90"></rect>
+        <circle fill="#33691E" cx="410" cy="260" r="45"></circle>
+        <circle fill="#558B2F" cx="375" cy="280" r="30"></circle>
+        <circle fill="#558B2F" cx="445" cy="280" r="30"></circle>
+        
+        <!-- Fruits on the Tree of Knowledge -->
+        <circle fill="#F44336" cx="380" cy="250" r="8"></circle> <!-- Red apple -->
+        <circle fill="#F44336" cx="420" cy="235" r="8"></circle> <!-- Red apple -->
+        <circle fill="#F44336" cx="440" cy="270" r="8"></circle> <!-- Red apple -->
+        <circle fill="#F44336" cx="390" cy="270" r="8"></circle> <!-- Red apple -->
+        
+        <!-- Serpent in the Tree -->
+        <path d="M410,290 C425,280 435,295 420,310 C405,325 415,340 430,325 C445,310 455,320 440,335" stroke="#8D6E63" stroke-width="10" stroke-linecap="round" fill="none"></path>
+        <circle fill="#A1887F" cx="440" cy="335" r="8"></circle> <!-- Head -->
+        <circle fill="#000000" cx="442" cy="332" r="2"></circle> <!-- Eye -->
+        <path d="M440,338 L445,342" stroke="#000000" stroke-width="1"></path> <!-- Tongue -->
+        
+        <!-- Adam and Eve (Simplified) -->
+        <!-- Adam -->
+        <circle fill="#FFCC99" cx="300" cy="430" r="20"></circle> <!-- Head -->
+        <rect fill="#FF5722" x="290" y="450" width="20" height="60"></rect> <!-- Body -->
+        <rect fill="#FFCC99" x="280" y="460" width="10" height="30"></rect> <!-- Left Arm -->
+        <rect fill="#FFCC99" x="310" y="460" width="10" height="30"></rect> <!-- Right Arm -->
+        <rect fill="#FFCC99" x="290" y="510" width="8" height="40"></rect> <!-- Left Leg -->
+        <rect fill="#FFCC99" x="302" y="510" width="8" height="40"></rect> <!-- Right Leg -->
+        
+        <!-- Eve -->
+        <circle fill="#FFCC99" cx="350" cy="430" r="20"></circle> <!-- Head -->
+        <rect fill="#26A69A" x="340" y="450" width="20" height="60"></rect> <!-- Body -->
+        <rect fill="#FFCC99" x="330" y="460" width="10" height="30"></rect> <!-- Left Arm -->
+        <rect fill="#FFCC99" x="360" y="460" width="10" height="30"></rect> <!-- Right Arm -->
+        <rect fill="#FFCC99" x="340" y="510" width="8" height="40"></rect> <!-- Left Leg -->
+        <rect fill="#FFCC99" x="352" y="510" width="8" height="40"></rect> <!-- Right Leg -->
+        
+        <!-- Animals -->
+        <!-- Lion -->
+        <circle fill="#FFB74D" cx="500" cy="500" r="25"></circle> <!-- Body -->
+        <circle fill="#FFA726" cx="470" cy="490" r="15"></circle> <!-- Head -->
+        <path d="M465,487 C460,480 455,485 458,490" stroke="#FFA726" stroke-width="3" fill="#FFA726"></path> <!-- Ear -->
+        <path d="M475,487 C480,480 485,485 482,490" stroke="#FFA726" stroke-width="3" fill="#FFA726"></path> <!-- Ear -->
+        <path d="M450,490 C460,470 480,470 470,490" stroke="#FF9800" stroke-width="6" fill="#FF9800"></path> <!-- Mane -->
+        
+        <!-- Sheep -->
+        <circle fill="#FFFFFF" cx="200" cy="480" r="20"></circle> <!-- Body -->
+        <circle fill="#E0E0E0" cx="180" cy="470" r="12"></circle> <!-- Head -->
+        <rect fill="#616161" x="195" y="495" width="6" height="25"></rect> <!-- Leg -->
+        <rect fill="#616161" x="205" y="495" width="6" height="25"></rect> <!-- Leg -->
+        
+        <!-- Deer -->
+        <circle fill="#A1887F" cx="650" cy="450" r="25"></circle> <!-- Body -->
+        <circle fill="#8D6E63" cx="680" cy="435" r="15"></circle> <!-- Head -->
+        <path d="M675,420 L685,400" stroke="#8D6E63" stroke-width="3"></path> <!-- Antler -->
+        <path d="M685,420 L695,400" stroke="#8D6E63" stroke-width="3"></path> <!-- Antler -->
+        
+        <!-- Flowers and Plants -->
+        <circle fill="#E91E63" cx="250" cy="500" r="8"></circle> <!-- Pink flower -->
+        <circle fill="#FFEB3B" cx="255" cy="500" r="4"></circle> <!-- Center -->
+        <circle fill="#E91E63" cx="370" cy="520" r="8"></circle> <!-- Pink flower -->
+        <circle fill="#FFEB3B" cx="375" cy="520" r="4"></circle> <!-- Center -->
+        <circle fill="#9C27B0" cx="580" cy="520" r="8"></circle> <!-- Purple flower -->
+        <circle fill="#FFEB3B" cx="585" cy="520" r="4"></circle> <!-- Center -->
+        <circle fill="#9C27B0" cx="420" cy="480" r="8"></circle> <!-- Purple flower -->
+        <circle fill="#FFEB3B" cx="425" cy="480" r="4"></circle> <!-- Center -->
+        <circle fill="#F44336" cx="320" cy="540" r="8"></circle> <!-- Red flower -->
+        <circle fill="#FFEB3B" cx="325" cy="540" r="4"></circle> <!-- Center -->
+        <circle fill="#F44336" cx="550" cy="490" r="8"></circle> <!-- Red flower -->
+        <circle fill="#FFEB3B" cx="555" cy="490" r="4"></circle> <!-- Center -->
+        
+        <!-- Small Bushes -->
+        <circle fill="#4CAF50" cx="150" cy="530" r="20"></circle>
+        <circle fill="#4CAF50" cx="700" cy="530" r="25"></circle>
+        <circle fill="#4CAF50" cx="450" cy="550" r="15"></circle>
+    </g>
 </svg>

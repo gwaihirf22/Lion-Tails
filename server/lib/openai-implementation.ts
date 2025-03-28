@@ -61,9 +61,9 @@ Format your response as valid JSON with the following structure:
       "imagePrompt": "A short description for an illustration of a key scene in the biblical style"
     }`;
     
-    // Using gpt-4o-mini since original gpt-4o is not available
-    // We already retrieved userModel earlier
-    const model = userModel || "gpt-4o-mini";
+    // Use a model with broader availability (gpt-3.5-turbo) to avoid permission issues
+    // We'll use the user's model if provided, otherwise fall back to gpt-3.5-turbo
+    const model = userModel || "gpt-3.5-turbo";
     
     // Call OpenAI API with a fresh client using the appropriate API key
     const openaiClient = getOpenAIClient(userApiKey || undefined);
