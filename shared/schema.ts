@@ -144,3 +144,25 @@ export const songSchema = z.object({
 });
 
 export type Song = z.infer<typeof songSchema>;
+
+// Schema for Heroes of Faith
+export const heroOfFaithSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  timePeriod: z.string(),
+  contribution: z.string(),
+  imageUrl: z.string().optional(),
+  birthYear: z.string().optional(),
+  deathYear: z.string().optional(),
+  famousQuote: z.string().optional(),
+  bibleVerse: z.object({
+    text: z.string(),
+    reference: z.string(),
+  }).optional(),
+  createdAt: z.date().or(z.string()).transform(val => 
+    typeof val === 'string' ? new Date(val) : val
+  ),
+});
+
+export type HeroOfFaith = z.infer<typeof heroOfFaithSchema>;

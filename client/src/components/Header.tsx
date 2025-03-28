@@ -19,7 +19,7 @@ export default function Header() {
           <h1 className="text-2xl md:text-3xl font-heading font-bold text-white">Lion Tails</h1>
         </div>
         <nav>
-          <ul className="flex space-x-4 font-heading">
+          <ul className="flex space-x-3 font-heading text-sm md:text-base">
             <li>
               <Link 
                 href="/" 
@@ -50,6 +50,14 @@ export default function Header() {
                 className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/characters' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
               >
                 Characters
+              </Link>
+            </li>
+            <li>
+              <Link 
+                href="/heroes-of-faith" 
+                className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/heroes-of-faith' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
+              >
+                Heroes
               </Link>
             </li>
             <li>

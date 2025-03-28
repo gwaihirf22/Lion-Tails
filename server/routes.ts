@@ -1,7 +1,8 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { storyRequestSchema, savedStorySchema, songSchema, characterSchema } from "@shared/schema";
+import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema } from "@shared/schema";
+import { heroesOfFaithData } from "./data/heroesOfFaith";
 import { generateStory } from "./lib/openai";
 import { generateSongChords } from "./lib/songGenerator";
 import { songs } from "./data/songs";
@@ -306,6 +307,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // API routes for Heroes of Faith
+  
+  // Initialize the storage with heroes of faith data if empty
+  (async () => {
+    try {
+      const existingHeroes = await storage.getAllHeroesOfFaith();
+      if (existingHeroes.length === 0) {
+        console.log("Initializing Heroes of Faith data");
+        for (const hero of heroesOfFaithData) {
+          await storage.createHeroOfFaith({
+            name: hero.name,
+            description: hero.description,
+            timePeriod: hero.timePeriod,
+            contribution: hero.contribution,
+            birthYear: hero.birthYear,
+            deathYear: hero.deathYear,
+            famousQuote: hero.famousQuote,
+            bibleVerse: hero.bibleVerse,
+            imageUrl: hero.imageUrl
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error initializing Heroes of Faith data:", error);
+    }
+  })();
+  
+  // Get all heroes of faith
+  app.get("/api/heroes", async (req, res) => {
+    try {
+      const heroes = await storage.getAllHeroesOfFaith();
+      res.json(heroes);
+    } catch (error) {
+      console.error("Error fetching heroes of faith:", error);
+      res.status(500).json({ message: "Failed to fetch heroes of faith" });
+    }
+  });
+  
+  // Get a specific hero of faith
+  app.get("/api/heroes/:id", async (req, res) => {
+    try {
+      const hero = await storage.getHeroOfFaithById(req.params.id);
+      if (!hero) {
+        return res.status(404).json({ message: "Hero of faith not found" });
+      }
+      res.json(hero);
+    } catch (error) {
+      console.error("Error fetching hero of faith:", error);
+      res.status(500).json({ message: "Failed to fetch hero of faith" });
+    }
+  });
+  
+  // Create a new hero of faith
+  app.post("/api/heroes", async (req, res) => {
+    try {
+      // The id and createdAt fields will be added by the storage method
+      const { id, createdAt, ...heroData } = req.body;
+      
+      // Validate the heroData
+      const validatedData = heroOfFaithSchema.omit({ id: true, createdAt: true }).parse(heroData);
+      
+      // Create the hero
+      const hero = await storage.createHeroOfFaith(validatedData);
+      res.status(201).json(hero);
+    } catch (error) {
+      console.error("Error creating hero of faith:", error);
+      
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      
+      res.status(500).json({ message: "Failed to create hero of faith" });
+    }
+  });
+  
+  // Update a hero of faith
+  app.put("/api/heroes/:id", async (req, res) => {
+    try {
+      const { id: bodyId, createdAt, ...updates } = req.body;
+      
+      const hero = await storage.updateHeroOfFaith(req.params.id, updates);
+      
+      if (!hero) {
+        return res.status(404).json({ message: "Hero of faith not found" });
+      }
+      
+      res.json(hero);
+    } catch (error) {
+      console.error("Error updating hero of faith:", error);
+      
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      
+      res.status(500).json({ message: "Failed to update hero of faith" });
+    }
+  });
+  
+  // Delete a hero of faith
+  app.delete("/api/heroes/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteHeroOfFaith(req.params.id);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Hero of faith not found" });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting hero of faith:", error);
+      res.status(500).json({ message: "Failed to delete hero of faith" });
+    }
+  });
+
   // Get story generation statistics
   app.get("/api/stats/story-generation", async (req, res) => {
     try {

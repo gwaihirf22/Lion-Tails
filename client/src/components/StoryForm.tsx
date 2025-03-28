@@ -37,6 +37,14 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
     enabled: useTimeTravel,
   });
   
+  // Fetch heroes of faith for selection
+  const { data: heroesOfFaith = [], isLoading: heroesLoading } = useQuery({
+    queryKey: ['/api/heroes'],
+    queryFn: getQueryFn<any[]>({
+      on401: "returnNull"
+    })
+  });
+  
   const form = useForm<StoryRequest>({
     resolver: zodResolver(storyRequestSchema),
     defaultValues: {
@@ -335,27 +343,25 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">None</SelectItem>
-                          <SelectItem value="cs-lewis">C.S. Lewis</SelectItem>
-                          <SelectItem value="mother-teresa">Mother Teresa</SelectItem>
-                          <SelectItem value="billy-graham">Billy Graham</SelectItem>
-                          <SelectItem value="martin-luther">Martin Luther</SelectItem>
-                          <SelectItem value="corrie-ten-boom">Corrie ten Boom</SelectItem>
-                          <SelectItem value="dietrich-bonhoeffer">Dietrich Bonhoeffer</SelectItem>
-                          <SelectItem value="william-carey">William Carey</SelectItem>
-                          <SelectItem value="hudson-taylor">Hudson Taylor</SelectItem>
-                          <SelectItem value="amy-carmichael">Amy Carmichael</SelectItem>
-                          <SelectItem value="john-bunyan">John Bunyan</SelectItem>
-                          <SelectItem value="augustine">Augustine of Hippo</SelectItem>
-                          <SelectItem value="george-mueller">George Müller</SelectItem>
-                          <SelectItem value="charles-spurgeon">Charles Spurgeon</SelectItem>
-                          <SelectItem value="john-wesley">John Wesley</SelectItem>
-                          <SelectItem value="jim-elliot">Jim Elliot</SelectItem>
-                          <SelectItem value="lottie-moon">Lottie Moon</SelectItem>
-                          <SelectItem value="eric-liddell">Eric Liddell</SelectItem>
+                          
+                          {heroesLoading ? (
+                            <SelectItem value="loading" disabled>Loading heroes...</SelectItem>
+                          ) : heroesOfFaith && heroesOfFaith.length > 0 ? (
+                            heroesOfFaith.map(hero => (
+                              <SelectItem key={hero.id} value={hero.id}>
+                                {hero.name}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="none-available" disabled>No heroes available</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
                   </FormControl>
+                  <FormDescription className="text-xs mt-1">
+                    Select a historical Christian figure to feature in the story. View more details in the Heroes section.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

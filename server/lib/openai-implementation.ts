@@ -31,6 +31,15 @@ export async function generateStoryWithOpenAI(request: StoryRequest): Promise<St
   if (useTimeTravel && characterId) {
     character = await storage.getCharacterById(characterId);
   }
+  
+  // Get hero of faith information if one is selected
+  let heroOfFaithName = undefined;
+  if (heroOfFaith && heroOfFaith !== 'none') {
+    const heroOfFaithObject = await storage.getHeroOfFaithById(heroOfFaith);
+    if (heroOfFaithObject) {
+      heroOfFaithName = heroOfFaithObject.name;
+    }
+  }
 
   try {
     // Check if we have any API key to use (user's or environment)
@@ -39,7 +48,7 @@ export async function generateStoryWithOpenAI(request: StoryRequest): Promise<St
       throw new Error("OpenAI API key not found");
     }
 
-    const prompt = buildStoryPrompt(childName || "Child", gender || "boy", animal || "lion", theme, biblicalEvent, storyTemplate, useTimeTravel, character, storyType || "regular", heroOfFaith);
+    const prompt = buildStoryPrompt(childName || "Child", gender || "boy", animal || "lion", theme, biblicalEvent, storyTemplate, useTimeTravel, character, storyType || "regular", heroOfFaithName);
     
     // System prompt that defines what kind of response we want
     const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author. Create wholesome, faith-based stories with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.

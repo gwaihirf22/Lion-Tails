@@ -101,7 +101,16 @@ export async function generateStory(request: StoryRequest): Promise<StoryRespons
       const safeAnimal = animal || "lamb";
       const safeTheme = theme || "faith";
       
-      return getDemoStory(safeChildName, safeGender, safeAnimal, safeTheme, biblicalEvent, bibleVerse);
+      // Get hero of faith information if one is selected
+      let heroOfFaithName = undefined;
+      if (heroOfFaith && heroOfFaith !== 'none') {
+        const heroOfFaithObject = await storage.getHeroOfFaithById(heroOfFaith);
+        if (heroOfFaithObject) {
+          heroOfFaithName = heroOfFaithObject.name;
+        }
+      }
+      
+      return getDemoStory(safeChildName, safeGender, safeAnimal, safeTheme, biblicalEvent, bibleVerse, heroOfFaithName);
     }
     
     // Use the OpenAI implementation to generate a story
@@ -129,30 +138,34 @@ export async function generateStory(request: StoryRequest): Promise<StoryRespons
 }
 
 // Function to build prompt for story generation
-function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null, useTimeTravel?: boolean, characterId?: string): string {
+function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null, useTimeTravel?: boolean, characterId?: string, heroOfFaith?: string): string {
   // Normalize "none" values
   const animalToUse = animal === "none" ? "lamb" : animal || "lamb";
   const themeToUse = theme === "none" ? "faith" : theme || "faith";
   const biblicalEventToUse = biblicalEvent === "none" ? undefined : biblicalEvent;
   
-  let prompt = `Create a Christian bedtime story for a ${gender} named ${childName}`;
+  let promptText = `Create a Christian bedtime story for a ${gender} named ${childName}`;
   
   if (animal && animal !== "none") {
-    prompt += ` about a ${animal}`;
+    promptText += ` about a ${animal}`;
   }
   
   if (theme && theme !== "none") {
-    prompt += ` with a theme of "${theme}"`;
+    promptText += ` with a theme of "${theme}"`;
   }
   
   if (biblicalEventToUse) {
-    prompt += ` based on the biblical event "${biblicalEventToUse}"`;
+    promptText += ` based on the biblical event "${biblicalEventToUse}"`;
     if (storyTemplate) {
-      prompt += `. Use this story template as a guide: ${storyTemplate}`;
+      promptText += `. Use this story template as a guide: ${storyTemplate}`;
     }
   }
   
-  prompt += `. The story should be at least 1000 words, child-friendly, include moral lessons, and end with a Bible verse related to ${themeToUse}. Title the story appropriately.
+  if (heroOfFaith && heroOfFaith !== "none") {
+    promptText += `. Also include the historical Christian figure "${heroOfFaith}" as part of the story, teaching the child about faith through their example.`;
+  }
+  
+  promptText += `. The story should be at least 1000 words, child-friendly, include moral lessons, and end with a Bible verse related to ${themeToUse}. Title the story appropriately.
 
 Use this format for your response:
 Title: [Story Title]
@@ -160,11 +173,11 @@ Content: [Full story content]
 
 The story should be engaging, descriptive, and have a clear beginning, middle, and end. It should include dialogue and be written at a level that a child can understand but also enjoy. The tone should be warm, reassuring, and convey Christian values.`;
   
-  return prompt;
+  return promptText;
 }
 
 // Function to provide a demo story when not using OpenAI
-function getDemoStory(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, bibleVerse: { text: string, reference: string }): StoryResponse {
+function getDemoStory(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, bibleVerse: { text: string, reference: string }, heroOfFaith?: string): StoryResponse {
   // Normalize "none" values  
   // Use the animal if provided and not "none"
   const animalToUse = animal === "none" ? "lamb" : animal || "lamb";
@@ -256,6 +269,14 @@ Mother listened with a smile. "What a wonderful dream! And what did you learn fr
 ${childName} thought for a moment. "I learned that being brave doesn't mean not feeling scared. It means trusting God even when we are scared. And I learned about ${themeToUse}—how important it is to keep doing the right thing even when others don't understand."
 
 "Those are beautiful lessons," Mother said, giving ${childName} a hug. "And just like God was with Noah through the flood, God is always with you too."
+
+${heroOfFaith ? `
+"You know," Mother added thoughtfully, "your story reminds me of ${heroOfFaith}, who also showed great faith in difficult times. Would you like me to tell you about ${heroOfFaith} tomorrow night?"
+
+${childName} nodded eagerly. "Yes, please! I want to learn about all the heroes of faith!"
+
+"That's wonderful," Mother smiled. "There are so many amazing examples of faithful people throughout history that we can learn from."
+` : ''}
 
 That night, as ${childName} gazed out the window before bed, a spring shower began to fall. And there, arching across the evening sky, was a beautiful rainbow—God's promise shining bright. ${childName} smiled, remembering the brave journey and the important lessons learned aboard Noah's Ark.`;
   

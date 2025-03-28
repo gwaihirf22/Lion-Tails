@@ -9,6 +9,7 @@ import Music from "@/pages/Music";
 import SavedStories from "@/pages/SavedStories";
 import Settings from "@/pages/Settings";
 import Characters from "@/pages/Characters";
+import HeroesOfFaith from "@/pages/HeroesOfFaith";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/saved-stories" component={SavedStories} />
       <Route path="/settings" component={Settings} />
       <Route path="/characters" component={Characters} />
+      <Route path="/heroes-of-faith" component={HeroesOfFaith} />
       <Route component={NotFound} />
     </Switch>
   );

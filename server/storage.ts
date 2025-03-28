@@ -1,4 +1,4 @@
-import { users, type User, type InsertUser, type Song, type SavedStory, type StoryResponse, type StoryRequest, type Character } from "@shared/schema";
+import { users, type User, type InsertUser, type Song, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
 
 export interface IStorage {
@@ -25,6 +25,13 @@ export interface IStorage {
   toggleFavorite(id: string, isFavorite: boolean): Promise<SavedStory | undefined>;
   deleteStory(id: string): Promise<boolean>;
   
+  // Heroes of Faith related methods
+  getAllHeroesOfFaith(): Promise<HeroOfFaith[]>;
+  getHeroOfFaithById(id: string): Promise<HeroOfFaith | undefined>;
+  createHeroOfFaith(hero: Omit<HeroOfFaith, "id" | "createdAt">): Promise<HeroOfFaith>;
+  updateHeroOfFaith(id: string, hero: Partial<HeroOfFaith>): Promise<HeroOfFaith | undefined>;
+  deleteHeroOfFaith(id: string): Promise<boolean>;
+  
   // Usage tracking
   getStoryGenerationCount(): Promise<number>;
   incrementStoryGenerationCount(): Promise<number>;
@@ -44,6 +51,7 @@ export class MemStorage implements IStorage {
   private characters: Map<string, Character>;
   private songs: Map<string, Song>;
   private stories: Map<string, SavedStory>;
+  private heroesOfFaith: Map<string, HeroOfFaith>;
   private storyGenerationCount: number;
   private lastResetDate: Date | null;
   private userOpenAIKey: string | null;
@@ -55,6 +63,7 @@ export class MemStorage implements IStorage {
     this.characters = new Map();
     this.songs = new Map();
     this.stories = new Map();
+    this.heroesOfFaith = new Map();
     this.storyGenerationCount = 0;
     this.lastResetDate = null;
     this.userOpenAIKey = null;
@@ -232,6 +241,49 @@ export class MemStorage implements IStorage {
   
   async setUserOpenAIModel(model: string): Promise<void> {
     this.userOpenAIModel = model;
+  }
+
+  // Heroes of Faith methods
+  async getAllHeroesOfFaith(): Promise<HeroOfFaith[]> {
+    return Array.from(this.heroesOfFaith.values()).sort((a, b) => {
+      // Sort by name alphabetically
+      return a.name.localeCompare(b.name);
+    });
+  }
+
+  async getHeroOfFaithById(id: string): Promise<HeroOfFaith | undefined> {
+    return this.heroesOfFaith.get(id);
+  }
+
+  async createHeroOfFaith(heroData: Omit<HeroOfFaith, "id" | "createdAt">): Promise<HeroOfFaith> {
+    const id = uuidv4();
+    const now = new Date();
+    
+    const hero: HeroOfFaith = {
+      ...heroData,
+      id,
+      createdAt: now
+    };
+    
+    this.heroesOfFaith.set(id, hero);
+    return hero;
+  }
+
+  async updateHeroOfFaith(id: string, updates: Partial<HeroOfFaith>): Promise<HeroOfFaith | undefined> {
+    const hero = this.heroesOfFaith.get(id);
+    if (!hero) return undefined;
+    
+    const updatedHero: HeroOfFaith = {
+      ...hero,
+      ...updates
+    };
+    
+    this.heroesOfFaith.set(id, updatedHero);
+    return updatedHero;
+  }
+
+  async deleteHeroOfFaith(id: string): Promise<boolean> {
+    return this.heroesOfFaith.delete(id);
   }
 }
 
