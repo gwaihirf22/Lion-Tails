@@ -44,6 +44,14 @@ export default function Header() {
                 My Stories
               </Link>
             </li>
+            <li>
+              <Link 
+                href="/settings" 
+                className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/settings' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
+              >
+                Settings
+              </Link>
+            </li>
           </ul>
         </nav>
       </div>

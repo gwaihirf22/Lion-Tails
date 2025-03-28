@@ -17,18 +17,39 @@ export interface IStorage {
   saveStory(story: StoryResponse, request: StoryRequest): Promise<SavedStory>;
   toggleFavorite(id: string, isFavorite: boolean): Promise<SavedStory | undefined>;
   deleteStory(id: string): Promise<boolean>;
+  
+  // Usage tracking
+  getStoryGenerationCount(): Promise<number>;
+  incrementStoryGenerationCount(): Promise<number>;
+  resetStoryGenerationCount(): Promise<void>;
+  getLastResetDate(): Promise<Date | null>;
+  setLastResetDate(date: Date): Promise<void>;
+  
+  // User settings
+  getUserOpenAIKey(): Promise<string | null>;
+  setUserOpenAIKey(key: string): Promise<void>;
+  getUserOpenAIModel(): Promise<string | null>;
+  setUserOpenAIModel(model: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<number, User>;
   private songs: Map<string, Song>;
   private stories: Map<string, SavedStory>;
+  private storyGenerationCount: number;
+  private lastResetDate: Date | null;
+  private userOpenAIKey: string | null;
+  private userOpenAIModel: string | null;
   currentId: number;
 
   constructor() {
     this.users = new Map();
     this.songs = new Map();
     this.stories = new Map();
+    this.storyGenerationCount = 0;
+    this.lastResetDate = null;
+    this.userOpenAIKey = null;
+    this.userOpenAIModel = 'gpt-4o'; // Default to the newest model
     this.currentId = 1;
   }
 
@@ -120,6 +141,46 @@ export class MemStorage implements IStorage {
   
   async deleteStory(id: string): Promise<boolean> {
     return this.stories.delete(id);
+  }
+  
+  // Usage tracking methods
+  async getStoryGenerationCount(): Promise<number> {
+    return this.storyGenerationCount;
+  }
+  
+  async incrementStoryGenerationCount(): Promise<number> {
+    this.storyGenerationCount += 1;
+    return this.storyGenerationCount;
+  }
+  
+  async resetStoryGenerationCount(): Promise<void> {
+    this.storyGenerationCount = 0;
+    this.lastResetDate = new Date();
+  }
+  
+  async getLastResetDate(): Promise<Date | null> {
+    return this.lastResetDate;
+  }
+  
+  async setLastResetDate(date: Date): Promise<void> {
+    this.lastResetDate = date;
+  }
+  
+  // User settings methods
+  async getUserOpenAIKey(): Promise<string | null> {
+    return this.userOpenAIKey;
+  }
+  
+  async setUserOpenAIKey(key: string): Promise<void> {
+    this.userOpenAIKey = key;
+  }
+  
+  async getUserOpenAIModel(): Promise<string | null> {
+    return this.userOpenAIModel;
+  }
+  
+  async setUserOpenAIModel(model: string): Promise<void> {
+    this.userOpenAIModel = model;
   }
 }
 

@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { StoryRequest, StoryResponse } from "@shared/schema";
 import { getBiblicalEventStoryTemplate } from "../data/storyTemplates";
 import { getBibleVerseByTheme } from "../data/bibleVerses";
+import { storage } from "../storage";
 
 // Initialize OpenAI API client
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
@@ -40,9 +41,13 @@ Format your response as valid JSON with the following structure:
       "imagePrompt": "A short description for an illustration of a key scene in the biblical style"
     }`;
     
+    // Get the user's preferred model or use the default
+    const userModel = await storage.getUserOpenAIModel();
+    const model = userModel || "gpt-4o";
+    
     // Call OpenAI API
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: model,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: prompt }

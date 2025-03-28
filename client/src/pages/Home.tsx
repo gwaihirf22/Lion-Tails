@@ -58,6 +58,20 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Story Generation Info */}
+      <div className="max-w-4xl mx-auto mb-8">
+        <div className="bg-white/90 rounded-xl shadow-md p-4 text-center">
+          <div className="inline-block bg-secondary/10 px-3 py-1 rounded-full text-secondary font-medium text-sm mb-2">
+            ✨ AI-Powered Stories
+          </div>
+          <h3 className="text-xl font-heading font-bold mb-2">Your First 50 Stories Are Free!</h3>
+          <p className="text-gray-700 mb-2">
+            Enjoy 50 free AI-generated stories to start, plus 10 more each month. Want unlimited stories?
+            Add your own OpenAI API key in the <a href="/settings" className="text-secondary hover:underline">Settings</a> page.
+          </p>
+        </div>
+      </div>
+      
       {/* Story Form Section */}
       <div className="max-w-4xl mx-auto">
         <StoryForm onSubmit={handleSubmitStory} loading={loading} />

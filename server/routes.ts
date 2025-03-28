@@ -148,6 +148,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to generate chords" });
     }
   });
+  
+  // API routes for OpenAI settings
+  
+  // Get user's OpenAI API key (note: we never return the actual key for security, just if it exists)
+  app.get("/api/settings/openai-key-status", async (req, res) => {
+    try {
+      const key = await storage.getUserOpenAIKey();
+      res.json({ hasKey: !!key });
+    } catch (error) {
+      console.error("Error fetching OpenAI key status:", error);
+      res.status(500).json({ message: "Failed to fetch API key status" });
+    }
+  });
+  
+  // Set user's OpenAI API key
+  app.post("/api/settings/openai-key", async (req, res) => {
+    try {
+      const { key } = req.body;
+      
+      if (!key || typeof key !== 'string') {
+        return res.status(400).json({ message: "Valid API key is required" });
+      }
+      
+      await storage.setUserOpenAIKey(key);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error setting OpenAI key:", error);
+      res.status(500).json({ message: "Failed to set API key" });
+    }
+  });
+  
+  // Delete user's OpenAI API key
+  app.delete("/api/settings/openai-key", async (req, res) => {
+    try {
+      await storage.setUserOpenAIKey('');
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting OpenAI key:", error);
+      res.status(500).json({ message: "Failed to delete API key" });
+    }
+  });
+  
+  // Get user's OpenAI model
+  app.get("/api/settings/openai-model", async (req, res) => {
+    try {
+      const model = await storage.getUserOpenAIModel();
+      res.json({ model: model || 'gpt-4o' });
+    } catch (error) {
+      console.error("Error fetching OpenAI model:", error);
+      res.status(500).json({ message: "Failed to fetch model setting" });
+    }
+  });
+  
+  // Set user's OpenAI model
+  app.post("/api/settings/openai-model", async (req, res) => {
+    try {
+      const { model } = req.body;
+      
+      if (!model || typeof model !== 'string') {
+        return res.status(400).json({ message: "Valid model name is required" });
+      }
+      
+      await storage.setUserOpenAIModel(model);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error setting OpenAI model:", error);
+      res.status(500).json({ message: "Failed to set model" });
+    }
+  });
+  
+  // Get story generation statistics
+  app.get("/api/stats/story-generation", async (req, res) => {
+    try {
+      const count = await storage.getStoryGenerationCount();
+      const lastResetDate = await storage.getLastResetDate();
+      
+      // Calculate quotas
+      const initialQuota = 50;
+      const monthlyQuota = 10;
+      const used = count;
+      let remaining = initialQuota - used;
+      
+      // Add monthly quotas if applicable
+      if (lastResetDate) {
+        const now = new Date();
+        const monthsSinceReset = Math.floor((now.getTime() - lastResetDate.getTime()) / (30 * 24 * 60 * 60 * 1000));
+        
+        if (monthsSinceReset > 0) {
+          remaining += monthsSinceReset * monthlyQuota;
+        }
+      }
+      
+      remaining = Math.max(0, remaining);
+      
+      res.json({
+        used,
+        remaining,
+        total: initialQuota + (lastResetDate ? monthlyQuota : 0),
+        lastResetDate
+      });
+    } catch (error) {
+      console.error("Error fetching story generation stats:", error);
+      res.status(500).json({ message: "Failed to fetch story statistics" });
+    }
+  });
 
   const httpServer = createServer(app);
 

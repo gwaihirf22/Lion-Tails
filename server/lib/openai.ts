@@ -1,16 +1,103 @@
 import { StoryRequest, StoryResponse } from "@shared/schema";
 import { getBiblicalEventStoryTemplate } from "../data/storyTemplates";
 import { getBibleVerseByTheme } from "../data/bibleVerses";
+import { generateStoryWithOpenAI } from "./openai-implementation";
+import { storage } from "../storage";
 
-// Simple version that just uses pre-written demo stories
+// Constants for our subscription model
+const FREE_STORY_INITIAL_QUOTA = 50;
+const FREE_STORY_MONTHLY_QUOTA = 10;
+const MONTH_IN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+
+// Function to check if user can generate a story with the free tier
+async function canGenerateStoryWithFreeTier(): Promise<boolean> {
+  const count = await storage.getStoryGenerationCount();
+  const lastResetDate = await storage.getLastResetDate();
+  
+  // If user has generated less than the initial quota, they can generate a story
+  if (count < FREE_STORY_INITIAL_QUOTA) {
+    return true;
+  }
+  
+  // If it's been a month since the last reset, reset the counter
+  // and give the user their monthly quota
+  if (lastResetDate) {
+    const now = new Date();
+    const timeSinceLastReset = now.getTime() - lastResetDate.getTime();
+    
+    if (timeSinceLastReset >= MONTH_IN_MS) {
+      // It's been a month, so reset the counter
+      await storage.resetStoryGenerationCount();
+      return true;
+    }
+    
+    // Check if user has monthly quota available
+    const monthlyQuotaUsed = count - FREE_STORY_INITIAL_QUOTA;
+    const currentMonthNumber = Math.floor(timeSinceLastReset / MONTH_IN_MS) + 1;
+    const totalMonthlyQuota = FREE_STORY_MONTHLY_QUOTA * currentMonthNumber;
+    
+    return monthlyQuotaUsed < totalMonthlyQuota;
+  }
+  
+  // If no reset date has been set, set it now and allow the generation
+  await storage.setLastResetDate(new Date());
+  return true;
+}
+
+// Main story generation function
 export async function generateStory(request: StoryRequest): Promise<StoryResponse> {
   const { childName, gender, animal, theme, biblicalEvent } = request;
   
   const storyTemplate = biblicalEvent ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
   const bibleVerse = getBibleVerseByTheme(theme);
-
-  // Just use the demo story
-  return getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
+  
+  // Check if user has provided their own OpenAI API key
+  const userApiKey = await storage.getUserOpenAIKey();
+  
+  // If user has their own API key, use that regardless of quota
+  if (userApiKey) {
+    try {
+      // Temporarily replace the API key with the user's key
+      const originalApiKey = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = userApiKey;
+      
+      // Generate the story using the user's API key
+      const story = await generateStoryWithOpenAI(request);
+      
+      // Restore the original API key
+      process.env.OPENAI_API_KEY = originalApiKey;
+      
+      return story;
+    } catch (error) {
+      console.error("Error using user's OpenAI API key:", error);
+      // Fall back to default behavior if user's key fails
+    }
+  }
+  
+  // No user API key or it failed, check if they have free quota
+  const canGenerateFree = await canGenerateStoryWithFreeTier();
+  
+  if (canGenerateFree) {
+    try {
+      // Increment the counter before generating to prevent abuse
+      await storage.incrementStoryGenerationCount();
+      
+      // Generate using our API key
+      return await generateStoryWithOpenAI(request);
+    } catch (error) {
+      console.error("Error generating story with OpenAI:", error);
+      // Fall back to demo story if OpenAI fails
+      return getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
+    }
+  } else {
+    // User has exceeded their free quota, return a demo story with a message
+    const demoStory = getDemoStory(childName, gender, animal, theme, biblicalEvent, bibleVerse);
+    
+    // Add a message to the story about reaching the quota
+    demoStory.content = `[You have reached your free story quota. Please add your own OpenAI API key to continue generating unique stories, or enjoy our pre-written stories until your next free stories become available.]\n\n${demoStory.content}`;
+    
+    return demoStory;
+  }
 }
 
 function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null): string {
