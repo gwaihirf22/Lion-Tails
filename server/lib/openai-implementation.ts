@@ -298,20 +298,41 @@ function buildStoryPrompt(childName: string, gender: string = "boy", animal: str
     storyFormat = "moral bedtime story with a clear ethical lesson";
   }
 
-  let prompt = `Write a traditional orthodox Christian ${storyFormat} for a ${gender} named ${childName}`;
+  let prompt = "";
   
-  // Only include animal if it's not 'none'
-  if (animal && animal !== 'none' && animal !== '') {
-    prompt += ` who loves ${animal}s`;
+  // Handle time travel mode differently - the character IS the main character
+  if (useTimeTravel && character) {
+    prompt = `Write a traditional orthodox Christian ${storyFormat} featuring ${character.name}, who is a ${character.gender === 'boy' ? 'boy' : 'girl'} of ${character.age} years old, as a time traveler`;
+    
+    // Add character traits if available
+    if (character.traits && character.traits.length > 0) {
+      prompt += ` with these traits: ${character.traits.join(', ')}`;
+    }
+    
+    // Only include animal if provided in character profile
+    if (character.favoriteAnimal && character.favoriteAnimal !== 'none' && character.favoriteAnimal !== '') {
+      prompt += ` who loves ${character.favoriteAnimal}s`;
+    }
+    
+    prompt += `.`;
+  } else {
+    // Regular mode - use the child's name and gender
+    prompt = `Write a traditional orthodox Christian ${storyFormat} for a ${gender} named ${childName}`;
+    
+    // Only include animal if it's not 'none'
+    if (animal && animal !== 'none' && animal !== '') {
+      prompt += ` who loves ${animal}s`;
+    }
+    
+    prompt += `.`;
   }
   
-  prompt += ".";
-  
-  // Only include theme if it's not 'none'
+  // Only include theme if it's not 'none' (for both modes)
   if (theme && theme !== 'none' && theme !== '') {
     prompt += ` The story should teach about ${theme}.`;
   }
 
+  // Add biblical event context (for both modes)
   if (biblicalEvent && biblicalEvent !== 'none' && biblicalEvent !== '') {
     if (storyTemplate) {
       prompt += ` The story should be based on the biblical story of ${biblicalEvent}. Use this template as inspiration: ${storyTemplate}`;
@@ -320,16 +341,12 @@ function buildStoryPrompt(childName: string, gender: string = "boy", animal: str
     }
   }
 
-  // Add time travel character if provided
+  // Add time travel details if in time travel mode
   if (useTimeTravel && character) {
-    prompt += ` IMPORTANT: This story should feature time travel! Include a character named ${character.name}, who is a ${character.gender === 'boy' ? 'boy' : 'girl'} of ${character.age} years old, as a time traveler who goes back in time to witness or participate in the biblical event.`;
-    
-    if (character.traits && character.traits.length > 0) {
-      prompt += ` This character has the following traits: ${character.traits.join(', ')}.`;
-    }
-    
-    prompt += ` The time traveling character should interact with the main child character (${childName}) in the story, creating a fun adventure where they both learn important lessons about faith.`;
+    prompt += ` IMPORTANT: This story should feature time travel! ${character.name} travels back in time to witness or participate in the biblical event mentioned.`;
+    prompt += ` The time traveling character should be the main protagonist in the story, with no other modern-day children present.`;
   } else {
+    // Regular mode - make child the main character
     prompt += ` The child should be the main character in the story`;
     if (animal && animal !== 'none' && animal !== '') {
       prompt += ` and interact with ${animal}s`;

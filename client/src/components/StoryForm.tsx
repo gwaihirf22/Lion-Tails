@@ -67,9 +67,23 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
     form.setValue("useTimeTravel", useTimeTravel);
     
     if (useTimeTravel) {
-      // In time travel mode, child's name, gender, and animal are optional
+      // In time travel mode, child's name, gender, and animal are not needed
       // (they will be handled by the character's details)
       form.clearErrors(['childName', 'gender', 'animal']);
+      
+      // Set default values for these fields so they don't get sent to the server
+      // We need to use valid values that satisfy the type constraints
+      form.setValue("childName", "Character");
+      form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
+      form.setValue("animal", "none");
+      
+      // Set focus on character selection dropdown
+      setTimeout(() => {
+        const characterDropdown = document.querySelector('[name="characterId"]');
+        if (characterDropdown) {
+          (characterDropdown as HTMLElement).focus();
+        }
+      }, 100);
     } else {
       // Clear character selection when time travel is disabled
       form.setValue("characterId", undefined);
