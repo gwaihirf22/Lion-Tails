@@ -5,6 +5,7 @@ import { StoryRequest } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import appIcon from "@/assets/app-icon.jpg";
 
 export default function Home() {
   const [, navigate] = useLocation();
@@ -41,8 +42,8 @@ export default function Home() {
           <p className="text-lg mb-6">Create beautiful faith-based stories for your little ones, filled with Biblical wisdom and heartwarming lessons.</p>
           <div className="flex flex-col md:flex-row justify-center items-center gap-4">
             <div className="flex-1 p-4">
-              <div className="animate-[float_6s_ease-in-out_infinite] w-48 h-48 mx-auto">
-                <img src="/images/bible-image.jpg" alt="Bible" className="w-full h-full object-cover rounded-full shadow-lg border-2 border-white" />
+              <div className="animate-[float_6s_ease-in-out_infinite] w-64 h-64 mx-auto">
+                <img src={appIcon} alt="Lion Tails" className="w-full h-full object-cover rounded-full shadow-lg border-2 border-white" />
               </div>
             </div>
             <div className="flex-1 p-4">

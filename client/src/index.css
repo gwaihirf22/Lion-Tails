@@ -9,7 +9,7 @@
 
   body {
     @apply font-sans antialiased text-foreground;
-    background-image: url('/images/lion-tails-bg.jpg');
+    background-image: url('/src/assets/lion-tails-background.jpg');
     background-size: cover;
     background-attachment: fixed;
     background-position: center;

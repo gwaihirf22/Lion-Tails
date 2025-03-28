@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 // Import the Lion Tails image
-import lionTailsIcon from "@/assets/lion-tails-icon.jpg";
+import appIcon from "@/assets/app-icon.jpg";
 
 export default function Header() {
   const [location] = useLocation();
@@ -12,7 +12,7 @@ export default function Header() {
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <img 
-            src={lionTailsIcon} 
+            src={appIcon} 
             alt="Lion Tails Logo" 
             className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-md"
           />
@@ -60,14 +60,7 @@ export default function Header() {
                 Heroes
               </Link>
             </li>
-            <li>
-              <Link 
-                href="/image-analysis" 
-                className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/image-analysis' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
-              >
-                Images
-              </Link>
-            </li>
+
             <li>
               <Link 
                 href="/settings" 

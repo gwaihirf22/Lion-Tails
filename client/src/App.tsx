@@ -11,6 +11,7 @@ import Settings from "@/pages/Settings";
 import Characters from "@/pages/Characters";
 import HeroesOfFaith from "@/pages/HeroesOfFaith";
 import ImageAnalysis from "@/pages/ImageAnalysis";
+
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
