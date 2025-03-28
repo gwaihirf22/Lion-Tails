@@ -42,9 +42,10 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
     defaultValues: {
       childName: "",
       gender: "boy",
-      animal: "lion", // Default to lion (our app's mascot)
-      theme: "courage", // Default theme
-      biblicalEvent: "noahs-ark", // Default to Noah's Ark since it's fully available
+      animal: "", // No default animal
+      theme: "", // No default theme
+      biblicalEvent: "", // No default biblical event
+      heroOfFaith: "", // No default hero of faith
       storyType: "regular", // Default to regular bedtime story
       useTimeTravel: false,
       characterId: undefined,
@@ -150,9 +151,10 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                             defaultValue={field.value}
                           >
                             <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                              <SelectValue placeholder="Select an animal" />
+                              <SelectValue placeholder="Select an animal if desired" />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
                               <SelectItem value="lion">Lion</SelectItem>
                               <SelectItem value="lamb">Lamb</SelectItem>
                               <SelectItem value="dove">Dove</SelectItem>
@@ -198,9 +200,10 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                         defaultValue={field.value}
                       >
                         <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                          <SelectValue placeholder="Select a theme" />
+                          <SelectValue placeholder="Select a theme if desired" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
                           <SelectItem value="kindness">Kindness</SelectItem>
                           <SelectItem value="courage">Courage</SelectItem>
                           <SelectItem value="obedience">Obedience</SelectItem>
@@ -281,25 +284,78 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                         defaultValue={field.value}
                       >
                         <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                          <SelectValue placeholder="Select a Biblical event" />
+                          <SelectValue placeholder="Select a Bible story if desired" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
                           <SelectItem value="noahs-ark">Noah's Ark</SelectItem>
                           <SelectItem value="david-goliath">David and Goliath</SelectItem>
-                          <SelectItem value="good-samaritan">The Good Samaritan (coming soon)</SelectItem>
-                          <SelectItem value="prodigal-son">The Prodigal Son (coming soon)</SelectItem>
-                          <SelectItem value="jonah">Jonah and the Whale (coming soon)</SelectItem>
-                          <SelectItem value="creation">Creation Story (coming soon)</SelectItem>
-                          <SelectItem value="daniel-lions">Daniel in the Lion's Den (coming soon)</SelectItem>
-                          <SelectItem value="moses">Moses and the Red Sea (coming soon)</SelectItem>
+                          <SelectItem value="good-samaritan">The Good Samaritan</SelectItem>
+                          <SelectItem value="prodigal-son">The Prodigal Son</SelectItem>
+                          <SelectItem value="jonah">Jonah and the Whale</SelectItem>
+                          <SelectItem value="creation">Creation Story</SelectItem>
+                          <SelectItem value="daniel-lions">Daniel in the Lion's Den</SelectItem>
+                          <SelectItem value="moses">Moses and the Red Sea</SelectItem>
+                          <SelectItem value="joseph">Joseph and his Brothers</SelectItem>
+                          <SelectItem value="joshua">Joshua and the Battle of Jericho</SelectItem>
+                          <SelectItem value="elijah">Elijah and the Prophets of Baal</SelectItem>
+                          <SelectItem value="esther">Queen Esther</SelectItem>
+                          <SelectItem value="jesus-birth">Birth of Jesus</SelectItem>
+                          <SelectItem value="jesus-miracles">Jesus' Miracles</SelectItem>
+                          <SelectItem value="easter">Easter Story</SelectItem>
+                          <SelectItem value="paul">Paul's Missionary Journeys</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </FormControl>
-                  <div className="text-xs text-secondary/70 mt-1">
-                    Currently, only Noah's Ark and David & Goliath stories are fully available. 
-                    More biblical stories will be added soon!
-                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="heroOfFaith"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">Heroes of the Faith</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-crown">
+                          <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
+                        </svg>
+                      </span>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                          <SelectValue placeholder="Select a Christian hero if desired" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="cs-lewis">C.S. Lewis</SelectItem>
+                          <SelectItem value="mother-teresa">Mother Teresa</SelectItem>
+                          <SelectItem value="billy-graham">Billy Graham</SelectItem>
+                          <SelectItem value="martin-luther">Martin Luther</SelectItem>
+                          <SelectItem value="corrie-ten-boom">Corrie ten Boom</SelectItem>
+                          <SelectItem value="dietrich-bonhoeffer">Dietrich Bonhoeffer</SelectItem>
+                          <SelectItem value="william-carey">William Carey</SelectItem>
+                          <SelectItem value="hudson-taylor">Hudson Taylor</SelectItem>
+                          <SelectItem value="amy-carmichael">Amy Carmichael</SelectItem>
+                          <SelectItem value="john-bunyan">John Bunyan</SelectItem>
+                          <SelectItem value="augustine">Augustine of Hippo</SelectItem>
+                          <SelectItem value="george-mueller">George Müller</SelectItem>
+                          <SelectItem value="charles-spurgeon">Charles Spurgeon</SelectItem>
+                          <SelectItem value="john-wesley">John Wesley</SelectItem>
+                          <SelectItem value="jim-elliot">Jim Elliot</SelectItem>
+                          <SelectItem value="lottie-moon">Lottie Moon</SelectItem>
+                          <SelectItem value="eric-liddell">Eric Liddell</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

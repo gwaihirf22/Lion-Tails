@@ -46,9 +46,10 @@ export const storyRequestSchema = z.object({
     invalid_type_error: "Gender must be 'boy' or 'girl'",
   }).optional(),
   // Optional fields with defaults or optional values
-  animal: z.string().default("lion").optional(),
-  theme: z.string().default("faith"),
-  biblicalEvent: z.string().default("none"),
+  animal: z.string().default("").optional(),
+  theme: z.string().default(""),
+  biblicalEvent: z.string().default(""),
+  heroOfFaith: z.string().default("").optional(),
   useTimeTravel: z.boolean().default(false),
   characterId: z.string().optional(),
   storyType: z.enum(["regular", "poem", "moral"]).default("regular"),

@@ -17,10 +17,10 @@ function getOpenAIClient(apiKey?: string | null) {
 }
 
 export async function generateStoryWithOpenAI(request: StoryRequest): Promise<StoryResponse> {
-  const { childName, gender, animal, theme, biblicalEvent, useTimeTravel, characterId, storyType } = request;
+  const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType } = request;
 
-  const storyTemplate = biblicalEvent ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
-  const bibleVerse = getBibleVerseByTheme(theme);
+  const storyTemplate = biblicalEvent && biblicalEvent !== 'none' ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
+  const bibleVerse = getBibleVerseByTheme(theme && theme !== 'none' ? theme : 'faith');
   
   // Get user's API key and model upfront
   const userApiKey = await storage.getUserOpenAIKey();
@@ -39,7 +39,7 @@ export async function generateStoryWithOpenAI(request: StoryRequest): Promise<St
       throw new Error("OpenAI API key not found");
     }
 
-    const prompt = buildStoryPrompt(childName || "Child", gender || "boy", animal || "lion", theme, biblicalEvent, storyTemplate, useTimeTravel, character, storyType || "regular");
+    const prompt = buildStoryPrompt(childName || "Child", gender || "boy", animal || "lion", theme, biblicalEvent, storyTemplate, useTimeTravel, character, storyType || "regular", heroOfFaith);
     
     // System prompt that defines what kind of response we want
     const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author. Create wholesome, faith-based stories with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
@@ -90,15 +90,24 @@ Format your response as valid JSON with the following structure:
       console.log("Raw response:", responseContent);
       
       // If we can't parse as JSON, use default values
+      let defaultImagePrompt = `A child named ${childName} in a biblical setting`;
+      if (animal && animal !== 'none' && animal !== '') {
+        defaultImagePrompt = `A child named ${childName} with ${animal}s in a biblical setting`;
+      }
+      
       jsonContent = {
         title: `${childName}'s Biblical Adventure`,
         content: responseContent,
-        imagePrompt: `A child named ${childName} with ${animal}s in a biblical setting`
+        imagePrompt: defaultImagePrompt
       };
     }
     
     // Get the image prompt
-    const imagePrompt = jsonContent.imagePrompt || `A child named ${childName} with ${animal}s in a biblical setting`;
+    let fallbackImagePrompt = `A child named ${childName} in a biblical setting`;
+    if (animal && animal !== 'none' && animal !== '') {
+      fallbackImagePrompt = `A child named ${childName} with ${animal}s in a biblical setting`;
+    }
+    const imagePrompt = jsonContent.imagePrompt || fallbackImagePrompt;
     
     // Generate an image for the story only if the user is using their own API key
     // gpt-4o-mini doesn't support image generation, so we need to check if we're using a custom key
@@ -205,7 +214,7 @@ function downloadImage(url: string, filepath: string): Promise<void> {
   });
 }
 
-function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular"): string {
+function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular", heroOfFaith?: string | undefined): string {
   let storyFormat = "bedtime story";
   if (storyType === "poem") {
     storyFormat = "bedtime poem with rhyming verses";
@@ -213,9 +222,21 @@ function buildStoryPrompt(childName: string, gender: string = "boy", animal: str
     storyFormat = "moral bedtime story with a clear ethical lesson";
   }
 
-  let prompt = `Write a traditional orthodox Christian ${storyFormat} for a ${gender} named ${childName} who loves ${animal}s. The story should teach about ${theme}.`;
+  let prompt = `Write a traditional orthodox Christian ${storyFormat} for a ${gender} named ${childName}`;
+  
+  // Only include animal if it's not 'none'
+  if (animal && animal !== 'none' && animal !== '') {
+    prompt += ` who loves ${animal}s`;
+  }
+  
+  prompt += ".";
+  
+  // Only include theme if it's not 'none'
+  if (theme && theme !== 'none' && theme !== '') {
+    prompt += ` The story should teach about ${theme}.`;
+  }
 
-  if (biblicalEvent && biblicalEvent !== 'none') {
+  if (biblicalEvent && biblicalEvent !== 'none' && biblicalEvent !== '') {
     if (storyTemplate) {
       prompt += ` The story should be based on the biblical story of ${biblicalEvent}. Use this template as inspiration: ${storyTemplate}`;
     } else {
@@ -233,10 +254,19 @@ function buildStoryPrompt(childName: string, gender: string = "boy", animal: str
     
     prompt += ` The time traveling character should interact with the main child character (${childName}) in the story, creating a fun adventure where they both learn important lessons about faith.`;
   } else {
-    prompt += ` The child should be the main character in the story and interact with ${animal}s.`;
+    prompt += ` The child should be the main character in the story`;
+    if (animal && animal !== 'none' && animal !== '') {
+      prompt += ` and interact with ${animal}s`;
+    }
+    prompt += `.`;
   }
 
   prompt += ` The story should be approximately 1000 words and include a clear moral lesson at the end that relates to traditional Christian values.`;
+  
+  // Include Heroes of Faith if provided
+  if (heroOfFaith && heroOfFaith !== 'none' && heroOfFaith !== '') {
+    prompt += ` Also, include the historical Christian figure ${heroOfFaith} in the story. They should make an appearance or be mentioned as part of the narrative, teaching the child about faith through their example or story.`;
+  }
   
   prompt += ` IMPORTANT: Ensure the story adheres ONLY to traditional orthodox Christian theology (Catholic, Orthodox, Protestant). Avoid ANY theological concepts from Mormon, Jehovah's Witness, or other non-traditional denominations. Focus on biblical teachings accepted in mainstream Christianity.`;
 
