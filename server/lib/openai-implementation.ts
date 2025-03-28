@@ -3,6 +3,10 @@ import { StoryRequest, StoryResponse } from "@shared/schema";
 import { getBiblicalEventStoryTemplate } from "../data/storyTemplates";
 import { getBibleVerseByTheme } from "../data/bibleVerses";
 import { storage } from "../storage";
+import * as fs from 'fs';
+import * as path from 'path';
+import * as https from 'https';
+import { v4 as uuidv4 } from 'uuid';
 
 // Function to get an OpenAI client with the current API key
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
@@ -79,17 +83,103 @@ Format your response as valid JSON with the following structure:
       };
     }
     
-    // Return the story with the bible verse
+    // Get the image prompt
+    const imagePrompt = jsonContent.imagePrompt || `A child named ${childName} with ${animal}s in a biblical setting`;
+    
+    // Generate an image for the story
+    let imageUrl = null;
+    try {
+      imageUrl = await generateStoryImage(imagePrompt);
+    } catch (imageError) {
+      console.error("Error generating story image:", imageError);
+      // Continue without an image if there's an error
+    }
+    
+    // Return the story with the bible verse and image
     return {
       title: jsonContent.title || `${childName}'s Biblical Adventure`,
       content: jsonContent.content || responseContent,
       bibleVerse: bibleVerse,
-      imagePrompt: jsonContent.imagePrompt || `A child named ${childName} with ${animal}s in a biblical setting`
+      imagePrompt: imagePrompt,
+      imageUrl: imageUrl || undefined
     };
   } catch (error) {
     console.error("Error generating story with OpenAI:", error);
     throw error;
   }
+}
+
+// Function to generate an image for a story using DALL-E
+export async function generateStoryImage(imagePrompt: string): Promise<string | undefined> {
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("OpenAI API key not found for image generation");
+      return undefined;
+    }
+
+    // Make sure the images directory exists
+    const imagesDir = path.join(process.cwd(), 'public', 'images', 'stories');
+    if (!fs.existsSync(imagesDir)) {
+      fs.mkdirSync(imagesDir, { recursive: true });
+    }
+
+    // Create a filename for the new image
+    const filename = `story_${uuidv4()}.png`;
+    const filepath = path.join(imagesDir, filename);
+    
+    // Append biblical art style to the prompt
+    const enhancedPrompt = `${imagePrompt}. Render in a beautiful, child-friendly biblical illustration style with soft colors.`;
+    
+    // Call DALL-E API to generate the image
+    const openaiClient = getOpenAIClient();
+    const response = await openaiClient.images.generate({
+      model: "dall-e-3",
+      prompt: enhancedPrompt,
+      n: 1,
+      size: "1024x1024",
+      quality: "standard",
+      style: "vivid",
+    });
+
+    // Download the image
+    if (response.data[0]?.url) {
+      await downloadImage(response.data[0].url, filepath);
+      return `/public/images/stories/${filename}`;
+    } else {
+      console.error("No image URL returned from OpenAI");
+      return undefined;
+    }
+  } catch (error) {
+    console.error("Error generating image with DALL-E:", error);
+    return undefined;
+  }
+}
+
+// Helper function to download an image from a URL and save it to disk
+function downloadImage(url: string, filepath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    https.get(url, (response) => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`Failed to download image: ${response.statusCode}`));
+        return;
+      }
+
+      const fileStream = fs.createWriteStream(filepath);
+      response.pipe(fileStream);
+
+      fileStream.on('finish', () => {
+        fileStream.close();
+        resolve();
+      });
+
+      fileStream.on('error', (err) => {
+        fs.unlink(filepath, () => {});
+        reject(err);
+      });
+    }).on('error', (err) => {
+      reject(err);
+    });
+  });
 }
 
 function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null): string {

@@ -290,9 +290,10 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
           
           <div className="flex justify-center mb-8">
               <img 
-                src={getBiblicalImage(story.title, story.content)}
+                src={story.imageUrl || getBiblicalImage(story.title, story.content)}
                 alt="Biblical story illustration" 
                 className="rounded-lg shadow-md max-w-full h-auto" 
+                style={{ maxHeight: '400px', objectFit: 'contain' }}
               />
             </div>
           

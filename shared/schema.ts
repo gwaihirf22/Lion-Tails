@@ -39,6 +39,7 @@ export const storyResponseSchema = z.object({
     reference: z.string(),
   }),
   imagePrompt: z.string().optional(),
+  imageUrl: z.string().optional(),
 });
 
 export type StoryResponse = z.infer<typeof storyResponseSchema>;
