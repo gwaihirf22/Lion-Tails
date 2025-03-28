@@ -1,10 +1,17 @@
-import { users, type User, type InsertUser, type Song, type SavedStory, type StoryResponse, type StoryRequest } from "@shared/schema";
+import { users, type User, type InsertUser, type Song, type SavedStory, type StoryResponse, type StoryRequest, type Character } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  
+  // Character related methods
+  getAllCharacters(): Promise<Character[]>;
+  getCharacterById(id: string): Promise<Character | undefined>;
+  createCharacter(character: Omit<Character, "id" | "createdAt">): Promise<Character>;
+  updateCharacter(id: string, character: Partial<Character>): Promise<Character | undefined>;
+  deleteCharacter(id: string): Promise<boolean>;
   
   // Song related methods
   getAllSongs(): Promise<Song[]>;
@@ -34,6 +41,7 @@ export interface IStorage {
 
 export class MemStorage implements IStorage {
   private users: Map<number, User>;
+  private characters: Map<string, Character>;
   private songs: Map<string, Song>;
   private stories: Map<string, SavedStory>;
   private storyGenerationCount: number;
@@ -44,6 +52,7 @@ export class MemStorage implements IStorage {
 
   constructor() {
     this.users = new Map();
+    this.characters = new Map();
     this.songs = new Map();
     this.stories = new Map();
     this.storyGenerationCount = 0;
@@ -68,6 +77,48 @@ export class MemStorage implements IStorage {
     const user: User = { ...insertUser, id };
     this.users.set(id, user);
     return user;
+  }
+
+  // Character related methods
+  async getAllCharacters(): Promise<Character[]> {
+    return Array.from(this.characters.values()).sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  async getCharacterById(id: string): Promise<Character | undefined> {
+    return this.characters.get(id);
+  }
+
+  async createCharacter(characterData: Omit<Character, "id" | "createdAt">): Promise<Character> {
+    const id = uuidv4();
+    const now = new Date();
+    
+    const character: Character = {
+      ...characterData,
+      id,
+      createdAt: now.toISOString()
+    };
+    
+    this.characters.set(id, character);
+    return character;
+  }
+
+  async updateCharacter(id: string, updates: Partial<Character>): Promise<Character | undefined> {
+    const character = this.characters.get(id);
+    if (!character) return undefined;
+    
+    const updatedCharacter: Character = {
+      ...character,
+      ...updates
+    };
+    
+    this.characters.set(id, updatedCharacter);
+    return updatedCharacter;
+  }
+
+  async deleteCharacter(id: string): Promise<boolean> {
+    return this.characters.delete(id);
   }
 
   async getAllSongs(): Promise<Song[]> {

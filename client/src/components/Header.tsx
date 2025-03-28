@@ -46,6 +46,14 @@ export default function Header() {
             </li>
             <li>
               <Link 
+                href="/characters" 
+                className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/characters' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
+              >
+                Characters
+              </Link>
+            </li>
+            <li>
+              <Link 
                 href="/settings" 
                 className={`text-white hover:text-accent duration-200 px-2 py-1 rounded ${location === '/settings' ? 'underline decoration-accent decoration-2 underline-offset-4' : ''}`}
               >

@@ -1,18 +1,23 @@
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
+import { getQueryFn } from "@/lib/queryClient";
 import { 
   Form, 
   FormControl, 
   FormField, 
   FormItem, 
   FormLabel, 
-  FormMessage 
+  FormMessage,
+  FormDescription
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { StoryRequest, storyRequestSchema } from "@shared/schema";
+import { Checkbox } from "@/components/ui/checkbox";
+import { StoryRequest, storyRequestSchema, type Character } from "@shared/schema";
 
 interface StoryFormProps {
   onSubmit: (data: StoryRequest) => void;
@@ -20,6 +25,18 @@ interface StoryFormProps {
 }
 
 export default function StoryForm({ onSubmit, loading = false }: StoryFormProps) {
+  const [useTimeTravel, setUseTimeTravel] = useState(false);
+  
+  // Fetch characters for selection
+  const { data: characters = [], isLoading: charactersLoading } = useQuery<Character[]>({
+    queryKey: ['/api/characters'],
+    queryFn: getQueryFn<Character[]>({
+      on401: "throw"
+    }),
+    // Only fetch when time travel is enabled
+    enabled: useTimeTravel,
+  });
+  
   const form = useForm<StoryRequest>({
     resolver: zodResolver(storyRequestSchema),
     defaultValues: {
@@ -28,8 +45,20 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
       animal: "lion", // Default to lion (our app's mascot)
       theme: "courage", // Default theme
       biblicalEvent: "noahs-ark", // Default to Noah's Ark since it's fully available
+      useTimeTravel: false,
+      characterId: undefined,
     },
   });
+  
+  // Update the form when the time travel checkbox changes
+  useEffect(() => {
+    form.setValue("useTimeTravel", useTimeTravel);
+    
+    // Clear character selection when time travel is disabled
+    if (!useTimeTravel) {
+      form.setValue("characterId", undefined);
+    }
+  }, [useTimeTravel, form]);
 
   return (
     <Card className="bg-white/95 rounded-2xl shadow-xl">
@@ -212,6 +241,84 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                 </FormItem>
               )}
             />
+
+            <div className="p-4 bg-secondary/10 rounded-lg border border-secondary/20">
+              <div className="flex items-start space-x-2">
+                <Checkbox 
+                  id="useTimeTravel" 
+                  checked={useTimeTravel} 
+                  onCheckedChange={(checked) => setUseTimeTravel(!!checked)} 
+                  className="mt-1"
+                />
+                <div className="space-y-1">
+                  <label
+                    htmlFor="useTimeTravel"
+                    className="font-medium text-sm cursor-pointer"
+                  >
+                    Enable Time Travel Mode
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Use one of your saved characters to travel back in time and witness biblical events
+                  </p>
+                </div>
+              </div>
+
+              {useTimeTravel && (
+                <FormField
+                  control={form.control}
+                  name="characterId"
+                  render={({ field }) => (
+                    <FormItem className="mt-4">
+                      <FormLabel className="text-sm font-medium">Choose a Time Traveler</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-rocket">
+                              <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" /><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" /><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" /><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+                            </svg>
+                          </span>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            disabled={charactersLoading || characters.length === 0}
+                          >
+                            <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                              <SelectValue placeholder={charactersLoading 
+                                ? "Loading characters..." 
+                                : characters.length === 0 
+                                  ? "No characters found" 
+                                  : "Select a character"} 
+                              />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {characters.length > 0 ? (
+                                characters.map((character) => (
+                                  <SelectItem key={character.id} value={character.id}>
+                                    {character.name} ({character.gender === "boy" ? "Boy" : "Girl"}, {character.age} yrs)
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <SelectItem value="none" disabled>
+                                  No characters found
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </FormControl>
+                      {characters.length === 0 && !charactersLoading && (
+                        <FormDescription className="mt-2">
+                          <a href="/characters" className="text-primary underline underline-offset-2">
+                            Create your first time traveler
+                          </a>
+                        </FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
             
             <Button 
               type="submit" 

@@ -46,7 +46,7 @@ async function canGenerateStoryWithFreeTier(): Promise<boolean> {
 
 // Main story generation function
 export async function generateStory(request: StoryRequest): Promise<StoryResponse> {
-  const { childName, gender, animal, theme, biblicalEvent } = request;
+  const { childName, gender, animal, theme, biblicalEvent, useTimeTravel, characterId } = request;
   
   const storyTemplate = biblicalEvent ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
   const bibleVerse = getBibleVerseByTheme(theme);
@@ -100,7 +100,7 @@ export async function generateStory(request: StoryRequest): Promise<StoryRespons
   }
 }
 
-function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null): string {
+function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null, useTimeTravel?: boolean, characterId?: string): string {
   let prompt = `Write a traditional orthodox Christian bedtime story for a ${gender} named ${childName} who loves ${animal}s. The story should teach about ${theme}.`;
 
   if (biblicalEvent && biblicalEvent !== 'none') {
@@ -109,6 +109,13 @@ function buildStoryPrompt(childName: string, gender: string = "boy", animal: str
     } else {
       prompt += ` The story should be based on the biblical story of ${biblicalEvent}.`;
     }
+  }
+
+  // We can't use async functions directly in this function, so we'll provide a more generic time travel prompt 
+  // The actual character details will be fetched and used in the main generateStory function
+  if (useTimeTravel && characterId) {
+    prompt += ` IMPORTANT: This is a time travel story! The story should include a time traveler character who goes back in time to witness or participate in the biblical event.`;
+    prompt += ` The time traveler should interact with the main child character (${childName}) in the story, creating a fun adventure where they both learn important lessons about faith.`;
   }
 
   prompt += ` The child should be the main character in the story and interact with ${animal}s. The story should be approximately 1000 words and include a clear moral lesson at the end that relates to traditional Christian values.`;

@@ -16,16 +16,51 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
-// Schema for story generation
-export const storyRequestSchema = z.object({
-  childName: z.string().min(1, "Child's name is required"),
+// Schema for character creation
+export const characterSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, "Character name is required"),
   gender: z.enum(["boy", "girl"], {
     required_error: "Please select a gender",
     invalid_type_error: "Gender must be 'boy' or 'girl'",
   }),
-  animal: z.string().min(1, "Favorite animal is required"),
-  theme: z.string().min(1, "Theme is required"),
-  biblicalEvent: z.string().min(1, "Biblical event is required"),
+  age: z.number().int().min(5).max(12).default(8),
+  hair: z.string().default("brown"),
+  eyes: z.string().default("brown"),
+  favoriteColor: z.string().default("blue"),
+  specialPower: z.string().optional(),
+  favoriteAnimal: z.string().optional(),
+  hobby: z.string().optional(),
+  timeTravelExperience: z.number().int().min(0).max(10).default(0),
+  personality: z.string().optional(),
+  createdAt: z.string(), // ISO date string
+});
+
+export type Character = z.infer<typeof characterSchema>;
+
+// Schema for story generation with optional fields
+export const storyRequestSchema = z.object({
+  // Required fields
+  childName: z.string().min(1, "Character name is required"),
+  gender: z.enum(["boy", "girl"], {
+    required_error: "Please select a gender",
+    invalid_type_error: "Gender must be 'boy' or 'girl'",
+  }),
+  // Optional fields with defaults or optional values
+  animal: z.string().default("lion"),
+  theme: z.string().default("faith"),
+  biblicalEvent: z.string().default("none"),
+  useTimeTravel: z.boolean().default(false),
+  characterId: z.string().optional(),
+  characterDetails: z.object({
+    age: z.number().int().min(5).max(12).optional(),
+    hair: z.string().optional(),
+    eyes: z.string().optional(),
+    favoriteColor: z.string().optional(),
+    specialPower: z.string().optional(),
+    hobby: z.string().optional(),
+    personality: z.string().optional(),
+  }).optional(),
 });
 
 export type StoryRequest = z.infer<typeof storyRequestSchema>;

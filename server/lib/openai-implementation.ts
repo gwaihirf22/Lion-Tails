@@ -15,10 +15,16 @@ function getOpenAIClient() {
 }
 
 export async function generateStoryWithOpenAI(request: StoryRequest): Promise<StoryResponse> {
-  const { childName, gender, animal, theme, biblicalEvent } = request;
+  const { childName, gender, animal, theme, biblicalEvent, useTimeTravel, characterId } = request;
 
   const storyTemplate = biblicalEvent ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
   const bibleVerse = getBibleVerseByTheme(theme);
+  
+  // Get character information if time travel is enabled
+  let character = undefined;
+  if (useTimeTravel && characterId) {
+    character = await storage.getCharacterById(characterId);
+  }
 
   try {
     if (!process.env.OPENAI_API_KEY) {
@@ -26,7 +32,7 @@ export async function generateStoryWithOpenAI(request: StoryRequest): Promise<St
       throw new Error("OpenAI API key not found");
     }
 
-    const prompt = buildStoryPrompt(childName, gender, animal, theme, biblicalEvent, storyTemplate);
+    const prompt = buildStoryPrompt(childName, gender, animal, theme, biblicalEvent, storyTemplate, useTimeTravel, character);
     
     // System prompt that defines what kind of response we want
     const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author. Create wholesome, faith-based stories with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
@@ -37,8 +43,9 @@ Your stories should:
 3. Be appropriate for children ages 3-10
 4. Include the specified child's name, gender, animal, and theme
 5. If a biblical event is specified, incorporate it into the narrative
-6. Never include content from Mormon, Jehovah's Witness, or other non-orthodox Christian theologies
-7. End with a message about God's love that connects to the Bible verse that will be added later
+6. If a time traveling character is specified, include them as an important part of the story
+7. Never include content from Mormon, Jehovah's Witness, or other non-orthodox Christian theologies
+8. End with a message about God's love that connects to the Bible verse that will be added later
 
 Format your response as valid JSON with the following structure:
     {
@@ -182,7 +189,7 @@ function downloadImage(url: string, filepath: string): Promise<void> {
   });
 }
 
-function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null): string {
+function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null, useTimeTravel?: boolean, character?: any): string {
   let prompt = `Write a traditional orthodox Christian bedtime story for a ${gender} named ${childName} who loves ${animal}s. The story should teach about ${theme}.`;
 
   if (biblicalEvent && biblicalEvent !== 'none') {
@@ -193,7 +200,20 @@ function buildStoryPrompt(childName: string, gender: string = "boy", animal: str
     }
   }
 
-  prompt += ` The child should be the main character in the story and interact with ${animal}s. The story should be approximately 1000 words and include a clear moral lesson at the end that relates to traditional Christian values.`;
+  // Add time travel character if provided
+  if (useTimeTravel && character) {
+    prompt += ` IMPORTANT: This story should feature time travel! Include a character named ${character.name}, who is a ${character.gender === 'boy' ? 'boy' : 'girl'} of ${character.age} years old, as a time traveler who goes back in time to witness or participate in the biblical event.`;
+    
+    if (character.traits && character.traits.length > 0) {
+      prompt += ` This character has the following traits: ${character.traits.join(', ')}.`;
+    }
+    
+    prompt += ` The time traveling character should interact with the main child character (${childName}) in the story, creating a fun adventure where they both learn important lessons about faith.`;
+  } else {
+    prompt += ` The child should be the main character in the story and interact with ${animal}s.`;
+  }
+
+  prompt += ` The story should be approximately 1000 words and include a clear moral lesson at the end that relates to traditional Christian values.`;
   
   prompt += ` IMPORTANT: Ensure the story adheres ONLY to traditional orthodox Christian theology (Catholic, Orthodox, Protestant). Avoid ANY theological concepts from Mormon, Jehovah's Witness, or other non-traditional denominations. Focus on biblical teachings accepted in mainstream Christianity.`;
 

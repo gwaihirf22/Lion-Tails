@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { storyRequestSchema, savedStorySchema, songSchema } from "@shared/schema";
+import { storyRequestSchema, savedStorySchema, songSchema, characterSchema } from "@shared/schema";
 import { generateStory } from "./lib/openai";
 import { generateSongChords } from "./lib/songGenerator";
 import { songs } from "./data/songs";
@@ -10,7 +10,95 @@ import { fromZodError } from "zod-validation-error";
 import { v4 as uuidv4 } from "uuid";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // API routes
+  // API routes for characters
+  
+  // Get all characters
+  app.get("/api/characters", async (req, res) => {
+    try {
+      const characters = await storage.getAllCharacters();
+      res.json(characters);
+    } catch (error) {
+      console.error("Error fetching characters:", error);
+      res.status(500).json({ message: "Failed to fetch characters" });
+    }
+  });
+  
+  // Get a specific character
+  app.get("/api/characters/:id", async (req, res) => {
+    try {
+      const character = await storage.getCharacterById(req.params.id);
+      if (!character) {
+        return res.status(404).json({ message: "Character not found" });
+      }
+      res.json(character);
+    } catch (error) {
+      console.error("Error fetching character:", error);
+      res.status(500).json({ message: "Failed to fetch character" });
+    }
+  });
+  
+  // Create a new character
+  app.post("/api/characters", async (req, res) => {
+    try {
+      // The id and createdAt fields will be added by the storage method
+      const { id, createdAt, ...characterData } = req.body;
+      
+      // Create the character
+      const character = await storage.createCharacter(characterData);
+      res.status(201).json(character);
+    } catch (error) {
+      console.error("Error creating character:", error);
+      
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      
+      res.status(500).json({ message: "Failed to create character" });
+    }
+  });
+  
+  // Update a character
+  app.put("/api/characters/:id", async (req, res) => {
+    try {
+      const { id: bodyId, createdAt, ...updates } = req.body;
+      
+      const character = await storage.updateCharacter(req.params.id, updates);
+      
+      if (!character) {
+        return res.status(404).json({ message: "Character not found" });
+      }
+      
+      res.json(character);
+    } catch (error) {
+      console.error("Error updating character:", error);
+      
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      
+      res.status(500).json({ message: "Failed to update character" });
+    }
+  });
+  
+  // Delete a character
+  app.delete("/api/characters/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteCharacter(req.params.id);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Character not found" });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting character:", error);
+      res.status(500).json({ message: "Failed to delete character" });
+    }
+  });
+  
+  // API routes for songs
   
   // Get all songs
   app.get("/api/songs", (req, res) => {
