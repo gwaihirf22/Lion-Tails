@@ -1,13 +1,16 @@
 import { Link, useLocation } from "wouter";
 import { useEffect, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, LogOut, User } from "lucide-react";
 import appIcon from "@/assets/app-icon.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/hooks/use-auth";
+import { Button } from "@/components/ui/button";
 
 export default function Header() {
   const [location] = useLocation();
   const isMobile = useIsMobile();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { user, logoutMutation } = useAuth();
 
   // Close menu on location change
   useEffect(() => {
@@ -62,28 +65,72 @@ export default function Header() {
           </div>
           
           {isMobile ? (
-            <button 
-              onClick={() => setMenuOpen(!menuOpen)} 
-              className="text-white p-2 focus:outline-none z-50"
-              aria-label={menuOpen ? "Close menu" : "Open menu"}
-            >
-              {menuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
+            <div className="flex items-center space-x-2">
+              {user && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => logoutMutation.mutate()} 
+                  className="text-white"
+                  disabled={logoutMutation.isPending}
+                >
+                  <LogOut size={20} />
+                </Button>
+              )}
+              <button 
+                onClick={() => setMenuOpen(!menuOpen)} 
+                className="text-white p-2 focus:outline-none z-50"
+                aria-label={menuOpen ? "Close menu" : "Open menu"}
+              >
+                {menuOpen ? <X size={24} /> : <Menu size={24} />}
+              </button>
+            </div>
           ) : (
-            <nav>
-              <ul className="flex space-x-2 font-heading text-sm md:text-base">
-                {navItems.map((item) => (
-                  <li key={item.href}>
-                    <Link 
-                      href={item.href} 
-                      className={`text-white hover:text-accent/90 duration-200 px-3 py-1.5 rounded-full ${location === item.href ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
-                    >
-                      {item.text}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </nav>
+            <div className="flex items-center">
+              <nav className="mr-4">
+                <ul className="flex space-x-2 font-heading text-sm md:text-base">
+                  {navItems.map((item) => (
+                    <li key={item.href}>
+                      <Link 
+                        href={item.href} 
+                        className={`text-white hover:text-accent/90 duration-200 px-3 py-1.5 rounded-full ${location === item.href ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
+                      >
+                        {item.text}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+              
+              {user ? (
+                <div className="flex items-center">
+                  <span className="text-white mr-2 hidden md:block">
+                    {user.username}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => logoutMutation.mutate()}
+                    disabled={logoutMutation.isPending}
+                    className="text-white border-white/20 hover:bg-white/10 hover:text-white"
+                  >
+                    <LogOut className="mr-1 h-4 w-4" />
+                    <span>Logout</span>
+                  </Button>
+                </div>
+              ) : (
+                <Link href="/auth">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="text-white border-white/20 hover:bg-white/10 hover:text-white"
+                  >
+                    <User className="mr-1 h-4 w-4" />
+                    <span>Login</span>
+                  </Button>
+                </Link>
+              )}
+            </div>
           )}
         </div>
       </header>
@@ -113,6 +160,30 @@ export default function Header() {
                       </Link>
                     </li>
                   ))}
+                  
+                  {/* Auth actions for mobile */}
+                  {user ? (
+                    <li>
+                      <button
+                        onClick={() => logoutMutation.mutate()}
+                        disabled={logoutMutation.isPending}
+                        className="flex items-center w-full text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full hover:bg-white/10"
+                      >
+                        <LogOut className="mr-2 h-5 w-5" />
+                        <span>Logout ({user.username})</span>
+                      </button>
+                    </li>
+                  ) : (
+                    <li>
+                      <Link
+                        href="/auth"
+                        className="flex items-center text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full hover:bg-white/10"
+                      >
+                        <User className="mr-2 h-5 w-5" />
+                        <span>Login / Register</span>
+                      </Link>
+                    </li>
+                  )}
                 </ul>
               </nav>
             </div>

@@ -15,7 +15,7 @@ import AuthPage from "@/pages/auth-page";
 
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "@/lib/protected-route";
 import { AuthProvider } from "@/hooks/use-auth";
 
 // Import the background image

@@ -4,56 +4,44 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { LoginUser, RegisterUser, User } from "@shared/schema";
-import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
+import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/schema";
+import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 type AuthContextType = {
-  user: User | null;
+  user: SelectUser | null;
   isLoading: boolean;
   error: Error | null;
-  loginMutation: UseMutationResult<{ user: User; token: string }, Error, LoginUser>;
+  loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<{ user: User; token: string }, Error, RegisterUser>;
-  isAuthenticated: boolean;
+  registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
 };
+
+type LoginData = Pick<InsertUser, "username" | "password">;
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
-  
-  // Current user query
   const {
     data: user,
     error,
     isLoading,
-  } = useQuery<{ user: User } | null, Error>({
+  } = useQuery<SelectUser | null, Error>({
     queryKey: ["/api/auth/me"],
     queryFn: getQueryFn({ on401: "returnNull" }),
-    select: (data) => data,
   });
 
-  // Login mutation
   const loginMutation = useMutation({
-    mutationFn: async (credentials: LoginUser) => {
+    mutationFn: async (credentials: LoginData) => {
       const res = await apiRequest("POST", "/api/auth/login", credentials);
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Login failed");
-      }
       return await res.json();
     },
-    onSuccess: (data) => {
-      // Set auth token in local storage
-      localStorage.setItem("authToken", data.token);
-      
-      // Update user data in cache
-      queryClient.setQueryData(["/api/auth/me"], { user: data.user });
-      
+    onSuccess: (user: SelectUser) => {
+      queryClient.setQueryData(["/api/auth/me"], user);
       toast({
         title: "Login successful",
-        description: `Welcome back, ${data.user.username}!`,
+        description: `Welcome back, ${user.username}!`,
       });
     },
     onError: (error: Error) => {
@@ -65,26 +53,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  // Register mutation
   const registerMutation = useMutation({
-    mutationFn: async (userData: RegisterUser) => {
-      const res = await apiRequest("POST", "/api/auth/register", userData);
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Registration failed");
-      }
+    mutationFn: async (credentials: InsertUser) => {
+      const res = await apiRequest("POST", "/api/auth/register", credentials);
       return await res.json();
     },
-    onSuccess: (data) => {
-      // Set auth token in local storage
-      localStorage.setItem("authToken", data.token);
-      
-      // Update user data in cache
-      queryClient.setQueryData(["/api/auth/me"], { user: data.user });
-      
+    onSuccess: (user: SelectUser) => {
+      queryClient.setQueryData(["/api/auth/me"], user);
       toast({
         title: "Registration successful",
-        description: "Welcome to Lion Tails! Please check your email to verify your account.",
+        description: "Your account has been created.",
       });
     },
     onError: (error: Error) => {
@@ -96,21 +74,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  // Logout mutation
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/auth/logout");
-      if (!res.ok) {
-        throw new Error("Logout failed");
-      }
+      await apiRequest("POST", "/api/auth/logout");
     },
     onSuccess: () => {
-      // Remove auth token from local storage
-      localStorage.removeItem("authToken");
-      
-      // Clear user data from cache
       queryClient.setQueryData(["/api/auth/me"], null);
-      
       toast({
         title: "Logged out",
         description: "You have been successfully logged out.",
@@ -125,19 +94,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  // Check if user is authenticated
-  const isAuthenticated = !!user?.user;
-
   return (
     <AuthContext.Provider
       value={{
-        user: user?.user || null,
+        user: user ?? null,
         isLoading,
         error,
         loginMutation,
         logoutMutation,
         registerMutation,
-        isAuthenticated,
       }}
     >
       {children}
