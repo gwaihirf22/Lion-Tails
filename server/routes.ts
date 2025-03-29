@@ -108,18 +108,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(songs);
   });
 
-  // Get a specific song by ID
-  app.get("/api/songs/:id", (req, res) => {
-    const song = songs.find(s => s.id === req.params.id);
-    if (!song) {
-      return res.status(404).json({ message: "Song not found" });
+  // Search for songs - must come before /:id route
+  app.get("/api/songs/search", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      
+      if (!query || query.length < 2) {
+        return res.status(400).json({ message: "Search query must be at least 2 characters" });
+      }
+      
+      console.log(`Searching songs with query: ${query}`);
+      const results = searchSongs(query);
+      console.log(`Found ${results.length} song matches`);
+      
+      return res.json(results);
+    } catch (error) {
+      console.error("Error searching songs:", error);
+      return res.status(500).json({ message: "Failed to search songs" });
     }
-    res.json(song);
   });
   
-  // These routes are implemented below with async/await
+  // Get popular songs - must come before /:id route
+  app.get("/api/songs/popular", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string || "10");
+      console.log(`Getting popular songs, limit: ${limit}`);
+      
+      const results = getPopularSongs(limit);
+      console.log(`Returning ${results.length} popular songs`);
+      
+      return res.json(results);
+    } catch (error) {
+      console.error("Error fetching popular songs:", error);
+      return res.status(500).json({ message: "Failed to fetch popular songs" });
+    }
+  });
   
-  // Find song lyrics by ID and generate chords
+  // Find song lyrics by ID and generate chords - must come before /:id route
   app.get("/api/songs/find/:id/generate-chords", async (req, res) => {
     try {
       const songEntry = findSongById(req.params.id);
@@ -261,42 +286,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating chords:", error);
       res.status(500).json({ message: "Failed to generate chords" });
-    }
-  });
-  
-  // Search for songs
-  app.get("/api/songs/search", async (req, res) => {
-    try {
-      const query = req.query.q as string;
-      
-      if (!query || query.length < 2) {
-        return res.status(400).json({ message: "Search query must be at least 2 characters" });
-      }
-      
-      console.log(`Searching songs with query: ${query}`);
-      const results = searchSongs(query);
-      console.log(`Found ${results.length} song matches`);
-      
-      return res.json(results);
-    } catch (error) {
-      console.error("Error searching songs:", error);
-      return res.status(500).json({ message: "Failed to search songs" });
-    }
-  });
-  
-  // Get popular songs
-  app.get("/api/songs/popular", async (req, res) => {
-    try {
-      const limit = parseInt(req.query.limit as string || "10");
-      console.log(`Getting popular songs, limit: ${limit}`);
-      
-      const results = getPopularSongs(limit);
-      console.log(`Returning ${results.length} popular songs`);
-      
-      return res.json(results);
-    } catch (error) {
-      console.error("Error fetching popular songs:", error);
-      return res.status(500).json({ message: "Failed to fetch popular songs" });
     }
   });
   
