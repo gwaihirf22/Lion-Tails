@@ -258,11 +258,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate request body
       const validatedData = storyRequestSchema.parse(req.body);
       
-      // Generate the story using OpenAI
-      const story = await generateStory(validatedData);
+      // Get user ID for authentication and tracking
+      const userId = (req.user as any).id;
+      
+      // Generate the story using OpenAI with user ID for quota tracking
+      const story = await generateStory(validatedData, userId);
       
       // Save the story for the authenticated user
-      const userId = (req.user as any).id;
       const savedStory = await storage.saveStory(story, validatedData, userId);
       
       res.json(story);
@@ -664,8 +666,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Analyze the image with OpenAI using user's API key
-      const analysis = await analyzeImageWithOpenAI(imageBase64, userOpenAIKey);
+      // Analyze the image with OpenAI using user's API key and userId
+      const analysis = await analyzeImageWithOpenAI(imageBase64, userId);
       
       res.json({ analysis });
     } catch (error) {

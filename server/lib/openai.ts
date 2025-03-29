@@ -10,9 +10,10 @@ const FREE_STORY_MONTHLY_QUOTA = 10;
 const MONTH_IN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
 
 // Function to check if user can generate a story with the free tier
-async function canGenerateStoryWithFreeTier(): Promise<boolean> {
-  const count = await storage.getStoryGenerationCount();
-  const lastResetDate = await storage.getLastResetDate();
+async function canGenerateStoryWithFreeTier(userId: number = 1): Promise<boolean> {
+  // Default to user ID 1 if not authenticated
+  const count = await storage.getStoryGenerationCount(userId);
+  const lastResetDate = await storage.getLastResetDate(userId);
   
   // If user has generated less than the initial quota, they can generate a story
   if (count < FREE_STORY_INITIAL_QUOTA) {
@@ -27,7 +28,7 @@ async function canGenerateStoryWithFreeTier(): Promise<boolean> {
     
     if (timeSinceLastReset >= MONTH_IN_MS) {
       // It's been a month, so reset the counter
-      await storage.resetStoryGenerationCount();
+      await storage.resetStoryGenerationCount(userId);
       return true;
     }
     
@@ -40,21 +41,21 @@ async function canGenerateStoryWithFreeTier(): Promise<boolean> {
   }
   
   // If no reset date has been set, set it now and allow the generation
-  await storage.setLastResetDate(new Date());
+  await storage.setLastResetDate(userId, new Date());
   return true;
 }
 
 // Main story generation function
-export async function generateStory(request: StoryRequest): Promise<StoryResponse> {
+export async function generateStory(request: StoryRequest, userId: number = 1): Promise<StoryResponse> {
   const { childName, gender, animal, theme, biblicalEvent, useTimeTravel, characterId, storyType, heroOfFaith } = request;
   
   try {
     // Get the user's OpenAI key if they've provided one
-    const userApiKey = await storage.getUserOpenAIKey();
+    const userApiKey = await storage.getUserOpenAIKey(userId);
     
     // Check if user can generate a story with free tier if they don't have their own API key
     if (!userApiKey) {
-      const canGenerate = await canGenerateStoryWithFreeTier();
+      const canGenerate = await canGenerateStoryWithFreeTier(userId);
       
       if (!canGenerate) {
         return {
@@ -69,7 +70,7 @@ export async function generateStory(request: StoryRequest): Promise<StoryRespons
       }
       
       // Increment the counter for free tier
-      await storage.incrementStoryGenerationCount();
+      await storage.incrementStoryGenerationCount(userId);
     }
     
     // Get a story template if there's a biblical event
@@ -82,7 +83,7 @@ export async function generateStory(request: StoryRequest): Promise<StoryRespons
     if (useTimeTravel && characterId) {
       // Get bible verse related to the theme
       // Use the OpenAI implementation to generate a story
-      const generatedStory = await generateStoryWithOpenAI(request);
+      const generatedStory = await generateStoryWithOpenAI(request, userId);
       
       // Add the bible verse to the response
       return {
@@ -114,8 +115,8 @@ export async function generateStory(request: StoryRequest): Promise<StoryRespons
       return getDemoStory(safeChildName, safeGender, safeAnimal, safeTheme, biblicalEvent, bibleVerse, heroOfFaithName);
     }
     
-    // Use the OpenAI implementation to generate a story
-    const generatedStory = await generateStoryWithOpenAI(request);
+    // Use the OpenAI implementation to generate a story with userId for API key access
+    const generatedStory = await generateStoryWithOpenAI(request, userId);
     
     // Add the bible verse to the response
     return {

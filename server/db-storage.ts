@@ -432,11 +432,17 @@ export class DbStorage implements IStorage {
 
   // Heroes of Faith methods
   async getAllHeroesOfFaith(): Promise<HeroOfFaith[]> {
-    const { rows } = await pool.query(
-      `SELECT * FROM heroes_of_faith ORDER BY name ASC`
-    );
-    
-    return rows.map(row => JSON.parse(row.hero_data));
+    try {
+      const { rows } = await pool.query(
+        `SELECT * FROM heroes_of_faith ORDER BY hero_id ASC`
+      );
+      
+      return rows.length ? rows.map(row => JSON.parse(row.hero_data)) : [];
+    } catch (error) {
+      console.error("Error fetching heroes of faith:", error);
+      // Return empty array instead of throwing to prevent app crashes
+      return [];
+    }
   }
 
   async getHeroOfFaithById(id: string): Promise<HeroOfFaith | undefined> {

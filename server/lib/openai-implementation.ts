@@ -23,15 +23,13 @@ function getOpenAIClient(apiKey?: string | null) {
   return new OpenAI({ apiKey: key });
 }
 
-export async function generateStoryWithOpenAI(request: StoryRequest): Promise<StoryResponse> {
+export async function generateStoryWithOpenAI(request: StoryRequest, userId: number = 1): Promise<StoryResponse> {
   const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType, customPrompt } = request;
 
   const storyTemplate = biblicalEvent && biblicalEvent !== 'none' ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
   const bibleVerse = getBibleVerseByTheme(theme && theme !== 'none' ? theme : 'faith');
   
-  // Get user's API key and model upfront - use a default userId of 1 for now
-  // In a real application, this would come from the authenticated user's session
-  const userId = 1; // Default user ID
+  // Get user's API key and model using the provided userId
   const userApiKey = await storage.getUserOpenAIKey(userId);
   const userModel = await storage.getUserOpenAIModel(userId);
   
@@ -168,7 +166,7 @@ Format your response as valid JSON with the following structure:
     // We already retrieved the userApiKey earlier
     if (userApiKey) {
       try {
-        imageUrl = await generateStoryImage(imagePrompt);
+        imageUrl = await generateStoryImage(imagePrompt, userId);
       } catch (imageError) {
         console.error("Error generating story image:", imageError);
         // Continue without an image if there's an error
@@ -200,11 +198,9 @@ Format your response as valid JSON with the following structure:
 }
 
 // Function to generate an image for a story using DALL-E
-export async function generateStoryImage(imagePrompt: string): Promise<string | undefined> {
+export async function generateStoryImage(imagePrompt: string, userId: number = 1): Promise<string | undefined> {
   try {
-    // Get the user's API key (if they provided one) - use a default userId of 1 for now
-    // In a real application, this would come from the authenticated user's session
-    const userId = 1; // Default user ID
+    // Get the user's API key using the provided userId
     const apiKey = await storage.getUserOpenAIKey(userId);
     
     // Check if we have any API key to use (user's or environment)
@@ -280,11 +276,9 @@ function downloadImage(url: string, filepath: string): Promise<void> {
 }
 
 // Function to analyze an image with OpenAI Vision API
-export async function analyzeImageWithOpenAI(imageBase64: string): Promise<string> {
+export async function analyzeImageWithOpenAI(imageBase64: string, userId: number = 1): Promise<string> {
   try {
-    // Get the user's API key (if they provided one) - use a default userId of 1 for now
-    // In a real application, this would come from the authenticated user's session
-    const userId = 1; // Default user ID
+    // Get the user's API key using the provided userId
     const apiKey = await storage.getUserOpenAIKey(userId);
     
     // Check if we have any API key to use (user's or environment)
