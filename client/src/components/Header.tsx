@@ -16,12 +16,11 @@ export default function Header() {
   const [location] = useLocation();
   const isMobile = useIsMobile();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [visibleItems, setVisibleItems] = useState(4); // Default visible items for desktop
+  const [visibleItems, setVisibleItems] = useState(4); 
   const navContainerRef = useRef<HTMLUListElement>(null);
   const logoContainerRef = useRef<HTMLDivElement>(null);
   const { user, logoutMutation } = useAuth();
-  
-  // Navigation items
+
   const navItems = [
     { href: "/", text: "Home" },
     { href: "/music", text: "Music" },
@@ -32,75 +31,68 @@ export default function Header() {
     { href: "/settings", text: "Settings" },
   ];
 
-  // Close menu on location change
   useEffect(() => {
     setMenuOpen(false);
   }, [location]);
 
-  // Close menu on ESC key
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setMenuOpen(false);
       }
     };
-    
+
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
   }, []);
 
-  // Prevent body scroll when menu is open on mobile
   useEffect(() => {
     if (menuOpen && isMobile) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
     }
-    
+
     return () => {
       document.body.style.overflow = '';
     };
   }, [menuOpen, isMobile]);
-  
-  // Resize handler for screen width changes
+
   useEffect(() => {
     if (isMobile) return;
-    
+
     const handleResize = () => {
       const width = window.innerWidth;
-      
+
       if (width > 1200) {
-        setVisibleItems(6); // All items visible on large screens
+        setVisibleItems(6); 
       } else if (width > 1000) {
-        setVisibleItems(5); // 5 items on medium-large screens
+        setVisibleItems(5); 
       } else if (width > 800) {
-        setVisibleItems(4); // 4 items on medium screens
+        setVisibleItems(4); 
       } else if (width > 640) {
-        setVisibleItems(3); // 3 items on small-medium screens
+        setVisibleItems(3); 
       } else {
-        setVisibleItems(2); // 2 items on small screens
+        setVisibleItems(2); 
       }
     };
-    
-    // Run once initially and on resize
+
     handleResize();
     window.addEventListener('resize', handleResize);
-    
+
     return () => {
       window.removeEventListener('resize', handleResize);
     };
   }, [isMobile]);
-  
-  // Split menu items into visible and overflow items
+
   const visibleNavItems = navItems.slice(0, visibleItems);
   const overflowNavItems = navItems.slice(visibleItems);
   const hasOverflow = overflowNavItems.length > 0;
-  
+
   return (
     <>
       <header className="bg-primary/60 backdrop-blur-md shadow-lg border-b border-white/10 sticky top-0 z-30">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-          {/* Logo */}
           <div ref={logoContainerRef} className="flex items-center space-x-3">
             <img 
               src={appIcon} 
@@ -109,8 +101,7 @@ export default function Header() {
             />
             <h1 className="text-xl md:text-3xl font-heading font-bold text-white drop-shadow-lg">Lion Tails</h1>
           </div>
-          
-          {/* Mobile header buttons */}
+
           {isMobile ? (
             <div className="flex items-center space-x-2">
               {user && (
@@ -134,10 +125,8 @@ export default function Header() {
             </div>
           ) : (
             <div className="flex items-center">
-              {/* Desktop navigation */}
               <nav className="mr-4">
                 <ul ref={navContainerRef} className="flex space-x-2 font-heading text-sm md:text-base">
-                  {/* Visible nav items */}
                   {visibleNavItems.map((item) => (
                     <li key={item.href}>
                       <Link 
@@ -148,8 +137,7 @@ export default function Header() {
                       </Link>
                     </li>
                   ))}
-                  
-                  {/* "More" dropdown for overflow items */}
+
                   {hasOverflow && (
                     <li>
                       <DropdownMenu>
@@ -176,8 +164,7 @@ export default function Header() {
                   )}
                 </ul>
               </nav>
-              
-              {/* Auth buttons */}
+
               {user ? (
                 <div className="flex items-center">
                   <span className="text-white mr-2 hidden md:block">
@@ -188,7 +175,7 @@ export default function Header() {
                     size="sm"
                     onClick={() => logoutMutation.mutate()}
                     disabled={logoutMutation.isPending}
-                    className="text-white border-white/20 hover:bg-white/10 hover:text-white"
+                    className="text-white border-white/20 hover:bg-white/10 hover:text-white font-medium" {/*Added font-medium for better contrast */}
                   >
                     <LogOut className="mr-1 h-4 w-4" />
                     <span>Logout</span>
@@ -199,7 +186,7 @@ export default function Header() {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    className="text-white border-white/20 hover:bg-white/10 hover:text-white"
+                    className="text-white border-white/20 hover:bg-white/10 hover:text-white font-medium" {/*Added font-medium for better contrast */}
                   >
                     <User className="mr-1 h-4 w-4" />
                     <span>Login</span>
@@ -211,17 +198,14 @@ export default function Header() {
         </div>
       </header>
 
-      {/* Mobile menu - slides in from top */}
       {isMobile && menuOpen && (
         <div className="fixed inset-0 z-50">
-          {/* Overlay */}
           <div 
             className="absolute inset-0 bg-black/40" 
             onClick={() => setMenuOpen(false)}
             aria-hidden="true"
           />
-          
-          {/* Menu Content */}
+
           <div className="absolute top-0 right-0 left-0 pt-20 pb-4 px-4 bg-primary/95 backdrop-blur-md shadow-lg border-b border-white/10 max-h-screen overflow-y-auto">
             <div className="container mx-auto">
               <nav>
@@ -236,14 +220,13 @@ export default function Header() {
                       </Link>
                     </li>
                   ))}
-                  
-                  {/* Auth actions for mobile */}
+
                   {user ? (
                     <li>
                       <button
                         onClick={() => logoutMutation.mutate()}
                         disabled={logoutMutation.isPending}
-                        className="flex items-center w-full text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full hover:bg-white/10"
+                        className="flex items-center w-full text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full hover:bg-white/10 font-medium" {/*Added font-medium for better contrast */}
                       >
                         <LogOut className="mr-2 h-5 w-5" />
                         <span>Logout ({user.username})</span>
@@ -253,7 +236,7 @@ export default function Header() {
                     <li>
                       <Link
                         href="/auth"
-                        className="flex items-center text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full hover:bg-white/10"
+                        className="flex items-center text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full hover:bg-white/10 font-medium" {/*Added font-medium for better contrast */}
                       >
                         <User className="mr-2 h-5 w-5" />
                         <span>Login / Register</span>
