@@ -394,11 +394,49 @@ export function BookPage({
           )}
         </div>
         
-        {/* Page number */}
-        <div className="mt-8 text-center text-sm opacity-70">
-          {currentPage} of {totalPages}
-        </div>
+        {/* Spacer for bottom margin */}
+        <div className="mt-8"></div>
       </Card>
+      
+      {/* Page navigation at the bottom */}
+      <div className="mt-6 mb-8 flex items-center justify-center space-x-2">
+        {/* Previous page button */}
+        <Button
+          variant={hasPrevPage ? "default" : "outline"}
+          size="sm"
+          disabled={!hasPrevPage}
+          onClick={onPrevPage}
+          className={cn(
+            "flex items-center gap-1 min-w-[120px] transition-transform duration-200",
+            hasPrevPage && "hover:-translate-x-1"
+          )}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Previous
+        </Button>
+        
+        {/* Page indicator */}
+        <div className="text-center">
+          <p className="text-sm font-medium">
+            Page {currentPage} of {totalPages}
+          </p>
+        </div>
+        
+        {/* Next page button */}
+        <Button
+          variant={hasNextPage ? "default" : "outline"}
+          size="sm"
+          disabled={!hasNextPage}
+          onClick={onNextPage}
+          className={cn(
+            "flex items-center gap-1 min-w-[120px] transition-transform duration-200",
+            hasNextPage && "hover:translate-x-1"
+          )}
+        >
+          Next
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }
