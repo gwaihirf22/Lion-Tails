@@ -53,23 +53,33 @@ export default function Header() {
             </button>
             
             {menuOpen && (
-              <div className="absolute top-16 right-0 left-0 bg-primary/95 backdrop-blur-md z-50 p-4 shadow-lg border-b border-white/10">
-                <nav>
-                  <ul className="flex flex-col space-y-2 font-heading text-base">
-                    {navItems.map((item) => (
-                      <li key={item.href}>
-                        <Link 
-                          href={item.href} 
-                          className={`block text-white hover:text-accent/90 duration-200 px-3 py-2 rounded-full ${location === item.href ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
-                          onClick={closeMenu}
-                        >
-                          {item.text}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </nav>
-              </div>
+              <>
+                {/* Overlay to capture clicks outside the menu */}
+                <div 
+                  className="fixed inset-0 bg-black/20 z-[90]" 
+                  onClick={closeMenu}
+                  aria-hidden="true"
+                />
+                
+                {/* Mobile menu */}
+                <div className="fixed top-[72px] right-0 left-0 bg-primary/95 backdrop-blur-md z-[100] p-4 shadow-lg border-b border-white/10">
+                  <nav className="container mx-auto">
+                    <ul className="flex flex-col space-y-2 font-heading text-base">
+                      {navItems.map((item) => (
+                        <li key={item.href}>
+                          <Link 
+                            href={item.href} 
+                            className={`block text-white hover:text-accent/90 duration-200 px-3 py-2 rounded-full ${location === item.href ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
+                            onClick={closeMenu}
+                          >
+                            {item.text}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </nav>
+                </div>
+              </>
             )}
           </div>
         ) : (
