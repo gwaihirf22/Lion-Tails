@@ -1,15 +1,34 @@
 import { users, type User, type InsertUser, type Song, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
+import session from 'express-session';
+import createMemoryStore from 'memorystore';
+
+const MemoryStore = createMemoryStore(session);
 
 export interface IStorage {
+  // Session store for authentication
+  sessionStore: session.Store;
+  
+  // User authentication methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, updates: Partial<User>): Promise<User | undefined>;
+  
+  // User verification methods
+  verifyUser(userId: number): Promise<boolean>;
+  createVerificationToken(userId: number, tokenType: 'email' | 'password'): Promise<string>;
+  getVerificationToken(token: string): Promise<{userId: number, type: string, expiresAt: Date} | undefined>;
+  deleteVerificationToken(token: string): Promise<boolean>;
+  
+  // User stories methods
+  getUserStories(userId: number): Promise<SavedStory[]>;
   
   // Character related methods
-  getAllCharacters(): Promise<Character[]>;
+  getAllCharacters(userId?: number): Promise<Character[]>;
   getCharacterById(id: string): Promise<Character | undefined>;
-  createCharacter(character: Omit<Character, "id" | "createdAt">): Promise<Character>;
+  createCharacter(character: Omit<Character, "id" | "createdAt">, userId: number): Promise<Character>;
   updateCharacter(id: string, character: Partial<Character>): Promise<Character | undefined>;
   deleteCharacter(id: string): Promise<boolean>;
   
@@ -19,11 +38,11 @@ export interface IStorage {
   createSong(song: Song): Promise<Song>;
   
   // Story related methods
-  getAllStories(): Promise<SavedStory[]>;
-  getStoryById(id: string): Promise<SavedStory | undefined>;
-  saveStory(story: StoryResponse, request: StoryRequest): Promise<SavedStory>;
-  toggleFavorite(id: string, isFavorite: boolean): Promise<SavedStory | undefined>;
-  deleteStory(id: string): Promise<boolean>;
+  getAllStories(userId?: number): Promise<SavedStory[]>;
+  getStoryById(id: string, userId?: number): Promise<SavedStory | undefined>;
+  saveStory(story: StoryResponse, request: StoryRequest, userId: number): Promise<SavedStory>;
+  toggleFavorite(id: string, isFavorite: boolean, userId: number): Promise<SavedStory | undefined>;
+  deleteStory(id: string, userId: number): Promise<boolean>;
   
   // Heroes of Faith related methods
   getAllHeroesOfFaith(): Promise<HeroOfFaith[]>;
@@ -32,18 +51,18 @@ export interface IStorage {
   updateHeroOfFaith(id: string, hero: Partial<HeroOfFaith>): Promise<HeroOfFaith | undefined>;
   deleteHeroOfFaith(id: string): Promise<boolean>;
   
-  // Usage tracking
-  getStoryGenerationCount(): Promise<number>;
-  incrementStoryGenerationCount(): Promise<number>;
-  resetStoryGenerationCount(): Promise<void>;
-  getLastResetDate(): Promise<Date | null>;
-  setLastResetDate(date: Date): Promise<void>;
+  // Usage tracking per user
+  getStoryGenerationCount(userId: number): Promise<number>;
+  incrementStoryGenerationCount(userId: number): Promise<number>;
+  resetStoryGenerationCount(userId: number): Promise<void>;
+  getLastResetDate(userId: number): Promise<Date | null>;
+  setLastResetDate(userId: number, date: Date): Promise<void>;
   
   // User settings
-  getUserOpenAIKey(): Promise<string | null>;
-  setUserOpenAIKey(key: string): Promise<void>;
-  getUserOpenAIModel(): Promise<string | null>;
-  setUserOpenAIModel(model: string): Promise<void>;
+  getUserOpenAIKey(userId: number): Promise<string | null>;
+  setUserOpenAIKey(userId: number, key: string): Promise<void>;
+  getUserOpenAIModel(userId: number): Promise<string | null>;
+  setUserOpenAIModel(userId: number, model: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -52,25 +71,37 @@ export class MemStorage implements IStorage {
   private songs: Map<string, Song>;
   private stories: Map<string, SavedStory>;
   private heroesOfFaith: Map<string, HeroOfFaith>;
-  private storyGenerationCount: number;
-  private lastResetDate: Date | null;
-  private userOpenAIKey: string | null;
-  private userOpenAIModel: string | null;
+  private verificationTokens: Map<string, {userId: number, type: string, expiresAt: Date}>;
+  private userStoryGenerationCounts: Map<number, number>;
+  private userLastResetDates: Map<number, Date>;
+  private userOpenAIKeys: Map<number, string>;
+  private userOpenAIModels: Map<number, string>;
+  private userCharacters: Map<number, Set<string>>;
+  private userStories: Map<number, Set<string>>;
+  sessionStore: session.Store;
   currentId: number;
 
   constructor() {
+    // Create memory store for sessions
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000 // prune expired entries every 24h
+    });
     this.users = new Map();
     this.characters = new Map();
     this.songs = new Map();
     this.stories = new Map();
     this.heroesOfFaith = new Map();
-    this.storyGenerationCount = 0;
-    this.lastResetDate = null;
-    this.userOpenAIKey = null;
-    this.userOpenAIModel = 'gpt-4o'; // Default to the newest model
+    this.verificationTokens = new Map();
+    this.userStoryGenerationCounts = new Map();
+    this.userLastResetDates = new Map();
+    this.userOpenAIKeys = new Map();
+    this.userOpenAIModels = new Map();
+    this.userCharacters = new Map();
+    this.userStories = new Map();
     this.currentId = 1;
   }
 
+  // User methods
   async getUser(id: number): Promise<User | undefined> {
     return this.users.get(id);
   }
@@ -81,25 +112,155 @@ export class MemStorage implements IStorage {
     );
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.email === email,
+    );
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentId++;
-    const user: User = { ...insertUser, id };
+    const now = new Date();
+    
+    // Create a new user with default values
+    const user: User = { 
+      ...insertUser, 
+      id,
+      isVerified: insertUser.isVerified !== undefined ? insertUser.isVerified : false,
+      isAdmin: insertUser.isAdmin !== undefined ? insertUser.isAdmin : false,
+      createdAt: now,
+      updatedAt: now,
+      // Initialize nullable fields
+      firstName: insertUser.firstName || null,
+      lastName: insertUser.lastName || null,
+      verificationToken: insertUser.verificationToken || null,
+      resetPasswordToken: null,
+      resetPasswordExpires: null
+    };
+    
     this.users.set(id, user);
+    
+    // Initialize user-specific collections
+    this.userCharacters.set(id, new Set());
+    this.userStories.set(id, new Set());
+    this.userStoryGenerationCounts.set(id, 0);
+    
     return user;
+  }
+  
+  async updateUser(id: number, updates: Partial<User>): Promise<User | undefined> {
+    const user = await this.getUser(id);
+    if (!user) return undefined;
+    
+    const updatedUser = {
+      ...user,
+      ...updates,
+      updatedAt: new Date()
+    };
+    
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+  
+  // Verification methods
+  async verifyUser(userId: number): Promise<boolean> {
+    const user = await this.getUser(userId);
+    if (!user) return false;
+    
+    const verifiedUser = {
+      ...user,
+      isVerified: true,
+      updatedAt: new Date()
+    };
+    
+    this.users.set(userId, verifiedUser);
+    return true;
+  }
+  
+  async createVerificationToken(userId: number, tokenType: 'email' | 'password'): Promise<string> {
+    // Generate a random token
+    const token = Array.from(Array(32), () => Math.floor(Math.random() * 36).toString(36)).join('');
+    
+    // Set expiry to 24 hours from now
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+    
+    // Store token
+    this.verificationTokens.set(token, {
+      userId,
+      type: tokenType,
+      expiresAt
+    });
+    
+    return token;
+  }
+  
+  async getVerificationToken(token: string): Promise<{userId: number, type: string, expiresAt: Date} | undefined> {
+    const tokenData = this.verificationTokens.get(token);
+    
+    // Check if token exists and is not expired
+    if (tokenData && tokenData.expiresAt > new Date()) {
+      return tokenData;
+    }
+    
+    // If token is expired, delete it
+    if (tokenData) {
+      this.verificationTokens.delete(token);
+    }
+    
+    return undefined;
+  }
+  
+  async deleteVerificationToken(token: string): Promise<boolean> {
+    return this.verificationTokens.delete(token);
+  }
+  
+  // User stories method
+  async getUserStories(userId: number): Promise<SavedStory[]> {
+    const userStoryIds = this.userStories.get(userId) || new Set();
+    const stories = Array.from(userStoryIds)
+      .map(id => this.stories.get(id))
+      .filter(story => !!story) as SavedStory[];
+    
+    // Filter out expired stories that are not favorites
+    const now = new Date();
+    const validStories = stories.filter(story => {
+      if (story.isFavorite) return true;
+      if (!story.expiresAt) return true;
+      const expiryDate = new Date(story.expiresAt);
+      return expiryDate > now;
+    });
+    
+    return validStories.sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   }
 
   // Character related methods
-  async getAllCharacters(): Promise<Character[]> {
-    return Array.from(this.characters.values()).sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+  async getAllCharacters(userId?: number): Promise<Character[]> {
+    if (userId) {
+      // Get characters for a specific user
+      const userCharacterIds = this.userCharacters.get(userId) || new Set();
+      const characters = Array.from(userCharacterIds)
+        .map(id => this.characters.get(id))
+        .filter(character => !!character) as Character[];
+      
+      return characters.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    } else {
+      // Get all characters (admin function)
+      return Array.from(this.characters.values()).sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    }
   }
 
   async getCharacterById(id: string): Promise<Character | undefined> {
     return this.characters.get(id);
   }
 
-  async createCharacter(characterData: Omit<Character, "id" | "createdAt">): Promise<Character> {
+  async createCharacter(characterData: Omit<Character, "id" | "createdAt">, userId: number): Promise<Character> {
     const id = uuidv4();
     const now = new Date();
     
@@ -110,6 +271,12 @@ export class MemStorage implements IStorage {
     };
     
     this.characters.set(id, character);
+    
+    // Add to user's characters
+    const userCharacters = this.userCharacters.get(userId) || new Set();
+    userCharacters.add(id);
+    this.userCharacters.set(userId, userCharacters);
+    
     return character;
   }
 
@@ -127,9 +294,21 @@ export class MemStorage implements IStorage {
   }
 
   async deleteCharacter(id: string): Promise<boolean> {
-    return this.characters.delete(id);
+    const deleted = this.characters.delete(id);
+    
+    // Remove from all user's character collections
+    for (const userCharMap of this.userCharacters) {
+      const userId = userCharMap[0];
+      const characters = userCharMap[1];
+      if (characters.has(id)) {
+        characters.delete(id);
+      }
+    }
+    
+    return deleted;
   }
 
+  // Song methods
   async getAllSongs(): Promise<Song[]> {
     return Array.from(this.songs.values());
   }
@@ -144,8 +323,14 @@ export class MemStorage implements IStorage {
     return songWithId;
   }
   
-  async getAllStories(): Promise<SavedStory[]> {
-    // Filter out expired stories that are not favorites
+  // Story methods
+  async getAllStories(userId?: number): Promise<SavedStory[]> {
+    // If userId is provided, get only that user's stories
+    if (userId) {
+      return this.getUserStories(userId);
+    }
+    
+    // Otherwise, get all stories (admin function)
     const now = new Date();
     const validStories = Array.from(this.stories.values()).filter(story => {
       if (story.isFavorite) return true;
@@ -159,11 +344,21 @@ export class MemStorage implements IStorage {
     );
   }
   
-  async getStoryById(id: string): Promise<SavedStory | undefined> {
-    return this.stories.get(id);
+  async getStoryById(id: string, userId?: number): Promise<SavedStory | undefined> {
+    const story = this.stories.get(id);
+    
+    // If userId is provided, check if the story belongs to the user
+    if (userId && story) {
+      const userStories = this.userStories.get(userId);
+      if (!userStories || !userStories.has(id)) {
+        return undefined; // Story doesn't belong to this user
+      }
+    }
+    
+    return story;
   }
   
-  async saveStory(story: StoryResponse, request: StoryRequest): Promise<SavedStory> {
+  async saveStory(story: StoryResponse, request: StoryRequest, userId: number): Promise<SavedStory> {
     const id = uuidv4();
     const now = new Date();
     
@@ -181,10 +376,22 @@ export class MemStorage implements IStorage {
     };
     
     this.stories.set(id, savedStory);
+    
+    // Add to user's stories
+    const userStories = this.userStories.get(userId) || new Set();
+    userStories.add(id);
+    this.userStories.set(userId, userStories);
+    
     return savedStory;
   }
   
-  async toggleFavorite(id: string, isFavorite: boolean): Promise<SavedStory | undefined> {
+  async toggleFavorite(id: string, isFavorite: boolean, userId: number): Promise<SavedStory | undefined> {
+    // Check if story belongs to the user
+    const userStories = this.userStories.get(userId);
+    if (!userStories || !userStories.has(id)) {
+      return undefined;
+    }
+    
     const story = this.stories.get(id);
     if (!story) return undefined;
     
@@ -199,48 +406,60 @@ export class MemStorage implements IStorage {
     return updatedStory;
   }
   
-  async deleteStory(id: string): Promise<boolean> {
+  async deleteStory(id: string, userId: number): Promise<boolean> {
+    // Check if story belongs to the user
+    const userStories = this.userStories.get(userId);
+    if (!userStories || !userStories.has(id)) {
+      return false;
+    }
+    
+    // Remove from user's stories
+    userStories.delete(id);
+    
+    // Remove from storage
     return this.stories.delete(id);
   }
   
   // Usage tracking methods
-  async getStoryGenerationCount(): Promise<number> {
-    return this.storyGenerationCount;
+  async getStoryGenerationCount(userId: number): Promise<number> {
+    return this.userStoryGenerationCounts.get(userId) || 0;
   }
   
-  async incrementStoryGenerationCount(): Promise<number> {
-    this.storyGenerationCount += 1;
-    return this.storyGenerationCount;
+  async incrementStoryGenerationCount(userId: number): Promise<number> {
+    const currentCount = this.userStoryGenerationCounts.get(userId) || 0;
+    const newCount = currentCount + 1;
+    this.userStoryGenerationCounts.set(userId, newCount);
+    return newCount;
   }
   
-  async resetStoryGenerationCount(): Promise<void> {
-    this.storyGenerationCount = 0;
-    this.lastResetDate = new Date();
+  async resetStoryGenerationCount(userId: number): Promise<void> {
+    this.userStoryGenerationCounts.set(userId, 0);
+    this.userLastResetDates.set(userId, new Date());
   }
   
-  async getLastResetDate(): Promise<Date | null> {
-    return this.lastResetDate;
+  async getLastResetDate(userId: number): Promise<Date | null> {
+    return this.userLastResetDates.get(userId) || null;
   }
   
-  async setLastResetDate(date: Date): Promise<void> {
-    this.lastResetDate = date;
+  async setLastResetDate(userId: number, date: Date): Promise<void> {
+    this.userLastResetDates.set(userId, date);
   }
   
   // User settings methods
-  async getUserOpenAIKey(): Promise<string | null> {
-    return this.userOpenAIKey;
+  async getUserOpenAIKey(userId: number): Promise<string | null> {
+    return this.userOpenAIKeys.get(userId) || null;
   }
   
-  async setUserOpenAIKey(key: string): Promise<void> {
-    this.userOpenAIKey = key;
+  async setUserOpenAIKey(userId: number, key: string): Promise<void> {
+    this.userOpenAIKeys.set(userId, key);
   }
   
-  async getUserOpenAIModel(): Promise<string | null> {
-    return this.userOpenAIModel;
+  async getUserOpenAIModel(userId: number): Promise<string | null> {
+    return this.userOpenAIModels.get(userId) || 'gpt-4o'; // Default to the newest model
   }
   
-  async setUserOpenAIModel(model: string): Promise<void> {
-    this.userOpenAIModel = model;
+  async setUserOpenAIModel(userId: number, model: string): Promise<void> {
+    this.userOpenAIModels.set(userId, model);
   }
 
   // Heroes of Faith methods

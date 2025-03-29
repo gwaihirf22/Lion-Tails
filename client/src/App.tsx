@@ -11,9 +11,12 @@ import Settings from "@/pages/Settings";
 import Characters from "@/pages/Characters";
 import HeroesOfFaith from "@/pages/HeroesOfFaith";
 import ImageAnalysis from "@/pages/ImageAnalysis";
+import AuthPage from "@/pages/auth-page";
 
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AuthProvider } from "@/hooks/use-auth";
 
 // Import the background image
 import lionTailsBackground from "@assets/Lion tails.jpg";
@@ -24,9 +27,10 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/story" component={Story} />
       <Route path="/music" component={Music} />
-      <Route path="/saved-stories" component={SavedStories} />
-      <Route path="/settings" component={Settings} />
-      <Route path="/characters" component={Characters} />
+      <Route path="/auth" component={AuthPage} />
+      <ProtectedRoute path="/saved-stories" component={SavedStories} />
+      <ProtectedRoute path="/settings" component={Settings} />
+      <ProtectedRoute path="/characters" component={Characters} />
       <Route path="/heroes-of-faith" component={HeroesOfFaith} />
       <Route path="/image-analysis" component={ImageAnalysis} />
       <Route component={NotFound} />
@@ -58,17 +62,19 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen flex flex-col font-body text-textDark" style={appBackgroundStyle}>
-        <div style={overlayStyle}></div>
-        <Header />
-        <main className="flex-grow container mx-auto p-4 md:px-8 md:py-6 relative z-10">
-          <div className="content-container rounded-2xl shadow-xl p-4 md:p-6 border border-primary/10 bg-white/80 backdrop-blur-sm">
-            <Router />
-          </div>
-        </main>
-        <Footer />
-      </div>
-      <Toaster />
+      <AuthProvider>
+        <div className="min-h-screen flex flex-col font-body text-textDark" style={appBackgroundStyle}>
+          <div style={overlayStyle}></div>
+          <Header />
+          <main className="flex-grow container mx-auto p-4 md:px-8 md:py-6 relative z-10">
+            <div className="content-container rounded-2xl shadow-xl p-4 md:p-6 border border-primary/10 bg-white/80 backdrop-blur-sm">
+              <Router />
+            </div>
+          </main>
+          <Footer />
+        </div>
+        <Toaster />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

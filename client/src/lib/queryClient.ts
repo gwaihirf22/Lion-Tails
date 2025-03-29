@@ -2,9 +2,20 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    try {
+      const errorData = await res.json();
+      throw new Error(errorData.error || errorData.message || res.statusText);
+    } catch (e) {
+      // If we can't parse JSON, just use the status text
+      const text = await res.text();
+      throw new Error(`${res.status}: ${text || res.statusText}`);
+    }
   }
+}
+
+// Get auth token from localStorage
+function getAuthToken(): string | null {
+  return localStorage.getItem("authToken");
 }
 
 export async function apiRequest(
@@ -12,11 +23,24 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  const headers: Record<string, string> = {};
+  
+  // Add content-type for JSON requests
+  if (data) {
+    headers["Content-Type"] = "application/json";
+  }
+  
+  // Add auth token if available
+  const token = getAuthToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    credentials: "include", // Include cookies
   });
 
   await throwIfResNotOk(res);
@@ -29,7 +53,16 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    const headers: Record<string, string> = {};
+    
+    // Add auth token if available
+    const token = getAuthToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    
     const res = await fetch(queryKey[0] as string, {
+      headers,
       credentials: "include",
     });
 

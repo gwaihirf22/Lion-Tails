@@ -11,8 +11,34 @@ import { searchSongs, findSongById, getPopularSongs } from "./lib/songSearch";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { v4 as uuidv4 } from "uuid";
+import session from "express-session";
+import { authenticate } from "./lib/middleware";
+import apiRouter from "./routes/api";
+import authRouter from "./routes/auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Set up session middleware
+  const sessionSecret = process.env.SESSION_SECRET || "lion-tails-dev-secret";
+  app.use(session({
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    }
+  }));
+  
+  // Apply authentication middleware globally
+  app.use(authenticate);
+  
+  // Use auth router for authentication routes
+  app.use('/api/auth', authRouter);
+  
+  // Use API router for other routes
+  app.use('/api', apiRouter);
+  
   // API routes for characters
   
   // Get all characters
