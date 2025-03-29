@@ -24,7 +24,7 @@ function getOpenAIClient(apiKey?: string | null) {
 }
 
 export async function generateStoryWithOpenAI(request: StoryRequest, userId: number = 1): Promise<StoryResponse> {
-  const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType, customPrompt } = request;
+  const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType, customPrompt, useAnimal } = request;
 
   const storyTemplate = biblicalEvent && biblicalEvent !== 'none' ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
   const bibleVerse = getBibleVerseByTheme(theme && theme !== 'none' ? theme : 'faith');
@@ -55,7 +55,24 @@ export async function generateStoryWithOpenAI(request: StoryRequest, userId: num
       throw new Error("OpenAI API key not found");
     }
 
-    const prompt = buildStoryPrompt(childName || "Child", gender || "boy", animal || "lion", theme, biblicalEvent, storyTemplate, useTimeTravel, character, storyType || "regular", heroOfFaithName, customPrompt);
+    // Handle the new useAnimal toggle
+    // If useAnimal is false, we pass an empty string to ensure no animal is included
+    const animalToUse = useAnimal ? (animal || "lion") : "";
+    
+    // Build the user prompt with the appropriate animal value based on useAnimal toggle
+    const prompt = buildStoryPrompt(
+      childName || "Child", 
+      gender || "boy", 
+      animalToUse, // Use the toggle-controlled animal value
+      theme, 
+      biblicalEvent, 
+      storyTemplate, 
+      useTimeTravel, 
+      character, 
+      storyType || "regular", 
+      heroOfFaithName, 
+      customPrompt
+    );
     
     // System prompt that defines what kind of response we want
     const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author. Create wholesome, faith-based stories with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
@@ -100,7 +117,7 @@ Format your response as valid JSON with the following structure:
       model: model,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: prompt }
+        { role: "user", content: prompt.toString() }
       ],
       response_format: { type: "json_object" },
       temperature: 0.7,
@@ -132,7 +149,8 @@ Format your response as valid JSON with the following structure:
           `Biblical Narrative`;
       } else {
         defaultImagePrompt = `A child named ${childName || "Child"} in a biblical setting`;
-        if (animal && animal !== 'none' && animal !== '') {
+        // Only include animal if useAnimal is true and an animal is provided
+        if (useAnimal && animal && animal !== 'none' && animal !== '') {
           defaultImagePrompt = `A child named ${childName || "Child"} with ${animal}s in a biblical setting`;
         }
         defaultTitle = `${childName || "Child"}'s Biblical Adventure`;
@@ -154,7 +172,8 @@ Format your response as valid JSON with the following structure:
         `A historically accurate biblical scene`;
     } else {
       fallbackImagePrompt = `A child named ${childName || "Child"} in a biblical setting`;
-      if (animal && animal !== 'none' && animal !== '') {
+      // Only include animal if useAnimal is true and an animal is provided
+      if (useAnimal && animal && animal !== 'none' && animal !== '') {
         fallbackImagePrompt = `A child named ${childName || "Child"} with ${animal}s in a biblical setting`;
       }
     }

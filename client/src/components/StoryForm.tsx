@@ -54,6 +54,7 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
       childName: "",
       gender: "boy",
       animal: "", // No default animal
+      useAnimal: true, // Default to including animals if selected
       theme: "", // No default theme
       biblicalEvent: "", // No default biblical event
       heroOfFaith: "", // No default hero of faith
@@ -219,6 +220,30 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                         </div>
                       </FormControl>
                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="useAnimal"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md p-2 border border-secondary/10">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel className="text-sm font-medium">
+                          Include Animals in Story
+                        </FormLabel>
+                        <div className="text-xs text-secondary/70">
+                          When enabled, the selected animal will be included in the story.
+                          When disabled, the story will not mention any animals even if one is selected above.
+                        </div>
+                      </div>
                     </FormItem>
                   )}
                 />

@@ -124,6 +124,7 @@ export const storyRequestSchema = z.object({
   }).optional(),
   // Optional fields with defaults or optional values
   animal: z.string().default("").optional(),
+  useAnimal: z.boolean().default(true), // New field: toggle for including animal in story
   theme: z.string().default(""),
   biblicalEvent: z.string().default(""),
   heroOfFaith: z.string().default("").optional(),
