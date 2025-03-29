@@ -71,7 +71,8 @@ export async function generateStoryWithOpenAI(request: StoryRequest, userId: num
       character, 
       storyType || "regular", 
       heroOfFaithName, 
-      customPrompt
+      customPrompt,
+      useAnimal // Pass the useAnimal toggle value
     );
     
     // System prompt that defines what kind of response we want
@@ -352,7 +353,7 @@ export async function analyzeImageWithOpenAI(imageBase64: string, userId: number
   }
 }
 
-function buildStoryPrompt(childName: string = "", gender: string = "boy", animal: string = "", theme: string = "", biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular", heroOfFaith?: string | undefined, customPrompt?: string | undefined): string {
+function buildStoryPrompt(childName: string = "", gender: string = "boy", animal: string = "", theme: string = "", biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular", heroOfFaith?: string | undefined, customPrompt?: string | undefined, useAnimal?: boolean): string {
   let storyFormat = "bedtime story";
   
   // Determine story format based on type
@@ -405,8 +406,8 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
     if (childName && childName !== '') {
       prompt += ` for a ${gender} named ${childName}`;
       
-      // Only include animal if it's not 'none' or empty
-      if (animal && animal !== 'none' && animal !== '') {
+      // Only include animal if useAnimal is true and animal is not 'none' or empty
+      if (useAnimal !== false && animal && animal !== 'none' && animal !== '') {
         prompt += ` who loves ${animal}s`;
       }
     }
@@ -436,7 +437,7 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
   // For regular mode (not biblical narrative) - make child the main character if provided
   else if (storyType !== "biblical_narrative" && childName && childName !== '') {
     prompt += ` The child should be the main character in the story`;
-    if (animal && animal !== 'none' && animal !== '') {
+    if (useAnimal !== false && animal && animal !== 'none' && animal !== '') {
       prompt += ` and interact with ${animal}s`;
     }
     prompt += `.`;

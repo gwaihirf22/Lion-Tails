@@ -47,7 +47,7 @@ async function canGenerateStoryWithFreeTier(userId: number = 1): Promise<boolean
 
 // Main story generation function
 export async function generateStory(request: StoryRequest, userId: number = 1): Promise<StoryResponse> {
-  const { childName, gender, animal, theme, biblicalEvent, useTimeTravel, characterId, storyType, heroOfFaith } = request;
+  const { childName, gender, animal, useAnimal, theme, biblicalEvent, useTimeTravel, characterId, storyType, heroOfFaith } = request;
   
   try {
     // Get the user's OpenAI key if they've provided one
@@ -99,7 +99,8 @@ export async function generateStory(request: StoryRequest, userId: number = 1): 
       const safeGender = gender || "boy";
       
       // Use default animal and theme if they are not provided
-      const safeAnimal = animal || "lamb";
+      // Apply useAnimal toggle - set empty string if useAnimal is false
+      const safeAnimal = useAnimal === false ? "" : (animal || "lamb");
       const safeTheme = theme || "faith";
       
       // Get hero of faith information if one is selected
@@ -112,7 +113,7 @@ export async function generateStory(request: StoryRequest, userId: number = 1): 
       }
       
       console.log("No API key available, using demo story");
-      return getDemoStory(safeChildName, safeGender, safeAnimal, safeTheme, biblicalEvent, bibleVerse, heroOfFaithName);
+      return getDemoStory(safeChildName, safeGender, safeAnimal, safeTheme, biblicalEvent, bibleVerse, heroOfFaithName, useAnimal);
     }
     
     // Use the OpenAI implementation to generate a story with userId for API key access
@@ -140,7 +141,7 @@ export async function generateStory(request: StoryRequest, userId: number = 1): 
 }
 
 // Function to build prompt for story generation
-function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null, useTimeTravel?: boolean, characterId?: string, heroOfFaith?: string): string {
+function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null, useTimeTravel?: boolean, characterId?: string, heroOfFaith?: string, useAnimal?: boolean): string {
   // Normalize "none" values
   const animalToUse = animal === "none" ? "lamb" : animal || "lamb";
   const themeToUse = theme === "none" ? "faith" : theme || "faith";
@@ -148,7 +149,8 @@ function buildStoryPrompt(childName: string, gender: string = "boy", animal: str
   
   let promptText = `Create a Christian bedtime story for a ${gender} named ${childName}`;
   
-  if (animal && animal !== "none") {
+  // Only include animal in the prompt if useAnimal is true (or undefined/not provided)
+  if (useAnimal !== false && animal && animal !== "none") {
     promptText += ` about a ${animal}`;
   }
   
@@ -179,7 +181,7 @@ The story should be engaging, descriptive, and have a clear beginning, middle, a
 }
 
 // Function to provide a demo story when not using OpenAI
-function getDemoStory(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, bibleVerse: { text: string, reference: string }, heroOfFaith?: string): StoryResponse {
+function getDemoStory(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, bibleVerse: { text: string, reference: string }, heroOfFaith?: string, useAnimal: boolean = true): StoryResponse {
   // Normalize "none" values  
   // Use the animal if provided and not "none"
   const animalToUse = animal === "none" ? "lamb" : animal || "lamb";
@@ -192,7 +194,16 @@ function getDemoStory(childName: string, gender: string = "boy", animal: string,
 
   // Set default title and content
   let title = `${childName}'s Wonderful ${themeToUse.charAt(0).toUpperCase() + themeToUse.slice(1)} Adventure`;
-  let content = `Once upon a time in a cozy little house at the edge of a sleepy town, there lived a child named ${childName}. ${childName} had a special love for ${animalToUse}s and could spend hours watching them, drawing pictures of them, and reading stories about them. Every night before bed, ${childName}'s parents would read Bible stories, and ${childName} would drift off to sleep imagining what it would be like to be part of those amazing adventures.
+  
+  // Create different story content based on the useAnimal toggle
+  let content = `Once upon a time in a cozy little house at the edge of a sleepy town, there lived a child named ${childName}. `;
+  
+  // Only add animal references if useAnimal is true and an animal is provided
+  if (useAnimal && animalToUse) {
+    content += `${childName} had a special love for ${animalToUse}s and could spend hours watching them, drawing pictures of them, and reading stories about them. `;
+  }
+  
+  content += `Every night before bed, ${childName}'s parents would read Bible stories, and ${childName} would drift off to sleep imagining what it would be like to be part of those amazing adventures.
 
 "Mommy," ${childName} would ask, "do you think Noah was scared when God told him to build such a big boat?"
 
@@ -226,13 +237,19 @@ ${childName} thought about this. "Like when my friends laughed at me for sharing
 
 "Exactly like that," Noah said. "You showed ${themeToUse} even when it wasn't popular. That takes real courage."
 
-Finally, after many days of hard work, the ark was complete. Noah began gathering the animals, just as God had instructed. ${childName} was amazed to see animals of every kind coming in pairs—tall giraffes, powerful elephants, tiny mice, and beautiful ${animalToUse}s too.
+Finally, after many days of hard work, the ark was complete. Noah began gathering the animals, just as God had instructed. ${childName} was amazed to see animals of every kind coming in pairs—tall giraffes, powerful elephants, tiny mice${useAnimal && animalToUse ? `, and beautiful ${animalToUse}s too` : ""}.
 
+${useAnimal && animalToUse ? `
 "Look, Noah!" ${childName} exclaimed, pointing to a pair of ${animalToUse}s approaching the ark. "Those are my favorites!"
 
 Noah smiled. "Would you like to help guide them to their special place on the ark?"
 
-${childName} nodded eagerly and gently led the ${animalToUse}s up the ramp and into the ark. The animals seemed to trust ${childName}, following quietly to their designated area where fresh hay and water awaited them.
+${childName} nodded eagerly and gently led the ${animalToUse}s up the ramp and into the ark. The animals seemed to trust ${childName}, following quietly to their designated area where fresh hay and water awaited them.` : `
+"Look at all the animals, Noah!" ${childName} exclaimed with wonder. "There are so many!"
+
+Noah smiled. "God is bringing them to us, two by two. Would you like to help guide some of them to their places on the ark?"
+
+${childName} nodded eagerly and helped Noah organize the animals, showing them to their designated areas where fresh hay and water awaited them.`}
 
 Once all the animals were safely aboard, Noah turned to ${childName} with a serious expression. "God has told me that the rain will start today. It's time for us to enter the ark."
 
@@ -242,7 +259,7 @@ ${childName} felt a flutter of fear in ${gender === 'boy' ? 'his' : 'her'} stoma
 
 Noah placed a reassuring hand on ${childName}'s shoulder. "It's okay to feel afraid. But remember, God promised to keep us safe, and God always keeps His promises."
 
-For forty days and forty nights, the rain continued. ${childName} helped Noah and his family feed the animals and keep the ark clean. The ${animalToUse}s became ${childName}'s special friends, and they would nuzzle ${childName}'s hand whenever they came near.
+For forty days and forty nights, the rain continued. ${childName} helped Noah and his family feed the animals and keep the ark clean. ${useAnimal && animalToUse ? `The ${animalToUse}s became ${childName}'s special friends, and they would nuzzle ${childName}'s hand whenever they came near.` : `Many of the animals became familiar with ${childName}, and some would even approach when ${gender === 'boy' ? 'he' : 'she'} came to feed them.`}
 
 One day, the rain stopped. The ark came to rest on a mountaintop, but water still covered the earth. Noah sent out a raven, and then a dove, to look for dry land, but the dove returned with nothing.
 
@@ -262,9 +279,9 @@ ${childName} looked at the colorful arc in the sky and felt a warm sense of peac
 
 "That's right," Noah said. "And God will always be with you, guiding you and keeping you safe, even when you face scary situations."
 
-As ${childName} helped release the animals back into the world, the ${animalToUse}s paused beside ${childName} as if to say thank you before bounding off to explore their new home.
+As ${childName} helped release the animals back into the world, ${useAnimal && animalToUse ? `the ${animalToUse}s paused beside ${childName} as if to say thank you before bounding off to explore their new home.` : `the animals scattered in all directions, eager to explore their new home.`}
 
-When ${childName} awoke the next morning, the dream felt so real that they hurried to tell their mother all about helping Noah and the special ${animalToUse}s on the ark.
+When ${childName} awoke the next morning, the dream felt so real that they hurried to tell their mother all about helping Noah ${useAnimal && animalToUse ? `and the special ${animalToUse}s` : `and all the amazing animals`} on the ark.
 
 Mother listened with a smile. "What a wonderful dream! And what did you learn from your adventure?"
 
