@@ -5,6 +5,8 @@ import { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { BookPage } from "@/components/BookPage";
+import { Star, Printer, Download, ChevronLeft, ChevronRight } from "lucide-react";
 
 // Import Lion Tails image
 import lionTailsImage from "@/assets/illustrations/lion-tails.jpg";
@@ -20,13 +22,43 @@ const getStoryImage = (): string => {
   return lionTailsImage;
 };
 
+// Calculate how many words fit on a page (approximately 300-400 words per page)
+const WORDS_PER_PAGE = 350;
+
 export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
   const [isPrinting, setIsPrinting] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showExpiryAlert, setShowExpiryAlert] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const storyContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // Split story into pages
+  const [storyPages, setStoryPages] = useState<string[]>([]);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // Process the story content into pages when the story changes
+  useEffect(() => {
+    if (story?.content) {
+      const words = story.content.split(/\s+/);
+      const pages = [];
+      let currentPageWords = [];
+      
+      for (let i = 0; i < words.length; i++) {
+        currentPageWords.push(words[i]);
+        
+        // When we reach the word limit or end of content, create a new page
+        if (currentPageWords.length >= WORDS_PER_PAGE || i === words.length - 1) {
+          pages.push(currentPageWords.join(' '));
+          currentPageWords = [];
+        }
+      }
+      
+      setStoryPages(pages);
+      setTotalPages(Math.max(1, pages.length));
+    }
+  }, [story]);
 
   // Check if story is favorited when storyId changes
   useEffect(() => {
@@ -164,111 +196,128 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
     }
   };
 
-  const paragraphs = story.content.split('\n').filter(para => para.trim() !== '');
+  // Navigation between pages
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const goToPrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  // Check if we should show the Bible verse (on the last page only)
+  const showBibleVerse = currentPage === totalPages;
+  
+  // Set the current page's content
+  const currentPageContent = storyPages[currentPage - 1] || '';
 
   return (
-    <Card className="bg-white/95 rounded-2xl shadow-xl">
-      <CardContent className="p-6">
-        {/* Expiry Alert */}
-        {showExpiryAlert && storyId && (
-          <Alert className="mb-4 bg-blue-50 border border-blue-100">
-            <AlertDescription className="flex items-center justify-between">
-              <div>
-                <span className="text-sm">
-                  Stories are automatically saved for one year. {isFavorite 
-                    ? "This story is favorited and will be kept indefinitely." 
-                    : "Favorite this story to keep it indefinitely."}
-                </span>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-6 w-6 p-0 rounded-full" 
-                onClick={() => setShowExpiryAlert(false)}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-2xl font-heading font-bold text-textDark">Your Bedtime Story</h3>
-          <div className="flex space-x-2">
-            {storyId && (
-              <Button 
-                onClick={handleToggleFavorite} 
-                disabled={isLoading}
-                variant="outline" 
-                size="sm"
-                className={`p-2 ${isFavorite 
-                  ? "bg-yellow-100 text-yellow-600 hover:bg-yellow-200" 
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"} rounded-lg transition duration-200`}
-                title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" width="24" height="24" viewBox="0 0 24 24" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                </svg>
-              </Button>
-            )}
-            <Button 
-              onClick={handlePrint} 
-              disabled={isPrinting}
-              variant="outline" 
-              size="sm"
-              className="p-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition duration-200"
-              title="Print Story"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect width="12" height="8" x="6" y="14" />
-              </svg>
-            </Button>
-            <Button 
-              onClick={handleSave} 
-              variant="outline" 
-              size="sm"
-              className="p-2 bg-secondary/20 hover:bg-secondary/30 text-secondary rounded-lg transition duration-200"
-              title="Save Story"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
-              </svg>
-            </Button>
-          </div>
-        </div>
-        
-        <div 
-          ref={storyContentRef} 
-          className="overflow-y-auto rounded-xl p-5 bg-[#FFFCF2] max-h-[70vh] scrollbar-thin scrollbar-thumb-secondary scrollbar-track-white font-serif"
-          style={{
-            scrollbarWidth: 'thin',
-            scrollbarColor: '#BDB2FF #fff'
-          }}
-        >
-          <h4 className="text-xl font-bold mb-5 text-center">{story.title}</h4>
-          
-          <div className="flex justify-center mb-8">
-              <img 
-                src={story.imageUrl || getStoryImage()}
-                alt="Story illustration" 
-                className="rounded-lg shadow-md max-w-full h-auto" 
-                style={{ maxHeight: '400px', objectFit: 'contain' }}
-              />
+    <div className="space-y-4">
+      {/* Expiry Alert */}
+      {showExpiryAlert && storyId && (
+        <Alert className="mb-4 bg-blue-50 border border-blue-100">
+          <AlertDescription className="flex items-center justify-between">
+            <div>
+              <span className="text-sm">
+                Stories are automatically saved for one year. {isFavorite 
+                  ? "This story is favorited and will be kept indefinitely." 
+                  : "Favorite this story to keep it indefinitely."}
+              </span>
             </div>
-          
-          {paragraphs.map((paragraph, index) => (
-            <p key={index} className="mb-3 leading-relaxed">{paragraph}</p>
-          ))}
-          
-          <div className="mt-6 p-4 bg-secondary/20 rounded-lg text-center italic">
-            <p className="text-textDark">{story.bibleVerse.text}</p>
-            <p className="font-semibold mt-2">— {story.bibleVerse.reference}</p>
-          </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-6 w-6 p-0 rounded-full" 
+              onClick={() => setShowExpiryAlert(false)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {/* Action Buttons */}
+      <div className="flex justify-end space-x-2 mb-4">
+        {storyId && (
+          <Button 
+            onClick={handleToggleFavorite} 
+            disabled={isLoading}
+            variant="outline" 
+            size="sm"
+            className={`${isFavorite 
+              ? "bg-yellow-100 text-yellow-600 hover:bg-yellow-200" 
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"} rounded-lg transition duration-200`}
+            title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+          >
+            <Star className="h-4 w-4 mr-2" fill={isFavorite ? "currentColor" : "none"} />
+            {isFavorite ? "Favorited" : "Favorite"}
+          </Button>
+        )}
+        <Button 
+          onClick={handlePrint} 
+          disabled={isPrinting}
+          variant="outline" 
+          size="sm"
+          className="bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition duration-200"
+          title="Print Story"
+        >
+          <Printer className="h-4 w-4 mr-2" />
+          Print
+        </Button>
+        <Button 
+          onClick={handleSave} 
+          variant="outline" 
+          size="sm"
+          className="bg-secondary/20 hover:bg-secondary/30 text-secondary rounded-lg transition duration-200"
+          title="Save Story"
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Save
+        </Button>
+      </div>
+
+      {/* Hidden div with full content for printing */}
+      <div ref={storyContentRef} className="hidden">
+        <h4 className="text-xl font-bold mb-5 text-center">{story.title}</h4>
+        <div dangerouslySetInnerHTML={{ __html: story.content.replace(/\n/g, '<br>') }} />
+        <div className="mt-6 p-4 bg-secondary/20 rounded-lg text-center italic">
+          <p className="text-textDark">{story.bibleVerse.text}</p>
+          <p className="font-semibold mt-2">— {story.bibleVerse.reference}</p>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+      
+      {/* Book Page Component */}
+      <BookPage
+        title={story.title}
+        content={currentPageContent}
+        verseText={showBibleVerse ? story.bibleVerse.text : undefined}
+        verseReference={showBibleVerse ? story.bibleVerse.reference : undefined}
+        onNextPage={goToNextPage}
+        onPrevPage={goToPrevPage}
+        hasNextPage={currentPage < totalPages}
+        hasPrevPage={currentPage > 1}
+        currentPage={currentPage}
+        totalPages={totalPages}
+      />
+
+      {/* Image Display on First Page */}
+      {currentPage === 1 && (
+        <div className="mt-4 flex justify-center">
+          <img 
+            src={story.imageUrl || getStoryImage()}
+            alt="Story illustration" 
+            className="rounded-lg shadow-md max-w-full h-auto" 
+            style={{ maxHeight: '300px', objectFit: 'contain' }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
