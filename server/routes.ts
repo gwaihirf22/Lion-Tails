@@ -7,6 +7,7 @@ import { generateStory } from "./lib/openai";
 import { generateSongChords } from "./lib/songGenerator";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { songs } from "./data/songs";
+import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { searchSongs, findSongById, getPopularSongs } from "./lib/songSearch";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -672,6 +673,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ analysis });
     } catch (error) {
       console.error("Error analyzing image:", error);
+      res.status(500).json({ message: "Failed to analyze image" });
+    }
+  });
+  
+  // Generate a story based on an image - requires authentication
+  app.post("/api/generate-story-from-image", async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to generate stories from images" });
+      }
+      
+      const { imageBase64, childName, gender, theme } = req.body;
+      
+      if (!imageBase64 || typeof imageBase64 !== 'string') {
+        return res.status(400).json({ message: "Valid image data is required" });
+      }
+      
+      if (!childName || !gender) {
+        return res.status(400).json({ message: "Child's name and gender are required" });
+      }
+      
+      // Get the user ID to check for API key
+      const userId = (req.user as any).id;
+      
+      // Check if user has their own OpenAI API key
+      const userOpenAIKey = await storage.getUserOpenAIKey(userId);
+      
+      if (!userOpenAIKey) {
+        return res.status(403).json({ 
+          message: "Generating stories from images requires your own OpenAI API key. Please add your API key in Settings."
+        });
+      }
+      
+      // Generate a story based on the image
+      const { generateStoryFromImage } = await import('./lib/openai-vision');
+      const story = await generateStoryFromImage(imageBase64, childName, gender, theme || 'faith', userId);
+      
+      // Generate a Bible verse related to the theme
+      const bibleVerse = getBibleVerseByTheme(theme || 'faith');
+      
+      // Create the full story response
+      const storyResponse = {
+        title: story.title,
+        content: story.content,
+        bibleVerse,
+        imageUrl: undefined // No image URL since we're using the uploaded image
+      };
+      
+      res.json(storyResponse);
+    } catch (error) {
+      console.error("Error generating story from image:", error);
+      res.status(500).json({ 
+        title: "Story Generation Error",
+        content: "There was an error generating your story from the image. Please check your API key and try again.",
+        bibleVerse: {
+          text: "Trust in the LORD with all your heart and lean not on your own understanding.",
+          reference: "Proverbs 3:5"
+        }
+      });
+    }
+  });
+  
+  // Analyze an attached asset image - requires authentication
+  app.post("/api/analyze-attached-image", async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to analyze images" });
+      }
+      
+      const { filename } = req.body;
+      
+      if (!filename || typeof filename !== 'string') {
+        return res.status(400).json({ message: "Valid filename is required" });
+      }
+      
+      // Get the user ID to check for API key
+      const userId = (req.user as any).id;
+      
+      // Check if user has their own OpenAI API key
+      const userOpenAIKey = await storage.getUserOpenAIKey(userId);
+      
+      if (!userOpenAIKey) {
+        return res.status(403).json({ 
+          message: "Image analysis requires your own OpenAI API key. Please add your API key in Settings."
+        });
+      }
+      
+      // Load the image from the attached_assets directory
+      const { loadAttachedImage } = await import('./lib/openai-vision');
+      const imageBase64 = await loadAttachedImage(filename);
+      
+      if (!imageBase64) {
+        return res.status(404).json({ message: `Image file ${filename} not found` });
+      }
+      
+      // Analyze the image with OpenAI
+      const analysis = await analyzeImageWithOpenAI(imageBase64, userId);
+      
+      res.json({ analysis });
+    } catch (error) {
+      console.error("Error analyzing attached image:", error);
       res.status(500).json({ message: "Failed to analyze image" });
     }
   });

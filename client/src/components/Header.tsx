@@ -28,6 +28,7 @@ export default function Header() {
     { href: "/saved-stories", text: "My Stories" },
     { href: "/characters", text: "Characters" },
     { href: "/heroes-of-faith", text: "Heroes" },
+    { href: "/image-analysis", text: "Image Analysis" },
     { href: "/settings", text: "Settings" },
   ];
 

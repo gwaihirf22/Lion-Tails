@@ -7,6 +7,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
 import { v4 as uuidv4 } from 'uuid';
+import { 
+  generateIllustrationPrompt, 
+  generateIllustration 
+} from './openai-vision';
 
 // Function to get an OpenAI client with the current API key
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
