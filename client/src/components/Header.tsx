@@ -91,7 +91,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="bg-primary/60 backdrop-blur-md shadow-lg border-b border-white/10 sticky top-0 z-30">
+      <header className="bg-primary/80 backdrop-blur-md shadow-lg border-b border-white/20 sticky top-0 z-30">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div ref={logoContainerRef} className="flex items-center space-x-3">
             <img 
@@ -99,7 +99,7 @@ export default function Header() {
               alt="Lion Tails Logo" 
               className="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover border-2 border-white shadow-lg"
             />
-            <h1 className="text-xl md:text-3xl font-heading font-bold text-white drop-shadow-lg">Lion Tails</h1>
+            <h1 className="text-xl md:text-3xl font-heading font-bold text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">Lion Tails</h1>
           </div>
 
           {isMobile ? (
@@ -131,7 +131,7 @@ export default function Header() {
                     <li key={item.href}>
                       <Link 
                         href={item.href} 
-                        className={`text-white hover:text-accent/90 duration-200 px-3 py-1.5 rounded-full ${location === item.href ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
+                        className={`nav-text hover:text-white duration-200 px-3 py-1.5 rounded-full ${location === item.href ? 'bg-white/30 font-bold shadow-inner' : 'hover:bg-white/20'}`}
                       >
                         {item.text}
                       </Link>
@@ -142,17 +142,17 @@ export default function Header() {
                     <li>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="flex items-center text-white hover:text-accent/90 duration-200 px-3 py-1.5 rounded-full hover:bg-white/10">
+                          <button className="flex items-center nav-text hover:text-white duration-200 px-3 py-1.5 rounded-full hover:bg-white/20">
                             <span className="mr-1">More</span>
                             <ChevronDown size={16} />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 bg-primary/90 backdrop-blur-md border-white/10">
+                        <DropdownMenuContent align="end" className="w-48 bg-primary/95 backdrop-blur-md border-white/20 shadow-lg">
                           {overflowNavItems.map((item) => (
                             <DropdownMenuItem key={item.href} asChild>
                               <Link 
                                 href={item.href}
-                                className={`w-full px-2 py-1.5 rounded-sm ${location === item.href ? 'bg-white/10 font-bold' : ''}`}
+                                className={`w-full px-2 py-1.5 rounded-sm nav-text ${location === item.href ? 'bg-white/30 font-bold' : 'hover:bg-white/20'}`}
                               >
                                 {item.text}
                               </Link>
@@ -167,7 +167,7 @@ export default function Header() {
 
               {user ? (
                 <div className="flex items-center">
-                  <span className="text-white mr-2 hidden md:block">
+                  <span className="nav-text mr-2 hidden md:block">
                     {user.username}
                   </span>
                   <Button
@@ -175,7 +175,7 @@ export default function Header() {
                     size="sm"
                     onClick={() => logoutMutation.mutate()}
                     disabled={logoutMutation.isPending}
-                    className="text-white border-white/30 hover:bg-white/20 hover:text-white font-bold shadow-sm" 
+                    className="text-white text-shadow-sm border-white/40 hover:bg-white/30 hover:text-white font-bold shadow-md" 
                   >
                     <LogOut className="mr-1 h-4 w-4" />
                     <span>Logout</span>
@@ -186,7 +186,7 @@ export default function Header() {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    className="text-white border-white/30 hover:bg-white/20 hover:text-white font-bold shadow-sm" 
+                    className="text-white text-shadow-sm border-white/40 hover:bg-white/30 hover:text-white font-bold shadow-md" 
                   >
                     <User className="mr-1 h-4 w-4" />
                     <span>Login</span>
@@ -206,7 +206,7 @@ export default function Header() {
             aria-hidden="true"
           />
 
-          <div className="absolute top-0 right-0 left-0 pt-20 pb-4 px-4 bg-primary/95 backdrop-blur-md shadow-lg border-b border-white/10 max-h-screen overflow-y-auto">
+          <div className="absolute top-0 right-0 left-0 pt-20 pb-4 px-4 bg-primary/95 backdrop-blur-md shadow-lg border-b border-white/20 max-h-screen overflow-y-auto">
             <div className="container mx-auto">
               <nav>
                 <ul className="flex flex-col space-y-2 font-heading text-base">
@@ -214,7 +214,7 @@ export default function Header() {
                     <li key={item.href}>
                       <Link 
                         href={item.href} 
-                        className={`block text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full ${location === item.href ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
+                        className={`block nav-text hover:text-white duration-200 px-4 py-3 rounded-full ${location === item.href ? 'bg-white/30 font-bold shadow-inner' : 'hover:bg-white/20'}`}
                       >
                         {item.text}
                       </Link>
@@ -226,7 +226,7 @@ export default function Header() {
                       <button
                         onClick={() => logoutMutation.mutate()}
                         disabled={logoutMutation.isPending}
-                        className="flex items-center w-full text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full hover:bg-white/10 font-bold shadow-sm" 
+                        className="flex items-center w-full nav-text hover:text-white duration-200 px-4 py-3 rounded-full hover:bg-white/20 font-bold shadow-sm" 
                       >
                         <LogOut className="mr-2 h-5 w-5" />
                         <span>Logout ({user.username})</span>
@@ -236,7 +236,7 @@ export default function Header() {
                     <li>
                       <Link
                         href="/auth"
-                        className="flex items-center text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full hover:bg-white/10 font-bold shadow-sm" 
+                        className="flex items-center nav-text hover:text-white duration-200 px-4 py-3 rounded-full hover:bg-white/20 font-bold shadow-sm" 
                       >
                         <User className="mr-2 h-5 w-5" />
                         <span>Login / Register</span>
