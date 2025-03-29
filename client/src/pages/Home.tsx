@@ -6,17 +6,41 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import appIcon from "@/assets/app-icon.jpg";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function Home() {
   const [, navigate] = useLocation();
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { user, isLoading } = useAuth();
 
   const handleSubmitStory = useCallback(async (data: StoryRequest) => {
+    // Check if user is authenticated before generating story
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in or create an account to generate stories.",
+        variant: "default",
+      });
+      navigate("/auth");
+      return;
+    }
+
     try {
       setLoading(true);
       
       const response = await apiRequest('POST', '/api/generate-story', data);
+      
+      if (response.status === 401) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in or create an account to generate stories.",
+          variant: "default",
+        });
+        navigate("/auth");
+        return;
+      }
+      
       const storyData = await response.json();
       
       // Navigate to the story page with the data
@@ -31,7 +55,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [navigate, toast]);
+  }, [navigate, toast, user]);
 
   return (
     <div>
@@ -104,7 +128,24 @@ export default function Home() {
       
       {/* Story Form Section */}
       <div className="max-w-4xl mx-auto">
-        <StoryForm onSubmit={handleSubmitStory} loading={loading} />
+        {!isLoading && (
+          <>
+            {!user ? (
+              <div className="bg-white/80 backdrop-blur-sm rounded-lg p-6 shadow-lg text-center">
+                <h3 className="text-2xl font-heading font-bold mb-4">Create Your First Story</h3>
+                <p className="mb-4">You need to sign in or create an account to generate personalized stories.</p>
+                <Button 
+                  className="bg-primary text-white hover:bg-primary/90 border-none shadow-md"
+                  onClick={() => navigate("/auth")}
+                >
+                  Sign In or Register
+                </Button>
+              </div>
+            ) : (
+              <StoryForm onSubmit={handleSubmitStory} loading={loading} />
+            )}
+          </>
+        )}
       </div>
     </div>
   );

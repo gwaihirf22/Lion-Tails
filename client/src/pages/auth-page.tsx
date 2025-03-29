@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Loader2 } from "lucide-react";
+import { loadCaptchaEnginge, LoadCanvasTemplate, validateCaptcha } from 'react-simple-captcha';
 
 // Extend the schemas from shared/schema.ts
 const loginSchema = z.object({
@@ -23,6 +24,7 @@ const registerSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string().min(6, "Password must be at least 6 characters"),
+  captcha: z.string().min(1, "Please complete the CAPTCHA"),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],
@@ -34,6 +36,14 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [activeTab, setActiveTab] = useState<string>("login");
+  const [captchaError, setCaptchaError] = useState<string | null>(null);
+
+  // Initialize CAPTCHA when component mounts or tab changes to register
+  useEffect(() => {
+    if (activeTab === "register") {
+      loadCaptchaEnginge(6);
+    }
+  }, [activeTab]);
 
   // Create forms
   const loginForm = useForm<LoginFormValues>({
@@ -51,6 +61,7 @@ export default function AuthPage() {
       email: "",
       password: "",
       confirmPassword: "",
+      captcha: "",
     },
   });
 
@@ -60,7 +71,19 @@ export default function AuthPage() {
   };
 
   const onRegisterSubmit = (values: RegisterFormValues) => {
-    const { confirmPassword, ...registerData } = values;
+    // Verify CAPTCHA
+    const captchaValid = validateCaptcha(values.captcha);
+    if (!captchaValid) {
+      setCaptchaError("CAPTCHA verification failed. Please try again.");
+      loadCaptchaEnginge(6); // Refresh CAPTCHA
+      return;
+    }
+
+    // Reset any previous errors
+    setCaptchaError(null);
+    
+    // Remove fields that shouldn't be sent to the API
+    const { confirmPassword, captcha, ...registerData } = values;
     registerMutation.mutate(registerData);
   };
 
@@ -191,6 +214,33 @@ export default function AuthPage() {
                         </FormItem>
                       )}
                     />
+                    
+                    {/* CAPTCHA */}
+                    <div className="mt-4">
+                      <FormLabel>CAPTCHA Verification</FormLabel>
+                      <div className="mb-2 bg-white p-2 rounded-md">
+                        <LoadCanvasTemplate />
+                      </div>
+                      <FormField
+                        control={registerForm.control}
+                        name="captcha"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input 
+                                placeholder="Enter the code above" 
+                                {...field} 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      {captchaError && (
+                        <div className="text-red-500 text-sm mt-1">{captchaError}</div>
+                      )}
+                    </div>
+                    
                     <Button 
                       type="submit" 
                       className="w-full" 

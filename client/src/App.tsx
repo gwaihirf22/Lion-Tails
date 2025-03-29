@@ -25,7 +25,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/story" component={Story} />
+      <ProtectedRoute path="/story" component={Story} />
       <Route path="/music" component={Music} />
       <Route path="/auth" component={AuthPage} />
       <ProtectedRoute path="/saved-stories" component={SavedStories} />
