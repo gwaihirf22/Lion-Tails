@@ -588,5 +588,28 @@ export class MemStorage implements IStorage {
 
 import { DbStorage } from './db-storage';
 
+let storageInstance: IStorage | null = null;
+
+// Helper function to safely initialize DbStorage
+function initializeDbStorage(): IStorage {
+  try {
+    if (process.env.DATABASE_URL) {
+      console.log("Initializing database storage with DATABASE_URL");
+      return new DbStorage();
+    }
+  } catch (error) {
+    console.error("Failed to initialize database storage:", error);
+    console.log("Falling back to memory storage");
+  }
+  
+  return new MemStorage();
+}
+
 // Use DbStorage if DATABASE_URL is set, otherwise fallback to MemStorage
-export const storage = process.env.DATABASE_URL ? new DbStorage() : new MemStorage();
+// Singleton pattern to ensure we only create the storage once
+export const storage = (() => {
+  if (!storageInstance) {
+    storageInstance = initializeDbStorage();
+  }
+  return storageInstance;
+})();

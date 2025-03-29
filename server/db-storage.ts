@@ -9,6 +9,11 @@ import { IStorage } from './storage';
 
 const PostgresStore = connectPg(session);
 
+// Helper function to check if DB is available
+function isDatabaseAvailable(): boolean {
+  return !!process.env.DATABASE_URL && !!pool && !!db;
+}
+
 // Define tables for DbStorage if they don't exist in schema.ts
 // For now, we'll store JSON data for some of the more complex types
 // We'll create proper relational schemas later
@@ -17,37 +22,88 @@ export class DbStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    if (!process.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL environment variable is required");
+    if (!process.env.DATABASE_URL || !pool) {
+      console.warn("DATABASE_URL not set or database connection failed. Using fallback session store.");
+      // Create memory store for sessions as fallback
+      const MemoryStore = require('memorystore')(session);
+      this.sessionStore = new MemoryStore({
+        checkPeriod: 86400000 // prune expired entries every 24h
+      });
+      return;
     }
 
     // Set up session store with PostgreSQL
-    this.sessionStore = new PostgresStore({
-      pool: pool as any, // type assertion to avoid Pool compatibility issues
-      tableName: 'session',
-      createTableIfMissing: true
-    });
+    try {
+      this.sessionStore = new PostgresStore({
+        pool: pool as any, // type assertion to avoid Pool compatibility issues
+        tableName: 'session',
+        createTableIfMissing: true
+      });
+    } catch (error) {
+      console.error("Failed to initialize PostgreSQL session store:", error);
+      // Fallback to memory store if PostgreSQL session store initialization fails
+      const MemoryStore = require('memorystore')(session);
+      this.sessionStore = new MemoryStore({
+        checkPeriod: 86400000 // prune expired entries every 24h
+      });
+    }
   }
 
   // User methods
   async getUser(id: number): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.id, id));
-    return result[0];
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in getUser(${id}). Using fallback empty result.`);
+      return undefined;
+    }
+    try {
+      const result = await db.select().from(users).where(eq(users.id, id));
+      return result[0];
+    } catch (error) {
+      console.error(`Error in getUser(${id}):`, error);
+      return undefined;
+    }
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.username, username));
-    return result[0];
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in getUserByUsername(${username}). Using fallback empty result.`);
+      return undefined;
+    }
+    try {
+      const result = await db.select().from(users).where(eq(users.username, username));
+      return result[0];
+    } catch (error) {
+      console.error(`Error in getUserByUsername(${username}):`, error);
+      return undefined;
+    }
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.email, email));
-    return result[0];
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in getUserByEmail(${email}). Using fallback empty result.`);
+      return undefined;
+    }
+    try {
+      const result = await db.select().from(users).where(eq(users.email, email));
+      return result[0];
+    } catch (error) {
+      console.error(`Error in getUserByEmail(${email}):`, error);
+      return undefined;
+    }
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const result = await db.insert(users).values(insertUser).returning();
-    return result[0];
+    if (!isDatabaseAvailable()) {
+      console.error("Database unavailable in createUser. Cannot create user:", insertUser.username);
+      throw new Error("Database connection is required to create users");
+    }
+    try {
+      const result = await db.insert(users).values(insertUser).returning();
+      return result[0];
+    } catch (error) {
+      console.error(`Error in createUser(${insertUser.username}):`, error);
+      throw error;
+    }
   }
 
   async updateUser(id: number, updates: Partial<User>): Promise<User | undefined> {
@@ -324,12 +380,19 @@ export class DbStorage implements IStorage {
 
   // Song methods - implementing temporary JSON storage
   async getAllSongs(): Promise<Song[]> {
+    if (!isDatabaseAvailable()) {
+      console.warn("Database unavailable in getAllSongs. Using fallback empty result.");
+      return [];
+    }
+
     try {
+      // Changed query to not order by title since that column doesn't exist in the raw table
+      // The title is inside the song_data JSON
       const { rows } = await pool.query(
-        `SELECT * FROM songs ORDER BY title ASC`
+        `SELECT * FROM songs ORDER BY song_id ASC`
       );
       
-      if (!rows.length) return [];
+      if (!rows || !rows.length) return [];
       
       return rows.map(row => {
         try {
@@ -361,13 +424,18 @@ export class DbStorage implements IStorage {
   }
 
   async getSongById(id: string): Promise<Song | undefined> {
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in getSongById(${id}). Using fallback empty result.`);
+      return undefined;
+    }
+    
     try {
       const { rows } = await pool.query(
         `SELECT * FROM songs WHERE song_id = $1`,
         [id]
       );
       
-      if (!rows.length) return undefined;
+      if (!rows || !rows.length) return undefined;
       
       try {
         // Handle the case where data might already be an object
@@ -531,169 +599,373 @@ export class DbStorage implements IStorage {
   }
   
   async saveStory(story: StoryResponse, request: StoryRequest, userId: number): Promise<SavedStory> {
-    const id = uuidv4();
-    const now = new Date();
+    if (!isDatabaseAvailable()) {
+      console.error("Database unavailable in saveStory. Cannot save story for user:", userId);
+      throw new Error("Database connection is required to save stories");
+    }
     
-    // Set expiry to 1 year from now
-    const expiryDate = new Date();
-    expiryDate.setFullYear(expiryDate.getFullYear() + 1);
-    
-    const savedStory: SavedStory = {
-      id,
-      story,
-      request,
-      createdAt: now.toISOString(),
-      isFavorite: false,
-      expiresAt: expiryDate.toISOString()
-    };
-    
-    await pool.query(
-      `INSERT INTO user_stories (story_id, user_id, story_data, created_at, is_favorite, expires_at) 
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, userId, JSON.stringify(savedStory), now, false, expiryDate]
-    );
-    
-    return savedStory;
+    try {
+      const id = uuidv4();
+      const now = new Date();
+      
+      // Set expiry to 1 year from now
+      const expiryDate = new Date();
+      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+      
+      const savedStory: SavedStory = {
+        id,
+        story,
+        request,
+        createdAt: now.toISOString(),
+        isFavorite: false,
+        expiresAt: expiryDate.toISOString()
+      };
+      
+      // Create the table if it doesn't exist (useful in deployment scenarios)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS user_stories (
+          story_id TEXT PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          story_data JSONB NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          is_favorite BOOLEAN DEFAULT FALSE,
+          expires_at TIMESTAMP WITH TIME ZONE
+        )
+      `);
+      
+      await pool.query(
+        `INSERT INTO user_stories (story_id, user_id, story_data, created_at, is_favorite, expires_at) 
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, userId, JSON.stringify(savedStory), now, false, expiryDate]
+      );
+      
+      return savedStory;
+    } catch (error) {
+      console.error("Error saving story:", error);
+      throw new Error("Failed to save story. Please try again later.");
+    }
   }
   
   async toggleFavorite(id: string, isFavorite: boolean, userId: number): Promise<SavedStory | undefined> {
-    // Get the current story
-    const story = await this.getStoryById(id, userId);
-    if (!story) return undefined;
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in toggleFavorite(${id}). Cannot update favorites.`);
+      return undefined;
+    }
     
-    const updatedStory: SavedStory = {
-      ...story,
-      isFavorite,
-      // Remove expiry date if it's now a favorite
-      expiresAt: isFavorite ? undefined : story.expiresAt
-    };
-    
-    // Update expiry in both JSON and the table column
-    const expiryDate = isFavorite ? null : story.expiresAt ? new Date(story.expiresAt) : null;
-    
-    await pool.query(
-      `UPDATE user_stories SET 
-       story_data = $1, 
-       is_favorite = $2, 
-       expires_at = $3 
-       WHERE story_id = $4 AND user_id = $5`,
-      [JSON.stringify(updatedStory), isFavorite, expiryDate, id, userId]
-    );
-    
-    return updatedStory;
+    try {
+      // Get the current story
+      const story = await this.getStoryById(id, userId);
+      if (!story) {
+        console.warn(`Story not found: ${id} for user ${userId}`);
+        return undefined;
+      }
+      
+      const updatedStory: SavedStory = {
+        ...story,
+        isFavorite,
+        // Remove expiry date if it's now a favorite
+        expiresAt: isFavorite ? undefined : story.expiresAt
+      };
+      
+      // Update expiry in both JSON and the table column
+      const expiryDate = isFavorite ? null : story.expiresAt ? new Date(story.expiresAt) : null;
+      
+      // Create table if needed (for deployment scenarios)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS user_stories (
+          story_id TEXT PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          story_data JSONB NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          is_favorite BOOLEAN DEFAULT FALSE,
+          expires_at TIMESTAMP WITH TIME ZONE
+        )
+      `);
+      
+      await pool.query(
+        `UPDATE user_stories SET 
+         story_data = $1, 
+         is_favorite = $2, 
+         expires_at = $3 
+         WHERE story_id = $4 AND user_id = $5`,
+        [JSON.stringify(updatedStory), isFavorite, expiryDate, id, userId]
+      );
+      
+      return updatedStory;
+    } catch (error) {
+      console.error(`Error toggling favorite for story ${id}:`, error);
+      return undefined;
+    }
   }
   
   async deleteStory(id: string, userId: number): Promise<boolean> {
-    const result = await pool.query(
-      `DELETE FROM user_stories WHERE story_id = $1 AND user_id = $2 RETURNING story_id`,
-      [id, userId]
-    );
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in deleteStory(${id}). Cannot delete story.`);
+      return false;
+    }
     
-    return (result.rowCount || 0) > 0;
+    try {
+      const result = await pool.query(
+        `DELETE FROM user_stories WHERE story_id = $1 AND user_id = $2 RETURNING story_id`,
+        [id, userId]
+      );
+      
+      return (result.rowCount || 0) > 0;
+    } catch (error) {
+      console.error(`Error deleting story ${id}:`, error);
+      return false;
+    }
   }
   
   // Usage tracking methods
   async getStoryGenerationCount(userId: number): Promise<number> {
-    const { rows } = await pool.query(
-      `SELECT count FROM user_usage WHERE user_id = $1`,
-      [userId]
-    );
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in getStoryGenerationCount(${userId}). Using default count 0.`);
+      return 0;
+    }
     
-    return rows.length ? rows[0].count : 0;
+    try {
+      // Create the table if it doesn't exist (helpful for deployment)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS user_usage (
+          user_id INTEGER PRIMARY KEY,
+          count INTEGER DEFAULT 0,
+          last_reset_date TIMESTAMP WITH TIME ZONE
+        )
+      `);
+      
+      const { rows } = await pool.query(
+        `SELECT count FROM user_usage WHERE user_id = $1`,
+        [userId]
+      );
+      
+      return rows.length ? rows[0].count : 0;
+    } catch (error) {
+      console.error(`Error getting story generation count for user ${userId}:`, error);
+      return 0; // Default to 0 on error
+    }
   }
   
   async incrementStoryGenerationCount(userId: number): Promise<number> {
-    // Use upsert pattern
-    const { rows } = await pool.query(
-      `INSERT INTO user_usage (user_id, count) 
-       VALUES ($1, 1) 
-       ON CONFLICT (user_id) 
-       DO UPDATE SET count = user_usage.count + 1 
-       RETURNING count`,
-      [userId]
-    );
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in incrementStoryGenerationCount(${userId}). Cannot increment count.`);
+      return 1; // Return 1 as a reasonable default
+    }
     
-    return rows[0].count;
+    try {
+      // Create the table if it doesn't exist (helpful for deployment)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS user_usage (
+          user_id INTEGER PRIMARY KEY,
+          count INTEGER DEFAULT 0,
+          last_reset_date TIMESTAMP WITH TIME ZONE
+        )
+      `);
+    
+      // Use upsert pattern
+      const { rows } = await pool.query(
+        `INSERT INTO user_usage (user_id, count) 
+         VALUES ($1, 1) 
+         ON CONFLICT (user_id) 
+         DO UPDATE SET count = user_usage.count + 1 
+         RETURNING count`,
+        [userId]
+      );
+      
+      return rows[0].count;
+    } catch (error) {
+      console.error(`Error incrementing story generation count for user ${userId}:`, error);
+      return 1; // Return 1 as a fallback value
+    }
   }
   
   async resetStoryGenerationCount(userId: number): Promise<void> {
-    const now = new Date();
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in resetStoryGenerationCount(${userId}). Cannot reset count.`);
+      return; // Just return without doing anything
+    }
     
-    await pool.query(
-      `INSERT INTO user_usage (user_id, count, last_reset_date) 
-       VALUES ($1, 0, $2) 
-       ON CONFLICT (user_id) 
-       DO UPDATE SET count = 0, last_reset_date = $2`,
-      [userId, now]
-    );
+    try {
+      // Create the table if it doesn't exist (helpful for deployment)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS user_usage (
+          user_id INTEGER PRIMARY KEY,
+          count INTEGER DEFAULT 0,
+          last_reset_date TIMESTAMP WITH TIME ZONE
+        )
+      `);
+    
+      const now = new Date();
+      
+      await pool.query(
+        `INSERT INTO user_usage (user_id, count, last_reset_date) 
+         VALUES ($1, 0, $2) 
+         ON CONFLICT (user_id) 
+         DO UPDATE SET count = 0, last_reset_date = $2`,
+        [userId, now]
+      );
+    } catch (error) {
+      console.error(`Error resetting story generation count for user ${userId}:`, error);
+      // No need to throw since this is a void function
+    }
   }
   
   async getLastResetDate(userId: number): Promise<Date | null> {
-    const { rows } = await pool.query(
-      `SELECT last_reset_date FROM user_usage WHERE user_id = $1`,
-      [userId]
-    );
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in getLastResetDate(${userId}). Using current date as fallback.`);
+      return new Date(); // Use current date as fallback to prevent unnecessary resets
+    }
     
-    return rows.length && rows[0].last_reset_date ? rows[0].last_reset_date : null;
+    try {
+      const { rows } = await pool.query(
+        `SELECT last_reset_date FROM user_usage WHERE user_id = $1`,
+        [userId]
+      );
+      
+      return rows.length && rows[0].last_reset_date ? rows[0].last_reset_date : null;
+    } catch (error) {
+      console.error(`Error getting last reset date for user ${userId}:`, error);
+      return new Date(); // Use current date as fallback
+    }
   }
   
   async setLastResetDate(userId: number, date: Date): Promise<void> {
-    await pool.query(
-      `INSERT INTO user_usage (user_id, last_reset_date) 
-       VALUES ($1, $2) 
-       ON CONFLICT (user_id) 
-       DO UPDATE SET last_reset_date = $2`,
-      [userId, date]
-    );
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in setLastResetDate(${userId}). Cannot update reset date.`);
+      return;
+    }
+    
+    try {
+      // Create the table if it doesn't exist (helpful for deployment)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS user_usage (
+          user_id INTEGER PRIMARY KEY,
+          count INTEGER DEFAULT 0,
+          last_reset_date TIMESTAMP WITH TIME ZONE
+        )
+      `);
+    
+      await pool.query(
+        `INSERT INTO user_usage (user_id, last_reset_date) 
+         VALUES ($1, $2) 
+         ON CONFLICT (user_id) 
+         DO UPDATE SET last_reset_date = $2`,
+        [userId, date]
+      );
+    } catch (error) {
+      console.error(`Error setting last reset date for user ${userId}:`, error);
+      // No need to throw since this is a void function
+    }
   }
   
   // User settings methods
   async getUserOpenAIKey(userId: number): Promise<string | null> {
-    const { rows } = await pool.query(
-      `SELECT openai_key FROM user_settings WHERE user_id = $1`,
-      [userId]
-    );
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in getUserOpenAIKey(${userId}). Returning null.`);
+      return null;
+    }
     
-    return rows.length && rows[0].openai_key ? rows[0].openai_key : null;
+    try {
+      const { rows } = await pool.query(
+        `SELECT openai_key FROM user_settings WHERE user_id = $1`,
+        [userId]
+      );
+      
+      return rows.length && rows[0].openai_key ? rows[0].openai_key : null;
+    } catch (error) {
+      console.error(`Error getting OpenAI key for user ${userId}:`, error);
+      return null;
+    }
   }
   
   async setUserOpenAIKey(userId: number, key: string): Promise<void> {
-    await pool.query(
-      `INSERT INTO user_settings (user_id, openai_key) 
-       VALUES ($1, $2) 
-       ON CONFLICT (user_id) 
-       DO UPDATE SET openai_key = $2`,
-      [userId, key]
-    );
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in setUserOpenAIKey(${userId}). Cannot save key.`);
+      return;
+    }
+    
+    try {
+      // Create the table if it doesn't exist (helpful for deployment)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS user_settings (
+          user_id INTEGER PRIMARY KEY,
+          openai_key TEXT,
+          openai_model TEXT
+        )
+      `);
+    
+      await pool.query(
+        `INSERT INTO user_settings (user_id, openai_key) 
+         VALUES ($1, $2) 
+         ON CONFLICT (user_id) 
+         DO UPDATE SET openai_key = $2`,
+        [userId, key]
+      );
+    } catch (error) {
+      console.error(`Error setting OpenAI key for user ${userId}:`, error);
+    }
   }
   
   async getUserOpenAIModel(userId: number): Promise<string | null> {
-    const { rows } = await pool.query(
-      `SELECT openai_model FROM user_settings WHERE user_id = $1`,
-      [userId]
-    );
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in getUserOpenAIModel(${userId}). Using default model.`);
+      return 'gpt-4o'; // Default to the newest model
+    }
     
-    return rows.length && rows[0].openai_model ? rows[0].openai_model : 'gpt-4o'; // Default to the newest model
+    try {
+      const { rows } = await pool.query(
+        `SELECT openai_model FROM user_settings WHERE user_id = $1`,
+        [userId]
+      );
+      
+      return rows.length && rows[0].openai_model ? rows[0].openai_model : 'gpt-4o'; // Default to the newest model
+    } catch (error) {
+      console.error(`Error getting OpenAI model for user ${userId}:`, error);
+      return 'gpt-4o'; // Default to the newest model on error
+    }
   }
   
   async setUserOpenAIModel(userId: number, model: string): Promise<void> {
-    await pool.query(
-      `INSERT INTO user_settings (user_id, openai_model) 
-       VALUES ($1, $2) 
-       ON CONFLICT (user_id) 
-       DO UPDATE SET openai_model = $2`,
-      [userId, model]
-    );
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in setUserOpenAIModel(${userId}). Cannot save model.`);
+      return;
+    }
+    
+    try {
+      // Create the table if it doesn't exist (helpful for deployment)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS user_settings (
+          user_id INTEGER PRIMARY KEY,
+          openai_key TEXT,
+          openai_model TEXT
+        )
+      `);
+    
+      await pool.query(
+        `INSERT INTO user_settings (user_id, openai_model) 
+         VALUES ($1, $2) 
+         ON CONFLICT (user_id) 
+         DO UPDATE SET openai_model = $2`,
+        [userId, model]
+      );
+    } catch (error) {
+      console.error(`Error setting OpenAI model for user ${userId}:`, error);
+    }
   }
 
   // Heroes of Faith methods
   async getAllHeroesOfFaith(): Promise<HeroOfFaith[]> {
+    if (!isDatabaseAvailable()) {
+      console.warn("Database unavailable in getAllHeroesOfFaith. Using fallback empty result.");
+      return [];
+    }
+    
     try {
       const { rows } = await pool.query(
         `SELECT * FROM heroes_of_faith ORDER BY hero_id ASC`
       );
       
-      if (!rows.length) return [];
+      if (!rows || !rows.length) return [];
       
       return rows.map(row => {
         try {
@@ -774,49 +1046,98 @@ export class DbStorage implements IStorage {
   }
 
   async createHeroOfFaith(heroData: Omit<HeroOfFaith, "id" | "createdAt">): Promise<HeroOfFaith> {
-    const id = uuidv4();
-    const now = new Date();
+    if (!isDatabaseAvailable()) {
+      console.warn("Database unavailable in createHeroOfFaith. Cannot create hero, but returning memory instance.");
+      // Create in-memory instance to allow app to continue working
+      const id = uuidv4();
+      const now = new Date();
+      return {
+        ...heroData,
+        id,
+        createdAt: now
+      };
+    }
     
-    const hero: HeroOfFaith = {
-      ...heroData,
-      id,
-      createdAt: now
-    };
-    
-    await pool.query(
-      `INSERT INTO heroes_of_faith (hero_id, hero_data, created_at) 
-       VALUES ($1, $2, $3)`,
-      [id, JSON.stringify(hero), now]
-    );
-    
-    return hero;
+    try {
+      const id = uuidv4();
+      const now = new Date();
+      
+      const hero: HeroOfFaith = {
+        ...heroData,
+        id,
+        createdAt: now
+      };
+      
+      // Create the table if it doesn't exist (helpful for deployment)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS heroes_of_faith (
+          hero_id TEXT PRIMARY KEY,
+          hero_data JSONB NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+      `);
+      
+      await pool.query(
+        `INSERT INTO heroes_of_faith (hero_id, hero_data, created_at) 
+         VALUES ($1, $2, $3)`,
+        [id, JSON.stringify(hero), now]
+      );
+      
+      return hero;
+    } catch (error) {
+      console.error("Error creating hero of faith:", error);
+      throw new Error("Failed to create hero of faith. Please try again later.");
+    }
   }
 
   async updateHeroOfFaith(id: string, updates: Partial<HeroOfFaith>): Promise<HeroOfFaith | undefined> {
-    // Get current hero
-    const hero = await this.getHeroOfFaithById(id);
-    if (!hero) return undefined;
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in updateHeroOfFaith(${id}). Cannot update hero.`);
+      return undefined;
+    }
     
-    const updatedHero: HeroOfFaith = {
-      ...hero,
-      ...updates
-    };
-    
-    await pool.query(
-      `UPDATE heroes_of_faith SET hero_data = $1 WHERE hero_id = $2`,
-      [JSON.stringify(updatedHero), id]
-    );
-    
-    return updatedHero;
+    try {
+      // Get current hero
+      const hero = await this.getHeroOfFaithById(id);
+      if (!hero) {
+        console.warn(`Hero of faith not found: ${id}`);
+        return undefined;
+      }
+      
+      const updatedHero: HeroOfFaith = {
+        ...hero,
+        ...updates
+      };
+      
+      await pool.query(
+        `UPDATE heroes_of_faith SET hero_data = $1 WHERE hero_id = $2`,
+        [JSON.stringify(updatedHero), id]
+      );
+      
+      return updatedHero;
+    } catch (error) {
+      console.error(`Error updating hero of faith with ID ${id}:`, error);
+      return undefined;
+    }
   }
 
   async deleteHeroOfFaith(id: string): Promise<boolean> {
-    const result = await pool.query(
-      `DELETE FROM heroes_of_faith WHERE hero_id = $1 RETURNING hero_id`,
-      [id]
-    );
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in deleteHeroOfFaith(${id}). Cannot delete hero.`);
+      return false;
+    }
     
-    return (result.rowCount || 0) > 0;
+    try {
+      const result = await pool.query(
+        `DELETE FROM heroes_of_faith WHERE hero_id = $1 RETURNING hero_id`,
+        [id]
+      );
+      
+      return (result.rowCount || 0) > 0;
+    } catch (error) {
+      console.error(`Error deleting hero of faith with ID ${id}:`, error);
+      return false;
+    }
   }
   
   // Hero Stories Library methods
