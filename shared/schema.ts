@@ -124,7 +124,7 @@ export const storyRequestSchema = z.object({
   }).optional(),
   // Optional fields with defaults or optional values
   animal: z.string().default("").optional(),
-  useAnimal: z.boolean().default(true), // New field: toggle for including animal in story
+  useAnimal: z.boolean().default(true), // Toggle for including animal in story
   theme: z.string().default(""),
   biblicalEvent: z.string().default(""),
   heroOfFaith: z.string().default("").optional(),
@@ -132,6 +132,9 @@ export const storyRequestSchema = z.object({
   characterId: z.string().optional(),
   storyType: z.enum(["regular", "poem", "moral", "biblical_narrative"]).default("regular"),
   customPrompt: z.string().default("").optional(),
+  biblePassage: z.string().default("").optional(), // Bible passage to study
+  historicalAccuracy: z.boolean().default(true).optional(), // Toggle for historical accuracy
+  learningFocus: z.string().default("").optional(), // Focus area for historical/educational stories
   characterDetails: z.object({
     age: z.number().int().min(5).max(12).optional(),
     hair: z.string().optional(),

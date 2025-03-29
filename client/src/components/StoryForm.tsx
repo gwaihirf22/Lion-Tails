@@ -18,17 +18,40 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StoryRequest, storyRequestSchema, type Character } from "@shared/schema";
+import { Textarea } from "@/components/ui/textarea";
 
 interface StoryFormProps {
   onSubmit: (data: StoryRequest) => void;
   loading?: boolean;
+  formType?: "children" | "historical";
+  showChildFields?: boolean;
+  showTimeTravel?: boolean;
+  showAnimalToggle?: boolean;
+  showBiblicalEvent?: boolean;
+  showHeroOfFaith?: boolean;
+  showBiblePassageField?: boolean;
+  showHistoricalAccuracyToggle?: boolean;
+  showLearningFocus?: boolean;
 }
 
-export default function StoryForm({ onSubmit, loading = false }: StoryFormProps) {
+export default function StoryForm({ 
+  onSubmit, 
+  loading = false,
+  formType = "children",
+  showChildFields = true,
+  showTimeTravel = true,
+  showAnimalToggle = true,
+  showBiblicalEvent = false,
+  showHeroOfFaith = true,
+  showBiblePassageField = true,
+  showHistoricalAccuracyToggle = false,
+  showLearningFocus = false
+}: StoryFormProps) {
   const [useTimeTravel, setUseTimeTravel] = useState(false);
   const [hasSelectedBiblicalEvent, setHasSelectedBiblicalEvent] = useState(false);
   const [hasSelectedHeroOfFaith, setHasSelectedHeroOfFaith] = useState(false);
   const [isBiblicalNarrative, setIsBiblicalNarrative] = useState(false);
+  const [historicalAccuracy, setHistoricalAccuracy] = useState(true);
   
   // Fetch characters for selection
   const { data: characters = [], isLoading: charactersLoading } = useQuery<Character[]>({
@@ -37,7 +60,7 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
       on401: "throw"
     }),
     // Only fetch when time travel is enabled
-    enabled: useTimeTravel,
+    enabled: useTimeTravel && showTimeTravel,
   });
   
   // Fetch heroes of faith for selection
@@ -45,7 +68,8 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
     queryKey: ['/api/heroes'],
     queryFn: getQueryFn<any[]>({
       on401: "returnNull"
-    })
+    }),
+    enabled: showHeroOfFaith
   });
   
   const form = useForm<StoryRequest>({
@@ -58,10 +82,13 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
       theme: "", // No default theme
       biblicalEvent: "", // No default biblical event
       heroOfFaith: "", // No default hero of faith
-      storyType: "regular", // Default to regular bedtime story
+      storyType: formType === "children" ? "regular" : "biblical_narrative", // Default based on form type
       useTimeTravel: false,
       characterId: undefined,
       customPrompt: "", // Empty custom prompt by default
+      biblePassage: "", // New field for Bible passage study
+      historicalAccuracy: true, // Default to historically accurate
+      learningFocus: "", // No default learning focus
     },
   });
   
@@ -69,7 +96,24 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
   useEffect(() => {
     form.setValue("useTimeTravel", useTimeTravel);
     
-    if (isBiblicalNarrative) {
+    if (formType === "historical") {
+      // In historical mode, child's name, gender, and animal are not needed
+      form.clearErrors(['childName', 'gender', 'animal']);
+      
+      // Set default values for these fields that satisfy type constraints
+      form.setValue("childName", "Biblical Character");
+      form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
+      form.setValue("animal", "none");
+      form.setValue("storyType", "biblical_narrative");
+      
+      // Clear character selection for historical mode
+      form.setValue("characterId", undefined);
+      form.setValue("useTimeTravel", false);
+      
+      // Set historical accuracy
+      form.setValue("historicalAccuracy", historicalAccuracy);
+    } 
+    else if (isBiblicalNarrative) {
       // In biblical narrative mode, child's name, gender, and animal are not needed
       form.clearErrors(['childName', 'gender', 'animal']);
       
@@ -108,17 +152,15 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
       // Clear character selection when time travel is disabled and not biblical narrative
       form.setValue("characterId", undefined);
     }
-  }, [useTimeTravel, isBiblicalNarrative, form]);
+  }, [useTimeTravel, isBiblicalNarrative, form, formType, historicalAccuracy]);
 
   return (
-    <Card className="content-container rounded-2xl shadow-lg">
+    <Card className={`content-container rounded-2xl shadow-lg ${formType === "historical" ? "border-amber-200" : "border-blue-200"}`}>
       <CardContent className="p-6">
-        <h3 className="text-2xl font-heading font-bold mb-4 text-secondary text-center">Create Your Biblical Adventure</h3>
-        
+        {/* Only show child fields when needed */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Only show child fields when time travel is disabled and not using biblical narrative */}
-            {!useTimeTravel && !isBiblicalNarrative && (
+            {formType === "children" && showChildFields && !useTimeTravel && !isBiblicalNarrative && (
               <>
                 <FormField
                   control={form.control}
@@ -224,323 +266,407 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                   )}
                 />
                 
-                <FormField
-                  control={form.control}
-                  name="useAnimal"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md p-2 border border-secondary/10">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel className="text-sm font-medium">
-                          Include Animals in Story
-                        </FormLabel>
-                        <div className="text-xs text-secondary/70">
-                          When enabled, the selected animal will be included in the story.
-                          When disabled, the story will not mention any animals even if one is selected above.
+                {showAnimalToggle && (
+                  <FormField
+                    control={form.control}
+                    name="useAnimal"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md p-2 border border-secondary/10">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="text-sm font-medium">
+                            Include Animals in Story
+                          </FormLabel>
+                          <div className="text-xs text-secondary/70">
+                            When enabled, the selected animal will be included in the story.
+                            When disabled, the story will not mention any animals even if one is selected above.
+                          </div>
                         </div>
-                      </div>
-                    </FormItem>
-                  )}
-                />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </>
             )}
             
-            <FormField
-              control={form.control}
-              name="theme"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">Theme/Message</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-heart">
-                          <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-                        </svg>
-                      </span>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                          <SelectValue placeholder="Select a theme if desired" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          <SelectItem value="kindness">Kindness</SelectItem>
-                          <SelectItem value="courage">Courage</SelectItem>
-                          <SelectItem value="obedience">Obedience</SelectItem>
-                          <SelectItem value="forgiveness">Forgiveness</SelectItem>
-                          <SelectItem value="gratitude">Gratitude</SelectItem>
-                          <SelectItem value="patience">Patience</SelectItem>
-                          <SelectItem value="faith">Faith</SelectItem>
-                          <SelectItem value="honesty">Honesty</SelectItem>
-                          <SelectItem value="humility">Humility</SelectItem>
-                          <SelectItem value="love">Love</SelectItem>
-                          <SelectItem value="joy">Joy</SelectItem>
-                          <SelectItem value="peace">Peace</SelectItem>
-                          <SelectItem value="trust">Trust</SelectItem>
-                          <SelectItem value="wisdom">Wisdom</SelectItem>
-                          <SelectItem value="prayer">Prayer</SelectItem>
-                          <SelectItem value="gentleness">Gentleness</SelectItem>
-                          <SelectItem value="self-control">Self-Control</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {formType === "children" && (
+              <FormField
+                control={form.control}
+                name="theme"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Theme/Message</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-heart">
+                            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                          </svg>
+                        </span>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                            <SelectValue placeholder="Select a theme if desired" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            <SelectItem value="kindness">Kindness</SelectItem>
+                            <SelectItem value="courage">Courage</SelectItem>
+                            <SelectItem value="obedience">Obedience</SelectItem>
+                            <SelectItem value="forgiveness">Forgiveness</SelectItem>
+                            <SelectItem value="gratitude">Gratitude</SelectItem>
+                            <SelectItem value="patience">Patience</SelectItem>
+                            <SelectItem value="faith">Faith</SelectItem>
+                            <SelectItem value="honesty">Honesty</SelectItem>
+                            <SelectItem value="humility">Humility</SelectItem>
+                            <SelectItem value="love">Love</SelectItem>
+                            <SelectItem value="joy">Joy</SelectItem>
+                            <SelectItem value="peace">Peace</SelectItem>
+                            <SelectItem value="trust">Trust</SelectItem>
+                            <SelectItem value="wisdom">Wisdom</SelectItem>
+                            <SelectItem value="prayer">Prayer</SelectItem>
+                            <SelectItem value="gentleness">Gentleness</SelectItem>
+                            <SelectItem value="self-control">Self-Control</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             
-            <FormField
-              control={form.control}
-              name="storyType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">Story Type</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-book">
-                          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
-                        </svg>
-                      </span>
-                      <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          setIsBiblicalNarrative(value === "biblical_narrative");
-                          
-                          // If switching to Biblical Narrative, reset the time travel mode
-                          if (value === "biblical_narrative" && useTimeTravel) {
-                            setUseTimeTravel(false);
-                            form.setValue("useTimeTravel", false);
-                          }
+            {formType === "children" && (
+              <FormField
+                control={form.control}
+                name="storyType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Story Type</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-book-open">
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                          </svg>
+                        </span>
+                        <Select
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            setIsBiblicalNarrative(value === "biblical_narrative");
+                          }}
+                          defaultValue={field.value}
+                        >
+                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                            <SelectValue placeholder="Select story type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="regular">Regular Bedtime Story</SelectItem>
+                            <SelectItem value="poem">Bedtime Poem</SelectItem>
+                            <SelectItem value="moral">Moral Bedtime Story</SelectItem>
+                            <SelectItem value="biblical_narrative">Biblical Narrative</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            
+            {formType === "children" && showTimeTravel && !isBiblicalNarrative && (
+              <FormField
+                control={form.control}
+                name="useTimeTravel"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md p-4 border border-secondary/10">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={(checked) => {
+                          setUseTimeTravel(!!checked);
+                          field.onChange(checked);
                         }}
-                        defaultValue={field.value}
-                      >
-                        <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                          <SelectValue placeholder="Select a story type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="regular">Regular Bedtime Story</SelectItem>
-                          <SelectItem value="poem">Bedtime Poem</SelectItem>
-                          <SelectItem value="moral">Moral Bedtime Story</SelectItem>
-                          <SelectItem value="biblical_narrative">Biblical Narrative</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="text-sm font-medium">
+                        Time Travel Adventure
+                      </FormLabel>
+                      <FormDescription>
+                        Enable this to create a story where your character travels back in time to witness Biblical events.
+                      </FormDescription>
                     </div>
-                  </FormControl>
-                  <div className="text-xs text-secondary/70 mt-1">
-                    Choose what type of story you'd like to create. Biblical Narrative creates historically accurate stories focused on biblical events without modern-day children.
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="biblicalEvent"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">Biblical Event</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-book-open">
-                          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                        </svg>
-                      </span>
-                      <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          if (value !== "none") {
-                            setHasSelectedBiblicalEvent(true);
-                            // Reset Hero of Faith if Biblical Event is selected
-                            form.setValue("heroOfFaith", "none");
-                            setHasSelectedHeroOfFaith(false);
-                          } else {
-                            setHasSelectedBiblicalEvent(false);
-                          }
-                        }}
-                        defaultValue={field.value}
-                        disabled={hasSelectedHeroOfFaith}
-                      >
-                        <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                          <SelectValue placeholder="Select a Bible story if desired" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          <SelectItem value="noahs-ark">Noah's Ark</SelectItem>
-                          <SelectItem value="david-goliath">David and Goliath</SelectItem>
-                          <SelectItem value="good-samaritan">The Good Samaritan</SelectItem>
-                          <SelectItem value="prodigal-son">The Prodigal Son</SelectItem>
-                          <SelectItem value="jonah">Jonah and the Whale</SelectItem>
-                          <SelectItem value="creation">Creation Story</SelectItem>
-                          <SelectItem value="daniel-lions">Daniel in the Lion's Den</SelectItem>
-                          <SelectItem value="moses">Moses and the Red Sea</SelectItem>
-                          <SelectItem value="joseph">Joseph and his Brothers</SelectItem>
-                          <SelectItem value="joshua">Joshua and the Battle of Jericho</SelectItem>
-                          <SelectItem value="elijah">Elijah and the Prophets of Baal</SelectItem>
-                          <SelectItem value="esther">Queen Esther</SelectItem>
-                          <SelectItem value="jesus-birth">Birth of Jesus</SelectItem>
-                          <SelectItem value="jesus-miracles">Jesus' Miracles</SelectItem>
-                          <SelectItem value="easter">Easter Story</SelectItem>
-                          <SelectItem value="paul">Paul's Missionary Journeys</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="heroOfFaith"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">Heroes of the Faith</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-crown">
-                          <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
-                        </svg>
-                      </span>
-                      <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          if (value !== "none") {
-                            setHasSelectedHeroOfFaith(true);
-                            // Reset Biblical Event if Hero of Faith is selected
-                            form.setValue("biblicalEvent", "none");
-                            setHasSelectedBiblicalEvent(false);
-                          } else {
-                            setHasSelectedHeroOfFaith(false);
-                          }
-                        }}
-                        defaultValue={field.value}
-                        disabled={hasSelectedBiblicalEvent}
-                      >
-                        <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                          <SelectValue placeholder="Select a Christian hero if desired" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          
-                          {heroesLoading ? (
-                            <SelectItem value="loading" disabled>Loading heroes...</SelectItem>
-                          ) : heroesOfFaith && heroesOfFaith.length > 0 ? (
-                            heroesOfFaith.map(hero => (
+                  </FormItem>
+                )}
+              />
+            )}
+            
+            {useTimeTravel && showTimeTravel && (
+              <FormField
+                control={form.control}
+                name="characterId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Time Travel Character</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-user">
+                            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                          </svg>
+                        </span>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                          disabled={charactersLoading}
+                        >
+                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                            <SelectValue placeholder={charactersLoading ? "Loading characters..." : "Select your time travel character"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {characters.length === 0 ? (
+                              <SelectItem value="create-new" disabled>
+                                Create a character in the Character Creator first
+                              </SelectItem>
+                            ) : (
+                              characters.map((character) => (
+                                <SelectItem key={character.id} value={character.id}>
+                                  {character.name} ({character.gender}, {character.age} years old)
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                    {characters.length === 0 && (
+                      <div className="mt-2 text-xs text-secondary/70">
+                        <a href="/characters" className="text-secondary font-medium underline">
+                          Click here to create a time travel character first
+                        </a>
+                      </div>
+                    )}
+                  </FormItem>
+                )}
+              />
+            )}
+            
+            {showBiblicalEvent && (formType === "historical" || isBiblicalNarrative) && (
+              <FormField
+                control={form.control}
+                name="biblicalEvent"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Biblical Event</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-book">
+                            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+                          </svg>
+                        </span>
+                        <Select
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            setHasSelectedBiblicalEvent(value !== "none" && value !== "");
+                            // Clear hero of faith if biblical event is selected
+                            if (value !== "none" && value !== "") {
+                              form.setValue("heroOfFaith", "");
+                              setHasSelectedHeroOfFaith(false);
+                            }
+                          }}
+                          value={field.value}
+                        >
+                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                            <SelectValue placeholder="Select a Biblical event" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            <SelectItem value="creation">Creation</SelectItem>
+                            <SelectItem value="noah">Noah's Ark</SelectItem>
+                            <SelectItem value="abraham">Abraham's Journey</SelectItem>
+                            <SelectItem value="joseph">Joseph in Egypt</SelectItem>
+                            <SelectItem value="moses">Moses and the Exodus</SelectItem>
+                            <SelectItem value="joshua">Joshua and the Battle of Jericho</SelectItem>
+                            <SelectItem value="davidGoliath">David and Goliath</SelectItem>
+                            <SelectItem value="daniel">Daniel in the Lion's Den</SelectItem>
+                            <SelectItem value="jonah">Jonah and the Whale</SelectItem>
+                            <SelectItem value="nativity">The Nativity of Jesus</SelectItem>
+                            <SelectItem value="miracles">Jesus' Miracles</SelectItem>
+                            <SelectItem value="parables">Jesus' Parables</SelectItem>
+                            <SelectItem value="crucifixion">The Crucifixion</SelectItem>
+                            <SelectItem value="resurrection">The Resurrection</SelectItem>
+                            <SelectItem value="pentecost">Day of Pentecost</SelectItem>
+                            <SelectItem value="paul">Paul's Missionary Journeys</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            
+            {showHeroOfFaith && (
+              <FormField
+                control={form.control}
+                name="heroOfFaith"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Heroes of the Faith</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-crown">
+                            <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
+                          </svg>
+                        </span>
+                        <Select
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            setHasSelectedHeroOfFaith(value !== "none" && value !== "");
+                            // Clear biblical event if hero is selected
+                            if (value !== "none" && value !== "" && formType === "historical") {
+                              form.setValue("biblicalEvent", "");
+                              setHasSelectedBiblicalEvent(false);
+                            }
+                          }}
+                          value={field.value}
+                          disabled={heroesLoading || (formType === "historical" && hasSelectedBiblicalEvent)}
+                        >
+                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                            <SelectValue placeholder={heroesLoading ? "Loading heroes..." : "Select a Hero of the Faith"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {heroesOfFaith.map((hero) => (
                               <SelectItem key={hero.id} value={hero.id}>
                                 {hero.name}
                               </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="none-available" disabled>No heroes available</SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                    {formType === "historical" && hasSelectedBiblicalEvent && (
+                      <div className="text-xs text-secondary/70 mt-1">
+                        You can only select a Hero of Faith or a Biblical Event, not both.
+                      </div>
+                    )}
+                  </FormItem>
+                )}
+              />
+            )}
+            
+            {showBiblePassageField && (
+              <FormField
+                control={form.control}
+                name="biblePassage"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Bible Passage to Study (Optional)</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-book-open-text">
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /><path d="M6 8h2" /><path d="M6 12h2" /><path d="M16 8h2" /><path d="M16 12h2" />
+                          </svg>
+                        </span>
+                        <Input 
+                          placeholder="e.g. John 3:16 or Psalm 23" 
+                          className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
+                          {...field} 
+                        />
+                      </div>
+                    </FormControl>
+                    <FormDescription>
+                      Enter a specific Bible verse or passage to include in the story.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            
+            {showHistoricalAccuracyToggle && formType === "historical" && (
+              <FormField
+                control={form.control}
+                name="historicalAccuracy"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md p-4 border border-secondary/10">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={(checked) => {
+                          setHistoricalAccuracy(!!checked);
+                          field.onChange(checked);
+                        }}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="text-sm font-medium">
+                        Prioritize Historical Accuracy
+                      </FormLabel>
+                      <FormDescription>
+                        When enabled, stories will focus more on historical facts. When disabled, more creative elements may be included.
+                      </FormDescription>
                     </div>
-                  </FormControl>
-                  <FormDescription className="text-xs mt-1">
-                    Select a historical Christian figure to feature in the story. View more details in the Heroes section.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="p-5 bg-gradient-to-br from-secondary/10 to-primary/5 rounded-lg border border-secondary/20 shadow-sm mt-2">
-              <div className="flex items-start space-x-3">
-                <Checkbox 
-                  id="useTimeTravel" 
-                  checked={useTimeTravel} 
-                  onCheckedChange={(checked) => setUseTimeTravel(!!checked)} 
-                  className="mt-1"
-                  disabled={isBiblicalNarrative}
-                />
-                <div className="space-y-1">
-                  <label
-                    htmlFor="useTimeTravel"
-                    className="font-medium text-base cursor-pointer text-secondary"
-                  >
-                    Enable Time Travel Mode
-                  </label>
-                  <p className="text-sm text-gray-600">
-                    Create stories where your characters travel back in time to witness biblical events or meet Heroes of Faith. 
-                    <a href="/characters" className="ml-1 text-primary font-medium hover:underline">Create a character</a> first.
-                  </p>
-                </div>
-              </div>
-
-              {useTimeTravel && (
-                <FormField
-                  control={form.control}
-                  name="characterId"
-                  render={({ field }) => (
-                    <FormItem className="mt-4">
-                      <FormLabel className="text-sm font-medium">Choose a Time Traveler</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-rocket">
-                              <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" /><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" /><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" /><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
-                            </svg>
-                          </span>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                            disabled={charactersLoading || characters.length === 0}
-                          >
-                            <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                              <SelectValue placeholder={charactersLoading 
-                                ? "Loading characters..." 
-                                : characters.length === 0 
-                                  ? "No characters found" 
-                                  : "Select a character"} 
-                              />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {characters.length > 0 ? (
-                                characters.map((character) => (
-                                  <SelectItem key={character.id} value={character.id}>
-                                    {character.name} ({character.gender === "boy" ? "Boy" : "Girl"}, {character.age} yrs)
-                                  </SelectItem>
-                                ))
-                              ) : (
-                                <SelectItem value="none" disabled>
-                                  No characters found
-                                </SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </FormControl>
-                      {characters.length === 0 && !charactersLoading && (
-                        <FormDescription className="mt-2">
-                          <a href="/characters" className="text-primary font-medium hover:underline flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
-                              <path d="M12 5v14M5 12h14"/>
-                            </svg>
-                            Create your first time traveler
-                          </a>
-                        </FormDescription>
-                      )}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-            </div>
+                  </FormItem>
+                )}
+              />
+            )}
+            
+            {showLearningFocus && formType === "historical" && (
+              <FormField
+                control={form.control}
+                name="learningFocus"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Learning Focus (Optional)</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-graduation-cap">
+                            <path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
+                          </svg>
+                        </span>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                            <SelectValue placeholder="What would you like to focus on?" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No specific focus</SelectItem>
+                            <SelectItem value="historical-context">Historical Context</SelectItem>
+                            <SelectItem value="theological-significance">Theological Significance</SelectItem>
+                            <SelectItem value="moral-lessons">Moral Lessons</SelectItem>
+                            <SelectItem value="cultural-insights">Cultural Insights</SelectItem>
+                            <SelectItem value="character-development">Character Development</SelectItem>
+                            <SelectItem value="faith-application">Faith Application Today</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             
             {/* Custom Prompt Field */}
             <FormField
@@ -551,53 +677,55 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                   <FormLabel className="text-sm font-medium">Custom Story Request (Optional)</FormLabel>
                   <FormControl>
                     <div className="relative">
-                      <span className="absolute inset-y-0 left-0 top-3 flex items-start pl-3 text-secondary z-10">
+                      <span className="absolute top-3 left-3 text-secondary">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-magic-wand">
-                          <path d="m4 19 7-7" /><path d="m12 3 1 1" /><path d="m19 10 1 1" /><path d="m2 12 1 1" /><path d="m14 21 1 1" /><path d="m11 14 1.5 1.5" /><path d="M15 11 17 9" />
+                          <path d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5z" /><path d="m2 2 8 8" /><path d="M20.5 10.5 22 12l-7.5 7.5-6-6L10 12l1.5-1.5" /><path d="M10.5 13.5 14 17" /><path d="M15 4h5v5" /><path d="M19 10 9 20" />
                         </svg>
                       </span>
-                      <textarea 
-                        className="pl-10 pr-4 py-2 h-24 w-full border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
-                        placeholder="Add your own custom story ideas or details here. Content must be child-friendly and Christ-centered."
+                      <Textarea 
+                        placeholder="Add any custom elements you'd like in your story..." 
+                        className="pl-10 pr-4 py-2 min-h-24 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
                         {...field} 
                       />
                     </div>
                   </FormControl>
-                  <div className="text-xs text-secondary/70 mt-1">
-                    Your request will be incorporated while maintaining age-appropriate content and Christian values.
-                    <br />
-                    <span className="text-red-500 font-medium">Note:</span> Any inappropriate content or requests will be filtered out.
-                  </div>
+                  <FormDescription>
+                    Optionally add specific details or elements you'd like included in your story.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
             
-            <Button 
-              type="submit" 
-              className="w-full py-4 px-4 mt-4 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white font-medium rounded-xl shadow-lg transition duration-200 flex items-center justify-center"
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Creating Your Story...
-                </>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-wand-sparkles mr-2">
-                    <path d="m6 17-5-5 5-5" /><path d="m19 17-5-5 5-5" /><path d="M12 12v9" /><path d="M12 3v9" /><path d="M12 12h9" /><path d="M3 12h9" /><path d="m17 12 5 5-5 5" /><path d="m7 12 5 5-5 5" />
-                  </svg> 
-                  {form.watch("storyType") === "poem" ? "Create Bedtime Poem" : 
-                  form.watch("storyType") === "moral" ? "Create Moral Bedtime Story" : 
-                  form.watch("storyType") === "biblical_narrative" ? "Create Biblical Narrative" :
-                  "Create Bedtime Story"}
-                </>
-              )}
-            </Button>
+            <div className="rounded-xl overflow-hidden mt-6">
+              <Button 
+                type="submit" 
+                className={`w-full py-4 px-4 ${formType === "historical" ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600" : "bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90"} text-white font-medium rounded-xl shadow-lg transition duration-200 flex items-center justify-center`}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Creating Your Story...
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-sparkles mr-2">
+                      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                      <path d="M5 3v4" /><path d="M19 17v4" /><path d="M3 5h4" /><path d="M17 19h4" />
+                    </svg> 
+                    {formType === "historical" ? "Create Historical Story" : 
+                      form.watch("storyType") === "poem" ? "Create Bedtime Poem" : 
+                      form.watch("storyType") === "moral" ? "Create Moral Bedtime Story" : 
+                      form.watch("storyType") === "biblical_narrative" ? "Create Biblical Narrative" :
+                      "Create Bedtime Story"}
+                  </>
+                )}
+              </Button>
+            </div>
           </form>
         </Form>
       </CardContent>

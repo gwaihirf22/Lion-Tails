@@ -1,12 +1,12 @@
 import { useCallback, useState } from "react";
 import { useLocation } from "wouter";
-import StoryForm from "@/components/StoryForm";
 import { StoryRequest } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import appIcon from "@/assets/app-icon.jpg";
 import { useAuth } from "@/hooks/use-auth";
+import StoryGeneratorTabs from "@/components/StoryGeneratorTabs";
 
 export default function Home() {
   const [, navigate] = useLocation();
@@ -126,7 +126,7 @@ export default function Home() {
         </div>
       </div>
       
-      {/* Story Form Section */}
+      {/* Story Generation Tabs Section */}
       <div className="max-w-4xl mx-auto">
         {!isLoading && (
           <>
@@ -142,7 +142,7 @@ export default function Home() {
                 </Button>
               </div>
             ) : (
-              <StoryForm onSubmit={handleSubmitStory} loading={loading} />
+              <StoryGeneratorTabs onSubmit={handleSubmitStory} loading={loading} />
             )}
           </>
         )}
