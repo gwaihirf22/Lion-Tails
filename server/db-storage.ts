@@ -1,6 +1,7 @@
 
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import pg from 'pg';
+const { Pool } = pg;
 import { users, type User, type InsertUser, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
