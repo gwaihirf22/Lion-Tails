@@ -6,57 +6,18 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// Import biblical illustrations
-import noahArkImage from "@/assets/illustrations/noah-ark.svg";
-import shepherdImage from "@/assets/illustrations/shepherd.svg";
-import danielLionsImage from "@/assets/illustrations/daniel-lions.svg";
-import gardenEdenImage from "@/assets/illustrations/garden-eden.svg";
-import defaultStoryImage from "@/assets/attached/default-story-image.png";
+// Import Lion Tails image
+import lionTailsImage from "@/assets/illustrations/lion-tails.jpg";
 
 interface StoryDisplayProps {
   story: StoryResponse;
   storyId?: string;
 }
 
-// Function to select the right biblical image based on story content
-const getBiblicalImage = (title: string, content: string): string => {
-  const titleAndContent = (title + " " + content).toLowerCase();
-  
-  if (titleAndContent.includes("noah") || 
-      titleAndContent.includes("ark") || 
-      titleAndContent.includes("flood") || 
-      titleAndContent.includes("rainbow")) {
-    return noahArkImage;
-  }
-  
-  if (titleAndContent.includes("shepherd") || 
-      titleAndContent.includes("sheep") || 
-      titleAndContent.includes("lamb") || 
-      titleAndContent.includes("david") || 
-      titleAndContent.includes("flock")) {
-    return shepherdImage;
-  }
-  
-  if (titleAndContent.includes("daniel") || 
-      titleAndContent.includes("lion") || 
-      titleAndContent.includes("den") || 
-      titleAndContent.includes("king darius")) {
-    return danielLionsImage;
-  }
-  
-  if (titleAndContent.includes("garden") || 
-      titleAndContent.includes("eden") || 
-      titleAndContent.includes("adam") || 
-      titleAndContent.includes("eve") || 
-      titleAndContent.includes("serpent") || 
-      titleAndContent.includes("snake") || 
-      titleAndContent.includes("apple") || 
-      titleAndContent.includes("fruit")) {
-    return gardenEdenImage;
-  }
-  
-  // Default to our provided default image
-  return defaultStoryImage;
+// Function to get the story image
+const getStoryImage = (): string => {
+  // Always use Lion Tails image
+  return lionTailsImage;
 };
 
 export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
@@ -291,8 +252,8 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
           
           <div className="flex justify-center mb-8">
               <img 
-                src={story.imageUrl || getBiblicalImage(story.title, story.content)}
-                alt="Biblical story illustration" 
+                src={story.imageUrl || getStoryImage()}
+                alt="Story illustration" 
                 className="rounded-lg shadow-md max-w-full h-auto" 
                 style={{ maxHeight: '400px', objectFit: 'contain' }}
               />
