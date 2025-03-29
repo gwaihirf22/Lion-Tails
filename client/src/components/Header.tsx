@@ -214,7 +214,7 @@ export default function Header() {
                     <li key={item.href}>
                       <Link 
                         href={item.href} 
-                        className={`block text-white font-semibold text-shadow duration-200 px-4 py-3 rounded-full ${location === item.href ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
+                        className={`block text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full ${location === item.href ? 'bg-white/20 font-bold shadow-inner' : 'hover:bg-white/10'}`}
                       >
                         {item.text}
                       </Link>
