@@ -8,9 +8,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { apiRequest, getQueryFn } from "@/lib/queryClient";
-import { HeroOfFaith } from '@shared/schema';
-import { Loader2, Info, Quote, Book, Calendar } from 'lucide-react';
+import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
+import { HeroOfFaith, HeroStory } from '@shared/schema';
+import { 
+  Loader2, 
+  Info, 
+  Quote, 
+  Book, 
+  Calendar, 
+  Link2, 
+  FileText, 
+  ExternalLink, 
+  Star,
+  History,
+  ListTodo,
+  BookOpen
+} from 'lucide-react';
+import { Link } from 'wouter';
 
 export default function HeroesOfFaith() {
   const { toast } = useToast();
@@ -21,6 +35,15 @@ export default function HeroesOfFaith() {
   const { data: heroes, isLoading, error } = useQuery({
     queryKey: ['/api/heroes'],
     queryFn: getQueryFn<HeroOfFaith[]>({ on401: 'returnNull' })
+  });
+
+  // Query to fetch stories for a specific hero when one is selected
+  const { data: heroStories, isLoading: isLoadingStories } = useQuery({
+    queryKey: ['/api/heroes', selectedHero?.id, 'stories'],
+    queryFn: selectedHero ? 
+      getQueryFn<HeroStory[]>({ on401: 'returnNull' }) : 
+      () => Promise.resolve([]),
+    enabled: !!selectedHero,
   });
 
   // Function to open hero details dialog
@@ -104,9 +127,19 @@ export default function HeroesOfFaith() {
               <p className="text-sm line-clamp-3 mb-2">{hero.description}</p>
               <Badge variant="outline" className="text-xs">{hero.birthYear || ''} - {hero.deathYear || ''}</Badge>
             </CardContent>
-            <CardFooter className="pt-1">
+            <CardFooter className="pt-1 flex gap-2">
               <Button variant="outline" size="sm" onClick={() => openHeroDetails(hero)}>
                 Learn More
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={() => {
+                  localStorage.setItem('selectedHeroOfFaith', hero.id);
+                  window.location.href = "/";
+                }}
+              >
+                Create Story
               </Button>
             </CardFooter>
           </Card>
@@ -116,7 +149,7 @@ export default function HeroesOfFaith() {
       {/* Hero Detail Dialog */}
       {selectedHero && (
         <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-          <DialogContent className="sm:max-w-[625px] max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-2xl flex items-center gap-2">
                 {selectedHero.name}
@@ -127,10 +160,23 @@ export default function HeroesOfFaith() {
             </DialogHeader>
             
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="contribution">Contribution</TabsTrigger>
-                <TabsTrigger value="inspiration">Inspiration</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="overview">
+                  <Info className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Overview</span>
+                </TabsTrigger>
+                <TabsTrigger value="contribution">
+                  <History className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Contribution</span>
+                </TabsTrigger>
+                <TabsTrigger value="sources">
+                  <FileText className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Sources</span>
+                </TabsTrigger>
+                <TabsTrigger value="stories">
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Stories</span>
+                </TabsTrigger>
               </TabsList>
               
               <TabsContent value="overview" className="space-y-4">
@@ -163,6 +209,20 @@ export default function HeroesOfFaith() {
                     </div>
                   </div>
                 </div>
+
+                {selectedHero.keyEvents && selectedHero.keyEvents.length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="text-lg font-semibold mb-2">Key Life Events</h3>
+                    <div className="space-y-2">
+                      {selectedHero.keyEvents.map((event, index) => (
+                        <div key={index} className="flex items-start gap-2">
+                          <Badge className="mt-0.5">{event.year}</Badge>
+                          <p>{event.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </TabsContent>
               
               <TabsContent value="contribution" className="space-y-4">
@@ -183,39 +243,142 @@ export default function HeroesOfFaith() {
                       </div>
                     </div>
                   )}
+
+                  {selectedHero.bibleVerse && (
+                    <div className="bg-primary/10 p-4 rounded-md mt-4">
+                      <div className="flex items-start gap-2">
+                        <Book className="h-5 w-5 text-primary mt-1" />
+                        <div>
+                          <p className="font-semibold">Bible Verse Associated with Their Life</p>
+                          <p className="italic">"{selectedHero.bibleVerse.text}"</p>
+                          <p className="text-right text-sm font-medium">— {selectedHero.bibleVerse.reference}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="sources" className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Historical Sources & Further Reading</h3>
+                  
+                  {selectedHero.sources && selectedHero.sources.length > 0 ? (
+                    <div className="space-y-4">
+                      {selectedHero.sources.map((source, index) => (
+                        <Card key={index}>
+                          <CardHeader className="py-3">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <CardTitle className="text-base">{source.title}</CardTitle>
+                                {source.author && (
+                                  <CardDescription>by {source.author}</CardDescription>
+                                )}
+                              </div>
+                              <Badge>{source.type}</Badge>
+                            </div>
+                          </CardHeader>
+                          
+                          {(source.description || source.url) && (
+                            <CardContent className="py-2">
+                              {source.description && <p className="text-sm mb-2">{source.description}</p>}
+                              {source.url && (
+                                <a 
+                                  href={source.url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-primary flex items-center text-sm hover:underline"
+                                >
+                                  <ExternalLink className="h-3 w-3 mr-1" />
+                                  Visit Source
+                                </a>
+                              )}
+                            </CardContent>
+                          )}
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No sources have been added for this hero yet.</p>
+                  )}
                 </div>
               </TabsContent>
               
-              <TabsContent value="inspiration" className="space-y-4">
-                {selectedHero.bibleVerse && (
-                  <div className="bg-primary/10 p-4 rounded-md">
-                    <div className="flex items-start gap-2">
-                      <Book className="h-5 w-5 text-primary mt-1" />
-                      <div>
-                        <p className="font-semibold">Bible Verse</p>
-                        <p className="italic">"{selectedHero.bibleVerse.text}"</p>
-                        <p className="text-right text-sm font-medium">— {selectedHero.bibleVerse.reference}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="mt-4">
-                  <h3 className="text-lg font-semibold mb-2">Tell a Story About This Hero</h3>
-                  <p className="text-sm">
-                    Create a personalized bedtime story featuring {selectedHero.name} by selecting them in the 
-                    story generator on the home page, under "Hero of Faith".
-                  </p>
+              <TabsContent value="stories" className="space-y-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Stories About {selectedHero.name}</h3>
                   <Button 
-                    className="mt-2" 
                     onClick={() => {
-                      setOpenDialog(false);
+                      localStorage.setItem('selectedHeroOfFaith', selectedHero.id);
                       window.location.href = "/";
                     }}
                   >
-                    Create a Story
+                    Create New Story
                   </Button>
                 </div>
+
+                {isLoadingStories ? (
+                  <div className="flex items-center justify-center p-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <span className="ml-2">Loading stories...</span>
+                  </div>
+                ) : (
+                  <>
+                    {heroStories && heroStories.length > 0 ? (
+                      <div className="space-y-4">
+                        {heroStories.map(story => (
+                          <Card key={story.id} className={story.isFeatured ? "border-primary/50" : ""}>
+                            <CardHeader className="py-3">
+                              <div className="flex items-center justify-between">
+                                <CardTitle className="text-base flex items-center">
+                                  {story.isFeatured && <Star className="h-4 w-4 text-yellow-500 mr-2" />}
+                                  {story.title}
+                                </CardTitle>
+                                <Badge variant={story.isHistoricallyAccurate ? "outline" : "secondary"}>
+                                  {story.isHistoricallyAccurate ? "Historical" : "Fictional"}
+                                </Badge>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="py-2">
+                              <p className="text-sm line-clamp-2">{story?.content ? story.content.substring(0, 150) + '...' : 'No content available'}</p>
+                            </CardContent>
+                            <CardFooter className="pt-0 pb-3">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => {
+                                  // Here we'd navigate to a story view page
+                                  toast({
+                                    title: "Coming Soon",
+                                    description: "The full story view will be available soon.",
+                                  });
+                                }}
+                              >
+                                Read Full Story
+                              </Button>
+                            </CardFooter>
+                          </Card>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center p-8 border rounded-md">
+                        <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                        <h4 className="text-lg font-medium mb-2">No Stories Yet</h4>
+                        <p className="text-muted-foreground mb-4">
+                          Be the first to create a story about {selectedHero.name} and their incredible faith journey.
+                        </p>
+                        <Button
+                          onClick={() => {
+                            localStorage.setItem('selectedHeroOfFaith', selectedHero.id);
+                            window.location.href = "/";
+                          }}
+                        >
+                          Create First Story
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
               </TabsContent>
             </Tabs>
           </DialogContent>

@@ -245,9 +245,43 @@ export const heroOfFaithSchema = z.object({
     text: z.string(),
     reference: z.string(),
   }).optional(),
+  sources: z.array(z.object({
+    title: z.string(),
+    author: z.string().optional(),
+    url: z.string().optional(),
+    description: z.string().optional(),
+    type: z.enum(["book", "article", "website", "documentary", "other"]).default("other"),
+  })).optional().default([]),
+  keyEvents: z.array(z.object({
+    year: z.string(),
+    description: z.string()
+  })).optional().default([]),
   createdAt: z.date().or(z.string()).transform(val => 
     typeof val === 'string' ? new Date(val) : val
   ),
 });
 
 export type HeroOfFaith = z.infer<typeof heroOfFaithSchema>;
+
+// Schema for Hero Stories Library
+export const heroStorySchema = z.object({
+  id: z.string(),
+  heroId: z.string(),
+  title: z.string(),
+  content: z.string(),
+  isHistoricallyAccurate: z.boolean().default(true),
+  sources: z.array(z.object({
+    title: z.string(),
+    author: z.string().optional(),
+    url: z.string().optional(),
+  })).optional().default([]),
+  bibleVerse: z.object({
+    text: z.string(),
+    reference: z.string(),
+  }),
+  createdAt: z.string(), // ISO date string
+  createdBy: z.number().optional(), // User ID
+  isFeatured: z.boolean().default(false),
+});
+
+export type HeroStory = z.infer<typeof heroStorySchema>;

@@ -1,6 +1,6 @@
 
 import { db, pool } from './db';
-import { users, verificationTokens, type User, type InsertUser, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith } from "@shared/schema";
+import { users, verificationTokens, type User, type InsertUser, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
 import { eq, and, desc, isNull, sql } from 'drizzle-orm';
@@ -813,6 +813,202 @@ export class DbStorage implements IStorage {
       [id]
     );
     
-    return result.rowCount > 0;
+    return result.rowCount! > 0;
+  }
+  
+  // Hero Stories Library methods
+  async getAllHeroStories(heroId?: string): Promise<HeroStory[]> {
+    try {
+      let query = `SELECT * FROM hero_stories`;
+      const params: any[] = [];
+      
+      if (heroId) {
+        query += ` WHERE hero_id = $1`;
+        params.push(heroId);
+      }
+      
+      query += ` ORDER BY created_at DESC`;
+      
+      const { rows } = await pool.query(query, params);
+      
+      if (!rows.length) return [];
+      
+      return rows.map(row => {
+        try {
+          // Handle the case where data might already be an object
+          if (typeof row.story_data === 'object' && row.story_data !== null) {
+            return row.story_data;
+          }
+          // Handle the string format with proper error handling
+          return JSON.parse(row.story_data);
+        } catch (parseError) {
+          console.error("Error parsing hero story data:", parseError);
+          // Return a default hero story object to prevent app crashes
+          return {
+            id: row.story_id || uuidv4(),
+            heroId: row.hero_id || "",
+            title: "Story Data Error",
+            content: "There was a problem loading this hero story. The data may be corrupted.",
+            isHistoricallyAccurate: true,
+            sources: [],
+            bibleVerse: {
+              text: "The Lord is my helper; I will not fear.",
+              reference: "Hebrews 13:6"
+            },
+            createdAt: new Date(row.created_at).toISOString() || new Date().toISOString(),
+            createdBy: row.user_id || undefined,
+            isFeatured: false
+          };
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching hero stories:", error);
+      return [];
+    }
+  }
+  
+  async getHeroStoryById(id: string): Promise<HeroStory | undefined> {
+    try {
+      const { rows } = await pool.query(
+        `SELECT * FROM hero_stories WHERE story_id = $1`,
+        [id]
+      );
+      
+      if (!rows.length) return undefined;
+      
+      try {
+        // Handle the case where data might already be an object
+        if (typeof rows[0].story_data === 'object' && rows[0].story_data !== null) {
+          return rows[0].story_data;
+        }
+        // Handle the string format with proper error handling
+        return JSON.parse(rows[0].story_data);
+      } catch (parseError) {
+        console.error("Error parsing hero story data:", parseError);
+        // Return a default hero story object to prevent app crashes
+        return {
+          id: id,
+          heroId: rows[0].hero_id || "",
+          title: "Story Data Error",
+          content: "There was a problem loading this hero story. The data may be corrupted.",
+          isHistoricallyAccurate: true,
+          sources: [],
+          bibleVerse: {
+            text: "The Lord is my helper; I will not fear.",
+            reference: "Hebrews 13:6"
+          },
+          createdAt: new Date(rows[0].created_at).toISOString() || new Date().toISOString(),
+          createdBy: rows[0].user_id || undefined,
+          isFeatured: false
+        };
+      }
+    } catch (error) {
+      console.error(`Error fetching hero story by ID ${id}:`, error);
+      return undefined;
+    }
+  }
+  
+  async getHeroStoriesByHeroId(heroId: string): Promise<HeroStory[]> {
+    return this.getAllHeroStories(heroId);
+  }
+  
+  async createHeroStory(storyData: Omit<HeroStory, "id" | "createdAt">, userId?: number): Promise<HeroStory> {
+    try {
+      const id = uuidv4();
+      const now = new Date();
+      
+      const story: HeroStory = {
+        ...storyData,
+        id,
+        createdAt: now.toISOString()
+      };
+      
+      if (userId) {
+        story.createdBy = userId;
+      }
+      
+      // Create SQL table if it doesn't exist
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS hero_stories (
+          story_id TEXT PRIMARY KEY,
+          hero_id TEXT NOT NULL,
+          user_id INTEGER,
+          story_data JSONB NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          is_featured BOOLEAN DEFAULT FALSE
+        )
+      `);
+      
+      await pool.query(
+        `INSERT INTO hero_stories (story_id, hero_id, user_id, story_data, created_at, is_featured) 
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, story.heroId, userId || null, JSON.stringify(story), now, story.isFeatured || false]
+      );
+      
+      return story;
+    } catch (error) {
+      console.error("Error creating hero story:", error);
+      throw error; // Rethrow to allow caller to handle appropriately
+    }
+  }
+  
+  async updateHeroStory(id: string, updates: Partial<HeroStory>): Promise<HeroStory | undefined> {
+    try {
+      // First get the current story
+      const story = await this.getHeroStoryById(id);
+      if (!story) return undefined;
+      
+      const updatedStory: HeroStory = {
+        ...story,
+        ...updates
+      };
+      
+      await pool.query(
+        `UPDATE hero_stories SET story_data = $1, is_featured = $2 WHERE story_id = $3`,
+        [JSON.stringify(updatedStory), updatedStory.isFeatured || false, id]
+      );
+      
+      return updatedStory;
+    } catch (error) {
+      console.error(`Error updating hero story with ID ${id}:`, error);
+      return undefined;
+    }
+  }
+  
+  async deleteHeroStory(id: string): Promise<boolean> {
+    try {
+      const result = await pool.query(
+        `DELETE FROM hero_stories WHERE story_id = $1 RETURNING story_id`,
+        [id]
+      );
+      
+      return result.rowCount! > 0;
+    } catch (error) {
+      console.error(`Error deleting hero story with ID ${id}:`, error);
+      return false;
+    }
+  }
+  
+  async toggleHeroStoryFeatured(id: string, isFeatured: boolean): Promise<HeroStory | undefined> {
+    try {
+      // First get the current story
+      const story = await this.getHeroStoryById(id);
+      if (!story) return undefined;
+      
+      const updatedStory: HeroStory = {
+        ...story,
+        isFeatured
+      };
+      
+      await pool.query(
+        `UPDATE hero_stories SET story_data = $1, is_featured = $2 WHERE story_id = $3`,
+        [JSON.stringify(updatedStory), isFeatured, id]
+      );
+      
+      return updatedStory;
+    } catch (error) {
+      console.error(`Error toggling featured status for hero story with ID ${id}:`, error);
+      return undefined;
+    }
   }
 }

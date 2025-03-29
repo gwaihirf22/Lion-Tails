@@ -1,4 +1,4 @@
-import { users, type User, type InsertUser, type Song, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith } from "@shared/schema";
+import { users, type User, type InsertUser, type Song, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
 import createMemoryStore from 'memorystore';
@@ -51,6 +51,15 @@ export interface IStorage {
   updateHeroOfFaith(id: string, hero: Partial<HeroOfFaith>): Promise<HeroOfFaith | undefined>;
   deleteHeroOfFaith(id: string): Promise<boolean>;
   
+  // Hero Stories library methods
+  getAllHeroStories(heroId?: string): Promise<HeroStory[]>;
+  getHeroStoryById(id: string): Promise<HeroStory | undefined>;
+  getHeroStoriesByHeroId(heroId: string): Promise<HeroStory[]>;
+  createHeroStory(story: Omit<HeroStory, "id" | "createdAt">, userId?: number): Promise<HeroStory>;
+  updateHeroStory(id: string, updates: Partial<HeroStory>): Promise<HeroStory | undefined>;
+  deleteHeroStory(id: string): Promise<boolean>;
+  toggleHeroStoryFeatured(id: string, isFeatured: boolean): Promise<HeroStory | undefined>;
+  
   // Usage tracking per user
   getStoryGenerationCount(userId: number): Promise<number>;
   incrementStoryGenerationCount(userId: number): Promise<number>;
@@ -71,6 +80,7 @@ export class MemStorage implements IStorage {
   private songs: Map<string, Song>;
   private stories: Map<string, SavedStory>;
   private heroesOfFaith: Map<string, HeroOfFaith>;
+  private heroStories: Map<string, HeroStory>;
   private verificationTokens: Map<string, {userId: number, type: string, expiresAt: Date}>;
   private userStoryGenerationCounts: Map<number, number>;
   private userLastResetDates: Map<number, Date>;
@@ -91,6 +101,7 @@ export class MemStorage implements IStorage {
     this.songs = new Map();
     this.stories = new Map();
     this.heroesOfFaith = new Map();
+    this.heroStories = new Map();
     this.verificationTokens = new Map();
     this.userStoryGenerationCounts = new Map();
     this.userLastResetDates = new Map();
@@ -503,6 +514,75 @@ export class MemStorage implements IStorage {
 
   async deleteHeroOfFaith(id: string): Promise<boolean> {
     return this.heroesOfFaith.delete(id);
+  }
+
+  // Hero Stories library methods
+  async getAllHeroStories(heroId?: string): Promise<HeroStory[]> {
+    if (heroId) {
+      return this.getHeroStoriesByHeroId(heroId);
+    }
+    
+    return Array.from(this.heroStories.values()).sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  async getHeroStoryById(id: string): Promise<HeroStory | undefined> {
+    return this.heroStories.get(id);
+  }
+
+  async getHeroStoriesByHeroId(heroId: string): Promise<HeroStory[]> {
+    const stories = Array.from(this.heroStories.values())
+      .filter(story => story.heroId === heroId);
+    
+    return stories.sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  async createHeroStory(storyData: Omit<HeroStory, "id" | "createdAt">, userId?: number): Promise<HeroStory> {
+    const id = uuidv4();
+    const now = new Date();
+    
+    const story: HeroStory = {
+      ...storyData,
+      id,
+      createdAt: now.toISOString(),
+      createdBy: userId
+    };
+    
+    this.heroStories.set(id, story);
+    return story;
+  }
+
+  async updateHeroStory(id: string, updates: Partial<HeroStory>): Promise<HeroStory | undefined> {
+    const story = this.heroStories.get(id);
+    if (!story) return undefined;
+    
+    const updatedStory: HeroStory = {
+      ...story,
+      ...updates
+    };
+    
+    this.heroStories.set(id, updatedStory);
+    return updatedStory;
+  }
+
+  async deleteHeroStory(id: string): Promise<boolean> {
+    return this.heroStories.delete(id);
+  }
+
+  async toggleHeroStoryFeatured(id: string, isFeatured: boolean): Promise<HeroStory | undefined> {
+    const story = this.heroStories.get(id);
+    if (!story) return undefined;
+    
+    const updatedStory: HeroStory = {
+      ...story,
+      isFeatured
+    };
+    
+    this.heroStories.set(id, updatedStory);
+    return updatedStory;
   }
 }
 

@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema } from "@shared/schema";
+import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema } from "@shared/schema";
 import { heroesOfFaithData } from "./data/heroesOfFaith";
 import { generateStory } from "./lib/openai";
 import { generateSongChords } from "./lib/songGenerator";
@@ -716,6 +716,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching story generation stats:", error);
       res.status(500).json({ message: "Failed to fetch story statistics" });
+    }
+  });
+
+  // Hero Stories Library API Routes
+  // Get all hero stories
+  app.get("/api/hero-stories", async (req, res) => {
+    try {
+      const heroId = req.query.heroId as string;
+      const stories = await storage.getAllHeroStories(heroId);
+      res.json(stories);
+    } catch (error) {
+      console.error("Error fetching hero stories:", error);
+      res.status(500).json({ message: "Failed to fetch hero stories" });
+    }
+  });
+  
+  // Get a specific hero story
+  app.get("/api/hero-stories/:id", async (req, res) => {
+    try {
+      const story = await storage.getHeroStoryById(req.params.id);
+      if (!story) {
+        return res.status(404).json({ message: "Hero story not found" });
+      }
+      res.json(story);
+    } catch (error) {
+      console.error("Error fetching hero story:", error);
+      res.status(500).json({ message: "Failed to fetch hero story" });
+    }
+  });
+  
+  // Get all stories for a specific hero
+  app.get("/api/heroes/:heroId/stories", async (req, res) => {
+    try {
+      const stories = await storage.getHeroStoriesByHeroId(req.params.heroId);
+      res.json(stories);
+    } catch (error) {
+      console.error("Error fetching hero's stories:", error);
+      res.status(500).json({ message: "Failed to fetch hero's stories" });
+    }
+  });
+  
+  // Create a new hero story
+  app.post("/api/hero-stories", async (req, res) => {
+    try {
+      const { id, createdAt, ...storyData } = req.body;
+      
+      // Validate the storyData
+      const validatedData = heroStorySchema.omit({ id: true, createdAt: true }).parse(storyData);
+      
+      const userId = req.user?.id;
+      
+      // Create the story
+      const story = await storage.createHeroStory(validatedData, userId);
+      res.status(201).json(story);
+    } catch (error) {
+      console.error("Error creating hero story:", error);
+      
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      
+      res.status(500).json({ message: "Failed to create hero story" });
+    }
+  });
+  
+  // Update a hero story
+  app.put("/api/hero-stories/:id", async (req, res) => {
+    try {
+      const { id: bodyId, createdAt, ...updates } = req.body;
+      
+      const story = await storage.updateHeroStory(req.params.id, updates);
+      
+      if (!story) {
+        return res.status(404).json({ message: "Hero story not found" });
+      }
+      
+      res.json(story);
+    } catch (error) {
+      console.error("Error updating hero story:", error);
+      
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      
+      res.status(500).json({ message: "Failed to update hero story" });
+    }
+  });
+  
+  // Delete a hero story
+  app.delete("/api/hero-stories/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteHeroStory(req.params.id);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Hero story not found" });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting hero story:", error);
+      res.status(500).json({ message: "Failed to delete hero story" });
+    }
+  });
+  
+  // Toggle a hero story's featured status
+  app.patch("/api/hero-stories/:id/featured", async (req, res) => {
+    try {
+      const { isFeatured } = req.body;
+      
+      if (typeof isFeatured !== 'boolean') {
+        return res.status(400).json({ message: "isFeatured must be a boolean" });
+      }
+      
+      const story = await storage.toggleHeroStoryFeatured(req.params.id, isFeatured);
+      
+      if (!story) {
+        return res.status(404).json({ message: "Hero story not found" });
+      }
+      
+      res.json(story);
+    } catch (error) {
+      console.error("Error toggling hero story featured status:", error);
+      res.status(500).json({ message: "Failed to toggle hero story featured status" });
     }
   });
 
