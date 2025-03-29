@@ -28,6 +28,7 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
   const [useTimeTravel, setUseTimeTravel] = useState(false);
   const [hasSelectedBiblicalEvent, setHasSelectedBiblicalEvent] = useState(false);
   const [hasSelectedHeroOfFaith, setHasSelectedHeroOfFaith] = useState(false);
+  const [isBiblicalNarrative, setIsBiblicalNarrative] = useState(false);
   
   // Fetch characters for selection
   const { data: characters = [], isLoading: charactersLoading } = useQuery<Character[]>({
@@ -63,17 +64,34 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
     },
   });
   
-  // Update the form when the time travel checkbox changes
+  // Update the form when the time travel checkbox or biblical narrative option changes
   useEffect(() => {
     form.setValue("useTimeTravel", useTimeTravel);
     
-    if (useTimeTravel) {
+    if (isBiblicalNarrative) {
+      // In biblical narrative mode, child's name, gender, and animal are not needed
+      form.clearErrors(['childName', 'gender', 'animal']);
+      
+      // Set default values for these fields that satisfy type constraints
+      form.setValue("childName", "Biblical Character");
+      form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
+      form.setValue("animal", "none");
+      
+      // Clear character selection for biblical narrative
+      form.setValue("characterId", undefined);
+      
+      // Make sure time travel is disabled for biblical narrative
+      if (useTimeTravel) {
+        setUseTimeTravel(false);
+        form.setValue("useTimeTravel", false);
+      }
+    } 
+    else if (useTimeTravel) {
       // In time travel mode, child's name, gender, and animal are not needed
       // (they will be handled by the character's details)
       form.clearErrors(['childName', 'gender', 'animal']);
       
       // Set default values for these fields so they don't get sent to the server
-      // We need to use valid values that satisfy the type constraints
       form.setValue("childName", "Character");
       form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
       form.setValue("animal", "none");
@@ -86,10 +104,10 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
         }
       }, 100);
     } else {
-      // Clear character selection when time travel is disabled
+      // Clear character selection when time travel is disabled and not biblical narrative
       form.setValue("characterId", undefined);
     }
-  }, [useTimeTravel, form]);
+  }, [useTimeTravel, isBiblicalNarrative, form]);
 
   return (
     <Card className="content-container rounded-2xl shadow-lg">
@@ -98,8 +116,8 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Only show child fields when time travel is disabled */}
-            {!useTimeTravel && (
+            {/* Only show child fields when time travel is disabled and not using biblical narrative */}
+            {!useTimeTravel && !isBiblicalNarrative && (
               <>
                 <FormField
                   control={form.control}
@@ -269,7 +287,16 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                         </svg>
                       </span>
                       <Select
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          setIsBiblicalNarrative(value === "biblical_narrative");
+                          
+                          // If switching to Biblical Narrative, reset the time travel mode
+                          if (value === "biblical_narrative" && useTimeTravel) {
+                            setUseTimeTravel(false);
+                            form.setValue("useTimeTravel", false);
+                          }
+                        }}
                         defaultValue={field.value}
                       >
                         <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
@@ -279,12 +306,13 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                           <SelectItem value="regular">Regular Bedtime Story</SelectItem>
                           <SelectItem value="poem">Bedtime Poem</SelectItem>
                           <SelectItem value="moral">Moral Bedtime Story</SelectItem>
+                          <SelectItem value="biblical_narrative">Biblical Narrative</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </FormControl>
                   <div className="text-xs text-secondary/70 mt-1">
-                    Choose what type of bedtime story you'd like to create.
+                    Choose what type of story you'd like to create. Biblical Narrative creates historically accurate stories focused on biblical events without modern-day children.
                   </div>
                   <FormMessage />
                 </FormItem>
@@ -413,6 +441,7 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                   checked={useTimeTravel} 
                   onCheckedChange={(checked) => setUseTimeTravel(!!checked)} 
                   className="mt-1"
+                  disabled={isBiblicalNarrative}
                 />
                 <div className="space-y-1">
                   <label
@@ -539,6 +568,7 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                   </svg> 
                   {form.watch("storyType") === "poem" ? "Create Bedtime Poem" : 
                   form.watch("storyType") === "moral" ? "Create Moral Bedtime Story" : 
+                  form.watch("storyType") === "biblical_narrative" ? "Create Biblical Narrative" :
                   "Create Bedtime Story"}
                 </>
               )}

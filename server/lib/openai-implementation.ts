@@ -66,11 +66,12 @@ Your stories should:
 1. Be at least 1000 words in length
 2. Include clear moral lessons based on Christian values
 3. Be appropriate for children ages 3-10
-4. Include the specified child's name, gender, animal, and theme
-5. If a biblical event is specified, incorporate it into the narrative
-6. If a time traveling character is specified, include them as an important part of the story
-7. Never include content from Mormon, Jehovah's Witness, or other non-orthodox Christian theologies
-8. End with a message about God's love that connects to the Bible verse that will be added later
+4. If the story type is a biblical narrative, focus entirely on biblical events and characters with historical accuracy
+5. For regular stories, include the specified child's name, gender, animal, and theme when provided
+6. If a biblical event is specified, incorporate it into the narrative
+7. If a time traveling character is specified, include them as an important part of the story
+8. Never include content from Mormon, Jehovah's Witness, or other non-orthodox Christian theologies
+9. End with a message about God's love that connects to the Bible verse that will be added later
 
 IMPORTANT STORYTELLING GUIDELINES:
 - Be CREATIVE with your story openings. AVOID generic openings like "Once upon a time" or "In a quaint little village"
@@ -78,6 +79,7 @@ IMPORTANT STORYTELLING GUIDELINES:
 - Create DISTINCTIVE characters with memorable personalities and traits
 - Use VARIED sentence structures and vocabulary appropriate for children
 - Include UNEXPECTED but age-appropriate plot developments
+- For biblical narratives, maintain historical accuracy while using engaging storytelling techniques
 - If a custom prompt is provided, incorporate those elements while ensuring the story remains appropriate for children
 - NEVER use the same story structure repeatedly; each story should feel fresh and unique
 
@@ -118,23 +120,45 @@ Format your response as valid JSON with the following structure:
       console.error("Error parsing OpenAI response as JSON:", parseError);
       console.log("Raw response:", responseContent);
       
-      // If we can't parse as JSON, use default values
-      let defaultImagePrompt = `A child named ${childName} in a biblical setting`;
-      if (animal && animal !== 'none' && animal !== '') {
-        defaultImagePrompt = `A child named ${childName} with ${animal}s in a biblical setting`;
+      // If we can't parse as JSON, use default values based on story type
+      let defaultImagePrompt = '';
+      let defaultTitle = '';
+      
+      if (storyType === "biblical_narrative") {
+        defaultImagePrompt = biblicalEvent ? 
+          `A biblical scene depicting ${biblicalEvent} in historically accurate detail` : 
+          `A historically accurate biblical scene`;
+          
+        defaultTitle = biblicalEvent ? 
+          `The Story of ${biblicalEvent}` : 
+          `Biblical Narrative`;
+      } else {
+        defaultImagePrompt = `A child named ${childName || "Child"} in a biblical setting`;
+        if (animal && animal !== 'none' && animal !== '') {
+          defaultImagePrompt = `A child named ${childName || "Child"} with ${animal}s in a biblical setting`;
+        }
+        defaultTitle = `${childName || "Child"}'s Biblical Adventure`;
       }
       
       jsonContent = {
-        title: `${childName}'s Biblical Adventure`,
+        title: defaultTitle,
         content: responseContent,
         imagePrompt: defaultImagePrompt
       };
     }
     
-    // Get the image prompt
-    let fallbackImagePrompt = `A child named ${childName} in a biblical setting`;
-    if (animal && animal !== 'none' && animal !== '') {
-      fallbackImagePrompt = `A child named ${childName} with ${animal}s in a biblical setting`;
+    // Get the image prompt with fallback
+    let fallbackImagePrompt = '';
+    
+    if (storyType === "biblical_narrative") {
+      fallbackImagePrompt = biblicalEvent ? 
+        `A biblical scene depicting ${biblicalEvent} in historically accurate detail` : 
+        `A historically accurate biblical scene`;
+    } else {
+      fallbackImagePrompt = `A child named ${childName || "Child"} in a biblical setting`;
+      if (animal && animal !== 'none' && animal !== '') {
+        fallbackImagePrompt = `A child named ${childName || "Child"} with ${animal}s in a biblical setting`;
+      }
     }
     const imagePrompt = jsonContent.imagePrompt || fallbackImagePrompt;
     
@@ -151,9 +175,19 @@ Format your response as valid JSON with the following structure:
       }
     }
     
+    // Prepare default title for different story types
+    let defaultTitle = '';
+    if (storyType === "biblical_narrative") {
+      defaultTitle = biblicalEvent ? 
+        `The Story of ${biblicalEvent}` : 
+        `Biblical Narrative`;
+    } else {
+      defaultTitle = childName ? `${childName}'s Biblical Adventure` : `Biblical Adventure`;
+    }
+    
     // Return the story with the bible verse and image
     return {
-      title: jsonContent.title || `${childName}'s Biblical Adventure`,
+      title: jsonContent.title || defaultTitle,
       content: jsonContent.content || responseContent,
       bibleVerse: bibleVerse,
       imagePrompt: imagePrompt,
@@ -305,18 +339,37 @@ export async function analyzeImageWithOpenAI(imageBase64: string): Promise<strin
   }
 }
 
-function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular", heroOfFaith?: string | undefined, customPrompt?: string | undefined): string {
+function buildStoryPrompt(childName: string = "", gender: string = "boy", animal: string = "", theme: string = "", biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular", heroOfFaith?: string | undefined, customPrompt?: string | undefined): string {
   let storyFormat = "bedtime story";
+  
+  // Determine story format based on type
   if (storyType === "poem") {
     storyFormat = "bedtime poem with rhyming verses";
   } else if (storyType === "moral") {
     storyFormat = "moral bedtime story with a clear ethical lesson";
+  } else if (storyType === "biblical_narrative") {
+    storyFormat = "biblical narrative";
   }
 
   let prompt = "";
   
+  // Biblical narrative format - focus solely on the biblical event/characters
+  if (storyType === "biblical_narrative") {
+    prompt = `Write a traditional orthodox Christian ${storyFormat} based on biblical events and characters`;
+    
+    // Add biblical event if provided
+    if (biblicalEvent && biblicalEvent !== 'none' && biblicalEvent !== '') {
+      if (storyTemplate) {
+        prompt += `, specifically about ${biblicalEvent}. Use this template as inspiration: ${storyTemplate}`;
+      } else {
+        prompt += `, specifically about ${biblicalEvent}`;
+      }
+    }
+    
+    prompt += `. This should be a faithful retelling of biblical events with historical accuracy while using engaging storytelling techniques. Do not include any modern-day children or fictional characters.`;
+  }
   // Handle time travel mode differently - the character IS the main character
-  if (useTimeTravel && character) {
+  else if (useTimeTravel && character) {
     prompt = `Write a traditional orthodox Christian ${storyFormat} featuring ${character.name}, who is a ${character.gender === 'boy' ? 'boy' : 'girl'} of ${character.age} years old, as a time traveler`;
     
     // Add character traits if available
@@ -330,25 +383,31 @@ function buildStoryPrompt(childName: string, gender: string = "boy", animal: str
     }
     
     prompt += `.`;
-  } else {
-    // Regular mode - use the child's name and gender
-    prompt = `Write a traditional orthodox Christian ${storyFormat} for a ${gender} named ${childName}`;
+  } 
+  // Regular mode - use the child's name and gender if provided
+  else {
+    prompt = `Write a traditional orthodox Christian ${storyFormat}`;
     
-    // Only include animal if it's not 'none'
-    if (animal && animal !== 'none' && animal !== '') {
-      prompt += ` who loves ${animal}s`;
+    // Only add child details if they were provided (for regular stories)
+    if (childName && childName !== '') {
+      prompt += ` for a ${gender} named ${childName}`;
+      
+      // Only include animal if it's not 'none' or empty
+      if (animal && animal !== 'none' && animal !== '') {
+        prompt += ` who loves ${animal}s`;
+      }
     }
     
     prompt += `.`;
   }
   
-  // Only include theme if it's not 'none' (for both modes)
+  // Only include theme if it's not 'none' or empty (for all modes)
   if (theme && theme !== 'none' && theme !== '') {
     prompt += ` The story should teach about ${theme}.`;
   }
 
-  // Add biblical event context (for both modes)
-  if (biblicalEvent && biblicalEvent !== 'none' && biblicalEvent !== '') {
+  // Add biblical event context (for non-biblical narrative modes)
+  if (storyType !== "biblical_narrative" && biblicalEvent && biblicalEvent !== 'none' && biblicalEvent !== '') {
     if (storyTemplate) {
       prompt += ` The story should be based on the biblical story of ${biblicalEvent}. Use this template as inspiration: ${storyTemplate}`;
     } else {
@@ -360,8 +419,9 @@ function buildStoryPrompt(childName: string, gender: string = "boy", animal: str
   if (useTimeTravel && character) {
     prompt += ` IMPORTANT: This story should feature time travel! ${character.name} travels back in time to witness or participate in the biblical event mentioned.`;
     prompt += ` The time traveling character should be the main protagonist in the story, with no other modern-day children present.`;
-  } else {
-    // Regular mode - make child the main character
+  } 
+  // For regular mode (not biblical narrative) - make child the main character if provided
+  else if (storyType !== "biblical_narrative" && childName && childName !== '') {
     prompt += ` The child should be the main character in the story`;
     if (animal && animal !== 'none' && animal !== '') {
       prompt += ` and interact with ${animal}s`;
@@ -373,7 +433,11 @@ function buildStoryPrompt(childName: string, gender: string = "boy", animal: str
   
   // Include Heroes of Faith if provided
   if (heroOfFaith && heroOfFaith !== 'none' && heroOfFaith !== '') {
-    prompt += ` Also, include the historical Christian figure ${heroOfFaith} in the story. They should make an appearance or be mentioned as part of the narrative, teaching the child about faith through their example or story.`;
+    if (storyType === "biblical_narrative") {
+      prompt += ` Focus on the historical Christian figure ${heroOfFaith}. Include accurate historical details about their life, ministry, and impact on Christianity.`;
+    } else {
+      prompt += ` Also, include the historical Christian figure ${heroOfFaith} in the story. They should make an appearance or be mentioned as part of the narrative, teaching about faith through their example or story.`;
+    }
   }
   
   prompt += ` IMPORTANT: Ensure the story adheres ONLY to traditional orthodox Christian theology (Catholic, Orthodox, Protestant). Avoid ANY theological concepts from Mormon, Jehovah's Witness, or other non-traditional denominations. Focus on biblical teachings accepted in mainstream Christianity.`;

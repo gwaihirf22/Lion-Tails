@@ -129,7 +129,7 @@ export const storyRequestSchema = z.object({
   heroOfFaith: z.string().default("").optional(),
   useTimeTravel: z.boolean().default(false),
   characterId: z.string().optional(),
-  storyType: z.enum(["regular", "poem", "moral"]).default("regular"),
+  storyType: z.enum(["regular", "poem", "moral", "biblical_narrative"]).default("regular"),
   customPrompt: z.string().default("").optional(),
   characterDetails: z.object({
     age: z.number().int().min(5).max(12).optional(),
@@ -141,14 +141,20 @@ export const storyRequestSchema = z.object({
     personality: z.string().optional(),
   }).optional(),
 }).refine((data) => {
+  // Biblical narrative doesn't require a child character
+  if (data.storyType === "biblical_narrative") {
+    return true;
+  }
+  
   // If time travel is enabled, characterId is required
   if (data.useTimeTravel) {
     return !!data.characterId;
   }
-  // If time travel is disabled, childName and gender are required
+  
+  // If time travel is disabled and it's not a biblical narrative, childName and gender are required
   return !!data.childName && !!data.gender;
 }, {
-  message: "Character selection is required for time travel mode. Child's name and gender are required otherwise.",
+  message: "Character selection is required for time travel mode. Child's name and gender are required for regular stories. Biblical narratives don't require character information.",
   path: ["characterId"]
 });
 
