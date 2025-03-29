@@ -273,11 +273,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Search query must be at least 2 characters" });
       }
       
+      console.log(`Searching songs with query: ${query}`);
       const results = searchSongs(query);
-      res.json(results);
+      console.log(`Found ${results.length} song matches`);
+      
+      return res.json(results);
     } catch (error) {
       console.error("Error searching songs:", error);
-      res.status(500).json({ message: "Failed to search songs" });
+      return res.status(500).json({ message: "Failed to search songs" });
     }
   });
   
@@ -285,11 +288,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/songs/popular", async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string || "10");
+      console.log(`Getting popular songs, limit: ${limit}`);
+      
       const results = getPopularSongs(limit);
-      res.json(results);
+      console.log(`Returning ${results.length} popular songs`);
+      
+      return res.json(results);
     } catch (error) {
       console.error("Error fetching popular songs:", error);
-      res.status(500).json({ message: "Failed to fetch popular songs" });
+      return res.status(500).json({ message: "Failed to fetch popular songs" });
     }
   });
   
