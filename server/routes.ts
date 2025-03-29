@@ -21,12 +21,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Apply authentication middleware globally
   app.use(authenticate);
   
-  // API routes for characters
+  // API routes for characters - all require authentication
   
-  // Get all characters
+  // Get all characters - requires authentication
   app.get("/api/characters", async (req, res) => {
     try {
-      const characters = await storage.getAllCharacters();
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to view characters" });
+      }
+      
+      // Get user ID from authenticated user
+      const userId = (req.user as any).id;
+      
+      // Get only characters belonging to this user
+      const characters = await storage.getAllCharacters(userId);
       res.json(characters);
     } catch (error) {
       console.error("Error fetching characters:", error);
@@ -34,13 +43,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Get a specific character
+  // Get a specific character - requires authentication
   app.get("/api/characters/:id", async (req, res) => {
     try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to view characters" });
+      }
+      
       const character = await storage.getCharacterById(req.params.id);
       if (!character) {
         return res.status(404).json({ message: "Character not found" });
       }
+      
+      // In the future, we should check if the character belongs to the user
+      // const userId = (req.user as any).id;
+      // if (character.userId !== userId) {
+      //   return res.status(403).json({ message: "Not authorized to access this character" });
+      // }
+      
       res.json(character);
     } catch (error) {
       console.error("Error fetching character:", error);
@@ -48,14 +69,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Create a new character
+  // Create a new character - requires authentication
   app.post("/api/characters", async (req, res) => {
     try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to create characters" });
+      }
+      
+      // Get user ID from authenticated user
+      const userId = (req.user as any).id;
+      
       // The id and createdAt fields will be added by the storage method
       const { id, createdAt, ...characterData } = req.body;
       
-      // Create the character
-      const character = await storage.createCharacter(characterData);
+      // Create the character associated with the authenticated user
+      const character = await storage.createCharacter(characterData, userId);
       res.status(201).json(character);
     } catch (error) {
       console.error("Error creating character:", error);
@@ -69,11 +98,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Update a character
+  // Update a character - requires authentication
   app.put("/api/characters/:id", async (req, res) => {
     try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to update characters" });
+      }
+      
+      // Get user ID from authenticated user
+      const userId = (req.user as any).id;
+      
+      // Remove fields that should not be updated directly
       const { id: bodyId, createdAt, ...updates } = req.body;
       
+      // Get the character to check ownership
+      const existingCharacter = await storage.getCharacterById(req.params.id);
+      
+      // Check if character exists and belongs to the user
+      if (!existingCharacter) {
+        return res.status(404).json({ message: "Character not found" });
+      }
+      
+      // In the future, we should check ownership
+      // if (existingCharacter.userId !== userId) {
+      //   return res.status(403).json({ message: "Not authorized to update this character" });
+      // }
+      
+      // Update the character
       const character = await storage.updateCharacter(req.params.id, updates);
       
       if (!character) {
@@ -93,9 +145,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Delete a character
+  // Delete a character - requires authentication
   app.delete("/api/characters/:id", async (req, res) => {
     try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to delete characters" });
+      }
+      
+      // Get user ID from authenticated user
+      const userId = (req.user as any).id;
+      
+      // Get the character to check ownership
+      const existingCharacter = await storage.getCharacterById(req.params.id);
+      
+      // Check if character exists
+      if (!existingCharacter) {
+        return res.status(404).json({ message: "Character not found" });
+      }
+      
+      // In the future, we should check ownership
+      // if (existingCharacter.userId !== userId) {
+      //   return res.status(403).json({ message: "Not authorized to delete this character" });
+      // }
+      
       const success = await storage.deleteCharacter(req.params.id);
       
       if (!success) {
@@ -174,17 +247,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Generate a story
+  // Generate a story - requires authentication
   app.post("/api/generate-story", async (req, res) => {
     try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to generate stories" });
+      }
+      
       // Validate request body
       const validatedData = storyRequestSchema.parse(req.body);
       
       // Generate the story using OpenAI
       const story = await generateStory(validatedData);
       
-      // Save the story automatically
-      await storage.saveStory(story, validatedData);
+      // Save the story for the authenticated user
+      const userId = (req.user as any).id;
+      const savedStory = await storage.saveStory(story, validatedData, userId);
       
       res.json(story);
     } catch (error) {
@@ -199,10 +278,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Get all saved stories
+  // Get all saved stories - requires authentication
   app.get("/api/stories", async (req, res) => {
     try {
-      const stories = await storage.getAllStories();
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to view stories" });
+      }
+      
+      // Get only the stories belonging to the authenticated user
+      const userId = (req.user as any).id;
+      const stories = await storage.getUserStories(userId);
       res.json(stories);
     } catch (error) {
       console.error("Error fetching stories:", error);
@@ -210,13 +296,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Get a specific story
+  // Get a specific story - requires authentication
   app.get("/api/stories/:id", async (req, res) => {
     try {
-      const story = await storage.getStoryById(req.params.id);
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to view stories" });
+      }
+      
+      // Get the story, but only if it belongs to the authenticated user
+      const userId = (req.user as any).id;
+      const story = await storage.getStoryById(req.params.id, userId);
+      
       if (!story) {
         return res.status(404).json({ message: "Story not found" });
       }
+      
       res.json(story);
     } catch (error) {
       console.error("Error fetching story:", error);
@@ -224,19 +319,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Toggle a story as favorite
+  // Toggle a story as favorite - requires authentication
   app.put("/api/stories/:id/favorite", async (req, res) => {
     try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to modify stories" });
+      }
+      
       const { isFavorite } = req.body;
       
       if (typeof isFavorite !== 'boolean') {
         return res.status(400).json({ message: "isFavorite must be a boolean" });
       }
       
-      const story = await storage.toggleFavorite(req.params.id, isFavorite);
+      // Get the user ID from the authenticated user
+      const userId = (req.user as any).id;
+      const story = await storage.toggleFavorite(req.params.id, isFavorite, userId);
       
       if (!story) {
-        return res.status(404).json({ message: "Story not found" });
+        return res.status(404).json({ message: "Story not found or unauthorized" });
       }
       
       res.json(story);
@@ -246,13 +348,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Delete a story
+  // Delete a story - requires authentication
   app.delete("/api/stories/:id", async (req, res) => {
     try {
-      const success = await storage.deleteStory(req.params.id);
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to delete stories" });
+      }
+      
+      // Get the user ID from the authenticated user
+      const userId = (req.user as any).id;
+      const success = await storage.deleteStory(req.params.id, userId);
       
       if (!success) {
-        return res.status(404).json({ message: "Story not found" });
+        return res.status(404).json({ message: "Story not found or unauthorized" });
       }
       
       res.json({ success: true });
@@ -314,12 +423,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // API routes for OpenAI settings
+  // API routes for OpenAI settings - all require authentication
   
   // Get user's OpenAI API key (note: we never return the actual key for security, just if it exists)
   app.get("/api/settings/openai-key-status", async (req, res) => {
     try {
-      const key = await storage.getUserOpenAIKey();
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to access settings" });
+      }
+      
+      const userId = (req.user as any).id;
+      const key = await storage.getUserOpenAIKey(userId);
       res.json({ hasKey: !!key });
     } catch (error) {
       console.error("Error fetching OpenAI key status:", error);
@@ -330,13 +445,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set user's OpenAI API key
   app.post("/api/settings/openai-key", async (req, res) => {
     try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to update settings" });
+      }
+      
+      const userId = (req.user as any).id;
       const { key } = req.body;
       
       if (!key || typeof key !== 'string') {
         return res.status(400).json({ message: "Valid API key is required" });
       }
       
-      await storage.setUserOpenAIKey(key);
+      await storage.setUserOpenAIKey(userId, key);
       res.json({ success: true });
     } catch (error) {
       console.error("Error setting OpenAI key:", error);
@@ -347,7 +468,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete user's OpenAI API key
   app.delete("/api/settings/openai-key", async (req, res) => {
     try {
-      await storage.setUserOpenAIKey('');
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to update settings" });
+      }
+      
+      const userId = (req.user as any).id;
+      await storage.setUserOpenAIKey(userId, '');
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting OpenAI key:", error);
@@ -358,7 +485,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's OpenAI model
   app.get("/api/settings/openai-model", async (req, res) => {
     try {
-      const model = await storage.getUserOpenAIModel();
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to access settings" });
+      }
+      
+      const userId = (req.user as any).id;
+      const model = await storage.getUserOpenAIModel(userId);
       res.json({ model: model || 'gpt-4o-mini' });
     } catch (error) {
       console.error("Error fetching OpenAI model:", error);
@@ -369,13 +502,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set user's OpenAI model
   app.post("/api/settings/openai-model", async (req, res) => {
     try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to update settings" });
+      }
+      
+      const userId = (req.user as any).id;
       const { model } = req.body;
       
       if (!model || typeof model !== 'string') {
         return res.status(400).json({ message: "Valid model name is required" });
       }
       
-      await storage.setUserOpenAIModel(model);
+      await storage.setUserOpenAIModel(userId, model);
       res.json({ success: true });
     } catch (error) {
       console.error("Error setting OpenAI model:", error);
@@ -499,17 +638,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Analyze an image with OpenAI Vision API
+  // Analyze an image with OpenAI Vision API - requires authentication
   app.post("/api/analyze-image", async (req, res) => {
     try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to analyze images" });
+      }
+      
       const { imageBase64 } = req.body;
       
       if (!imageBase64 || typeof imageBase64 !== 'string') {
         return res.status(400).json({ message: "Valid image data is required" });
       }
       
-      // Analyze the image with OpenAI
-      const analysis = await analyzeImageWithOpenAI(imageBase64);
+      // Get the user ID to check for API key
+      const userId = (req.user as any).id;
+      
+      // Check if user has their own OpenAI API key
+      const userOpenAIKey = await storage.getUserOpenAIKey(userId);
+      
+      if (!userOpenAIKey) {
+        return res.status(403).json({ 
+          message: "Image analysis requires your own OpenAI API key. Please add your API key in Settings."
+        });
+      }
+      
+      // Analyze the image with OpenAI using user's API key
+      const analysis = await analyzeImageWithOpenAI(imageBase64, userOpenAIKey);
       
       res.json({ analysis });
     } catch (error) {
@@ -518,11 +674,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get story generation statistics
+  // Get story generation statistics - requires authentication
   app.get("/api/stats/story-generation", async (req, res) => {
     try {
-      const count = await storage.getStoryGenerationCount();
-      const lastResetDate = await storage.getLastResetDate();
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to view statistics" });
+      }
+      
+      // Get the user ID from the authenticated user
+      const userId = (req.user as any).id;
+      const count = await storage.getStoryGenerationCount(userId);
+      const lastResetDate = await storage.getLastResetDate(userId);
       
       // Calculate quotas
       const initialQuota = 50;

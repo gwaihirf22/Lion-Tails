@@ -1,16 +1,35 @@
 import { Link, useLocation } from "wouter";
-import { useEffect, useState } from "react";
-import { Menu, X, LogOut, User } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Menu, X, LogOut, User, ChevronDown, MoreHorizontal } from "lucide-react";
 import appIcon from "@/assets/app-icon.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function Header() {
   const [location] = useLocation();
   const isMobile = useIsMobile();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [visibleItems, setVisibleItems] = useState(4); // Default visible items for desktop
+  const navContainerRef = useRef<HTMLUListElement>(null);
+  const logoContainerRef = useRef<HTMLDivElement>(null);
   const { user, logoutMutation } = useAuth();
+  
+  // Navigation items
+  const navItems = [
+    { href: "/", text: "Home" },
+    { href: "/music", text: "Music" },
+    { href: "/saved-stories", text: "My Stories" },
+    { href: "/characters", text: "Characters" },
+    { href: "/heroes-of-faith", text: "Heroes" },
+    { href: "/settings", text: "Settings" },
+  ];
 
   // Close menu on location change
   useEffect(() => {
@@ -41,21 +60,47 @@ export default function Header() {
       document.body.style.overflow = '';
     };
   }, [menuOpen, isMobile]);
-
-  const navItems = [
-    { href: "/", text: "Home" },
-    { href: "/music", text: "Music" },
-    { href: "/saved-stories", text: "My Stories" },
-    { href: "/characters", text: "Characters" },
-    { href: "/heroes-of-faith", text: "Heroes" },
-    { href: "/settings", text: "Settings" },
-  ];
+  
+  // Resize handler for screen width changes
+  useEffect(() => {
+    if (isMobile) return;
+    
+    const handleResize = () => {
+      const width = window.innerWidth;
+      
+      if (width > 1200) {
+        setVisibleItems(6); // All items visible on large screens
+      } else if (width > 1000) {
+        setVisibleItems(5); // 5 items on medium-large screens
+      } else if (width > 800) {
+        setVisibleItems(4); // 4 items on medium screens
+      } else if (width > 640) {
+        setVisibleItems(3); // 3 items on small-medium screens
+      } else {
+        setVisibleItems(2); // 2 items on small screens
+      }
+    };
+    
+    // Run once initially and on resize
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [isMobile]);
+  
+  // Split menu items into visible and overflow items
+  const visibleNavItems = navItems.slice(0, visibleItems);
+  const overflowNavItems = navItems.slice(visibleItems);
+  const hasOverflow = overflowNavItems.length > 0;
   
   return (
     <>
       <header className="bg-primary/60 backdrop-blur-md shadow-lg border-b border-white/10 sticky top-0 z-30">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
+          {/* Logo */}
+          <div ref={logoContainerRef} className="flex items-center space-x-3">
             <img 
               src={appIcon} 
               alt="Lion Tails Logo" 
@@ -64,6 +109,7 @@ export default function Header() {
             <h1 className="text-xl md:text-3xl font-heading font-bold text-white drop-shadow-lg">Lion Tails</h1>
           </div>
           
+          {/* Mobile header buttons */}
           {isMobile ? (
             <div className="flex items-center space-x-2">
               {user && (
@@ -87,9 +133,11 @@ export default function Header() {
             </div>
           ) : (
             <div className="flex items-center">
+              {/* Desktop navigation */}
               <nav className="mr-4">
-                <ul className="flex space-x-2 font-heading text-sm md:text-base">
-                  {navItems.map((item) => (
+                <ul ref={navContainerRef} className="flex space-x-2 font-heading text-sm md:text-base">
+                  {/* Visible nav items */}
+                  {visibleNavItems.map((item) => (
                     <li key={item.href}>
                       <Link 
                         href={item.href} 
@@ -99,9 +147,36 @@ export default function Header() {
                       </Link>
                     </li>
                   ))}
+                  
+                  {/* "More" dropdown for overflow items */}
+                  {hasOverflow && (
+                    <li>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex items-center text-white hover:text-accent/90 duration-200 px-3 py-1.5 rounded-full hover:bg-white/10">
+                            <span className="mr-1">More</span>
+                            <ChevronDown size={16} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 bg-primary/90 backdrop-blur-md border-white/10">
+                          {overflowNavItems.map((item) => (
+                            <DropdownMenuItem key={item.href} asChild>
+                              <Link 
+                                href={item.href}
+                                className={`w-full px-2 py-1.5 rounded-sm ${location === item.href ? 'bg-white/10 font-bold' : ''}`}
+                              >
+                                {item.text}
+                              </Link>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </li>
+                  )}
                 </ul>
               </nav>
               
+              {/* Auth buttons */}
               {user ? (
                 <div className="flex items-center">
                   <span className="text-white mr-2 hidden md:block">
@@ -135,7 +210,7 @@ export default function Header() {
         </div>
       </header>
 
-      {/* Mobile menu - completely separate from the header */}
+      {/* Mobile menu - slides in from top */}
       {isMobile && menuOpen && (
         <div className="fixed inset-0 z-50">
           {/* Overlay */}
