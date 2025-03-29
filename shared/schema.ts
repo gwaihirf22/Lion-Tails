@@ -130,6 +130,7 @@ export const storyRequestSchema = z.object({
   useTimeTravel: z.boolean().default(false),
   characterId: z.string().optional(),
   storyType: z.enum(["regular", "poem", "moral"]).default("regular"),
+  customPrompt: z.string().default("").optional(),
   characterDetails: z.object({
     age: z.number().int().min(5).max(12).optional(),
     hair: z.string().optional(),

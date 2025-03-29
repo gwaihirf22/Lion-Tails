@@ -59,6 +59,7 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
       storyType: "regular", // Default to regular bedtime story
       useTimeTravel: false,
       characterId: undefined,
+      customPrompt: "", // Empty custom prompt by default
     },
   });
   
@@ -486,6 +487,37 @@ export default function StoryForm({ onSubmit, loading = false }: StoryFormProps)
                 />
               )}
             </div>
+            
+            {/* Custom Prompt Field */}
+            <FormField
+              control={form.control}
+              name="customPrompt"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">Custom Story Request (Optional)</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 top-3 flex items-start pl-3 text-secondary z-10">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-magic-wand">
+                          <path d="m4 19 7-7" /><path d="m12 3 1 1" /><path d="m19 10 1 1" /><path d="m2 12 1 1" /><path d="m14 21 1 1" /><path d="m11 14 1.5 1.5" /><path d="M15 11 17 9" />
+                        </svg>
+                      </span>
+                      <textarea 
+                        className="pl-10 pr-4 py-2 h-24 w-full border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
+                        placeholder="Add your own custom story ideas or details here. Content must be child-friendly and Christ-centered."
+                        {...field} 
+                      />
+                    </div>
+                  </FormControl>
+                  <div className="text-xs text-secondary/70 mt-1">
+                    Your request will be incorporated while maintaining age-appropriate content and Christian values.
+                    <br />
+                    <span className="text-red-500 font-medium">Note:</span> Any inappropriate content or requests will be filtered out.
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             
             <Button 
               type="submit" 

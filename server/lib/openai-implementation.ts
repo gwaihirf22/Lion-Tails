@@ -24,14 +24,16 @@ function getOpenAIClient(apiKey?: string | null) {
 }
 
 export async function generateStoryWithOpenAI(request: StoryRequest): Promise<StoryResponse> {
-  const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType } = request;
+  const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType, customPrompt } = request;
 
   const storyTemplate = biblicalEvent && biblicalEvent !== 'none' ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
   const bibleVerse = getBibleVerseByTheme(theme && theme !== 'none' ? theme : 'faith');
   
-  // Get user's API key and model upfront
-  const userApiKey = await storage.getUserOpenAIKey();
-  const userModel = await storage.getUserOpenAIModel();
+  // Get user's API key and model upfront - use a default userId of 1 for now
+  // In a real application, this would come from the authenticated user's session
+  const userId = 1; // Default user ID
+  const userApiKey = await storage.getUserOpenAIKey(userId);
+  const userModel = await storage.getUserOpenAIModel(userId);
   
   // Get character information if time travel is enabled
   let character = undefined;
@@ -55,7 +57,7 @@ export async function generateStoryWithOpenAI(request: StoryRequest): Promise<St
       throw new Error("OpenAI API key not found");
     }
 
-    const prompt = buildStoryPrompt(childName || "Child", gender || "boy", animal || "lion", theme, biblicalEvent, storyTemplate, useTimeTravel, character, storyType || "regular", heroOfFaithName);
+    const prompt = buildStoryPrompt(childName || "Child", gender || "boy", animal || "lion", theme, biblicalEvent, storyTemplate, useTimeTravel, character, storyType || "regular", heroOfFaithName, customPrompt);
     
     // System prompt that defines what kind of response we want
     const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author. Create wholesome, faith-based stories with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
@@ -69,6 +71,15 @@ Your stories should:
 6. If a time traveling character is specified, include them as an important part of the story
 7. Never include content from Mormon, Jehovah's Witness, or other non-orthodox Christian theologies
 8. End with a message about God's love that connects to the Bible verse that will be added later
+
+IMPORTANT STORYTELLING GUIDELINES:
+- Be CREATIVE with your story openings. AVOID generic openings like "Once upon a time" or "In a quaint little village"
+- Choose UNIQUE settings, time periods, and scenarios that fit the theme
+- Create DISTINCTIVE characters with memorable personalities and traits
+- Use VARIED sentence structures and vocabulary appropriate for children
+- Include UNEXPECTED but age-appropriate plot developments
+- If a custom prompt is provided, incorporate those elements while ensuring the story remains appropriate for children
+- NEVER use the same story structure repeatedly; each story should feel fresh and unique
 
 Format your response as valid JSON with the following structure:
     {
@@ -157,8 +168,10 @@ Format your response as valid JSON with the following structure:
 // Function to generate an image for a story using DALL-E
 export async function generateStoryImage(imagePrompt: string): Promise<string | undefined> {
   try {
-    // Get the user's API key (if they provided one)
-    const apiKey = await storage.getUserOpenAIKey();
+    // Get the user's API key (if they provided one) - use a default userId of 1 for now
+    // In a real application, this would come from the authenticated user's session
+    const userId = 1; // Default user ID
+    const apiKey = await storage.getUserOpenAIKey(userId);
     
     // Check if we have any API key to use (user's or environment)
     if (!apiKey && !process.env.OPENAI_API_KEY) {
@@ -235,8 +248,10 @@ function downloadImage(url: string, filepath: string): Promise<void> {
 // Function to analyze an image with OpenAI Vision API
 export async function analyzeImageWithOpenAI(imageBase64: string): Promise<string> {
   try {
-    // Get the user's API key (if they provided one)
-    const apiKey = await storage.getUserOpenAIKey();
+    // Get the user's API key (if they provided one) - use a default userId of 1 for now
+    // In a real application, this would come from the authenticated user's session
+    const userId = 1; // Default user ID
+    const apiKey = await storage.getUserOpenAIKey(userId);
     
     // Check if we have any API key to use (user's or environment)
     if (!apiKey && !process.env.OPENAI_API_KEY) {
@@ -290,7 +305,7 @@ export async function analyzeImageWithOpenAI(imageBase64: string): Promise<strin
   }
 }
 
-function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular", heroOfFaith?: string | undefined): string {
+function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular", heroOfFaith?: string | undefined, customPrompt?: string | undefined): string {
   let storyFormat = "bedtime story";
   if (storyType === "poem") {
     storyFormat = "bedtime poem with rhyming verses";
@@ -362,6 +377,15 @@ function buildStoryPrompt(childName: string, gender: string = "boy", animal: str
   }
   
   prompt += ` IMPORTANT: Ensure the story adheres ONLY to traditional orthodox Christian theology (Catholic, Orthodox, Protestant). Avoid ANY theological concepts from Mormon, Jehovah's Witness, or other non-traditional denominations. Focus on biblical teachings accepted in mainstream Christianity.`;
+
+  // Add the custom prompt if provided
+  if (customPrompt && customPrompt.trim() !== "") {
+    // Clean the prompt of any inappropriate content by adding a safety instruction
+    prompt += ` Additionally, the user has requested the following to be included in the story (while maintaining age-appropriate content and Christian values): ${customPrompt.trim()}`;
+    
+    // Add strong filtering instruction to ensure content remains appropriate
+    prompt += ` IMPORTANT: Filter any inappropriate content or themes from this custom request. ONLY include elements that are consistent with traditional Christian values and appropriate for young children. Completely ignore any requests for content that might be harmful, inappropriate, or contrary to wholesome Christian teachings.`;
+  }
 
   return prompt;
 }
