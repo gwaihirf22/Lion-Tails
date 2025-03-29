@@ -164,24 +164,30 @@ export function BookPage({
 
   return (
     <div className="w-full max-w-4xl mx-auto my-6 px-4">
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex-1">
-          {hasPrevPage && (
+      {/* Mobile-optimized top navigation */}
+      <div className="grid grid-cols-3 items-center mb-4 gap-1">
+        {/* Previous Button - Icon only on mobile, text on desktop */}
+        <div className="text-left">
+          {hasPrevPage ? (
             <Button 
               variant="ghost" 
+              size="sm"
               onClick={onPrevPage}
-              className="flex items-center gap-1"
+              className="flex items-center"
             >
               <ChevronLeft className="h-4 w-4" />
-              Previous Page
+              <span className="hidden sm:inline ml-1">Previous</span>
             </Button>
+          ) : (
+            <div className="w-8"></div>
           )}
         </div>
         
-        <div className="flex-1 text-center flex gap-2 justify-center">
+        {/* Center controls - Theme selector and color picker */}
+        <div className="flex justify-center items-center gap-1">
           <Select value={theme} onValueChange={(value: BookTheme) => setTheme(value)}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Select Theme" />
+            <SelectTrigger className="h-8 w-[110px] text-xs sm:text-sm sm:w-[140px]">
+              <SelectValue placeholder="Theme" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="classic">Classic</SelectItem>
@@ -197,7 +203,7 @@ export function BookPage({
           
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="icon" className="h-10 w-10">
+              <Button variant="outline" size="icon" className="h-8 w-8">
                 <Palette className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
@@ -232,16 +238,20 @@ export function BookPage({
           </Popover>
         </div>
         
-        <div className="flex-1 text-right">
-          {hasNextPage && (
+        {/* Next Button - Icon only on mobile, text on desktop */}
+        <div className="text-right">
+          {hasNextPage ? (
             <Button 
-              variant="ghost" 
+              variant="ghost"
+              size="sm"
               onClick={onNextPage}
-              className="flex items-center gap-1"
+              className="flex items-center"
             >
-              Next Page
+              <span className="hidden sm:inline mr-1">Next</span>
               <ChevronRight className="h-4 w-4" />
             </Button>
+          ) : (
+            <div className="w-8"></div>
           )}
         </div>
       </div>
