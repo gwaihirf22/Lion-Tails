@@ -175,7 +175,7 @@ export default function Header() {
                     size="sm"
                     onClick={() => logoutMutation.mutate()}
                     disabled={logoutMutation.isPending}
-                    className="text-white border-white/20 hover:bg-white/10 hover:text-white font-medium" {/*Added font-medium for better contrast */}
+                    className="text-white border-white/20 hover:bg-white/10 hover:text-white font-medium" /* Added font-medium for better contrast */
                   >
                     <LogOut className="mr-1 h-4 w-4" />
                     <span>Logout</span>
@@ -186,7 +186,7 @@ export default function Header() {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    className="text-white border-white/20 hover:bg-white/10 hover:text-white font-medium" {/*Added font-medium for better contrast */}
+                    className="text-white border-white/20 hover:bg-white/10 hover:text-white font-medium" /* Added font-medium for better contrast */
                   >
                     <User className="mr-1 h-4 w-4" />
                     <span>Login</span>
@@ -226,7 +226,7 @@ export default function Header() {
                       <button
                         onClick={() => logoutMutation.mutate()}
                         disabled={logoutMutation.isPending}
-                        className="flex items-center w-full text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full hover:bg-white/10 font-medium" {/*Added font-medium for better contrast */}
+                        className="flex items-center w-full text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full hover:bg-white/10 font-medium" /* Added font-medium for better contrast */
                       >
                         <LogOut className="mr-2 h-5 w-5" />
                         <span>Logout ({user.username})</span>
@@ -236,7 +236,7 @@ export default function Header() {
                     <li>
                       <Link
                         href="/auth"
-                        className="flex items-center text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full hover:bg-white/10 font-medium" {/*Added font-medium for better contrast */}
+                        className="flex items-center text-white hover:text-accent/90 duration-200 px-4 py-3 rounded-full hover:bg-white/10 font-medium" /* Added font-medium for better contrast */
                       >
                         <User className="mr-2 h-5 w-5" />
                         <span>Login / Register</span>
