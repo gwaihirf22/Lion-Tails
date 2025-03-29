@@ -23,7 +23,7 @@ export class DbStorage implements IStorage {
 
     // Set up session store with PostgreSQL
     this.sessionStore = new PostgresStore({
-      pool,
+      pool: pool as any, // type assertion to avoid Pool compatibility issues
       tableName: 'session',
       createTableIfMissing: true
     });
@@ -162,13 +162,14 @@ export class DbStorage implements IStorage {
             request: {
               theme: "",
               animal: "",
-              gender: "",
+              gender: "boy" as "boy" | "girl" | undefined,
               childName: "",
               storyType: "regular",
               heroOfFaith: "",
               customPrompt: "",
               biblicalEvent: "",
-              useTimeTravel: false
+              useTimeTravel: false,
+              useAnimal: true
             },
             createdAt: new Date(row.created_at) || new Date(),
             expiresAt: new Date(row.expires_at) || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
@@ -216,7 +217,7 @@ export class DbStorage implements IStorage {
           return {
             id: row.character_id || "unknown",
             name: "Unknown Character",
-            gender: "unknown",
+            gender: "boy" as "boy" | "girl", // Default to boy to match schema
             age: 0,
             hairColor: "",
             eyeColor: "",
@@ -257,7 +258,7 @@ export class DbStorage implements IStorage {
         return {
           id: id,
           name: "Unknown Character",
-          gender: "unknown",
+          gender: "boy" as "boy" | "girl", // Default to boy to match schema
           age: 0,
           hairColor: "",
           eyeColor: "",
@@ -266,7 +267,7 @@ export class DbStorage implements IStorage {
           specialAbility: "",
           personality: "",
           backstory: "",
-          createdAt: new Date(rows[0].created_at) || new Date()
+          createdAt: (new Date(rows[0].created_at) || new Date()).toISOString()
         };
       }
     } catch (error) {
@@ -318,7 +319,7 @@ export class DbStorage implements IStorage {
       [id]
     );
     
-    return result.rowCount > 0;
+    return (result.rowCount || 0) > 0;
   }
 
   // Song methods - implementing temporary JSON storage
@@ -451,13 +452,14 @@ export class DbStorage implements IStorage {
             request: {
               theme: "",
               animal: "",
-              gender: "",
+              gender: "boy" as "boy" | "girl" | undefined,
               childName: "",
               storyType: "regular",
               heroOfFaith: "",
               customPrompt: "",
               biblicalEvent: "",
-              useTimeTravel: false
+              useTimeTravel: false,
+              useAnimal: true
             },
             createdAt: new Date(row.created_at) || new Date(),
             expiresAt: new Date(row.expires_at) || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
@@ -508,13 +510,14 @@ export class DbStorage implements IStorage {
           request: {
             theme: "",
             animal: "",
-            gender: "",
+            gender: "boy" as "boy" | "girl" | undefined,
             childName: "",
             storyType: "regular",
             heroOfFaith: "",
             customPrompt: "",
             biblicalEvent: "",
-            useTimeTravel: false
+            useTimeTravel: false,
+            useAnimal: true
           },
           createdAt: new Date(rows[0].created_at).toISOString() || new Date().toISOString(),
           expiresAt: rows[0].expires_at ? new Date(rows[0].expires_at).toISOString() : undefined,
@@ -586,7 +589,7 @@ export class DbStorage implements IStorage {
       [id, userId]
     );
     
-    return result.rowCount > 0;
+    return (result.rowCount || 0) > 0;
   }
   
   // Usage tracking methods
@@ -813,7 +816,7 @@ export class DbStorage implements IStorage {
       [id]
     );
     
-    return result.rowCount! > 0;
+    return (result.rowCount || 0) > 0;
   }
   
   // Hero Stories Library methods
@@ -982,7 +985,7 @@ export class DbStorage implements IStorage {
         [id]
       );
       
-      return result.rowCount! > 0;
+      return (result.rowCount || 0) > 0;
     } catch (error) {
       console.error(`Error deleting hero story with ID ${id}:`, error);
       return false;
