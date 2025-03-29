@@ -126,45 +126,153 @@ export class DbStorage implements IStorage {
 
   // User stories method - implementing temporary JSON storage until we create proper relations
   async getUserStories(userId: number): Promise<SavedStory[]> {
-    // We'll use a raw query for now to store/retrieve JSON
-    // Later we'll create proper relational tables
-    const { rows } = await pool.query(
-      `SELECT * FROM user_stories WHERE user_id = $1 AND 
-       (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
-       ORDER BY created_at DESC`,
-      [userId]
-    );
-    
-    if (!rows.length) return [];
-    
-    return rows.map(row => JSON.parse(row.story_data));
+    try {
+      // We'll use a raw query for now to store/retrieve JSON
+      // Later we'll create proper relational tables
+      const { rows } = await pool.query(
+        `SELECT * FROM user_stories WHERE user_id = $1 AND 
+         (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
+         ORDER BY created_at DESC`,
+        [userId]
+      );
+      
+      if (!rows.length) return [];
+      
+      return rows.map(row => {
+        try {
+          // Handle the case where data might already be an object
+          if (typeof row.story_data === 'object' && row.story_data !== null) {
+            return row.story_data;
+          }
+          // Handle the string format with proper error handling
+          return JSON.parse(row.story_data);
+        } catch (parseError) {
+          console.error("Error parsing story data:", parseError);
+          // Return a default story object to prevent app crashes
+          return {
+            id: row.story_id || "unknown",
+            story: {
+              title: "Story Data Error",
+              content: "There was a problem loading this story. The data may be corrupted.",
+              bibleVerse: {
+                text: "The Lord is my helper; I will not fear.",
+                reference: "Hebrews 13:6"
+              }
+            },
+            request: {
+              theme: "",
+              animal: "",
+              gender: "",
+              childName: "",
+              storyType: "regular",
+              heroOfFaith: "",
+              customPrompt: "",
+              biblicalEvent: "",
+              useTimeTravel: false
+            },
+            createdAt: new Date(row.created_at) || new Date(),
+            expiresAt: new Date(row.expires_at) || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            isFavorite: !!row.is_favorite
+          };
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching user stories:", error);
+      return [];
+    }
   }
 
   // Character related methods - implementing temporary JSON storage
   async getAllCharacters(userId?: number): Promise<Character[]> {
-    if (userId) {
-      const { rows } = await pool.query(
-        `SELECT * FROM user_characters WHERE user_id = $1 ORDER BY created_at DESC`,
-        [userId]
-      );
-      return rows.map(row => JSON.parse(row.character_data));
-    } else {
-      // Admin function to get all characters
-      const { rows } = await pool.query(
-        `SELECT * FROM user_characters ORDER BY created_at DESC`
-      );
-      return rows.map(row => JSON.parse(row.character_data));
+    try {
+      let rows: any[];
+      if (userId) {
+        const result = await pool.query(
+          `SELECT * FROM user_characters WHERE user_id = $1 ORDER BY created_at DESC`,
+          [userId]
+        );
+        rows = result.rows;
+      } else {
+        // Admin function to get all characters
+        const result = await pool.query(
+          `SELECT * FROM user_characters ORDER BY created_at DESC`
+        );
+        rows = result.rows;
+      }
+      
+      if (!rows.length) return [];
+      
+      return rows.map(row => {
+        try {
+          // Handle the case where data might already be an object
+          if (typeof row.character_data === 'object' && row.character_data !== null) {
+            return row.character_data;
+          }
+          // Handle the string format with proper error handling
+          return JSON.parse(row.character_data);
+        } catch (parseError) {
+          console.error("Error parsing character data:", parseError);
+          // Return a default object to prevent app crashes
+          return {
+            id: row.character_id || "unknown",
+            name: "Unknown Character",
+            gender: "unknown",
+            age: 0,
+            hairColor: "",
+            eyeColor: "",
+            outfit: "",
+            favoriteActivity: "",
+            specialAbility: "",
+            personality: "",
+            backstory: "",
+            createdAt: new Date(row.created_at) || new Date()
+          };
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching characters:", error);
+      return [];
     }
   }
 
   async getCharacterById(id: string): Promise<Character | undefined> {
-    const { rows } = await pool.query(
-      `SELECT * FROM user_characters WHERE character_id = $1`,
-      [id]
-    );
-    
-    if (!rows.length) return undefined;
-    return JSON.parse(rows[0].character_data);
+    try {
+      const { rows } = await pool.query(
+        `SELECT * FROM user_characters WHERE character_id = $1`,
+        [id]
+      );
+      
+      if (!rows.length) return undefined;
+      
+      try {
+        // Handle the case where data might already be an object
+        if (typeof rows[0].character_data === 'object' && rows[0].character_data !== null) {
+          return rows[0].character_data;
+        }
+        // Handle the string format with proper error handling
+        return JSON.parse(rows[0].character_data);
+      } catch (parseError) {
+        console.error("Error parsing character data:", parseError);
+        // Return a default object to prevent app crashes
+        return {
+          id: id,
+          name: "Unknown Character",
+          gender: "unknown",
+          age: 0,
+          hairColor: "",
+          eyeColor: "",
+          outfit: "",
+          favoriteActivity: "",
+          specialAbility: "",
+          personality: "",
+          backstory: "",
+          createdAt: new Date(rows[0].created_at) || new Date()
+        };
+      }
+    } catch (error) {
+      console.error(`Error fetching character by ID ${id}:`, error);
+      return undefined;
+    }
   }
 
   async createCharacter(characterData: Omit<Character, "id" | "createdAt">, userId: number): Promise<Character> {
@@ -215,32 +323,92 @@ export class DbStorage implements IStorage {
 
   // Song methods - implementing temporary JSON storage
   async getAllSongs(): Promise<Song[]> {
-    const { rows } = await pool.query(
-      `SELECT * FROM songs ORDER BY title ASC`
-    );
-    
-    return rows.map(row => JSON.parse(row.song_data));
+    try {
+      const { rows } = await pool.query(
+        `SELECT * FROM songs ORDER BY title ASC`
+      );
+      
+      if (!rows.length) return [];
+      
+      return rows.map(row => {
+        try {
+          // Handle the case where data might already be an object
+          if (typeof row.song_data === 'object' && row.song_data !== null) {
+            return row.song_data;
+          }
+          // Handle the string format with proper error handling
+          return JSON.parse(row.song_data);
+        } catch (parseError) {
+          console.error("Error parsing song data:", parseError);
+          // Return a default song object to prevent app crashes
+          return {
+            id: row.song_id || "unknown",
+            title: "Song Data Error",
+            artist: "Unknown",
+            verses: [{ lyrics: ["Data could not be parsed"], chords: [""] }],
+            chorus: null,
+            bridge: null,
+            chords: [],
+            backgroundColor: "#f8f9fa"
+          };
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching songs:", error);
+      return [];
+    }
   }
 
   async getSongById(id: string): Promise<Song | undefined> {
-    const { rows } = await pool.query(
-      `SELECT * FROM songs WHERE song_id = $1`,
-      [id]
-    );
-    
-    if (!rows.length) return undefined;
-    return JSON.parse(rows[0].song_data);
+    try {
+      const { rows } = await pool.query(
+        `SELECT * FROM songs WHERE song_id = $1`,
+        [id]
+      );
+      
+      if (!rows.length) return undefined;
+      
+      try {
+        // Handle the case where data might already be an object
+        if (typeof rows[0].song_data === 'object' && rows[0].song_data !== null) {
+          return rows[0].song_data;
+        }
+        // Handle the string format with proper error handling
+        return JSON.parse(rows[0].song_data);
+      } catch (parseError) {
+        console.error("Error parsing song data:", parseError);
+        // Return a default song object to prevent app crashes
+        return {
+          id: id,
+          title: "Song Data Error",
+          artist: "Unknown",
+          verses: [{ lyrics: ["Data could not be parsed"], chords: [""] }],
+          chorus: null,
+          bridge: null,
+          chords: [],
+          backgroundColor: "#f8f9fa"
+        };
+      }
+    } catch (error) {
+      console.error(`Error fetching song by ID ${id}:`, error);
+      return undefined;
+    }
   }
   
   async createSong(song: Song): Promise<Song> {
-    const songWithId = song.id ? song : { ...song, id: uuidv4() };
-    
-    await pool.query(
-      `INSERT INTO songs (song_id, song_data) VALUES ($1, $2)`,
-      [songWithId.id, JSON.stringify(songWithId)]
-    );
-    
-    return songWithId;
+    try {
+      const songWithId = song.id ? song : { ...song, id: uuidv4() };
+      
+      await pool.query(
+        `INSERT INTO songs (song_id, song_data) VALUES ($1, $2)`,
+        [songWithId.id, JSON.stringify(songWithId)]
+      );
+      
+      return songWithId;
+    } catch (error) {
+      console.error("Error creating song:", error);
+      throw error; // Rethrow to allow caller to handle appropriately
+    }
   }
   
   // Story methods
@@ -249,29 +417,114 @@ export class DbStorage implements IStorage {
       return this.getUserStories(userId);
     }
     
-    // Admin function - get all stories
-    const { rows } = await pool.query(
-      `SELECT * FROM user_stories WHERE 
-       is_favorite = true OR expires_at IS NULL OR expires_at > NOW()
-       ORDER BY created_at DESC`
-    );
-    
-    return rows.map(row => JSON.parse(row.story_data));
+    try {
+      // Admin function - get all stories
+      const { rows } = await pool.query(
+        `SELECT * FROM user_stories WHERE 
+         is_favorite = true OR expires_at IS NULL OR expires_at > NOW()
+         ORDER BY created_at DESC`
+      );
+      
+      if (!rows.length) return [];
+      
+      return rows.map(row => {
+        try {
+          // Handle the case where data might already be an object
+          if (typeof row.story_data === 'object' && row.story_data !== null) {
+            return row.story_data;
+          }
+          // Handle the string format with proper error handling
+          return JSON.parse(row.story_data);
+        } catch (parseError) {
+          console.error("Error parsing story data:", parseError);
+          // Return a default story object to prevent app crashes
+          return {
+            id: row.story_id || "unknown",
+            story: {
+              title: "Story Data Error",
+              content: "There was a problem loading this story. The data may be corrupted.",
+              bibleVerse: {
+                text: "The Lord is my helper; I will not fear.",
+                reference: "Hebrews 13:6"
+              }
+            },
+            request: {
+              theme: "",
+              animal: "",
+              gender: "",
+              childName: "",
+              storyType: "regular",
+              heroOfFaith: "",
+              customPrompt: "",
+              biblicalEvent: "",
+              useTimeTravel: false
+            },
+            createdAt: new Date(row.created_at) || new Date(),
+            expiresAt: new Date(row.expires_at) || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            isFavorite: !!row.is_favorite
+          };
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching all stories:", error);
+      return [];
+    }
   }
   
   async getStoryById(id: string, userId?: number): Promise<SavedStory | undefined> {
-    let query = `SELECT * FROM user_stories WHERE story_id = $1`;
-    const params: any[] = [id];
-    
-    if (userId) {
-      query += ` AND user_id = $2`;
-      params.push(userId);
+    try {
+      let query = `SELECT * FROM user_stories WHERE story_id = $1`;
+      const params: any[] = [id];
+      
+      if (userId) {
+        query += ` AND user_id = $2`;
+        params.push(userId);
+      }
+      
+      const { rows } = await pool.query(query, params);
+      
+      if (!rows.length) return undefined;
+      
+      try {
+        // Handle the case where data might already be an object
+        if (typeof rows[0].story_data === 'object' && rows[0].story_data !== null) {
+          return rows[0].story_data;
+        }
+        // Handle the string format with proper error handling
+        return JSON.parse(rows[0].story_data);
+      } catch (parseError) {
+        console.error("Error parsing story data:", parseError);
+        // Return a default story object to prevent app crashes
+        return {
+          id: id,
+          story: {
+            title: "Story Data Error",
+            content: "There was a problem loading this story. The data may be corrupted.",
+            bibleVerse: {
+              text: "The Lord is my helper; I will not fear.",
+              reference: "Hebrews 13:6"
+            }
+          },
+          request: {
+            theme: "",
+            animal: "",
+            gender: "",
+            childName: "",
+            storyType: "regular",
+            heroOfFaith: "",
+            customPrompt: "",
+            biblicalEvent: "",
+            useTimeTravel: false
+          },
+          createdAt: new Date(rows[0].created_at).toISOString() || new Date().toISOString(),
+          expiresAt: rows[0].expires_at ? new Date(rows[0].expires_at).toISOString() : undefined,
+          isFavorite: !!rows[0].is_favorite
+        };
+      }
+    } catch (error) {
+      console.error(`Error fetching story by ID ${id}:`, error);
+      return undefined;
     }
-    
-    const { rows } = await pool.query(query, params);
-    
-    if (!rows.length) return undefined;
-    return JSON.parse(rows[0].story_data);
   }
   
   async saveStory(story: StoryResponse, request: StoryRequest, userId: number): Promise<SavedStory> {
@@ -437,7 +690,37 @@ export class DbStorage implements IStorage {
         `SELECT * FROM heroes_of_faith ORDER BY hero_id ASC`
       );
       
-      return rows.length ? rows.map(row => JSON.parse(row.hero_data)) : [];
+      if (!rows.length) return [];
+      
+      return rows.map(row => {
+        try {
+          // Handle the case where data might already be an object
+          if (typeof row.hero_data === 'object' && row.hero_data !== null) {
+            return row.hero_data;
+          }
+          // Handle the string format with proper error handling
+          return JSON.parse(row.hero_data);
+        } catch (parseError) {
+          console.error("Error parsing hero data:", parseError);
+          // Return a default object to prevent app crashes
+          return {
+            id: row.hero_id || "unknown",
+            name: "Unknown Hero",
+            description: "Data could not be parsed",
+            timePeriod: "",
+            contribution: "",
+            birthYear: "",
+            deathYear: "",
+            famousQuote: "",
+            bibleVerse: {
+              text: "The Lord is my helper; I will not fear.",
+              reference: "Hebrews 13:6"
+            },
+            imageUrl: "",
+            createdAt: new Date()
+          };
+        }
+      });
     } catch (error) {
       console.error("Error fetching heroes of faith:", error);
       // Return empty array instead of throwing to prevent app crashes
@@ -446,13 +729,45 @@ export class DbStorage implements IStorage {
   }
 
   async getHeroOfFaithById(id: string): Promise<HeroOfFaith | undefined> {
-    const { rows } = await pool.query(
-      `SELECT * FROM heroes_of_faith WHERE hero_id = $1`,
-      [id]
-    );
-    
-    if (!rows.length) return undefined;
-    return JSON.parse(rows[0].hero_data);
+    try {
+      const { rows } = await pool.query(
+        `SELECT * FROM heroes_of_faith WHERE hero_id = $1`,
+        [id]
+      );
+      
+      if (!rows.length) return undefined;
+      
+      try {
+        // Handle the case where data might already be an object
+        if (typeof rows[0].hero_data === 'object' && rows[0].hero_data !== null) {
+          return rows[0].hero_data;
+        }
+        // Handle the string format with proper error handling
+        return JSON.parse(rows[0].hero_data);
+      } catch (parseError) {
+        console.error("Error parsing hero data:", parseError);
+        // Return a default object to prevent app crashes
+        return {
+          id: id,
+          name: "Unknown Hero",
+          description: "Data could not be parsed",
+          timePeriod: "",
+          contribution: "",
+          birthYear: "",
+          deathYear: "",
+          famousQuote: "",
+          bibleVerse: {
+            text: "The Lord is my helper; I will not fear.",
+            reference: "Hebrews 13:6"
+          },
+          imageUrl: "",
+          createdAt: new Date()
+        };
+      }
+    } catch (error) {
+      console.error(`Error fetching hero of faith by ID ${id}:`, error);
+      return undefined;
+    }
   }
 
   async createHeroOfFaith(heroData: Omit<HeroOfFaith, "id" | "createdAt">): Promise<HeroOfFaith> {
