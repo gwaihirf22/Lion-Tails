@@ -426,6 +426,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Update song by ID
+  app.patch("/api/songs/:id", async (req, res) => {
+    try {
+      const songId = req.params.id;
+      
+      // Get the current song from data
+      const existingSong = songs.find(song => song.id === songId);
+      
+      if (!existingSong) {
+        return res.status(404).json({ message: "Song not found" });
+      }
+      
+      // Update the song with the new data
+      const updatedSong = {
+        ...existingSong,
+        ...req.body,
+        id: songId, // Ensure ID doesn't change
+      };
+      
+      // Find the index of the song to update
+      const songIndex = songs.findIndex(song => song.id === songId);
+      
+      // Replace the song in the array
+      songs[songIndex] = updatedSong;
+      
+      res.json(updatedSong);
+    } catch (error) {
+      console.error("Error updating song:", error);
+      res.status(500).json({ message: "Failed to update song" });
+    }
+  });
+  
   // API routes for OpenAI settings - all require authentication
   
   // Get user's OpenAI API key (note: we never return the actual key for security, just if it exists)
