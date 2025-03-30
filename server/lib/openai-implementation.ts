@@ -28,7 +28,7 @@ function getOpenAIClient(apiKey?: string | null) {
 }
 
 export async function generateStoryWithOpenAI(request: StoryRequest, userId: number = 1): Promise<StoryResponse> {
-  const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType, customPrompt, useAnimal } = request;
+  const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType, customPrompt, useAnimal, biblePassage } = request;
 
   const storyTemplate = biblicalEvent && biblicalEvent !== 'none' ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
   const bibleVerse = getBibleVerseByTheme(theme && theme !== 'none' ? theme : 'faith');
@@ -76,13 +76,14 @@ export async function generateStoryWithOpenAI(request: StoryRequest, userId: num
       storyType || "regular", 
       heroOfFaithName, 
       customPrompt,
-      useAnimal // Pass the useAnimal toggle value
+      useAnimal, // Pass the useAnimal toggle value
+      biblePassage // Pass the Bible passage
     );
     
     // System prompt that defines what kind of response we want
-    const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author. Create wholesome, faith-based stories with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
+    const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author and Bible teacher. Create wholesome, faith-based stories and Bible teachings with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
     
-Your stories should:
+Your content should:
 1. Be at least 1000 words in length
 2. Include clear moral lessons based on Christian values
 3. Be appropriate for children ages 3-10
@@ -92,6 +93,10 @@ Your stories should:
 7. If a time traveling character is specified, include them as an important part of the story
 8. Never include content from Mormon, Jehovah's Witness, or other non-orthodox Christian theologies
 9. End with a message about God's love that connects to the Bible verse that will be added later
+10. When a specific Bible passage is provided, create either:
+   a. A detailed narrative retelling of the passage if it contains a story
+   b. A clear, educational explanation of the passage's meaning if it's theological/teaching content
+   c. Include at least 2 references to credible Christian sources (scholars, theologians, websites)
 
 IMPORTANT STORYTELLING GUIDELINES:
 - Be CREATIVE with your story openings. AVOID generic openings like "Once upon a time" or "In a quaint little village"
@@ -102,6 +107,7 @@ IMPORTANT STORYTELLING GUIDELINES:
 - For biblical narratives, maintain historical accuracy while using engaging storytelling techniques
 - If a custom prompt is provided, incorporate those elements while ensuring the story remains appropriate for children
 - NEVER use the same story structure repeatedly; each story should feel fresh and unique
+- When creating content for a specific Bible passage, focus on making the theological content understandable to children while maintaining accuracy
 
 Format your response as valid JSON with the following structure:
     {
@@ -171,7 +177,9 @@ Format your response as valid JSON with the following structure:
     // Get the image prompt with fallback
     let fallbackImagePrompt = '';
     
-    if (storyType === "biblical_narrative") {
+    if (biblePassage && biblePassage.trim() !== "" && biblePassage !== 'none') {
+      fallbackImagePrompt = `A biblical scene depicting ${biblePassage} in historically accurate detail`;
+    } else if (storyType === "biblical_narrative") {
       fallbackImagePrompt = biblicalEvent ? 
         `A biblical scene depicting ${biblicalEvent} in historically accurate detail` : 
         `A historically accurate biblical scene`;
@@ -199,7 +207,9 @@ Format your response as valid JSON with the following structure:
     
     // Prepare default title for different story types
     let defaultTitle = '';
-    if (storyType === "biblical_narrative") {
+    if (biblePassage && biblePassage.trim() !== "" && biblePassage !== 'none') {
+      defaultTitle = `Understanding ${biblePassage}`;
+    } else if (storyType === "biblical_narrative") {
       defaultTitle = biblicalEvent ? 
         `The Story of ${biblicalEvent}` : 
         `Biblical Narrative`;
@@ -357,7 +367,7 @@ export async function analyzeImageWithOpenAI(imageBase64: string, userId: number
   }
 }
 
-function buildStoryPrompt(childName: string = "", gender: string = "boy", animal: string = "", theme: string = "", biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular", heroOfFaith?: string | undefined, customPrompt?: string | undefined, useAnimal?: boolean): string {
+function buildStoryPrompt(childName: string = "", gender: string = "boy", animal: string = "", theme: string = "", biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular", heroOfFaith?: string | undefined, customPrompt?: string | undefined, useAnimal?: boolean, biblePassage?: string | undefined): string {
   let storyFormat = "bedtime story";
   
   // Determine story format based on type
@@ -459,6 +469,17 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
   }
   
   prompt += ` IMPORTANT: Ensure the story adheres ONLY to traditional orthodox Christian theology (Catholic, Orthodox, Protestant). Avoid ANY theological concepts from Mormon, Jehovah's Witness, or other non-traditional denominations. Focus on biblical teachings accepted in mainstream Christianity.`;
+
+  // Add Bible passage if provided
+  if (biblePassage && biblePassage.trim() !== "" && biblePassage !== 'none') {
+    prompt += ` IMPORTANT: This request is specifically focused on the Bible passage "${biblePassage}". 
+    
+    Create a detailed explanation and narrative about this passage. If it's a narrative passage, create a story that faithfully retells the events with historical accuracy and engaging details. If it's not a narrative passage (like Psalms, Proverbs, or Epistles), provide educational and insightful information about its meaning, context, and the lessons it teaches.
+    
+    Include at least 2 references to credible Christian sources or commentaries about this passage. These should be from well-known Christian theologians, Bible scholars, or respected Christian websites. Format these as proper citations at the end of the content.
+    
+    Make sure to explain the spiritual and moral lessons from this passage in a way that's understandable to children. Regardless of whether it's a narrative or teaching passage, focus on making the biblical content engaging, accurate, and educational.`;
+  }
 
   // Add the custom prompt if provided
   if (customPrompt && customPrompt.trim() !== "") {
