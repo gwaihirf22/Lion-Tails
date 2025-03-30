@@ -370,11 +370,73 @@ export function BookPage({
         
         {/* Content */}
         <div className={cn("prose max-w-none", styles.textClass)}>
-          {paragraphs.map((paragraph, index) => (
-            <p key={index} className="mb-4 leading-relaxed text-base md:text-lg">
-              {paragraph}
-            </p>
-          ))}
+          {paragraphs.map((paragraph, index) => {
+            // Check if the paragraph contains "For Further Learning:" and render links
+            if (paragraph.includes("For Further Learning:") || paragraph.includes("For Further Learning")) {
+              // Split the paragraph into sections
+              // First extract the whole "For Further Learning:" section
+              const learningSection = paragraph.split("For Further Learning:")[1] || paragraph.split("For Further Learning")[1] || paragraph;
+              // Then split by website mentions or bullet points
+              const lines = learningSection.split(/(?=- \*\*[A-Za-z0-9]+\.(com|org)\*\*)|(?=\*\*[A-Za-z0-9]+\.(com|org)\*\*)/).map(line => line.trim());
+              
+              return (
+                <div key={index} className="mb-6 mt-6 p-4 bg-primary/5 rounded-md border border-primary/10">
+                  <h3 className="font-bold text-lg mb-3 text-primary">For Further Learning:</h3>
+                  <ul className="space-y-2 list-disc pl-5">
+                    {lines.filter(line => line.includes(".com") || line.includes(".org")).map((line, i) => {
+                      // Extract the website URL - handle more formats
+                      // Try different patterns: BibleGateway.com, Bible-Gateway.com, BibleProject.com etc.
+                      const match = line.match(/([A-Za-z0-9-]+\.(com|org))/i);
+                      // For hyphenated domains, also look for standard formats like "Bible Gateway"
+                      const textMatch = !match && line.match(/([A-Za-z]+[\s-][A-Za-z]+)\s/i);
+                      if (match) {
+                        const site = match[0];
+                        // Make sure we have www. in front
+                        const url = site.toLowerCase().startsWith("www.") ? 
+                          `https://${site}` : 
+                          `https://www.${site}`;
+                        
+                        // Clean up the line text
+                        const cleanLine = line.replace(/^-\s*/, '').replace(/\*\*/g, '');
+                        
+                        // Get the description part after the site
+                        let description = "";
+                        const parts = cleanLine.split(site);
+                        if (parts.length > 1) {
+                          // Extract the description after the site name
+                          description = parts[1].replace(/^[:\s-]+/, '').trim();
+                        } else {
+                          // If no split, use the whole line without the site
+                          description = cleanLine.replace(site, '').replace(/^[:\s-]+/, '').trim();
+                        }
+                        
+                        return (
+                          <li key={i}>
+                            <a 
+                              href={url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline font-medium"
+                            >
+                              {site}
+                            </a>
+                            {description && <span> - {description}</span>}
+                          </li>
+                        );
+                      }
+                      return null;
+                    }).filter(Boolean)}
+                  </ul>
+                </div>
+              );
+            }
+            // For all other paragraphs, render normally
+            return (
+              <p key={index} className="mb-4 leading-relaxed text-base md:text-lg">
+                {paragraph}
+              </p>
+            );
+          })}
           
           {/* Bible verse with floral decoration */}
           {verseText && (
