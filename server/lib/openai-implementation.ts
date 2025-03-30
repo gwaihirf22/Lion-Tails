@@ -233,10 +233,46 @@ Format your response as valid JSON with the following structure:
       defaultTitle = childName ? `${childName}'s Biblical Adventure` : `Biblical Adventure`;
     }
     
+    // Check if the content includes "For Further Learning:" section
+    let finalContent = jsonContent.content || responseContent;
+    
+    // If "For Further Learning:" section is missing, add it
+    if (!finalContent.includes("For Further Learning:") && !finalContent.includes("For Further Learning")) {
+      // Add default further learning section based on story type
+      let furtherLearningSection = "\n\n**For Further Learning:**\n\n";
+      
+      if (biblePassage && biblePassage.trim() !== "" && biblePassage !== 'none') {
+        furtherLearningSection += `- **BibleGateway.com** - Read ${biblePassage} in multiple translations and access study notes about this passage.\n`;
+        furtherLearningSection += `- **BibleStudyTools.com** - Find commentary and historical context for ${biblePassage}.\n`;
+        furtherLearningSection += `- **GotQuestions.org** - Find answers to common questions about the themes in ${biblePassage}.`;
+      } else if (storyType === "biblical_narrative") {
+        if (biblicalEvent && biblicalEvent !== 'none' && biblicalEvent !== '') {
+          furtherLearningSection += `- **BibleProject.com** - Watch animated videos explaining the biblical narrative of ${biblicalEvent}.\n`;
+          furtherLearningSection += `- **BibleGateway.com** - Read the full biblical account of ${biblicalEvent} in multiple translations.\n`;
+          furtherLearningSection += `- **Biblehub.com** - Access commentaries and historical context about ${biblicalEvent}.`;
+        } else {
+          furtherLearningSection += `- **BibleProject.com** - Watch animated videos explaining biblical narratives and themes.\n`;
+          furtherLearningSection += `- **BibleGateway.com** - Read the full biblical accounts in multiple translations.\n`;
+          furtherLearningSection += `- **Christianity.com** - Learn more about biblical stories and their historical contexts.`;
+        }
+      } else if (heroOfFaith && heroOfFaith !== 'none' && heroOfFaith !== '') {
+        furtherLearningSection += `- **Christianity.com** - Learn more about the life and impact of ${heroOfFaith}.\n`;
+        furtherLearningSection += `- **Crosswalk.com** - Explore articles about ${heroOfFaith} and other heroes of the faith.\n`;
+        furtherLearningSection += `- **TheGospelCoalition.org** - Find resources about how ${heroOfFaith}'s example applies to Christian living today.`;
+      } else {
+        // General Christian themes
+        furtherLearningSection += `- **BibleGateway.com** - Read Bible stories and passages in child-friendly translations.\n`;
+        furtherLearningSection += `- **GotQuestions.org** - Find answers to questions about Christian faith in simple language.\n`;
+        furtherLearningSection += `- **BibleProject.com** - Watch animated videos that explain biblical concepts for all ages.`;
+      }
+      
+      finalContent += furtherLearningSection;
+    }
+    
     // Return the story with the bible verse and image
     return {
       title: jsonContent.title || defaultTitle,
-      content: jsonContent.content || responseContent,
+      content: finalContent,
       bibleVerse: bibleVerse,
       imagePrompt: imagePrompt,
       imageUrl: imageUrl || undefined
