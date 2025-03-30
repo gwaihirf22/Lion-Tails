@@ -16,12 +16,20 @@ export default function StoryGeneratorTabs({ onSubmit, loading = false }: StoryG
       <h2 className="text-3xl font-heading font-bold text-center text-secondary mb-6">Create a Story</h2>
       
       <Tabs defaultValue="children" onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-2 mb-6">
-          <TabsTrigger value="children" className="text-lg py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-100 data-[state=active]:to-purple-100">
-            Children's Stories
+        <TabsList className="grid grid-cols-2 mb-6 gap-1 p-1">
+          <TabsTrigger 
+            value="children" 
+            className="text-sm sm:text-base lg:text-lg py-2 sm:py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-100 data-[state=active]:to-purple-100 whitespace-normal h-auto"
+          >
+            <span className="block sm:hidden">Children's</span>
+            <span className="hidden sm:block">Children's Stories</span>
           </TabsTrigger>
-          <TabsTrigger value="historical" className="text-lg py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-100 data-[state=active]:to-orange-100">
-            Historical & Biblical Stories
+          <TabsTrigger 
+            value="historical" 
+            className="text-sm sm:text-base lg:text-lg py-2 sm:py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-100 data-[state=active]:to-orange-100 whitespace-normal h-auto"
+          >
+            <span className="block sm:hidden">Historical</span>
+            <span className="hidden sm:block">Historical & Biblical</span>
           </TabsTrigger>
         </TabsList>
         
