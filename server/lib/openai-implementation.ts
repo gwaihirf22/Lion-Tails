@@ -97,6 +97,21 @@ Your content should:
    a. A detailed narrative retelling of the passage if it contains a story
    b. A clear, educational explanation of the passage's meaning if it's theological/teaching content
    c. Include at least 2 references to credible Christian sources (scholars, theologians, websites)
+11. ALWAYS end ALL stories with a "Further Learning" section that contains 2-3 credible Christian websites where readers can learn more about the biblical concepts, characters, or themes in the story. These must be actual legitimate websites such as:
+   - BibleGateway.com
+   - GotQuestions.org
+   - BibleStudyTools.com 
+   - Christianity.com
+   - BlueLetterBible.org
+   - Bible.org
+   - Biblehub.com
+   - ReasonableTheology.org
+   - Ligonier.org
+   - DesiringGod.org
+   - TheGospelCoalition.org
+   - Crosswalk.com
+   - BibleProject.com
+   Format this section as "For Further Learning:" followed by website names and brief descriptions of what readers will find there related to this specific story's content.
 
 IMPORTANT STORYTELLING GUIDELINES:
 - Be CREATIVE with your story openings. AVOID generic openings like "Once upon a time" or "In a quaint little village"
@@ -108,6 +123,7 @@ IMPORTANT STORYTELLING GUIDELINES:
 - If a custom prompt is provided, incorporate those elements while ensuring the story remains appropriate for children
 - NEVER use the same story structure repeatedly; each story should feel fresh and unique
 - When creating content for a specific Bible passage, focus on making the theological content understandable to children while maintaining accuracy
+- Ensure the Further Learning websites are specifically relevant to the story's central themes or biblical characters
 
 Format your response as valid JSON with the following structure:
     {
@@ -468,7 +484,9 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
     }
   }
   
-  prompt += ` IMPORTANT: Ensure the story adheres ONLY to traditional orthodox Christian theology (Catholic, Orthodox, Protestant). Avoid ANY theological concepts from Mormon, Jehovah's Witness, or other non-traditional denominations. Focus on biblical teachings accepted in mainstream Christianity.`;
+  prompt += ` IMPORTANT: Ensure the story adheres ONLY to traditional orthodox Christian theology (Catholic, Orthodox, Protestant). Avoid ANY theological concepts from Mormon, Jehovah's Witness, or other non-traditional denominations. Focus on biblical teachings accepted in mainstream Christianity.
+  
+  REMEMBER: End ALL stories with a "For Further Learning:" section that lists 2-3 credible Christian websites where parents and children can learn more about the specific biblical concepts, characters, or themes in this story. Include brief descriptions of what they'll find on each site relevant to THIS specific story's content.`;
 
   // Add Bible passage if provided
   if (biblePassage && biblePassage.trim() !== "" && biblePassage !== 'none') {
