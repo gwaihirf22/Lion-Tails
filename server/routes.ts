@@ -566,17 +566,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existingHeroes.length === 0) {
         console.log("Initializing Heroes of Faith data");
         for (const hero of heroesOfFaithData) {
-          await storage.createHeroOfFaith({
-            name: hero.name,
-            description: hero.description,
-            timePeriod: hero.timePeriod,
-            contribution: hero.contribution,
-            birthYear: hero.birthYear,
-            deathYear: hero.deathYear,
-            famousQuote: hero.famousQuote,
-            bibleVerse: hero.bibleVerse,
-            imageUrl: hero.imageUrl
-          });
+          try {
+            // Pass hero directly as it's already a HeroOfFaith type
+            await storage.createHeroOfFaith(hero);
+          } catch (err) {
+            console.error(`Failed to create hero: ${hero.name}`, err);
+          }
         }
       }
     } catch (error) {
@@ -977,6 +972,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error toggling hero story featured status:", error);
       res.status(500).json({ message: "Failed to toggle hero story featured status" });
+    }
+  });
+
+  // Database status endpoint - useful for monitoring
+  app.get("/api/system/db-status", async (req, res) => {
+    try {
+      // Check if DATABASE_URL is even set
+      if (!process.env.DATABASE_URL) {
+        return res.json({
+          status: "not_configured",
+          message: "Database connection not configured. Using in-memory storage.",
+          persistence: false
+        });
+      }
+
+      // We'll use the Pool class directly to test the connection
+      import('@neondatabase/serverless').then(async ({ Pool }) => {
+        try {
+          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+          
+          // Test a simple query to verify connection
+          const client = await pool.connect();
+          await client.query('SELECT NOW() as time');
+          client.release();
+          
+          return res.json({
+            status: "connected",
+            message: "Database connection successful. Data will persist across deployments.",
+            persistence: true
+          });
+        } catch (dbError: any) {
+          console.error("Database check failed:", dbError);
+          return res.json({
+            status: "error",
+            message: "Database connection failed. Using in-memory storage as fallback.",
+            persistence: false,
+            error: dbError?.message || String(dbError)
+          });
+        }
+      }).catch(importError => {
+        console.error("Error importing database module:", importError);
+        return res.json({
+          status: "error",
+          message: "Error importing database module. Using in-memory storage as fallback.",
+          persistence: false,
+          error: importError?.message || String(importError)
+        });
+      });
+    } catch (error: any) {
+      console.error("Database check failed:", error);
+      return res.json({
+        status: "error",
+        message: "Database check failed. Using in-memory storage as fallback.",
+        persistence: false,
+        error: error?.message || String(error)
+      });
     }
   });
 

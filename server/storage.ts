@@ -596,12 +596,23 @@ function initializeDbStorage(): IStorage {
     if (process.env.DATABASE_URL) {
       console.log("Initializing database storage with DATABASE_URL");
       return new DbStorage();
+    } else {
+      console.log("DATABASE_URL not found, using in-memory storage");
     }
   } catch (error) {
     console.error("Failed to initialize database storage:", error);
     console.log("Falling back to memory storage");
+    // Log more detailed error information for debugging
+    if (error instanceof Error) {
+      console.error("Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+    }
   }
   
+  console.log("Using in-memory storage (data will be lost on restart)");
   return new MemStorage();
 }
 
@@ -609,7 +620,14 @@ function initializeDbStorage(): IStorage {
 // Singleton pattern to ensure we only create the storage once
 export const storage = (() => {
   if (!storageInstance) {
-    storageInstance = initializeDbStorage();
+    try {
+      storageInstance = initializeDbStorage();
+      console.log("Storage initialization successful");
+    } catch (fatalError) {
+      console.error("Fatal error during storage initialization:", fatalError);
+      console.error("Using emergency in-memory fallback storage");
+      storageInstance = new MemStorage();
+    }
   }
   return storageInstance;
 })();

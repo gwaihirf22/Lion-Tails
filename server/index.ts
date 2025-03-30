@@ -2,6 +2,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import path from "path";
+// Import PostgreSQL for database check
+import { Pool } from '@neondatabase/serverless';
 
 const app = express();
 app.use(express.json());
@@ -40,7 +42,45 @@ app.use((req, res, next) => {
   next();
 });
 
+// Function to check database connection
+async function checkDatabase(): Promise<boolean> {
+  if (!process.env.DATABASE_URL) {
+    log("No DATABASE_URL provided, will use in-memory storage");
+    return false;
+  }
+  
+  try {
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const client = await pool.connect();
+    await client.query('SELECT NOW()');
+    client.release();
+    log("Database connection successful");
+    return true;
+  } catch (error) {
+    log("Database connection failed");
+    if (error instanceof Error) {
+      log("Error details: " + error.message);
+    }
+    return false;
+  }
+}
+
 (async () => {
+  // Ensure database is ready before starting server
+  try {
+    log("Checking database connection...");
+    await checkDatabase();
+    log("Database check completed.");
+  } catch (err) {
+    log("Database check failed");
+    if (err instanceof Error) {
+      log("Error details: " + err.message);
+    } else {
+      log("Unknown error occurred during database check");
+    }
+    log("Application will continue with in-memory storage if needed.");
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
