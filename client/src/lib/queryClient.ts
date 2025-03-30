@@ -3,11 +3,15 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     try {
-      const errorData = await res.json();
+      // Clone the response before reading it to avoid "body already read" errors
+      const clonedRes = res.clone();
+      const errorData = await clonedRes.json();
       throw new Error(errorData.error || errorData.message || res.statusText);
     } catch (e) {
       // If we can't parse JSON, just use the status text
-      const text = await res.text();
+      // Clone the response before reading it to avoid "body already read" errors
+      const clonedRes = res.clone();
+      const text = await clonedRes.text();
       throw new Error(`${res.status}: ${text || res.statusText}`);
     }
   }
@@ -70,8 +74,18 @@ export const getQueryFn: <T>(options: {
       return null;
     }
 
-    await throwIfResNotOk(res);
-    return await res.json();
+    try {
+      // Clone the response before checking and reading
+      const resForCheck = res.clone();
+      await throwIfResNotOk(resForCheck);
+      
+      // Use another clone for reading the body
+      const resForReading = res.clone();
+      return await resForReading.json();
+    } catch (error) {
+      console.error("Error in queryFn:", error);
+      throw error;
+    }
   };
 
 export const queryClient = new QueryClient({

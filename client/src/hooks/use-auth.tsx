@@ -34,8 +34,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
-      const res = await apiRequest("POST", "/api/auth/login", credentials);
-      return await res.json();
+      try {
+        const res = await apiRequest("POST", "/api/auth/login", credentials);
+        // Clone the response before reading it to avoid "body already read" errors
+        const clonedRes = res.clone();
+        return await clonedRes.json();
+      } catch (error) {
+        console.error("Login error:", error);
+        throw error;
+      }
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/auth/me"], user);
@@ -47,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onError: (error: Error) => {
       toast({
         title: "Login failed",
-        description: error.message,
+        description: error.message || "Failed to login. Please try again.",
         variant: "destructive",
       });
     },
@@ -55,8 +62,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const registerMutation = useMutation({
     mutationFn: async (credentials: InsertUser) => {
-      const res = await apiRequest("POST", "/api/auth/register", credentials);
-      return await res.json();
+      try {
+        const res = await apiRequest("POST", "/api/auth/register", credentials);
+        // Clone the response before reading it to avoid "body already read" errors
+        const clonedRes = res.clone();
+        return await clonedRes.json();
+      } catch (error) {
+        console.error("Registration error:", error);
+        throw error;
+      }
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/auth/me"], user);
@@ -68,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onError: (error: Error) => {
       toast({
         title: "Registration failed",
-        description: error.message,
+        description: error.message || "Failed to register. Please try again.",
         variant: "destructive",
       });
     },
