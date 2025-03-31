@@ -55,8 +55,6 @@ export function BookPage({
   useEffect(() => {
     if (content) {
       setParagraphs(content.split("\n\n").filter(p => p.trim() !== ""));
-    } else {
-      setParagraphs([]);
     }
   }, [content]);
 
@@ -163,62 +161,6 @@ export function BookPage({
   };
 
   const styles = getThemeStyles();
-  
-  // Function to process and extract website links from a paragraph
-  const processResourceLinks = (paragraph: string): { domain: string; url: string; description: string }[] => {
-    if (!paragraph) return [];
-    
-    try {
-      // Extract the part after "For Further Learning:" if it exists
-      const resourceSection = paragraph.includes("For Further Learning:") 
-        ? paragraph.split("For Further Learning:")[1] 
-        : paragraph.includes("For Further Learning")
-        ? paragraph.split("For Further Learning")[1]
-        : null;
-      
-      if (!resourceSection) return [];
-      
-      // Split by newlines or bullet points to get individual resources
-      const resourceLines = resourceSection
-        .split(/\n/)
-        .map(line => line.trim())
-        .filter(line => line && (line.includes(".com") || line.includes(".org")));
-      
-      return resourceLines
-        .map(line => {
-          try {
-            // Extract domain
-            const domainMatch = line.match(/([A-Za-z0-9-]+\.(com|org))/i);
-            if (!domainMatch) return null;
-            
-            const domain = domainMatch[0];
-            const url = domain.toLowerCase().startsWith("www.") 
-              ? `https://${domain}` 
-              : `https://www.${domain}`;
-            
-            // Extract description (text after the domain)
-            const cleanLine = line.replace(/^-\s*/, "").replace(/\*\*/g, "");
-            let description = "";
-            
-            if (cleanLine.includes(domain)) {
-              const parts = cleanLine.split(domain);
-              if (parts.length > 1) {
-                description = parts[1].replace(/^[:\s-]+/, "").trim();
-              }
-            }
-            
-            return { domain, url, description };
-          } catch (err) {
-            console.error("Error processing resource line:", err);
-            return null;
-          }
-        })
-        .filter(Boolean) as { domain: string; url: string; description: string }[];
-    } catch (err) {
-      console.error("Error processing resources:", err);
-      return [];
-    }
-  };
 
   return (
     <div className="w-full max-w-4xl mx-auto my-6 px-4">
@@ -431,32 +373,73 @@ export function BookPage({
           {paragraphs.map((paragraph, index) => {
             // Check if the paragraph contains "For Further Learning:" and render links
             if (paragraph && (paragraph.includes("For Further Learning:") || paragraph.includes("For Further Learning"))) {
-              const resources = processResourceLinks(paragraph);
+              // Split the paragraph into sections
+              // First extract the whole "For Further Learning:" section
+              const learningSection = paragraph.split("For Further Learning:")[1] || paragraph.split("For Further Learning")[1] || paragraph;
+              // Then split by website mentions or bullet points, with safety checks for undefined
+              const lines = learningSection ? 
+                learningSection.split(/(?=- \*\*[A-Za-z0-9]+\.(com|org)\*\*)|(?=\*\*[A-Za-z0-9]+\.(com|org)\*\*)/).filter(Boolean).map(line => line?.trim() || "") 
+                : [];
               
-              if (resources.length > 0) {
-                return (
-                  <div key={index} className="mb-6 mt-6 p-4 bg-primary/5 rounded-md border border-primary/10">
-                    <h3 className="font-bold text-lg mb-3 text-primary">For Further Learning:</h3>
-                    <ul className="space-y-2 list-disc pl-5">
-                      {resources.map((resource, i) => (
-                        <li key={i}>
-                          <a 
-                            href={resource.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-primary hover:underline font-medium"
-                          >
-                            {resource.domain}
-                          </a>
-                          {resource.description && <span> - {resource.description}</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              }
+              return (
+                <div key={index} className="mb-6 mt-6 p-4 bg-primary/5 rounded-md border border-primary/10">
+                  <h3 className="font-bold text-lg mb-3 text-primary">For Further Learning:</h3>
+                  <ul className="space-y-2 list-disc pl-5">
+                    {lines.filter(line => line && (line.includes(".com") || line.includes(".org"))).map((line, i) => {
+                      // Safe function to extract and display website links
+                      const renderWebsiteLink = () => {
+                        if (!line) return null;
+                        
+                        try {
+                          // Extract the website URL - handle more formats
+                          const match = line.match(/([A-Za-z0-9-]+\.(com|org))/i);
+                          if (!match) return null;
+                          
+                          const site = match[0];
+                          // Make sure we have www. in front
+                          const url = site.toLowerCase().startsWith("www.") ? 
+                            `https://${site}` : 
+                            `https://www.${site}`;
+                          
+                          // Clean up the line text
+                          const cleanLine = line.replace(/^-\s*/, '').replace(/\*\*/g, '');
+                          
+                          // Get the description part after the site
+                          let description = "";
+                          const parts = cleanLine.split(site);
+                          if (parts && parts.length > 1) {
+                            // Extract the description after the site name
+                            description = parts[1] ? parts[1].replace(/^[:\s-]+/, '').trim() : "";
+                          } else {
+                            // If no split, use the whole line without the site
+                            description = cleanLine ? cleanLine.replace(site, '').replace(/^[:\s-]+/, '').trim() : "";
+                          }
+                          
+                          return (
+                            <li key={i}>
+                              <a 
+                                href={url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline font-medium"
+                              >
+                                {site}
+                              </a>
+                              {description && <span> - {description}</span>}
+                            </li>
+                          );
+                        } catch (error) {
+                          console.error("Error parsing website link:", error);
+                          return null;
+                        }
+                      };
+                      
+                      return renderWebsiteLink();
+                    }).filter(Boolean)}
+                  </ul>
+                </div>
+              );
             }
-            
             // For all other paragraphs, render normally
             return (
               <p key={index} className="mb-4 leading-relaxed text-base md:text-lg">
