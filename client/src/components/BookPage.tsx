@@ -14,7 +14,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, Palette } from "lucide-react";
+import { ChevronLeft, ChevronRight, Palette, ScrollText, BookOpen } from "lucide-react";
 
 // More diverse theme options
 type BookTheme = "classic" | "royal" | "fantasy" | "minimal" | "victorian" | "biblical" | "floral" | "modern";
@@ -50,6 +50,9 @@ export function BookPage({
   const [theme, setTheme] = useState<BookTheme>("classic");
   const [bgColor, setBgColor] = useState<BgColor>("cream");
   const [paragraphs, setParagraphs] = useState<string[]>([]);
+  
+  // Add a state for scrolling mode
+  const [scrollMode, setScrollMode] = useState<boolean>(false);
   
   // Split content into paragraphs for better formatting
   useEffect(() => {
@@ -241,8 +244,20 @@ export function BookPage({
           )}
         </div>
         
-        {/* Center controls - Theme selector and color picker */}
+        {/* Center controls - Theme selector, scroll toggle, and color picker */}
         <div className="flex justify-center items-center gap-1">
+          {/* Scroll/Page Mode Toggle */}
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="h-8 w-8" 
+            title={scrollMode ? "Switch to page mode" : "Switch to scroll mode"}
+            onClick={() => setScrollMode(!scrollMode)}
+          >
+            {scrollMode ? <BookOpen className="h-4 w-4" /> : <ScrollText className="h-4 w-4" />}
+          </Button>
+          
+          {/* Theme Selector */}
           <Select value={theme} onValueChange={(value: BookTheme) => setTheme(value)}>
             <SelectTrigger className="h-8 w-[110px] text-xs sm:text-sm sm:w-[140px]">
               <SelectValue placeholder="Theme" />
@@ -259,6 +274,7 @@ export function BookPage({
             </SelectContent>
           </Select>
           
+          {/* Color Picker */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="icon" className="h-8 w-8">
@@ -403,93 +419,181 @@ export function BookPage({
           </>
         )}
         
-        {/* Decorative header */}
+        {/* Elegant book title header */}
         <div className="text-center mb-8 relative">
-          <div className="absolute left-0 right-0 top-1/2 h-[1px] bg-current opacity-20"></div>
-          
-          {/* Decorative flourish before title */}
-          <div className="flex items-center justify-center mb-2">
-            <svg width="120" height="20" viewBox="0 0 120 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M60 0C53.5 0 50 5 45 10C40 15 35 20 27.5 20C20 20 10 15 0 15V17.5C10 17.5 20 22.5 27.5 22.5C35 22.5 40 17.5 45 12.5C50 7.5 53.5 2.5 60 2.5C66.5 2.5 70 7.5 75 12.5C80 17.5 85 22.5 92.5 22.5C100 22.5 110 17.5 120 17.5V15C110 15 100 20 92.5 20C85 20 80 15 75 10C70 5 66.5 0 60 0Z" fill="currentColor" fillOpacity="0.3"/>
-            </svg>
+          {/* Top decorative element */}
+          <div className="mb-4 h-6 relative flex items-center justify-center">
+            <div className="absolute left-0 right-0 top-1/2 h-[1px] border-t border-current opacity-10"></div>
+            <div className="absolute left-1/4 right-1/4 top-1/2 h-[1px] border-t border-current opacity-20"></div>
+            <div className="bg-inherit relative px-4 z-10">
+              <svg width="50" height="16" viewBox="0 0 50 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M25 0L30 6L25 12L20 6L25 0Z" fill="currentColor" fillOpacity="0.3"/>
+              </svg>
+            </div>
           </div>
           
-          <h1 className={cn("text-2xl md:text-3xl font-bold relative inline-block px-6", styles.headerClass)}>
-            {title}
-          </h1>
+          {/* Title with decorative frame */}
+          <div className="relative inline-block">
+            <h1 className={cn("text-2xl md:text-3xl font-bold relative py-2 px-4 sm:px-8 bg-inherit", styles.headerClass)}>
+              {title}
+            </h1>
+            {/* Subtle corners for title */}
+            <div className="absolute top-0 left-0 w-3 h-3 border-t border-l border-current opacity-30"></div>
+            <div className="absolute top-0 right-0 w-3 h-3 border-t border-r border-current opacity-30"></div>
+            <div className="absolute bottom-0 left-0 w-3 h-3 border-b border-l border-current opacity-30"></div>
+            <div className="absolute bottom-0 right-0 w-3 h-3 border-b border-r border-current opacity-30"></div>
+          </div>
           
-          {/* Decorative flourish after title */}
-          <div className="flex items-center justify-center mt-2">
-            <svg width="120" height="20" viewBox="0 0 120 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="transform rotate-180">
-              <path d="M60 0C53.5 0 50 5 45 10C40 15 35 20 27.5 20C20 20 10 15 0 15V17.5C10 17.5 20 22.5 27.5 22.5C35 22.5 40 17.5 45 12.5C50 7.5 53.5 2.5 60 2.5C66.5 2.5 70 7.5 75 12.5C80 17.5 85 22.5 92.5 22.5C100 22.5 110 17.5 120 17.5V15C110 15 100 20 92.5 20C85 20 80 15 75 10C70 5 66.5 0 60 0Z" fill="currentColor" fillOpacity="0.3"/>
-            </svg>
+          {/* Bottom decorative element */}
+          <div className="mt-4 h-6 relative flex items-center justify-center">
+            <div className="absolute left-0 right-0 top-1/2 h-[1px] border-t border-current opacity-10"></div>
+            <div className="absolute left-1/4 right-1/4 top-1/2 h-[1px] border-t border-current opacity-20"></div>
+            <div className="bg-inherit relative px-4 z-10">
+              <svg width="50" height="16" viewBox="0 0 50 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="transform rotate-180">
+                <path d="M25 0L30 6L25 12L20 6L25 0Z" fill="currentColor" fillOpacity="0.3"/>
+              </svg>
+            </div>
           </div>
         </div>
         
-        {/* Content */}
-        <div className={cn("prose max-w-none", styles.textClass)}>
-          {paragraphs.map((paragraph, index) => {
-            // Check if the paragraph contains "For Further Learning:" and render links
-            if (paragraph && (paragraph.includes("For Further Learning:") || paragraph.includes("For Further Learning"))) {
-              const resources = processResourceLinks(paragraph);
-              
-              if (resources.length > 0) {
+        {/* Content - Either scrollable mode or paginated mode */}
+        <div className={cn("prose max-w-none", styles.textClass, scrollMode ? "max-h-[60vh] overflow-y-auto pr-4" : "")}>
+          {/* For scroll mode - show all content at once */}
+          {scrollMode && (
+            <>
+              {paragraphs.map((paragraph, index) => {
+                // Check if the paragraph contains "For Further Learning:" and render links
+                if (paragraph && (paragraph.includes("For Further Learning:") || paragraph.includes("For Further Learning"))) {
+                  const resources = processResourceLinks(paragraph);
+                  
+                  if (resources.length > 0) {
+                    return (
+                      <div key={index} className="mb-6 mt-6 p-4 bg-primary/5 rounded-md border border-primary/10">
+                        <h3 className="font-bold text-lg mb-3 text-primary">For Further Learning:</h3>
+                        <ul className="space-y-2 list-disc pl-5">
+                          {resources.map((resource, i) => (
+                            <li key={i}>
+                              <a 
+                                href={resource.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline font-medium"
+                              >
+                                {resource.domain}
+                              </a>
+                              {resource.description && <span> - {resource.description}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  }
+                }
+                
+                // For all other paragraphs, render normally
                 return (
-                  <div key={index} className="mb-6 mt-6 p-4 bg-primary/5 rounded-md border border-primary/10">
-                    <h3 className="font-bold text-lg mb-3 text-primary">For Further Learning:</h3>
-                    <ul className="space-y-2 list-disc pl-5">
-                      {resources.map((resource, i) => (
-                        <li key={i}>
-                          <a 
-                            href={resource.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-primary hover:underline font-medium"
-                          >
-                            {resource.domain}
-                          </a>
-                          {resource.description && <span> - {resource.description}</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <p key={index} className="mb-4 leading-relaxed text-base md:text-lg">
+                    {paragraph}
+                  </p>
                 );
-              }
-            }
-            
-            // For all other paragraphs, render normally
-            return (
-              <p key={index} className="mb-4 leading-relaxed text-base md:text-lg">
-                {paragraph}
-              </p>
-            );
-          })}
+              })}
+              
+              {/* Bible verse with floral decoration */}
+              {verseText && (
+                <div className={cn("mt-8 p-4 border-t border-b relative", styles.verseClass)}>
+                  {/* Decorative flowers left */}
+                  <div className="absolute left-0 -top-5 w-32 h-10 overflow-hidden opacity-70">
+                    <svg width="120" height="40" viewBox="0 0 210 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M210 0C189 0 170 15 160 30C150 15 130 0 105 0C80 0 60 15 50 30C40 15 20 0 0 0V4C20 4 40 19 50 34C60 19 80 4 105 4C130 4 150 19 160 34C170 19 190 4 210 4V0Z" fill="currentColor" fillOpacity="0.3"/>
+                    </svg>
+                  </div>
+                  
+                  {/* Verse content */}
+                  <div className="py-4">
+                    <p className="text-center mb-4 italic">{verseText}</p>
+                    {verseReference && (
+                      <p className="text-center text-sm font-semibold">— {verseReference}</p>
+                    )}
+                  </div>
+                  
+                  {/* Decorative flowers right */}
+                  <div className="absolute right-0 -bottom-5 w-32 h-10 overflow-hidden opacity-70 transform rotate-180">
+                    <svg width="120" height="40" viewBox="0 0 210 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M210 0C189 0 170 15 160 30C150 15 130 0 105 0C80 0 60 15 50 30C40 15 20 0 0 0V4C20 4 40 19 50 34C60 19 80 4 105 4C130 4 150 19 160 34C170 19 190 4 210 4V0Z" fill="currentColor" fillOpacity="0.3"/>
+                    </svg>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
           
-          {/* Bible verse with floral decoration */}
-          {verseText && (
-            <div className={cn("mt-8 p-4 border-t border-b relative", styles.verseClass)}>
-              {/* Decorative flowers left */}
-              <div className="absolute left-0 -top-5 w-32 h-10 overflow-hidden opacity-70">
-                <svg width="120" height="40" viewBox="0 0 210 70" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M210 0C189 0 170 15 160 30C150 15 130 0 105 0C80 0 60 15 50 30C40 15 20 0 0 0V4C20 4 40 19 50 34C60 19 80 4 105 4C130 4 150 19 160 34C170 19 190 4 210 4V0Z" fill="currentColor" fillOpacity="0.3"/>
-                </svg>
-              </div>
+          {/* For pagination mode - only show paragraphs for current page */}
+          {!scrollMode && (
+            <>
+              {paragraphs.map((paragraph, index) => {
+                // Check if the paragraph contains "For Further Learning:" and render links
+                if (paragraph && (paragraph.includes("For Further Learning:") || paragraph.includes("For Further Learning"))) {
+                  const resources = processResourceLinks(paragraph);
+                  
+                  if (resources.length > 0) {
+                    return (
+                      <div key={index} className="mb-6 mt-6 p-4 bg-primary/5 rounded-md border border-primary/10">
+                        <h3 className="font-bold text-lg mb-3 text-primary">For Further Learning:</h3>
+                        <ul className="space-y-2 list-disc pl-5">
+                          {resources.map((resource, i) => (
+                            <li key={i}>
+                              <a 
+                                href={resource.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline font-medium"
+                              >
+                                {resource.domain}
+                              </a>
+                              {resource.description && <span> - {resource.description}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  }
+                }
+                
+                // For all other paragraphs, render normally
+                return (
+                  <p key={index} className="mb-4 leading-relaxed text-base md:text-lg">
+                    {paragraph}
+                  </p>
+                );
+              })}
               
-              {/* Verse content */}
-              <div className="py-4">
-                <p className="text-center mb-4 italic">{verseText}</p>
-                {verseReference && (
-                  <p className="text-center text-sm font-semibold">— {verseReference}</p>
-                )}
-              </div>
-              
-              {/* Decorative flowers right */}
-              <div className="absolute right-0 -bottom-5 w-32 h-10 overflow-hidden opacity-70 transform rotate-180">
-                <svg width="120" height="40" viewBox="0 0 210 70" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M210 0C189 0 170 15 160 30C150 15 130 0 105 0C80 0 60 15 50 30C40 15 20 0 0 0V4C20 4 40 19 50 34C60 19 80 4 105 4C130 4 150 19 160 34C170 19 190 4 210 4V0Z" fill="currentColor" fillOpacity="0.3"/>
-                </svg>
-              </div>
-            </div>
+              {/* Bible verse with floral decoration */}
+              {verseText && (
+                <div className={cn("mt-8 p-4 border-t border-b relative", styles.verseClass)}>
+                  {/* Decorative flowers left */}
+                  <div className="absolute left-0 -top-5 w-32 h-10 overflow-hidden opacity-70">
+                    <svg width="120" height="40" viewBox="0 0 210 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M210 0C189 0 170 15 160 30C150 15 130 0 105 0C80 0 60 15 50 30C40 15 20 0 0 0V4C20 4 40 19 50 34C60 19 80 4 105 4C130 4 150 19 160 34C170 19 190 4 210 4V0Z" fill="currentColor" fillOpacity="0.3"/>
+                    </svg>
+                  </div>
+                  
+                  {/* Verse content */}
+                  <div className="py-4">
+                    <p className="text-center mb-4 italic">{verseText}</p>
+                    {verseReference && (
+                      <p className="text-center text-sm font-semibold">— {verseReference}</p>
+                    )}
+                  </div>
+                  
+                  {/* Decorative flowers right */}
+                  <div className="absolute right-0 -bottom-5 w-32 h-10 overflow-hidden opacity-70 transform rotate-180">
+                    <svg width="120" height="40" viewBox="0 0 210 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M210 0C189 0 170 15 160 30C150 15 130 0 105 0C80 0 60 15 50 30C40 15 20 0 0 0V4C20 4 40 19 50 34C60 19 80 4 105 4C130 4 150 19 160 34C170 19 190 4 210 4V0Z" fill="currentColor" fillOpacity="0.3"/>
+                    </svg>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
         
@@ -497,45 +601,56 @@ export function BookPage({
         <div className="mt-8"></div>
       </Card>
       
-      {/* Page navigation at the bottom */}
-      <div className="mt-6 mb-8 flex items-center justify-center space-x-2">
-        {/* Previous page button */}
-        <Button
-          variant={hasPrevPage ? "default" : "outline"}
-          size="sm"
-          disabled={!hasPrevPage}
-          onClick={onPrevPage}
-          className={cn(
-            "flex items-center gap-1 min-w-[120px] transition-transform duration-200",
-            hasPrevPage && "hover:-translate-x-1"
-          )}
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Previous
-        </Button>
-        
-        {/* Page indicator */}
-        <div className="text-center">
-          <p className="text-sm font-medium">
-            Page {currentPage} of {totalPages}
+      {/* Page navigation at the bottom - only shown in page mode */}
+      {!scrollMode && (
+        <div className="mt-6 mb-8 flex items-center justify-center space-x-2">
+          {/* Previous page button */}
+          <Button
+            variant={hasPrevPage ? "default" : "outline"}
+            size="sm"
+            disabled={!hasPrevPage}
+            onClick={onPrevPage}
+            className={cn(
+              "flex items-center gap-1 min-w-[120px] transition-transform duration-200",
+              hasPrevPage && "hover:-translate-x-1"
+            )}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </Button>
+          
+          {/* Page indicator */}
+          <div className="text-center">
+            <p className="text-sm font-medium">
+              Page {currentPage} of {totalPages}
+            </p>
+          </div>
+          
+          {/* Next page button */}
+          <Button
+            variant={hasNextPage ? "default" : "outline"}
+            size="sm"
+            disabled={!hasNextPage}
+            onClick={onNextPage}
+            className={cn(
+              "flex items-center gap-1 min-w-[120px] transition-transform duration-200",
+              hasNextPage && "hover:translate-x-1"
+            )}
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+      
+      {/* Scroll mode indicator */}
+      {scrollMode && (
+        <div className="mt-6 mb-8 text-center">
+          <p className="text-sm text-gray-500 italic">
+            Scroll mode enabled. Use the toggle in the top bar to switch back to page view.
           </p>
         </div>
-        
-        {/* Next page button */}
-        <Button
-          variant={hasNextPage ? "default" : "outline"}
-          size="sm"
-          disabled={!hasNextPage}
-          onClick={onNextPage}
-          className={cn(
-            "flex items-center gap-1 min-w-[120px] transition-transform duration-200",
-            hasNextPage && "hover:translate-x-1"
-          )}
-        >
-          Next
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
+      )}
     </div>
   );
 }
