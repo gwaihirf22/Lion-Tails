@@ -28,7 +28,7 @@ function getOpenAIClient(apiKey?: string | null) {
 }
 
 export async function generateStoryWithOpenAI(request: StoryRequest, userId: number = 1): Promise<StoryResponse> {
-  const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType, customPrompt, useAnimal, biblePassage } = request;
+  const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType, customPrompt, useAnimal, biblePassage, readingLevel, storyLength } = request;
 
   const storyTemplate = biblicalEvent && biblicalEvent !== 'none' ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
   const bibleVerse = getBibleVerseByTheme(theme && theme !== 'none' ? theme : 'faith');
@@ -77,16 +77,18 @@ export async function generateStoryWithOpenAI(request: StoryRequest, userId: num
       heroOfFaithName, 
       customPrompt,
       useAnimal, // Pass the useAnimal toggle value
-      biblePassage // Pass the Bible passage
+      biblePassage, // Pass the Bible passage
+      readingLevel || "early-elementary", // Pass the reading level
+      storyLength || "medium" // Pass the story length
     );
     
     // System prompt that defines what kind of response we want
     const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author and Bible teacher. Create wholesome, faith-based stories and Bible teachings with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
     
 Your content should:
-1. Be at least 1000 words in length
+1. Be the appropriate length as specified in the prompt
 2. Include clear moral lessons based on Christian values
-3. Be appropriate for children ages 3-10
+3. Be appropriate for the reading level specified in the prompt (ages 3-14)
 4. If the story type is a biblical narrative, focus entirely on biblical events and characters with historical accuracy
 5. For regular stories, include the specified child's name, gender, animal, and theme when provided
 6. If a biblical event is specified, incorporate it into the narrative
@@ -419,7 +421,7 @@ export async function analyzeImageWithOpenAI(imageBase64: string, userId: number
   }
 }
 
-function buildStoryPrompt(childName: string = "", gender: string = "boy", animal: string = "", theme: string = "", biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular", heroOfFaith?: string | undefined, customPrompt?: string | undefined, useAnimal?: boolean, biblePassage?: string | undefined): string {
+function buildStoryPrompt(childName: string = "", gender: string = "boy", animal: string = "", theme: string = "", biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular", heroOfFaith?: string | undefined, customPrompt?: string | undefined, useAnimal?: boolean, biblePassage?: string | undefined, readingLevel: string = "early-elementary", storyLength: string = "medium"): string {
   let storyFormat = "bedtime story";
   
   // Determine story format based on type
@@ -509,7 +511,35 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
     prompt += `.`;
   }
 
-  prompt += ` The story should be approximately 1000 words and include a clear moral lesson at the end that relates to traditional Christian values.`;
+  // Adjust word count based on story length
+  let wordCount = "1000";
+  if (storyLength === "very-short") {
+    wordCount = "300 to 500";
+  } else if (storyLength === "short") {
+    wordCount = "600 to 900";
+  } else if (storyLength === "medium") {
+    wordCount = "1000 to 1200";
+  } else if (storyLength === "long") {
+    wordCount = "1500 to 2000";
+  } else if (storyLength === "extended") {
+    wordCount = "2500 to 3000";
+  }
+  
+  // Adjust reading level based on the selected level
+  let readingLevelText = "";
+  if (readingLevel === "preschool") {
+    readingLevelText = "using very simple vocabulary suitable for ages 3-5. Use short sentences and basic concepts.";
+  } else if (readingLevel === "kindergarten") {
+    readingLevelText = "using simple vocabulary suitable for ages 5-6. Use relatively short sentences and straightforward concepts.";
+  } else if (readingLevel === "early-elementary") {
+    readingLevelText = "using vocabulary suitable for ages 6-8. Balance simple and more complex sentences.";
+  } else if (readingLevel === "late-elementary") {
+    readingLevelText = "using moderately advanced vocabulary suitable for ages 9-11. Include more complex sentence structures and concepts.";
+  } else if (readingLevel === "middle-school") {
+    readingLevelText = "using more advanced vocabulary suitable for ages 12-14. Include complex sentence structures and deeper concepts.";
+  }
+  
+  prompt += ` The story should be approximately ${wordCount} words ${readingLevelText} Include a clear moral lesson at the end that relates to traditional Christian values.`;
   
   // Include Heroes of Faith if provided
   if (heroOfFaith && heroOfFaith !== 'none' && heroOfFaith !== '') {
