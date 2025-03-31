@@ -717,6 +717,74 @@ export class DbStorage implements IStorage {
     }
   }
   
+  async updateStoryHeroId(storyId: string, heroId: string, userId: number): Promise<SavedStory | undefined> {
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in updateStoryHeroId(${storyId}). Cannot associate story with hero.`);
+      return undefined;
+    }
+    
+    try {
+      // First verify the story exists and belongs to the user
+      const story = await this.getStoryById(storyId, userId);
+      if (!story) {
+        console.warn(`Story not found: ${storyId} for user ${userId}`);
+        return undefined;
+      }
+      
+      // Next verify the hero exists
+      const hero = await this.getHeroOfFaithById(heroId);
+      if (!hero) {
+        console.warn(`Hero not found: ${heroId}`);
+        return undefined;
+      }
+      
+      // Update the story's heroId in the database
+      await pool.query(`
+        UPDATE user_stories
+        SET hero_id = $1
+        WHERE story_id = $2 AND user_id = $3
+      `, [heroId, storyId, userId]);
+      
+      // Also update the heroId in the JSON data
+      await pool.query(`
+        UPDATE user_stories
+        SET story_data = jsonb_set(
+          story_data, 
+          '{heroId}', 
+          $1::jsonb
+        )
+        WHERE story_id = $2 AND user_id = $3
+      `, [JSON.stringify(heroId), storyId, userId]);
+      
+      // Add "hero of faith" tag if not already there
+      await pool.query(`
+        UPDATE user_stories
+        SET story_data = jsonb_set(
+          story_data,
+          '{searchMetadata,tags}',
+          CASE 
+            WHEN NOT story_data->'searchMetadata'->'tags' ? 'hero of faith' 
+            THEN jsonb_append(
+              story_data->'searchMetadata'->'tags', 
+              '$', 
+              '"hero of faith"'
+            )
+            ELSE story_data->'searchMetadata'->'tags'
+          END
+        )
+        WHERE story_id = $2 AND user_id = $3
+      `, [heroId, storyId, userId]);
+      
+      console.log(`Associated story ${storyId} with hero ${heroId}`);
+      
+      // Get the updated story
+      return await this.getStoryById(storyId, userId);
+    } catch (error) {
+      console.error("Error updating story hero ID:", error);
+      return undefined;
+    }
+  }
+  
   // Story search methods
   async searchStories(query: string, userId?: number): Promise<SavedStory[]> {
     try {

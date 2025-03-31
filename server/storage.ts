@@ -43,6 +43,7 @@ export interface IStorage {
   saveStory(story: StoryResponse, request: StoryRequest, userId: number, heroId?: string): Promise<SavedStory>;
   toggleFavorite(id: string, isFavorite: boolean, userId: number): Promise<SavedStory | undefined>;
   deleteStory(id: string, userId: number): Promise<boolean>;
+  updateStoryHeroId(storyId: string, heroId: string, userId: number): Promise<SavedStory | undefined>;
   
   // Story search methods
   searchStories(query: string, userId?: number): Promise<SavedStory[]>;
@@ -505,6 +506,60 @@ export class MemStorage implements IStorage {
 
     // Remove from storage
     return this.stories.delete(id);
+  }
+  
+  async updateStoryHeroId(storyId: string, heroId: string, userId: number): Promise<SavedStory | undefined> {
+    // Check if story belongs to the user
+    const userStories = this.userStories.get(userId);
+    if (!userStories || !userStories.has(storyId)) {
+      return undefined;
+    }
+    
+    // Get the story
+    const story = this.stories.get(storyId);
+    if (!story) return undefined;
+    
+    // Update the heroId field
+    const updatedStory: SavedStory = {
+      ...story,
+      heroId
+    };
+    
+    // If story doesn't already have the hero in keywords, add it
+    if (updatedStory.searchMetadata) {
+      const hero = this.heroesOfFaith.get(heroId);
+      if (hero) {
+        // Ensure all arrays exist before trying to modify them
+        if (!updatedStory.searchMetadata.keywords) {
+          updatedStory.searchMetadata.keywords = [];
+        }
+        if (!updatedStory.searchMetadata.characters) {
+          updatedStory.searchMetadata.characters = [];
+        }
+        if (!updatedStory.searchMetadata.tags) {
+          updatedStory.searchMetadata.tags = [];
+        }
+        
+        // Add hero's name to keywords and characters if not already there
+        if (!updatedStory.searchMetadata.keywords.includes(hero.name)) {
+          updatedStory.searchMetadata.keywords.push(hero.name);
+        }
+        if (!updatedStory.searchMetadata.characters.includes(hero.name)) {
+          updatedStory.searchMetadata.characters.push(hero.name);
+        }
+        // Add "hero of faith" tag if not already there
+        if (!updatedStory.searchMetadata.tags.includes("hero of faith")) {
+          updatedStory.searchMetadata.tags.push("hero of faith");
+        }
+      }
+    }
+    
+    // Save the updated story
+    this.stories.set(storyId, updatedStory);
+    
+    console.log(`Associated story ${storyId} with hero ${heroId}`);
+    
+    return updatedStory;
   }
 
   // Search methods implementation

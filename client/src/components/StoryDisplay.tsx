@@ -1,12 +1,21 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StoryResponse } from "@shared/schema";
+import { StoryResponse, HeroOfFaith, SavedStory } from "@shared/schema";
 import { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { BookPage } from "@/components/BookPage";
-import { Star, Printer, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { Star, Printer, Download, ChevronLeft, ChevronRight, UserPlus } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 // Import Lion Tails image
 import lionTailsImage from "@/assets/illustrations/lion-tails.jpg";
@@ -32,8 +41,15 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
   const [showExpiryAlert, setShowExpiryAlert] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [scrollMode, setScrollMode] = useState(false);
+  const [selectedHeroId, setSelectedHeroId] = useState<string>('');
   const storyContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  
+  // Fetch Heroes of Faith for the dropdown
+  const { data: heroes = [] } = useQuery<HeroOfFaith[]>({
+    queryKey: ['/api/heroes-of-faith'],
+    enabled: !!storyId // Only fetch if we have a storyId
+  });
 
   // Split story into pages
   const [storyPages, setStoryPages] = useState<string[]>([]);
@@ -210,6 +226,65 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
     }
   };
 
+  // Associate story with hero mutation
+  const associateWithHeroMutation = useMutation({
+    mutationFn: async (heroId: string) => {
+      if (!storyId) throw new Error("Story ID is required");
+      const response = await apiRequest('POST', `/api/stories/${storyId}/associate-hero`, { heroId });
+      if (!response.ok) {
+        throw new Error("Failed to associate story with hero");
+      }
+      return await response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Story Associated",
+        description: "This story has been successfully associated with the selected Hero of Faith.",
+      });
+      
+      // Invalidate relevant queries to refresh data
+      queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/stories'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to associate story with hero",
+        variant: "destructive",
+      });
+    }
+  });
+  
+  // Handle hero selection and association
+  const handleAssociateWithHero = (heroId: string) => {
+    if (!heroId) return;
+    
+    setSelectedHeroId(heroId);
+    associateWithHeroMutation.mutate(heroId);
+  };
+  
+  // Fetch the saved story to check if it has an associated hero
+  useEffect(() => {
+    const fetchSavedStory = async () => {
+      if (!storyId) return;
+      
+      try {
+        const response = await apiRequest('GET', `/api/stories/${storyId}`);
+        if (response.ok) {
+          const savedStory = await response.json();
+          // If the saved story has a heroId, set it as selected
+          if (savedStory.heroId) {
+            setSelectedHeroId(savedStory.heroId);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching saved story:', error);
+      }
+    };
+    
+    fetchSavedStory();
+  }, [storyId]);
+  
   // Check if we should show the Bible verse (on the last page only)
   const showBibleVerse = currentPage === totalPages;
   
@@ -319,6 +394,49 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
             className="rounded-lg shadow-md max-w-full h-auto" 
             style={{ maxHeight: '300px', objectFit: 'contain' }}
           />
+        </div>
+      )}
+      
+      {/* Hero of Faith Association Section */}
+      {storyId && heroes.length > 0 && (
+        <div className="mt-8 p-4 bg-amber-50 border border-amber-100 rounded-lg">
+          <h4 className="text-lg font-semibold mb-3 flex items-center text-amber-800">
+            <UserPlus className="h-5 w-5 mr-2" />
+            Associate with a Hero of Faith
+          </h4>
+          <p className="text-sm text-amber-700 mb-4">
+            Connect this story to a Hero of Faith to help organize your stories and find related content.
+          </p>
+          
+          <div className="grid gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="hero-select" className="text-amber-800">Select a Hero of Faith</Label>
+              <Select 
+                value={selectedHeroId} 
+                onValueChange={handleAssociateWithHero}
+                disabled={associateWithHeroMutation.isPending}
+              >
+                <SelectTrigger className="w-full bg-white border-amber-200">
+                  <SelectValue placeholder="Choose a Hero of Faith" />
+                </SelectTrigger>
+                <SelectContent>
+                  {heroes.map(hero => (
+                    <SelectItem key={hero.id} value={hero.id}>
+                      {hero.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {selectedHeroId && (
+                <p className="text-xs text-green-600 mt-1">
+                  {associateWithHeroMutation.isPending 
+                    ? "Associating story..." 
+                    : "Story is associated with a Hero of Faith"}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

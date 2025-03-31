@@ -607,6 +607,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // API endpoint to associate a story with a hero of faith
+  app.post("/api/stories/:id/associate-hero", async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to modify stories" });
+      }
+      
+      const { heroId } = req.body;
+      
+      if (!heroId || typeof heroId !== 'string') {
+        return res.status(400).json({ message: "Valid hero ID is required" });
+      }
+      
+      // Verify the hero exists
+      const hero = await storage.getHeroOfFaithById(heroId);
+      if (!hero) {
+        return res.status(404).json({ message: "Hero not found" });
+      }
+      
+      // Get the user ID from the authenticated user
+      const userId = (req.user as any).id;
+      
+      // Get the story and update its heroId
+      const storyId = req.params.id;
+      const story = await storage.getStoryById(storyId, userId);
+      
+      if (!story) {
+        return res.status(404).json({ message: "Story not found or unauthorized" });
+      }
+      
+      // Update the heroId field in the story
+      const updatedStory = await storage.updateStoryHeroId(storyId, heroId, userId);
+      
+      if (!updatedStory) {
+        return res.status(500).json({ message: "Failed to associate story with hero" });
+      }
+      
+      res.json(updatedStory);
+    } catch (error) {
+      console.error("Error associating story with hero:", error);
+      res.status(500).json({ message: "Failed to associate story with hero" });
+    }
+  });
+  
   // Get all saved stories - requires authentication
   app.get("/api/stories", async (req, res) => {
     try {
