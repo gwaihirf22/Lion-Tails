@@ -23,8 +23,9 @@ export default function Header() {
 
   const navItems = [
     { href: "/", text: "Home" },
-    { href: "/music", text: "Music" },
+    { href: "/generate-story", text: "Create Story" },
     { href: "/saved-stories", text: "My Stories" },
+    { href: "/music", text: "Music" },
     { href: "/characters", text: "Characters" },
     { href: "/heroes-of-faith", text: "Heroes" },
     { href: "/image-analysis", text: "Image Analysis" },

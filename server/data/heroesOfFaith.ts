@@ -3,13 +3,26 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Helper function to ensure all heroes have the required fields
 const createHero = (hero: Partial<HeroOfFaith>): HeroOfFaith => {
+  // Ensure sources has the correct type
+  const defaultSources = [{
+    title: "Default Source",
+    type: "book" as "book" | "article" | "website" | "documentary" | "other",
+    author: "Unknown"
+  }];
+  
+  // Ensure we have valid sources with the correct type property
+  const validSources = hero.sources ? hero.sources.map(source => ({
+    ...source,
+    type: (source.type as "book" | "article" | "website" | "documentary" | "other") || "other"
+  })) : defaultSources;
+  
   return {
     id: hero.id || uuidv4(),
     name: hero.name || "",
     description: hero.description || "",
     timePeriod: hero.timePeriod || "",
     contribution: hero.contribution || "",
-    sources: hero.sources || [],
+    sources: validSources,
     keyEvents: hero.keyEvents || [],
     birthYear: hero.birthYear,
     deathYear: hero.deathYear,

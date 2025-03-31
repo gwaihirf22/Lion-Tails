@@ -11,6 +11,7 @@ import Settings from "@/pages/Settings";
 import Characters from "@/pages/Characters";
 import HeroesOfFaith from "@/pages/HeroesOfFaith";
 import ImageAnalysis from "@/pages/ImageAnalysis";
+import GenerateStory from "@/pages/GenerateStory";
 import AuthPage from "@/pages/auth-page";
 
 import Header from "@/components/Header";
@@ -26,6 +27,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <ProtectedRoute path="/story" component={Story} />
+      <ProtectedRoute path="/generate-story" component={GenerateStory} />
       <Route path="/music" component={Music} />
       <Route path="/auth" component={AuthPage} />
       <ProtectedRoute path="/saved-stories" component={SavedStories} />

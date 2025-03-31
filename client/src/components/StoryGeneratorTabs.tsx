@@ -12,9 +12,7 @@ export default function StoryGeneratorTabs({ onSubmit, loading = false }: StoryG
   const [activeTab, setActiveTab] = useState<string>("children");
 
   return (
-    <div className="content-container rounded-2xl shadow-lg p-4">
-      <h2 className="text-3xl font-heading font-bold text-center text-secondary mb-6">Create a Story</h2>
-      
+    <div>
       <Tabs defaultValue="children" onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-2 mb-6 gap-1 p-1">
           <TabsTrigger 
