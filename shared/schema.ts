@@ -144,6 +144,7 @@ export const storyRequestSchema = z.object({
     "middle-school"
   ]).default("early-elementary"),
   storyLength: z.enum([
+    "very-short",
     "short", 
     "medium", 
     "long", 

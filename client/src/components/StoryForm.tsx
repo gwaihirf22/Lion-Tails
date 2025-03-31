@@ -1059,6 +1059,7 @@ export default function StoryForm({
                             <SelectValue placeholder="Select story length" />
                           </SelectTrigger>
                           <SelectContent>
+                            <SelectItem value="very-short">Very Short (2-4 minutes)</SelectItem>
                             <SelectItem value="short">Short (5-7 minutes)</SelectItem>
                             <SelectItem value="medium">Medium (8-12 minutes)</SelectItem>
                             <SelectItem value="long">Long (13-20 minutes)</SelectItem>
