@@ -281,6 +281,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // New route for story/generate endpoint for compatibility with client
+  app.post("/api/story/generate", async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to generate stories" });
+      }
+      
+      // Validate request body
+      const validatedData = storyRequestSchema.parse(req.body);
+      
+      // Get user ID for authentication and tracking
+      const userId = (req.user as any).id;
+      
+      // Generate the story using OpenAI with user ID for quota tracking
+      const story = await generateStory(validatedData, userId);
+      
+      // Return the generated story
+      res.json(story);
+    } catch (error) {
+      console.error("Error generating story:", error);
+      
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      
+      res.status(500).json({ message: "Failed to generate story" });
+    }
+  });
+  
+  // Get user's story generation usage stats
+  app.get("/api/story/usage", async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to view usage stats" });
+      }
+      
+      // Get user ID from authenticated user
+      const userId = (req.user as any).id;
+      
+      // Get the user's current generation count
+      const count = await storage.getStoryGenerationCount(userId);
+      
+      // Get the last reset date or use the current date if none exists
+      const lastReset = await storage.getLastResetDate(userId) || new Date();
+      
+      // Calculate next reset date (1st of next month)
+      const nextReset = new Date(lastReset);
+      nextReset.setMonth(nextReset.getMonth() + 1);
+      nextReset.setDate(1);
+      
+      // Set standard monthly limit (free tier)
+      const monthlyLimit = 10;
+      
+      // Add initial 50 stories for new users
+      const initialBonus = 50;
+      
+      // Calculate remaining generations
+      // If this is the first month (no reset date is set or it's the first time using the app)
+      const isNewUser = !await storage.getLastResetDate(userId);
+      const limit = isNewUser ? initialBonus + monthlyLimit : monthlyLimit;
+      const remaining = Math.max(0, limit - count);
+      
+      res.json({
+        count,
+        remaining,
+        limit,
+        lastReset: lastReset.toISOString(),
+        nextReset: nextReset.toISOString(),
+        isNewUser
+      });
+    } catch (error) {
+      console.error("Error fetching usage stats:", error);
+      res.status(500).json({ message: "Failed to fetch usage statistics" });
+    }
+  });
+  
+  // API endpoint to save a story after generation
+  app.post("/api/story/save", async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to save stories" });
+      }
+      
+      const { story, request, isFavorite } = req.body;
+      
+      if (!story || !request) {
+        return res.status(400).json({ message: "Story and request data are required" });
+      }
+      
+      // Get user ID from authenticated user
+      const userId = (req.user as any).id;
+      
+      // Save the story
+      const savedStory = await storage.saveStory(story, request, userId);
+      
+      // If isFavorite is specified, set favorite status
+      if (typeof isFavorite === 'boolean' && isFavorite) {
+        await storage.toggleFavorite(savedStory.id, true, userId);
+        savedStory.isFavorite = true;
+      }
+      
+      res.status(201).json(savedStory);
+    } catch (error) {
+      console.error("Error saving story:", error);
+      res.status(500).json({ message: "Failed to save story" });
+    }
+  });
+  
+  // API endpoint to toggle favorite status of a story
+  app.post("/api/story/favorite/:id", async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to modify stories" });
+      }
+      
+      const { isFavorite } = req.body;
+      
+      if (typeof isFavorite !== 'boolean') {
+        return res.status(400).json({ message: "isFavorite must be a boolean" });
+      }
+      
+      // Get the user ID from the authenticated user
+      const userId = (req.user as any).id;
+      const story = await storage.toggleFavorite(req.params.id, isFavorite, userId);
+      
+      if (!story) {
+        return res.status(404).json({ message: "Story not found or unauthorized" });
+      }
+      
+      res.json(story);
+    } catch (error) {
+      console.error("Error updating favorite status:", error);
+      res.status(500).json({ message: "Failed to update favorite status" });
+    }
+  });
+  
   // Get all saved stories - requires authentication
   app.get("/api/stories", async (req, res) => {
     try {
