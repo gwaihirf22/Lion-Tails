@@ -135,14 +135,31 @@ export const storyRequestSchema = z.object({
   biblePassage: z.string().default("").optional(), // Bible passage to study
   historicalAccuracy: z.boolean().default(true).optional(), // Toggle for historical accuracy
   learningFocus: z.string().default("").optional(), // Focus area for historical/educational stories
+  // New fields for reading level and story length
+  readingLevel: z.enum([
+    "preschool", 
+    "kindergarten", 
+    "early-elementary", 
+    "late-elementary", 
+    "middle-school"
+  ]).default("early-elementary"),
+  storyLength: z.enum([
+    "short", 
+    "medium", 
+    "long", 
+    "extended"
+  ]).default("medium"),
+  // Character details for both time travel and regular stories
+  useCharacter: z.boolean().default(false), // Toggle for including custom character in any story type
   characterDetails: z.object({
-    age: z.number().int().min(5).max(12).optional(),
+    age: z.number().int().min(3).max(14).optional(),
     hair: z.string().optional(),
     eyes: z.string().optional(),
     favoriteColor: z.string().optional(),
     specialPower: z.string().optional(),
     hobby: z.string().optional(),
     personality: z.string().optional(),
+    favoriteAnimal: z.string().optional(),
   }).optional(),
 }).refine((data) => {
   // Biblical narrative doesn't require a child character
@@ -155,10 +172,15 @@ export const storyRequestSchema = z.object({
     return !!data.characterId;
   }
   
-  // If time travel is disabled and it's not a biblical narrative, childName and gender are required
+  // If custom character is enabled for any story type, characterDetails is required
+  if (data.useCharacter) {
+    return !!data.characterDetails;
+  }
+  
+  // If time travel is disabled, useCharacter is disabled, and it's not a biblical narrative, childName and gender are required
   return !!data.childName && !!data.gender;
 }, {
-  message: "Character selection is required for time travel mode. Child's name and gender are required for regular stories. Biblical narratives don't require character information.",
+  message: "For time travel stories, a character selection is required. For stories with custom characters, character details are required. For regular stories without custom characters, the child's name and gender are required. Biblical narratives don't require character information.",
   path: ["characterId"]
 });
 
