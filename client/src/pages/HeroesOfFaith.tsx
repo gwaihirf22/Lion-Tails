@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
-import { HeroOfFaith, HeroStory } from '@shared/schema';
+import { HeroOfFaith, HeroStory, SavedStory } from '@shared/schema';
 import { 
   Loader2, 
   Info, 
@@ -38,13 +38,38 @@ export default function HeroesOfFaith() {
   });
 
   // Query to fetch stories for a specific hero when one is selected
-  const { data: heroStories, isLoading: isLoadingStories } = useQuery({
+  const { data: heroStoriesData, isLoading: isLoadingStories } = useQuery({
     queryKey: ['/api/heroes', selectedHero?.id, 'stories'],
     queryFn: selectedHero ? 
-      getQueryFn<HeroStory[]>({ on401: 'returnNull' }) : 
-      () => Promise.resolve([]),
+      getQueryFn<{heroStories: HeroStory[], userStories: SavedStory[]}>({ on401: 'returnNull' }) : 
+      () => Promise.resolve({heroStories: [], userStories: []}),
     enabled: !!selectedHero,
   });
+  
+  // Combine both types of stories for display
+  const heroStories = useMemo(() => {
+    if (!heroStoriesData) return [];
+    const { heroStories = [], userStories = [] } = heroStoriesData;
+    
+    // Convert any user stories to the HeroStory format for display
+    const convertedUserStories: HeroStory[] = userStories.map(story => ({
+      id: story.id,
+      heroId: selectedHero?.id || "",
+      title: story.story.title,
+      content: story.story.content,
+      isHistoricallyAccurate: story.searchMetadata?.tags?.includes("historical") || false,
+      bibleVerse: story.story.bibleVerse,
+      isFeatured: story.isFavorite || false,
+      createdAt: story.createdAt,
+      createdBy: undefined,
+      sources: [{ title: "User Generated Story" }]
+    }));
+    
+    // Combine and sort by creation date (newest first)
+    return [...heroStories, ...convertedUserStories].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [heroStoriesData, selectedHero]);
 
   // Function to open hero details dialog
   const openHeroDetails = (hero: HeroOfFaith) => {

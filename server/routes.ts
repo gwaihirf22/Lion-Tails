@@ -561,7 +561,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get both dedicated hero stories and regular stories about this hero
       const heroStories = await storage.getHeroStoriesByHeroId(heroId);
-      const userStories = await storage.getStoriesByHeroId(heroId, userId);
+      
+      // Get user-generated stories about this hero
+      const userStories = userId ? await storage.getStoriesByHeroId(heroId, userId) : [];
+      
+      console.log(`Found ${heroStories.length} dedicated hero stories and ${userStories.length} user stories for hero ${heroId}`);
       
       // Return both types of stories
       res.status(200).json({

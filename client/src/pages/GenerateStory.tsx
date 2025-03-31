@@ -116,6 +116,30 @@ export default function GenerateStory() {
       const storyData = await response.json();
       setGeneratedStory(storyData);
       
+      // Automatically save the story
+      try {
+        const saveResponse = await apiRequest("POST", "/api/story/save", {
+          story: storyData,
+          request: data,
+          isFavorite: false,
+        });
+        
+        const savedStory = await saveResponse.json();
+        setSavedId(savedStory.id);
+        
+        toast({
+          title: "Story saved automatically!",
+          description: "You can find it in your saved stories.",
+        });
+      } catch (saveError) {
+        console.error("Failed to auto-save story:", saveError);
+        toast({
+          title: "Story generated but not saved",
+          description: "You can manually save your story using the Save button.",
+          variant: "destructive",
+        });
+      }
+      
       // Refresh usage stats
       queryClient.invalidateQueries({ queryKey: ["/api/story/usage"] });
     } catch (error) {
