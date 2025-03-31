@@ -377,8 +377,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user ID from authenticated user
       const userId = (req.user as any).id;
       
-      // Save the story
-      const savedStory = await storage.saveStory(story, request, userId);
+      // Check if the story is about a Hero of Faith and get the ID
+      let heroId: string | undefined = undefined;
+      
+      if (request.heroOfFaith && request.heroOfFaith !== "None") {
+        // Look up the hero by name to get the ID
+        const heroes = await storage.getAllHeroesOfFaith();
+        const hero = heroes.find(h => h.name === request.heroOfFaith);
+        if (hero) {
+          heroId = hero.id;
+          console.log(`Found Hero of Faith ID ${heroId} for ${request.heroOfFaith}`);
+        }
+      }
+      
+      // Save the story with associated hero if applicable
+      const savedStory = await storage.saveStory(story, request, userId, heroId);
       
       // If isFavorite is specified, set favorite status
       if (typeof isFavorite === 'boolean' && isFavorite) {
@@ -386,10 +399,178 @@ export async function registerRoutes(app: Express): Promise<Server> {
         savedStory.isFavorite = true;
       }
       
+      // If this is a Hero of Faith story, also save it to the hero stories collection
+      if (heroId && story.bibleVerse) {
+        try {
+          // Create a hero story entry
+          await storage.createHeroStory({
+            heroId,
+            title: story.title,
+            content: story.content,
+            isHistoricallyAccurate: true,
+            bibleVerse: story.bibleVerse,
+            isFeatured: false,
+            sources: [
+              {
+                title: "User Generated Story",
+                author: "AI Story Generator",
+                url: `/stories/${savedStory.id}`
+              }
+            ]
+          }, userId);
+          console.log(`Created hero story for hero ${heroId}`);
+        } catch (heroStoryError) {
+          console.error("Error creating hero story:", heroStoryError);
+          // Don't fail the entire request if this part fails
+        }
+      }
+      
       res.status(201).json(savedStory);
     } catch (error) {
       console.error("Error saving story:", error);
       res.status(500).json({ message: "Failed to save story" });
+    }
+  });
+  
+  // Search for stories - general search query
+  app.get("/api/stories/search", async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to search stories" });
+      }
+      
+      const query = req.query.q as string;
+      
+      if (!query) {
+        return res.status(400).json({ message: "Search query is required" });
+      }
+      
+      // Get user ID from authenticated user
+      const userId = (req.user as any).id;
+      
+      // Search stories with the query
+      const stories = await storage.searchStories(query, userId);
+      
+      res.status(200).json(stories);
+    } catch (error) {
+      console.error("Error searching stories:", error);
+      res.status(500).json({ message: "Failed to search stories" });
+    }
+  });
+  
+  // Search for stories by name
+  app.get("/api/stories/search/name/:name", async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to search stories" });
+      }
+      
+      const name = req.params.name;
+      
+      if (!name) {
+        return res.status(400).json({ message: "Name parameter is required" });
+      }
+      
+      // Get user ID from authenticated user
+      const userId = (req.user as any).id;
+      
+      // Search stories with the name
+      const stories = await storage.searchStoriesByName(name, userId);
+      
+      res.status(200).json(stories);
+    } catch (error) {
+      console.error("Error searching stories by name:", error);
+      res.status(500).json({ message: "Failed to search stories by name" });
+    }
+  });
+  
+  // Search for stories by Bible passage
+  app.get("/api/stories/search/passage/:passage", async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to search stories" });
+      }
+      
+      const passage = req.params.passage;
+      
+      if (!passage) {
+        return res.status(400).json({ message: "Bible passage parameter is required" });
+      }
+      
+      // Get user ID from authenticated user
+      const userId = (req.user as any).id;
+      
+      // Search stories with the Bible passage
+      const stories = await storage.searchStoriesByBiblePassage(passage, userId);
+      
+      res.status(200).json(stories);
+    } catch (error) {
+      console.error("Error searching stories by Bible passage:", error);
+      res.status(500).json({ message: "Failed to search stories by Bible passage" });
+    }
+  });
+  
+  // Search for stories by topic
+  app.get("/api/stories/search/topic/:topic", async (req, res) => {
+    try {
+      // Check if user is authenticated
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required to search stories" });
+      }
+      
+      const topic = req.params.topic;
+      
+      if (!topic) {
+        return res.status(400).json({ message: "Topic parameter is required" });
+      }
+      
+      // Get user ID from authenticated user
+      const userId = (req.user as any).id;
+      
+      // Search stories with the topic
+      const stories = await storage.searchStoriesByTopic(topic, userId);
+      
+      res.status(200).json(stories);
+    } catch (error) {
+      console.error("Error searching stories by topic:", error);
+      res.status(500).json({ message: "Failed to search stories by topic" });
+    }
+  });
+  
+  // Get stories for a specific Hero of Faith
+  app.get("/api/heroes/:heroId/stories", async (req, res) => {
+    try {
+      const heroId = req.params.heroId;
+      
+      if (!heroId) {
+        return res.status(400).json({ message: "Hero ID parameter is required" });
+      }
+      
+      // Get the hero to confirm it exists
+      const hero = await storage.getHeroOfFaithById(heroId);
+      
+      if (!hero) {
+        return res.status(404).json({ message: "Hero not found" });
+      }
+      
+      // Get user ID from authenticated user for permission check
+      const userId = req.user ? (req.user as any).id : undefined;
+      
+      // Get both dedicated hero stories and regular stories about this hero
+      const heroStories = await storage.getHeroStoriesByHeroId(heroId);
+      const userStories = await storage.getStoriesByHeroId(heroId, userId);
+      
+      // Return both types of stories
+      res.status(200).json({
+        heroStories,
+        userStories
+      });
+    } catch (error) {
+      console.error("Error fetching hero stories:", error);
+      res.status(500).json({ message: "Failed to fetch hero stories" });
     }
   });
   

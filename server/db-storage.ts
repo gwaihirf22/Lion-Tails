@@ -3,7 +3,7 @@ import { db, pool } from './db';
 import { users, verificationTokens, type User, type InsertUser, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
-import { eq, and, desc, isNull, sql } from 'drizzle-orm';
+import { eq, and, desc, isNull, sql, or, like, ilike } from 'drizzle-orm';
 import connectPg from 'connect-pg-simple';
 import { IStorage } from './storage';
 
@@ -714,6 +714,452 @@ export class DbStorage implements IStorage {
     } catch (error) {
       console.error(`Error deleting story ${id}:`, error);
       return false;
+    }
+  }
+  
+  // Story search methods
+  async searchStories(query: string, userId?: number): Promise<SavedStory[]> {
+    try {
+      let sqlQuery: string;
+      let params: any[] = [];
+      
+      if (userId) {
+        // Search only user's stories
+        sqlQuery = `
+          SELECT * FROM user_stories 
+          WHERE user_id = $1 
+          AND (
+            story_data->>'title' ILIKE $2 
+            OR story_data->>'content' ILIKE $2 
+            OR story_data->'bibleVerse'->>'text' ILIKE $2 
+            OR story_data->'bibleVerse'->>'reference' ILIKE $2
+            OR story_data->'request'->>'theme' ILIKE $2
+            OR story_data->'request'->>'childName' ILIKE $2
+            OR story_data->'request'->>'animal' ILIKE $2
+            OR story_data->'request'->>'customPrompt' ILIKE $2
+          )
+          AND (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
+          ORDER BY created_at DESC
+        `;
+        params = [userId, `%${query}%`];
+      } else {
+        // Admin search all stories
+        sqlQuery = `
+          SELECT * FROM user_stories 
+          WHERE 
+            story_data->>'title' ILIKE $1 
+            OR story_data->>'content' ILIKE $1 
+            OR story_data->'bibleVerse'->>'text' ILIKE $1 
+            OR story_data->'bibleVerse'->>'reference' ILIKE $1
+            OR story_data->'request'->>'theme' ILIKE $1
+            OR story_data->'request'->>'childName' ILIKE $1
+            OR story_data->'request'->>'animal' ILIKE $1
+            OR story_data->'request'->>'customPrompt' ILIKE $1
+          ORDER BY created_at DESC
+        `;
+        params = [`%${query}%`];
+      }
+      
+      const { rows } = await pool.query(sqlQuery, params);
+      
+      if (!rows.length) return [];
+      
+      return rows.map(row => {
+        try {
+          if (typeof row.story_data === 'object' && row.story_data !== null) {
+            return row.story_data;
+          }
+          return JSON.parse(row.story_data);
+        } catch (error) {
+          console.error("Error parsing story data:", error);
+          return {
+            id: row.story_id || "unknown",
+            story: {
+              title: "Error Loading Story",
+              content: "There was a problem loading this story data.",
+              bibleVerse: { text: "", reference: "" }
+            },
+            request: {
+              theme: "",
+              animal: "",
+              gender: "boy" as "boy" | "girl" | undefined,
+              childName: "",
+              storyType: "regular",
+              useTimeTravel: false,
+              useAnimal: true
+            },
+            createdAt: new Date(row.created_at).toISOString(),
+            isFavorite: !!row.is_favorite,
+            searchMetadata: {
+              childName: "",
+              biblePassage: "",
+              topic: "",
+              tags: []
+            }
+          };
+        }
+      });
+    } catch (error) {
+      console.error("Error searching stories:", error);
+      return [];
+    }
+  }
+  
+  async searchStoriesByName(name: string, userId?: number): Promise<SavedStory[]> {
+    try {
+      let sqlQuery: string;
+      let params: any[] = [];
+      
+      if (userId) {
+        // Search only user's stories
+        sqlQuery = `
+          SELECT * FROM user_stories 
+          WHERE user_id = $1 
+          AND story_data->'request'->>'childName' ILIKE $2
+          AND (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
+          ORDER BY created_at DESC
+        `;
+        params = [userId, `%${name}%`];
+      } else {
+        // Admin search all stories
+        sqlQuery = `
+          SELECT * FROM user_stories 
+          WHERE story_data->'request'->>'childName' ILIKE $1
+          ORDER BY created_at DESC
+        `;
+        params = [`%${name}%`];
+      }
+      
+      const { rows } = await pool.query(sqlQuery, params);
+      
+      if (!rows.length) return [];
+      
+      return rows.map(row => {
+        try {
+          if (typeof row.story_data === 'object' && row.story_data !== null) {
+            return row.story_data;
+          }
+          return JSON.parse(row.story_data);
+        } catch (error) {
+          console.error("Error parsing story data:", error);
+          return {
+            id: row.story_id || "unknown",
+            story: {
+              title: "Error Loading Story",
+              content: "There was a problem loading this story data.",
+              bibleVerse: { text: "", reference: "" }
+            },
+            request: {
+              theme: "",
+              animal: "",
+              gender: "boy" as "boy" | "girl" | undefined,
+              childName: "",
+              storyType: "regular",
+              useTimeTravel: false,
+              useAnimal: true
+            },
+            createdAt: new Date(row.created_at).toISOString(),
+            isFavorite: !!row.is_favorite,
+            searchMetadata: {
+              childName: name,
+              biblePassage: "",
+              topic: "",
+              tags: []
+            }
+          };
+        }
+      });
+    } catch (error) {
+      console.error("Error searching stories by name:", error);
+      return [];
+    }
+  }
+  
+  async searchStoriesByBiblePassage(passage: string, userId?: number): Promise<SavedStory[]> {
+    try {
+      let sqlQuery: string;
+      let params: any[] = [];
+      
+      if (userId) {
+        // Search only user's stories
+        sqlQuery = `
+          SELECT * FROM user_stories 
+          WHERE user_id = $1 
+          AND story_data->'bibleVerse'->>'reference' ILIKE $2
+          AND (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
+          ORDER BY created_at DESC
+        `;
+        params = [userId, `%${passage}%`];
+      } else {
+        // Admin search all stories
+        sqlQuery = `
+          SELECT * FROM user_stories 
+          WHERE story_data->'bibleVerse'->>'reference' ILIKE $1
+          ORDER BY created_at DESC
+        `;
+        params = [`%${passage}%`];
+      }
+      
+      const { rows } = await pool.query(sqlQuery, params);
+      
+      if (!rows.length) return [];
+      
+      return rows.map(row => {
+        try {
+          if (typeof row.story_data === 'object' && row.story_data !== null) {
+            return row.story_data;
+          }
+          return JSON.parse(row.story_data);
+        } catch (error) {
+          console.error("Error parsing story data:", error);
+          return {
+            id: row.story_id || "unknown",
+            story: {
+              title: "Error Loading Story",
+              content: "There was a problem loading this story data.",
+              bibleVerse: { text: "", reference: "" }
+            },
+            request: {
+              theme: "",
+              animal: "",
+              gender: "boy" as "boy" | "girl" | undefined,
+              childName: "",
+              storyType: "regular",
+              useTimeTravel: false,
+              useAnimal: true
+            },
+            createdAt: new Date(row.created_at).toISOString(),
+            isFavorite: !!row.is_favorite,
+            searchMetadata: {
+              childName: "",
+              biblePassage: passage,
+              topic: "",
+              tags: []
+            }
+          };
+        }
+      });
+    } catch (error) {
+      console.error("Error searching stories by Bible passage:", error);
+      return [];
+    }
+  }
+  
+  async searchStoriesByTopic(topic: string, userId?: number): Promise<SavedStory[]> {
+    try {
+      let sqlQuery: string;
+      let params: any[] = [];
+      
+      if (userId) {
+        // Search only user's stories
+        sqlQuery = `
+          SELECT * FROM user_stories 
+          WHERE user_id = $1 
+          AND story_data->'request'->>'theme' ILIKE $2
+          AND (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
+          ORDER BY created_at DESC
+        `;
+        params = [userId, `%${topic}%`];
+      } else {
+        // Admin search all stories
+        sqlQuery = `
+          SELECT * FROM user_stories 
+          WHERE story_data->'request'->>'theme' ILIKE $1
+          ORDER BY created_at DESC
+        `;
+        params = [`%${topic}%`];
+      }
+      
+      const { rows } = await pool.query(sqlQuery, params);
+      
+      if (!rows.length) return [];
+      
+      return rows.map(row => {
+        try {
+          if (typeof row.story_data === 'object' && row.story_data !== null) {
+            return row.story_data;
+          }
+          return JSON.parse(row.story_data);
+        } catch (error) {
+          console.error("Error parsing story data:", error);
+          return {
+            id: row.story_id || "unknown",
+            story: {
+              title: "Error Loading Story",
+              content: "There was a problem loading this story data.",
+              bibleVerse: { text: "", reference: "" }
+            },
+            request: {
+              theme: "",
+              animal: "",
+              gender: "boy" as "boy" | "girl" | undefined,
+              childName: "",
+              storyType: "regular",
+              useTimeTravel: false,
+              useAnimal: true
+            },
+            createdAt: new Date(row.created_at).toISOString(),
+            isFavorite: !!row.is_favorite,
+            searchMetadata: {
+              childName: "",
+              biblePassage: "",
+              topic: topic,
+              tags: []
+            }
+          };
+        }
+      });
+    } catch (error) {
+      console.error("Error searching stories by topic:", error);
+      return [];
+    }
+  }
+  
+  async searchStoriesByTags(tags: string[], userId?: number): Promise<SavedStory[]> {
+    if (!tags.length) return [];
+    
+    try {
+      // Create a dynamic query with multiple ILIKE conditions for tags
+      const tagConditions = tags.map((_, index) => 
+        `story_data->'request'->>'theme' ILIKE $${userId ? index + 2 : index + 1}`
+      ).join(' OR ');
+      
+      let sqlQuery: string;
+      let params: any[] = [];
+      
+      if (userId) {
+        // Search only user's stories
+        sqlQuery = `
+          SELECT * FROM user_stories 
+          WHERE user_id = $1 
+          AND (${tagConditions})
+          AND (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
+          ORDER BY created_at DESC
+        `;
+        params = [userId, ...tags.map(tag => `%${tag}%`)];
+      } else {
+        // Admin search all stories
+        sqlQuery = `
+          SELECT * FROM user_stories 
+          WHERE (${tagConditions})
+          ORDER BY created_at DESC
+        `;
+        params = tags.map(tag => `%${tag}%`);
+      }
+      
+      const { rows } = await pool.query(sqlQuery, params);
+      
+      if (!rows.length) return [];
+      
+      return rows.map(row => {
+        try {
+          if (typeof row.story_data === 'object' && row.story_data !== null) {
+            return row.story_data;
+          }
+          return JSON.parse(row.story_data);
+        } catch (error) {
+          console.error("Error parsing story data:", error);
+          return {
+            id: row.story_id || "unknown",
+            story: {
+              title: "Error Loading Story",
+              content: "There was a problem loading this story data.",
+              bibleVerse: { text: "", reference: "" }
+            },
+            request: {
+              theme: "",
+              animal: "",
+              gender: "boy" as "boy" | "girl" | undefined,
+              childName: "",
+              storyType: "regular",
+              useTimeTravel: false,
+              useAnimal: true
+            },
+            createdAt: new Date(row.created_at).toISOString(),
+            isFavorite: !!row.is_favorite,
+            searchMetadata: {
+              childName: "",
+              biblePassage: "",
+              topic: "",
+              tags: tags
+            }
+          };
+        }
+      });
+    } catch (error) {
+      console.error("Error searching stories by tags:", error);
+      return [];
+    }
+  }
+  
+  async getStoriesByHeroId(heroId: string, userId?: number): Promise<SavedStory[]> {
+    try {
+      let sqlQuery: string;
+      let params: any[] = [];
+      
+      if (userId) {
+        // Get only stories belonging to this user with this hero
+        sqlQuery = `
+          SELECT * FROM user_stories 
+          WHERE user_id = $1 
+          AND story_data->>'heroId' = $2
+          AND (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
+          ORDER BY created_at DESC
+        `;
+        params = [userId, heroId];
+      } else {
+        // Admin function - get all stories for this hero
+        sqlQuery = `
+          SELECT * FROM user_stories 
+          WHERE story_data->>'heroId' = $1
+          ORDER BY created_at DESC
+        `;
+        params = [heroId];
+      }
+      
+      const { rows } = await pool.query(sqlQuery, params);
+      
+      if (!rows.length) return [];
+      
+      return rows.map(row => {
+        try {
+          if (typeof row.story_data === 'object' && row.story_data !== null) {
+            return row.story_data;
+          }
+          return JSON.parse(row.story_data);
+        } catch (error) {
+          console.error("Error parsing story data:", error);
+          return {
+            id: row.story_id || "unknown",
+            story: {
+              title: "Error Loading Story",
+              content: "There was a problem loading this story data.",
+              bibleVerse: { text: "", reference: "" }
+            },
+            request: {
+              theme: "",
+              animal: "",
+              gender: "boy" as "boy" | "girl" | undefined,
+              childName: "",
+              storyType: "regular",
+              useTimeTravel: false,
+              useAnimal: true
+            },
+            createdAt: new Date(row.created_at).toISOString(),
+            isFavorite: !!row.is_favorite,
+            heroId,
+            searchMetadata: {
+              childName: "",
+              biblePassage: "",
+              topic: "",
+              tags: []
+            }
+          };
+        }
+      });
+    } catch (error) {
+      console.error(`Error getting stories for hero ${heroId}:`, error);
+      return [];
     }
   }
   

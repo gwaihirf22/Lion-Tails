@@ -40,9 +40,17 @@ export interface IStorage {
   // Story related methods
   getAllStories(userId?: number): Promise<SavedStory[]>;
   getStoryById(id: string, userId?: number): Promise<SavedStory | undefined>;
-  saveStory(story: StoryResponse, request: StoryRequest, userId: number): Promise<SavedStory>;
+  saveStory(story: StoryResponse, request: StoryRequest, userId: number, heroId?: string): Promise<SavedStory>;
   toggleFavorite(id: string, isFavorite: boolean, userId: number): Promise<SavedStory | undefined>;
   deleteStory(id: string, userId: number): Promise<boolean>;
+  
+  // Story search methods
+  searchStories(query: string, userId?: number): Promise<SavedStory[]>;
+  searchStoriesByName(name: string, userId?: number): Promise<SavedStory[]>;
+  searchStoriesByBiblePassage(passage: string, userId?: number): Promise<SavedStory[]>;
+  searchStoriesByTopic(topic: string, userId?: number): Promise<SavedStory[]>;
+  searchStoriesByTags(tags: string[], userId?: number): Promise<SavedStory[]>;
+  getStoriesByHeroId(heroId: string, userId?: number): Promise<SavedStory[]>;
 
   // Heroes of Faith related methods
   getAllHeroesOfFaith(): Promise<HeroOfFaith[]>;
@@ -369,7 +377,7 @@ export class MemStorage implements IStorage {
     return story;
   }
 
-  async saveStory(story: StoryResponse, request: StoryRequest, userId: number): Promise<SavedStory> {
+  async saveStory(story: StoryResponse, request: StoryRequest, userId: number, heroId?: string): Promise<SavedStory> {
     const id = uuidv4();
     const now = new Date();
 
@@ -377,13 +385,81 @@ export class MemStorage implements IStorage {
     const expiryDate = new Date();
     expiryDate.setFullYear(expiryDate.getFullYear() + 1);
 
+    // Generate search metadata from the story and request
+    const keywords: string[] = [];
+    const tags: string[] = [];
+    const characters: string[] = [];
+    const biblicalReferences: string[] = [];
+    const themes: string[] = [];
+
+    // Extract child's name and gender if present
+    if (request.childName) {
+      characters.push(request.childName);
+      keywords.push(request.childName);
+    }
+    if (request.gender) {
+      tags.push(request.gender);
+    }
+
+    // Add animal if present
+    if (request.animal && request.animal !== "None" && request.useAnimal) {
+      keywords.push(request.animal);
+    }
+
+    // Add theme if present
+    if (request.theme && request.theme !== "None") {
+      themes.push(request.theme);
+      keywords.push(request.theme);
+    }
+
+    // Add biblical event if present
+    if (request.biblicalEvent && request.biblicalEvent !== "None") {
+      tags.push("biblical event");
+      keywords.push(request.biblicalEvent);
+      biblicalReferences.push(request.biblicalEvent);
+    }
+
+    // Add specific Hero of Faith if present
+    if (request.heroOfFaith && request.heroOfFaith !== "None") {
+      characters.push(request.heroOfFaith);
+      keywords.push(request.heroOfFaith);
+      tags.push("hero of faith");
+    }
+
+    // Add Bible verse reference
+    if (story.bibleVerse && story.bibleVerse.reference) {
+      biblicalReferences.push(story.bibleVerse.reference);
+    }
+
+    // Add story title to keywords
+    keywords.push(story.title);
+
+    // Add custom prompt if present
+    if (request.customPrompt) {
+      const promptWords = request.customPrompt.split(/\s+/).filter(word => word.length > 4);
+      keywords.push(...promptWords.slice(0, 5)); // Add up to 5 significant words from custom prompt
+    }
+
+    // Add story type
+    if (request.storyType) {
+      tags.push(request.storyType);
+    }
+
     const savedStory: SavedStory = {
       id,
       story,
       request,
       createdAt: now.toISOString(),
       isFavorite: false,
-      expiresAt: expiryDate.toISOString()
+      expiresAt: expiryDate.toISOString(),
+      heroId, // Link to Hero of Faith if provided
+      searchMetadata: {
+        keywords,
+        tags,
+        characters,
+        biblicalReferences,
+        themes
+      }
     };
 
     this.stories.set(id, savedStory);
@@ -429,6 +505,202 @@ export class MemStorage implements IStorage {
 
     // Remove from storage
     return this.stories.delete(id);
+  }
+
+  // Search methods implementation
+  async searchStories(query: string, userId?: number): Promise<SavedStory[]> {
+    // Get all stories for this user (or all stories if no userId)
+    const allStories = userId ? await this.getUserStories(userId) : Array.from(this.stories.values());
+    
+    // Normalize query for case-insensitive search
+    const normalizedQuery = query.toLowerCase();
+    
+    // Filter stories based on the query
+    return allStories.filter(story => {
+      // Search in title
+      if (story.story.title.toLowerCase().includes(normalizedQuery)) {
+        return true;
+      }
+      
+      // Search in content
+      if (story.story.content.toLowerCase().includes(normalizedQuery)) {
+        return true;
+      }
+      
+      // Search in metadata
+      if (story.searchMetadata) {
+        // Search in keywords
+        if (story.searchMetadata.keywords?.some(keyword => 
+          keyword.toLowerCase().includes(normalizedQuery)
+        )) {
+          return true;
+        }
+        
+        // Search in tags
+        if (story.searchMetadata.tags?.some(tag => 
+          tag.toLowerCase().includes(normalizedQuery)
+        )) {
+          return true;
+        }
+        
+        // Search in characters
+        if (story.searchMetadata.characters?.some(character => 
+          character.toLowerCase().includes(normalizedQuery)
+        )) {
+          return true;
+        }
+        
+        // Search in biblical references
+        if (story.searchMetadata.biblicalReferences?.some(reference => 
+          reference.toLowerCase().includes(normalizedQuery)
+        )) {
+          return true;
+        }
+        
+        // Search in themes
+        if (story.searchMetadata.themes?.some(theme => 
+          theme.toLowerCase().includes(normalizedQuery)
+        )) {
+          return true;
+        }
+      }
+      
+      return false;
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  
+  async searchStoriesByName(name: string, userId?: number): Promise<SavedStory[]> {
+    // Get all stories for this user (or all stories if no userId)
+    const allStories = userId ? await this.getUserStories(userId) : Array.from(this.stories.values());
+    
+    // Normalize name for case-insensitive search
+    const normalizedName = name.toLowerCase();
+    
+    // Filter stories that include the name in their characters or request
+    return allStories.filter(story => {
+      // Check in child name from request
+      if (story.request.childName && 
+          story.request.childName.toLowerCase().includes(normalizedName)) {
+        return true;
+      }
+      
+      // Check in metadata characters list
+      if (story.searchMetadata?.characters?.some(character => 
+        character.toLowerCase().includes(normalizedName)
+      )) {
+        return true;
+      }
+      
+      return false;
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  
+  async searchStoriesByBiblePassage(passage: string, userId?: number): Promise<SavedStory[]> {
+    // Get all stories for this user (or all stories if no userId)
+    const allStories = userId ? await this.getUserStories(userId) : Array.from(this.stories.values());
+    
+    // Normalize passage for case-insensitive search
+    const normalizedPassage = passage.toLowerCase();
+    
+    // Filter stories with matching Bible passages
+    return allStories.filter(story => {
+      // Check in the bibleVerse reference
+      if (story.story.bibleVerse?.reference &&
+          story.story.bibleVerse.reference.toLowerCase().includes(normalizedPassage)) {
+        return true;
+      }
+      
+      // Check in metadata biblical references
+      if (story.searchMetadata?.biblicalReferences?.some(reference => 
+        reference.toLowerCase().includes(normalizedPassage)
+      )) {
+        return true;
+      }
+      
+      // Check in story content (might contain Bible references)
+      if (story.story.content.toLowerCase().includes(normalizedPassage)) {
+        return true;
+      }
+      
+      return false;
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  
+  async searchStoriesByTopic(topic: string, userId?: number): Promise<SavedStory[]> {
+    // Get all stories for this user (or all stories if no userId)
+    const allStories = userId ? await this.getUserStories(userId) : Array.from(this.stories.values());
+    
+    // Normalize topic for case-insensitive search
+    const normalizedTopic = topic.toLowerCase();
+    
+    // Filter stories with matching topics/themes
+    return allStories.filter(story => {
+      // Check in story theme
+      if (story.request.theme && 
+          story.request.theme.toLowerCase().includes(normalizedTopic)) {
+        return true;
+      }
+      
+      // Check in metadata themes
+      if (story.searchMetadata?.themes?.some(theme => 
+        theme.toLowerCase().includes(normalizedTopic)
+      )) {
+        return true;
+      }
+      
+      // Check in metadata keywords
+      if (story.searchMetadata?.keywords?.some(keyword => 
+        keyword.toLowerCase().includes(normalizedTopic)
+      )) {
+        return true;
+      }
+      
+      return false;
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  
+  async searchStoriesByTags(tags: string[], userId?: number): Promise<SavedStory[]> {
+    // Get all stories for this user (or all stories if no userId)
+    const allStories = userId ? await this.getUserStories(userId) : Array.from(this.stories.values());
+    
+    // Normalize tags for case-insensitive search
+    const normalizedTags = tags.map(tag => tag.toLowerCase());
+    
+    // Filter stories with matching tags
+    return allStories.filter(story => {
+      // If the story has no tags, it doesn't match
+      if (!story.searchMetadata?.tags || story.searchMetadata.tags.length === 0) {
+        return false;
+      }
+      
+      // Check if any of the story's tags match any of the search tags
+      const storyTags = story.searchMetadata.tags.map(tag => tag.toLowerCase());
+      return normalizedTags.some(tag => storyTags.includes(tag));
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  
+  async getStoriesByHeroId(heroId: string, userId?: number): Promise<SavedStory[]> {
+    // Get all stories for this user (or all stories if no userId)
+    const allStories = userId ? await this.getUserStories(userId) : Array.from(this.stories.values());
+    
+    // Filter stories related to the specific hero
+    return allStories.filter(story => {
+      // Check if story has the heroId directly
+      if (story.heroId === heroId) {
+        return true;
+      }
+      
+      // Check if story request mentioned this hero
+      if (story.request.heroOfFaith) {
+        // Get the hero to compare by name
+        const hero = this.heroesOfFaith.get(heroId);
+        if (hero && story.request.heroOfFaith === hero.name) {
+          return true;
+        }
+      }
+      
+      return false;
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   // Usage tracking methods

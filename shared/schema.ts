@@ -178,7 +178,7 @@ export const storyResponseSchema = z.object({
 
 export type StoryResponse = z.infer<typeof storyResponseSchema>;
 
-// Schema for saved stories
+// Schema for saved stories with enhanced search metadata
 export const savedStorySchema = z.object({
   id: z.string(),
   story: storyResponseSchema,
@@ -186,6 +186,22 @@ export const savedStorySchema = z.object({
   createdAt: z.string(), // ISO date string
   isFavorite: z.boolean().default(false),
   expiresAt: z.string().optional(), // ISO date string
+  
+  // Search and relationship metadata
+  heroId: z.string().optional(), // ID of the Hero of Faith if story is related to one
+  searchMetadata: z.object({
+    keywords: z.array(z.string()).optional(),
+    tags: z.array(z.string()).optional(),
+    characters: z.array(z.string()).optional(),
+    biblicalReferences: z.array(z.string()).optional(),
+    themes: z.array(z.string()).optional(),
+  }).optional().default({
+    keywords: [],
+    tags: [],
+    characters: [],
+    biblicalReferences: [],
+    themes: []
+  }),
 });
 
 export type SavedStory = z.infer<typeof savedStorySchema>;
