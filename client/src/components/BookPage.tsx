@@ -33,6 +33,8 @@ interface BookPageProps {
   hasPrevPage?: boolean;
   currentPage?: number;
   totalPages?: number;
+  scrollMode?: boolean;
+  onScrollModeChange?: (mode: boolean) => void;
 }
 
 export function BookPage({
@@ -46,13 +48,12 @@ export function BookPage({
   hasPrevPage = false,
   currentPage = 1,
   totalPages = 1,
+  scrollMode = false,
+  onScrollModeChange,
 }: BookPageProps) {
   const [theme, setTheme] = useState<BookTheme>("classic");
   const [bgColor, setBgColor] = useState<BgColor>("cream");
   const [paragraphs, setParagraphs] = useState<string[]>([]);
-  
-  // Add a state for scrolling mode
-  const [scrollMode, setScrollMode] = useState<boolean>(false);
   
   // Split content into paragraphs for better formatting
   useEffect(() => {
@@ -252,7 +253,7 @@ export function BookPage({
             size="icon" 
             className="h-8 w-8" 
             title={scrollMode ? "Switch to page mode" : "Switch to scroll mode"}
-            onClick={() => setScrollMode(!scrollMode)}
+            onClick={() => onScrollModeChange && onScrollModeChange(!scrollMode)}
           >
             {scrollMode ? <BookOpen className="h-4 w-4" /> : <ScrollText className="h-4 w-4" />}
           </Button>
@@ -457,7 +458,13 @@ export function BookPage({
         </div>
         
         {/* Content - Either scrollable mode or paginated mode */}
-        <div className={cn("prose max-w-none", styles.textClass, scrollMode ? "max-h-[60vh] overflow-y-auto pr-4" : "")}>
+        <div className={cn(
+          "prose max-w-none", 
+          styles.textClass, 
+          scrollMode ? 
+          "max-h-[60vh] overflow-y-auto pr-4 scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-rounded-full scrollbar-thumb-primary/40 scrollbar-track-primary/10 hover:scrollbar-thumb-primary/60" 
+          : ""
+        )}>
           {/* For scroll mode - show all content at once */}
           {scrollMode && (
             <>

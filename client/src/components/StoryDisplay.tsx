@@ -31,6 +31,7 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showExpiryAlert, setShowExpiryAlert] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [scrollMode, setScrollMode] = useState(false);
   const storyContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -296,15 +297,17 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
       {/* Book Page Component */}
       <BookPage
         title={story.title}
-        content={currentPageContent}
-        verseText={showBibleVerse ? story.bibleVerse.text : undefined}
-        verseReference={showBibleVerse ? story.bibleVerse.reference : undefined}
+        content={scrollMode ? story.content : currentPageContent}
+        verseText={scrollMode || showBibleVerse ? story.bibleVerse.text : undefined}
+        verseReference={scrollMode || showBibleVerse ? story.bibleVerse.reference : undefined}
         onNextPage={goToNextPage}
         onPrevPage={goToPrevPage}
         hasNextPage={currentPage < totalPages}
         hasPrevPage={currentPage > 1}
         currentPage={currentPage}
         totalPages={totalPages}
+        scrollMode={scrollMode}
+        onScrollModeChange={(mode) => setScrollMode(mode)}
       />
 
       {/* Image Display on First Page */}
