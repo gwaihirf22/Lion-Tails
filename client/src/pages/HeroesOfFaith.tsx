@@ -136,7 +136,7 @@ export default function HeroesOfFaith() {
                 size="sm" 
                 onClick={() => {
                   localStorage.setItem('selectedHeroOfFaith', hero.id);
-                  window.location.href = "/";
+                  window.location.href = "/generate-story";
                 }}
               >
                 Create Story
@@ -310,7 +310,7 @@ export default function HeroesOfFaith() {
                   <Button 
                     onClick={() => {
                       localStorage.setItem('selectedHeroOfFaith', selectedHero.id);
-                      window.location.href = "/";
+                      window.location.href = "/generate-story";
                     }}
                   >
                     Create New Story
@@ -370,7 +370,7 @@ export default function HeroesOfFaith() {
                         <Button
                           onClick={() => {
                             localStorage.setItem('selectedHeroOfFaith', selectedHero.id);
-                            window.location.href = "/";
+                            window.location.href = "/generate-story";
                           }}
                         >
                           Create First Story

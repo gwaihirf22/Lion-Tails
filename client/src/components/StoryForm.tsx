@@ -72,6 +72,9 @@ export default function StoryForm({
     enabled: showHeroOfFaith
   });
   
+  // Check localStorage for a pre-selected hero of faith
+  const selectedHeroFromStorage = typeof window !== 'undefined' ? localStorage.getItem('selectedHeroOfFaith') : null;
+  
   const form = useForm<StoryRequest>({
     resolver: zodResolver(storyRequestSchema),
     defaultValues: {
@@ -81,7 +84,7 @@ export default function StoryForm({
       useAnimal: true, // Default to including animals if selected
       theme: "", // No default theme
       biblicalEvent: "", // No default biblical event
-      heroOfFaith: "", // No default hero of faith
+      heroOfFaith: selectedHeroFromStorage || "", // Use hero from localStorage if available
       storyType: formType === "children" ? "regular" : "biblical_narrative", // Default based on form type
       useTimeTravel: false,
       characterId: undefined,
@@ -92,6 +95,22 @@ export default function StoryForm({
     },
   });
   
+  // Effect to set hasSelectedHeroOfFaith based on selectedHeroFromStorage
+  useEffect(() => {
+    if (selectedHeroFromStorage) {
+      setHasSelectedHeroOfFaith(true);
+      
+      // If we're in historical mode and have a hero selected, make sure biblical event is cleared
+      if (formType === "historical") {
+        form.setValue("biblicalEvent", "");
+        setHasSelectedBiblicalEvent(false);
+      }
+      
+      // Clear localStorage after we've used the value
+      localStorage.removeItem('selectedHeroOfFaith');
+    }
+  }, [selectedHeroFromStorage, form, formType]);
+
   // Update the form when the time travel checkbox or biblical narrative option changes
   useEffect(() => {
     form.setValue("useTimeTravel", useTimeTravel);
