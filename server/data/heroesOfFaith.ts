@@ -1,8 +1,27 @@
 import { HeroOfFaith } from '@shared/schema';
 import { v4 as uuidv4 } from 'uuid';
 
+// Helper function to ensure all heroes have the required fields
+const createHero = (hero: Partial<HeroOfFaith>): HeroOfFaith => {
+  return {
+    id: hero.id || uuidv4(),
+    name: hero.name || "",
+    description: hero.description || "",
+    timePeriod: hero.timePeriod || "",
+    contribution: hero.contribution || "",
+    sources: hero.sources || [],
+    keyEvents: hero.keyEvents || [],
+    birthYear: hero.birthYear,
+    deathYear: hero.deathYear,
+    famousQuote: hero.famousQuote,
+    bibleVerse: hero.bibleVerse,
+    imageUrl: hero.imageUrl,
+    createdAt: hero.createdAt || new Date()
+  };
+};
+
 // Initial set of Heroes of Faith
-export const heroesOfFaithData: HeroOfFaith[] = [
+const rawHeroesOfFaithData = [
   {
     id: uuidv4(),
     name: "William Wilberforce",
@@ -16,6 +35,51 @@ export const heroesOfFaithData: HeroOfFaith[] = [
       text: "Learn to do right; seek justice. Defend the oppressed. Take up the cause of the fatherless; plead the case of the widow.",
       reference: "Isaiah 1:17"
     },
+    sources: [
+      {
+        title: "Amazing Grace: William Wilberforce and the Heroic Campaign to End Slavery",
+        author: "Eric Metaxas",
+        type: "book"
+      }
+    ],
+    keyEvents: [
+      {
+        year: "1807",
+        description: "Abolition of the Slave Trade Act passed in British Parliament"
+      },
+      {
+        year: "1833",
+        description: "Slavery Abolition Act passed, just three days before his death"
+      }
+    ],
+    createdAt: new Date()
+  },
+  {
+    id: uuidv4(),
+    name: "Jim Elliot",
+    description: "An American missionary who was killed while attempting to evangelize the Huaorani people of Ecuador.",
+    timePeriod: "1927-1956",
+    contribution: "His journal entries and famous quote about sacrifice inspired countless missionaries. After his death, his wife Elisabeth continued his work among the very people who killed him.",
+    birthYear: "1927",
+    deathYear: "1956",
+    famousQuote: "He is no fool who gives what he cannot keep to gain what he cannot lose.",
+    bibleVerse: {
+      text: "For whoever wants to save their life will lose it, but whoever loses their life for me will find it.",
+      reference: "Matthew 16:25"
+    },
+    sources: [
+      {
+        title: "Through Gates of Splendor",
+        author: "Elisabeth Elliot",
+        type: "book"
+      }
+    ],
+    keyEvents: [
+      {
+        year: "1956",
+        description: "Killed by Huaorani tribe members while attempting to make missionary contact"
+      }
+    ],
     createdAt: new Date()
   },
   {
@@ -152,5 +216,68 @@ export const heroesOfFaithData: HeroOfFaith[] = [
       reference: "1 Corinthians 13:12"
     },
     createdAt: new Date()
+  },
+  {
+    id: uuidv4(),
+    name: "John Wesley",
+    description: "An English cleric, theologian, and evangelist who founded the Methodist movement.",
+    timePeriod: "1703-1791",
+    contribution: "Traveled over 250,000 miles on horseback, preached over 40,000 sermons, and helped spark a revival in England that emphasized personal holiness and social justice.",
+    birthYear: "1703",
+    deathYear: "1791",
+    famousQuote: "Do all the good you can, by all the means you can, in all the ways you can, in all the places you can, at all the times you can, to all the people you can, as long as ever you can.",
+    bibleVerse: {
+      text: "And what does the Lord require of you? To act justly and to love mercy and to walk humbly with your God.",
+      reference: "Micah 6:8"
+    },
+    createdAt: new Date()
+  },
+  {
+    id: uuidv4(),
+    name: "Martin Luther",
+    description: "A German professor of theology, priest, and seminal figure in the Protestant Reformation.",
+    timePeriod: "1483-1546",
+    contribution: "Posted his Ninety-five Theses in 1517, challenging the Catholic Church's practices and doctrines, which sparked the Protestant Reformation and emphasized salvation by faith alone.",
+    birthYear: "1483",
+    deathYear: "1546",
+    famousQuote: "Here I stand. I can do no other. God help me.",
+    bibleVerse: {
+      text: "For it is by grace you have been saved, through faith—and this is not from yourselves, it is the gift of God—not by works, so that no one can boast.",
+      reference: "Ephesians 2:8-9"
+    },
+    createdAt: new Date()
+  },
+  {
+    id: uuidv4(),
+    name: "Elisabeth Elliot",
+    description: "Christian author and speaker who, after her husband Jim Elliot was killed, worked as a missionary to the very tribe that murdered him.",
+    timePeriod: "1926-2015",
+    contribution: "Returned to Ecuador to minister to the Huaorani tribe that killed her husband, wrote numerous influential books on Christian living, and hosted the radio program 'Gateway to Joy'.",
+    birthYear: "1926",
+    deathYear: "2015",
+    famousQuote: "The secret is Christ in me, not me in a different set of circumstances.",
+    bibleVerse: {
+      text: "But we have this treasure in jars of clay to show that this all-surpassing power is from God and not from us.",
+      reference: "2 Corinthians 4:7"
+    },
+    createdAt: new Date()
+  },
+  {
+    id: uuidv4(),
+    name: "Charles Spurgeon",
+    description: "English Baptist preacher known as the 'Prince of Preachers' who was a powerful orator and prolific author.",
+    timePeriod: "1834-1892",
+    contribution: "Built the Metropolitan Tabernacle which seated 5,000 people, founded a pastors' college, an orphanage, and published numerous sermons and books that continue to influence Christians today.",
+    birthYear: "1834",
+    deathYear: "1892",
+    famousQuote: "God loves with a great love the man whose heart is bursting with a passion for the impossible.",
+    bibleVerse: {
+      text: "But he said to me, 'My grace is sufficient for you, for my power is made perfect in weakness.' Therefore I will boast all the more gladly about my weaknesses, so that Christ's power may rest on me.",
+      reference: "2 Corinthians 12:9"
+    },
+    createdAt: new Date()
   }
 ];
+
+// Apply the createHero function to ensure all heroes have the required fields
+export const heroesOfFaithData: HeroOfFaith[] = rawHeroesOfFaithData.map(hero => createHero(hero));
