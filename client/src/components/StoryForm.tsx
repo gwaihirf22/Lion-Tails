@@ -60,14 +60,14 @@ export default function StoryForm({
   const [isBiblicalNarrative, setIsBiblicalNarrative] = useState(false);
   const [historicalAccuracy, setHistoricalAccuracy] = useState(true);
   
-  // Fetch characters for selection
+  // Fetch characters for selection - always fetch them as they can be used in any story type
   const { data: characters = [], isLoading: charactersLoading } = useQuery<Character[]>({
     queryKey: ['/api/characters'],
     queryFn: getQueryFn<Character[]>({
       on401: "throw"
     }),
-    // Only fetch when time travel is enabled
-    enabled: useTimeTravel && showTimeTravel,
+    // Always fetch characters as they can be used in any story type
+    enabled: true,
   });
   
   // Fetch heroes of faith for selection
@@ -188,10 +188,9 @@ export default function StoryForm({
           (characterDropdown as HTMLElement).focus();
         }
       }, 100);
-    } else {
-      // Clear character selection when time travel is disabled and not biblical narrative
-      form.setValue("characterId", undefined);
-    }
+    } 
+    // Keep character selection even when time travel is not enabled
+    // This allows using the character in regular stories too
   }, [useTimeTravel, isBiblicalNarrative, form, formType, historicalAccuracy]);
 
   // Update the form when the custom character checkbox changes
@@ -205,6 +204,9 @@ export default function StoryForm({
       // Set default values for these fields so they don't get sent to the server
       form.setValue("childName", "Custom Character");
       form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
+      
+      // Clear any selected character when using a custom character
+      form.setValue("characterId", undefined);
     }
   }, [useCustomCharacter, form]);
 
@@ -214,7 +216,7 @@ export default function StoryForm({
         {/* Only show child fields when needed */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {formType === "children" && showChildFields && !useTimeTravel && !isBiblicalNarrative && (
+            {formType === "children" && showChildFields && !useTimeTravel && !isBiblicalNarrative && !form.getValues("characterId") && (
               <>
                 <FormField
                   control={form.control}
@@ -457,7 +459,7 @@ export default function StoryForm({
                         Time Travel Adventure
                       </FormLabel>
                       <FormDescription>
-                        Enable this to create a story where your character travels back in time to witness Biblical events.
+                        Enable this to create a time travel adventure where your character visits Biblical times. This only affects the story theme, not character selection.
                       </FormDescription>
                     </div>
                   </FormItem>
@@ -465,7 +467,7 @@ export default function StoryForm({
               />
             )}
             
-            {formType === "children" && showCustomCharacter && !useTimeTravel && !isBiblicalNarrative && (
+            {formType === "children" && showCustomCharacter && !useTimeTravel && !isBiblicalNarrative && !form.getValues("characterId") && (
               <FormField
                 control={form.control}
                 name="useCharacter"
@@ -494,7 +496,7 @@ export default function StoryForm({
             )}
             
             {/* Character Details Fields (when custom character is enabled) */}
-            {useCustomCharacter && !useTimeTravel && !isBiblicalNarrative && (
+            {useCustomCharacter && !useTimeTravel && !isBiblicalNarrative && !form.getValues("characterId") && (
               <div className="space-y-4 p-4 border border-dashed border-secondary/30 rounded-lg bg-secondary/5">
                 <h3 className="text-md font-semibold mb-2 text-secondary">Character Details</h3>
                 
@@ -706,13 +708,13 @@ export default function StoryForm({
               </div>
             )}
             
-            {useTimeTravel && showTimeTravel && (
+            {formType === "children" && !isBiblicalNarrative && (
               <FormField
                 control={form.control}
                 name="characterId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">Time Travel Character</FormLabel>
+                    <FormLabel className="text-sm font-medium">Select Character</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
@@ -721,12 +723,19 @@ export default function StoryForm({
                           </svg>
                         </span>
                         <Select
-                          onValueChange={field.onChange}
+                          onValueChange={(value) => {
+                            // When a character is selected, clear the custom character
+                            if (value && useCustomCharacter) {
+                              setUseCustomCharacter(false);
+                              form.setValue("useCharacter", false);
+                            }
+                            field.onChange(value);
+                          }}
                           value={field.value}
                           disabled={charactersLoading}
                         >
                           <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                            <SelectValue placeholder={charactersLoading ? "Loading characters..." : "Select your time travel character"} />
+                            <SelectValue placeholder={charactersLoading ? "Loading characters..." : "Select a character for your story"} />
                           </SelectTrigger>
                           <SelectContent>
                             {characters.length === 0 ? (
@@ -744,14 +753,30 @@ export default function StoryForm({
                         </Select>
                       </div>
                     </FormControl>
+                    <FormDescription>
+                      Select an existing character to use in your story. Characters can be used with or without the time travel option.
+                    </FormDescription>
                     <FormMessage />
-                    {characters.length === 0 && (
-                      <div className="mt-2 text-xs text-secondary/70">
-                        <a href="/characters" className="text-secondary font-medium underline">
-                          Click here to create a time travel character first
-                        </a>
-                      </div>
-                    )}
+                    <div className="flex justify-between mt-1">
+                      {characters.length === 0 && (
+                        <div className="text-xs text-secondary/70">
+                          <a href="/characters" className="text-secondary font-medium underline">
+                            Click here to create a character for stories
+                          </a>
+                        </div>
+                      )}
+                      {field.value && (
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                          onClick={() => field.onChange(undefined)}
+                        >
+                          Reset Selection
+                        </Button>
+                      )}
+                    </div>
                   </FormItem>
                 )}
               />
