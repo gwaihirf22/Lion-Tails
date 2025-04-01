@@ -145,8 +145,8 @@ export default function StoryForm({
       form.setValue("animal", "none");
       form.setValue("storyType", "biblical_narrative");
       
-      // Clear character selection for historical mode
-      form.setValue("characterId", undefined);
+      // Keep character selection even for historical mode
+      // Character selection remains optional; don't clear it
       form.setValue("useTimeTravel", false);
       
       // Set historical accuracy
@@ -161,8 +161,8 @@ export default function StoryForm({
       form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
       form.setValue("animal", "none");
       
-      // Clear character selection for biblical narrative
-      form.setValue("characterId", undefined);
+      // Keep character selection even for biblical narrative
+      // Character selection remains optional; don't clear it
       
       // Make sure time travel is disabled for biblical narrative
       if (useTimeTravel) {
@@ -200,8 +200,8 @@ export default function StoryForm({
         {/* Only show child fields when needed */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Character Selection - Moved to the top and available for all story types */}
-            {formType === "children" && (
+            {/* Character Selection - Moved to the top and available for all story types, including biblical narratives */}
+            {(formType === "children" || formType === "historical") && (
               <FormField
                 control={form.control}
                 name="characterId"
