@@ -95,7 +95,8 @@ export default function SongSearch({ onSave }: SongSearchProps) {
       
       toast({
         title: "Song Added!",
-        description: "The song has been added with guitar chords.",
+        description: "The song has been added with guitar chords. View it in the Browse Songs tab.",
+        duration: 5000,
       });
 
       // Trigger parent component refresh
@@ -104,11 +105,14 @@ export default function SongSearch({ onSave }: SongSearchProps) {
       // Clear selection
       setSelectedSong(null);
       setSearchTerm("");
+      
+      // Switch to the search tab
+      setActiveTab("search");
     } catch (error) {
       console.error("Error generating chords:", error);
       toast({
         title: "Error",
-        description: "Failed to generate chords. Try again later.",
+        description: "Failed to generate chords. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -152,7 +156,8 @@ export default function SongSearch({ onSave }: SongSearchProps) {
       
       toast({
         title: "Song Added!",
-        description: "Your custom song has been added with guitar chords.",
+        description: "Your custom song has been added with guitar chords. View it in the Browse Songs tab.",
+        duration: 5000,
       });
 
       // Trigger parent component refresh

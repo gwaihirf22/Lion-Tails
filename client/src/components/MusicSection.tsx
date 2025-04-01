@@ -152,10 +152,11 @@ export default function MusicSection({ songs }: MusicSectionProps) {
         {/* View song dialog */}
         {selectedSong && viewMode && (
           <Dialog open={viewMode} onOpenChange={(open) => !open && setViewMode(false)}>
-            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto" aria-describedby="song-view-description">
               <DialogHeader>
                 <DialogTitle className="text-2xl">{selectedSong.title}</DialogTitle>
                 {selectedSong.artist && <p className="text-muted-foreground">by {selectedSong.artist}</p>}
+                <p id="song-view-description" className="sr-only">Full song details with lyrics and guitar chords</p>
               </DialogHeader>
               
               <div className="mt-4 space-y-6">
@@ -174,9 +175,10 @@ export default function MusicSection({ songs }: MusicSectionProps) {
         {/* Edit song dialog */}
         {selectedSong && editMode && (
           <Dialog open={editMode} onOpenChange={(open) => !open && setEditMode(false)}>
-            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto" aria-describedby="song-edit-description">
               <DialogHeader>
                 <DialogTitle>Edit Song: {selectedSong.title}</DialogTitle>
+                <p id="song-edit-description" className="sr-only">Edit song lyrics and chords</p>
               </DialogHeader>
               
               <div className="grid gap-4 py-4">
@@ -243,9 +245,14 @@ export default function MusicSection({ songs }: MusicSectionProps) {
                             className="w-24 mr-2"
                             value={selectedSong.chorus?.chords[lineIndex] || ''} 
                             onChange={(e) => {
-                              const updatedChorus = {...selectedSong.chorus};
-                              updatedChorus.chords[lineIndex] = e.target.value;
-                              setSelectedSong({...selectedSong, chorus: updatedChorus});
+                              if (selectedSong.chorus) {
+                                const updatedChorus = {
+                                  lyrics: [...selectedSong.chorus.lyrics],
+                                  chords: [...selectedSong.chorus.chords]
+                                };
+                                updatedChorus.chords[lineIndex] = e.target.value;
+                                setSelectedSong({...selectedSong, chorus: updatedChorus});
+                              }
                             }}
                             placeholder="Chord"
                           />
@@ -253,9 +260,14 @@ export default function MusicSection({ songs }: MusicSectionProps) {
                             className="flex-1"
                             value={line} 
                             onChange={(e) => {
-                              const updatedChorus = {...selectedSong.chorus};
-                              updatedChorus.lyrics[lineIndex] = e.target.value;
-                              setSelectedSong({...selectedSong, chorus: updatedChorus});
+                              if (selectedSong.chorus) {
+                                const updatedChorus = {
+                                  lyrics: [...selectedSong.chorus.lyrics],
+                                  chords: [...selectedSong.chorus.chords]
+                                };
+                                updatedChorus.lyrics[lineIndex] = e.target.value;
+                                setSelectedSong({...selectedSong, chorus: updatedChorus});
+                              }
                             }}
                             placeholder="Lyrics"
                           />
@@ -276,9 +288,14 @@ export default function MusicSection({ songs }: MusicSectionProps) {
                             className="w-24 mr-2"
                             value={selectedSong.bridge?.chords[lineIndex] || ''} 
                             onChange={(e) => {
-                              const updatedBridge = {...selectedSong.bridge};
-                              updatedBridge.chords[lineIndex] = e.target.value;
-                              setSelectedSong({...selectedSong, bridge: updatedBridge});
+                              if (selectedSong.bridge) {
+                                const updatedBridge = {
+                                  lyrics: [...selectedSong.bridge.lyrics],
+                                  chords: [...selectedSong.bridge.chords]
+                                };
+                                updatedBridge.chords[lineIndex] = e.target.value;
+                                setSelectedSong({...selectedSong, bridge: updatedBridge});
+                              }
                             }}
                             placeholder="Chord"
                           />
@@ -286,9 +303,14 @@ export default function MusicSection({ songs }: MusicSectionProps) {
                             className="flex-1"
                             value={line} 
                             onChange={(e) => {
-                              const updatedBridge = {...selectedSong.bridge};
-                              updatedBridge.lyrics[lineIndex] = e.target.value;
-                              setSelectedSong({...selectedSong, bridge: updatedBridge});
+                              if (selectedSong.bridge) {
+                                const updatedBridge = {
+                                  lyrics: [...selectedSong.bridge.lyrics],
+                                  chords: [...selectedSong.bridge.chords]
+                                };
+                                updatedBridge.lyrics[lineIndex] = e.target.value;
+                                setSelectedSong({...selectedSong, bridge: updatedBridge});
+                              }
                             }}
                             placeholder="Lyrics"
                           />
