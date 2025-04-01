@@ -216,7 +216,7 @@ export default function StoryForm({
         {/* Only show child fields when needed */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {formType === "children" && showChildFields && !useTimeTravel && !isBiblicalNarrative && !form.getValues("characterId") && (
+            {formType === "children" && showChildFields && !isBiblicalNarrative && !form.getValues("characterId") && (
               <>
                 <FormField
                   control={form.control}
@@ -467,7 +467,7 @@ export default function StoryForm({
               />
             )}
             
-            {formType === "children" && showCustomCharacter && !useTimeTravel && !isBiblicalNarrative && !form.getValues("characterId") && (
+            {formType === "children" && showCustomCharacter && !isBiblicalNarrative && !form.getValues("characterId") && (
               <FormField
                 control={form.control}
                 name="useCharacter"
@@ -496,7 +496,7 @@ export default function StoryForm({
             )}
             
             {/* Character Details Fields (when custom character is enabled) */}
-            {useCustomCharacter && !useTimeTravel && !isBiblicalNarrative && !form.getValues("characterId") && (
+            {useCustomCharacter && !isBiblicalNarrative && !form.getValues("characterId") && (
               <div className="space-y-4 p-4 border border-dashed border-secondary/30 rounded-lg bg-secondary/5">
                 <h3 className="text-md font-semibold mb-2 text-secondary">Character Details</h3>
                 
