@@ -1,6 +1,11 @@
 // Song-related routes
 import { Express } from "express";
 import { allSongsForSearch, getStructuredSongById } from './data/songDatabase';
+import { generateSongChords } from "./lib/songGenerator";
+import { storage } from "./storage";
+import { Song, songSchema } from "@shared/schema";
+import { ZodError } from "zod";
+import { fromZodError } from "zod-validation-error";
 
 export function registerSongRoutes(app: Express) {
   // Get all songs for searching
@@ -65,6 +70,70 @@ export function registerSongRoutes(app: Express) {
     } catch (error) {
       console.error("Error fetching song:", error);
       return res.status(500).json({ message: "Failed to fetch song" });
+    }
+  });
+  
+  // Create a new song
+  app.post("/api/songs", async (req, res) => {
+    try {
+      const songData = songSchema.parse(req.body);
+      const song = await storage.createSong(songData);
+      res.status(201).json(song);
+    } catch (error) {
+      console.error("Error creating song:", error);
+      
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      
+      res.status(500).json({ message: "Failed to create song" });
+    }
+  });
+
+  // Find song by ID and generate chords
+  app.get("/api/songs/:id/generate-chords", async (req, res) => {
+    try {
+      const songEntry = allSongsForSearch.find(s => s.id === req.params.id);
+      
+      if (!songEntry) {
+        return res.status(404).json({ message: "Song not found" });
+      }
+      
+      // Generate chords for the found song
+      const songWithChords = await generateSongChords(songEntry.title, songEntry.lyrics);
+      
+      // Save the song with chords
+      const savedSong = await storage.createSong(songWithChords);
+      
+      res.json(savedSong);
+    } catch (error) {
+      console.error("Error finding song and generating chords:", error);
+      res.status(500).json({ message: "Failed to generate chords for the song" });
+    }
+  });
+
+  // Generate chords for a custom song
+  app.post("/api/generate-chords", async (req, res) => {
+    try {
+      const { title, lyrics } = req.body;
+      
+      if (!title || !lyrics) {
+        return res.status(400).json({ message: "Title and lyrics are required" });
+      }
+      
+      console.log(`Generating chords for custom song: ${title}`);
+      
+      // Generate chords for the song
+      const songWithChords = await generateSongChords(title, lyrics);
+      
+      // Save the song with chords
+      const savedSong = await storage.createSong(songWithChords);
+      
+      res.status(201).json(savedSong);
+    } catch (error) {
+      console.error("Error generating chords:", error);
+      res.status(500).json({ message: "Failed to generate chords" });
     }
   });
 }
