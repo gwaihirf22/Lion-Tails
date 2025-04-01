@@ -40,7 +40,7 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showExpiryAlert, setShowExpiryAlert] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [scrollMode, setScrollMode] = useState(false);
+  const [scrollMode, setScrollMode] = useState(true);
   const [selectedHeroId, setSelectedHeroId] = useState<string>('');
   const storyContentRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -217,12 +217,16 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
   const goToNextPage = () => {
     if (currentPage < totalPages) {
       setCurrentPage(currentPage + 1);
+      // Scroll to top of the page when navigating
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const goToPrevPage = () => {
     if (currentPage > 1) {
       setCurrentPage(currentPage - 1);
+      // Scroll to top of the page when navigating
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 

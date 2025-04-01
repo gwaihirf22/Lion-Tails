@@ -19,6 +19,9 @@ export default function SavedStories() {
 
   // Fetch all stories
   useEffect(() => {
+    // Scroll to the top of the page when component mounts
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    
     const fetchStories = async () => {
       try {
         setLoading(true);

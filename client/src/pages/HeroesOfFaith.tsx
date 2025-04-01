@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -28,6 +28,11 @@ import { Link } from 'wouter';
 
 export default function HeroesOfFaith() {
   const { toast } = useToast();
+  
+  // Scroll to top when component mounts
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, []);
   const [selectedHero, setSelectedHero] = useState<HeroOfFaith | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
 

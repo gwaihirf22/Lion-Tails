@@ -10,6 +10,9 @@ export default function Story() {
   const [storyId, setStoryId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Scroll to the top of the page when component mounts
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    
     const urlParams = new URLSearchParams(window.location.search);
     const dataParam = urlParams.get("data");
     const idParam = urlParams.get("id");

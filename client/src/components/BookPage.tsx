@@ -253,7 +253,13 @@ export function BookPage({
             size="icon" 
             className="h-8 w-8" 
             title={scrollMode ? "Switch to page mode" : "Switch to scroll mode"}
-            onClick={() => onScrollModeChange && onScrollModeChange(!scrollMode)}
+            onClick={() => {
+              if (onScrollModeChange) {
+                onScrollModeChange(!scrollMode);
+                // Scroll to top when toggling modes
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            }}
           >
             {scrollMode ? <BookOpen className="h-4 w-4" /> : <ScrollText className="h-4 w-4" />}
           </Button>
