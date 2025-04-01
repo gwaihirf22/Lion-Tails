@@ -332,9 +332,12 @@ export function convertLyricsToStucturedSong(id: string, title: string, artist: 
   const lines = lyricsText.split('\n');
   
   // We'll identify chorus as repeated sections or sections after blank lines
-  let verses: Verse[] = [];
-  let chorus: Verse | null = null;
-  let bridge: Verse | null = null;
+  let verses: { lyrics: string[], chords: string[] }[] = [];
+  let chorus: { lyrics: string[], chords: string[] } | null = null;
+  let bridge: { lyrics: string[], chords: string[] } | null = null;
+  
+  // Explicitly initialize bridge for type safety
+  bridge = null;
   
   let currentVerse: string[] = [];
   let inChorus = false;
@@ -376,6 +379,24 @@ export function convertLyricsToStucturedSong(id: string, title: string, artist: 
   
   // Generate some basic chords based on common patterns
   const songChords = generateChordsForSong(id, tags);
+  
+  // Get chord names only
+  const chordNames = songChords.map(chord => chord.name);
+  
+  // Assign actual chord names to verses - use a 4-chord progression and repeat it
+  verses = verses.map(verse => {
+    const newChords = verse.lyrics.map((line: string, index: number) => chordNames[index % chordNames.length]);
+    return { lyrics: verse.lyrics, chords: newChords };
+  });
+  
+  // Assign chords to chorus if it exists
+  if (chorus) {
+    const newChords = chorus.lyrics.map((line: string, index: number) => chordNames[(index + 2) % chordNames.length]);
+    chorus = { lyrics: chorus.lyrics, chords: newChords };
+  }
+  
+  // We'll skip bridge for now as it's always null in our current implementation
+  // This will be handled in a future enhancement
   
   // Create complete song object
   return {

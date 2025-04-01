@@ -6,6 +6,7 @@ import { storage } from "./storage";
 import { Song, songSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
+import { v4 as uuidv4 } from "uuid";
 
 export function registerSongRoutes(app: Express) {
   // Get all songs for searching
