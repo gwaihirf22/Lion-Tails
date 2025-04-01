@@ -17,6 +17,7 @@ export default function MusicSection({ songs }: MusicSectionProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [editMode, setEditMode] = useState(false);
+  const [viewMode, setViewMode] = useState(false);
   const { toast } = useToast();
 
   // Handle search input change
@@ -44,6 +45,14 @@ export default function MusicSection({ songs }: MusicSectionProps) {
   const handleEditSong = (song: Song) => {
     setSelectedSong(song);
     setEditMode(true);
+    setViewMode(false);
+  };
+  
+  // Handle view song
+  const handleViewSong = (song: Song) => {
+    setSelectedSong(song);
+    setViewMode(true);
+    setEditMode(false);
   };
 
   // Handle save edited song
@@ -114,7 +123,12 @@ export default function MusicSection({ songs }: MusicSectionProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {filteredSongs.map((song) => (
               <div key={song.id} className="relative group">
-                <SongCard song={song} />
+                <div 
+                  className="cursor-pointer"
+                  onClick={() => handleViewSong(song)}
+                >
+                  <SongCard song={song} />
+                </div>
                 <button 
                   onClick={() => handleEditSong(song)}
                   className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-primary text-white rounded-full p-2"
@@ -133,6 +147,28 @@ export default function MusicSection({ songs }: MusicSectionProps) {
               <p>No songs available. Add songs in the "Find & Add Songs" tab.</p>
             )}
           </div>
+        )}
+        
+        {/* View song dialog */}
+        {selectedSong && viewMode && (
+          <Dialog open={viewMode} onOpenChange={(open) => !open && setViewMode(false)}>
+            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="text-2xl">{selectedSong.title}</DialogTitle>
+                {selectedSong.artist && <p className="text-muted-foreground">by {selectedSong.artist}</p>}
+              </DialogHeader>
+              
+              <div className="mt-4 space-y-6">
+                {/* Display the complete song with SongCard component */}
+                <SongCard song={selectedSong} />
+                
+                <div className="flex justify-end space-x-2 mt-4">
+                  <Button variant="outline" onClick={() => setViewMode(false)}>Close</Button>
+                  <Button onClick={() => handleEditSong(selectedSong)}>Edit Song</Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         )}
         
         {/* Edit song dialog */}
