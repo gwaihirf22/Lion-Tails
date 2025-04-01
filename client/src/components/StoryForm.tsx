@@ -54,7 +54,6 @@ export default function StoryForm({
   showCustomCharacter = true
 }: StoryFormProps) {
   const [useTimeTravel, setUseTimeTravel] = useState(false);
-  const [useCustomCharacter, setUseCustomCharacter] = useState(false);
   const [hasSelectedBiblicalEvent, setHasSelectedBiblicalEvent] = useState(false);
   const [hasSelectedHeroOfFaith, setHasSelectedHeroOfFaith] = useState(false);
   const [isBiblicalNarrative, setIsBiblicalNarrative] = useState(false);
@@ -193,22 +192,7 @@ export default function StoryForm({
     // This allows using the character in regular stories too
   }, [useTimeTravel, isBiblicalNarrative, form, formType, historicalAccuracy]);
 
-  // Update the form when the custom character checkbox changes
-  useEffect(() => {
-    form.setValue("useCharacter", useCustomCharacter);
-    
-    if (useCustomCharacter) {
-      // When custom character is enabled, clear child fields errors if present
-      form.clearErrors(['childName', 'gender']);
-      
-      // Set default values for these fields so they don't get sent to the server
-      form.setValue("childName", "Custom Character");
-      form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
-      
-      // Clear any selected character when using a custom character
-      form.setValue("characterId", undefined);
-    }
-  }, [useCustomCharacter, form]);
+  // Character creation is now handled exclusively through the Character tab
 
   return (
     <Card className={`content-container rounded-2xl shadow-lg ${formType === "historical" ? "border-amber-200" : "border-blue-200"}`}>
@@ -467,246 +451,7 @@ export default function StoryForm({
               />
             )}
             
-            {formType === "children" && showCustomCharacter && !isBiblicalNarrative && !form.getValues("characterId") && (
-              <FormField
-                control={form.control}
-                name="useCharacter"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md p-4 border border-secondary/10">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={(checked) => {
-                          setUseCustomCharacter(!!checked);
-                          field.onChange(checked);
-                        }}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel className="text-sm font-medium">
-                        Custom Character
-                      </FormLabel>
-                      <FormDescription>
-                        Enable this to create a story with a custom character with special abilities and traits.
-                      </FormDescription>
-                    </div>
-                  </FormItem>
-                )}
-              />
-            )}
-            
-            {/* Character Details Fields (when custom character is enabled) */}
-            {useCustomCharacter && !isBiblicalNarrative && !form.getValues("characterId") && (
-              <div className="space-y-4 p-4 border border-dashed border-secondary/30 rounded-lg bg-secondary/5">
-                <h3 className="text-md font-semibold mb-2 text-secondary">Character Details</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="characterDetails.age"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">Character Age</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-                              </svg>
-                            </span>
-                            <Select
-                              onValueChange={(value) => field.onChange(parseInt(value))}
-                              value={field.value?.toString() || "8"}
-                            >
-                              <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                                <SelectValue placeholder="Select age" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map((age) => (
-                                  <SelectItem key={age} value={age.toString()}>
-                                    {age} years old
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="characterDetails.hair"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">Hair Color</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 3H3v18h18V3z" />
-                              </svg>
-                            </span>
-                            <Input 
-                              placeholder="e.g. brown, red, blonde..." 
-                              className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
-                              {...field} 
-                            />
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="characterDetails.eyes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">Eye Color</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" />
-                              </svg>
-                            </span>
-                            <Input 
-                              placeholder="e.g. blue, green, brown..." 
-                              className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
-                              {...field} 
-                            />
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="characterDetails.favoriteColor"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">Favorite Color</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="13.5" cy="6.5" r="2.5" /><path d="M19 11V9a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h9a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-3" />
-                              </svg>
-                            </span>
-                            <Input 
-                              placeholder="e.g. blue, red, purple..." 
-                              className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
-                              {...field} 
-                            />
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="characterDetails.personality"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">Personality</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10" /><path d="M8 14s1.5 2 4 2 4-2 4-2" /><line x1="9" x2="9.01" y1="9" y2="9" /><line x1="15" x2="15.01" y1="9" y2="9" />
-                              </svg>
-                            </span>
-                            <Input 
-                              placeholder="e.g. shy, brave, curious..." 
-                              className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
-                              {...field} 
-                            />
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="characterDetails.hobby"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">Hobby</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10" /><path d="m15 9-6 6" /><path d="m9 9 6 6" />
-                              </svg>
-                            </span>
-                            <Input 
-                              placeholder="e.g. drawing, sports, reading..." 
-                              className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
-                              {...field} 
-                            />
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="characterDetails.specialPower"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">Special Ability</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-                              </svg>
-                            </span>
-                            <Input 
-                              placeholder="e.g. flying, talking to animals..." 
-                              className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
-                              {...field} 
-                            />
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="characterDetails.favoriteAnimal"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">Favorite Animal</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M10 5.172C10 3.782 8.423 2.679 6.5 3c-2.823.47-4.113 6.006-4 7 .08.703 1.725 1.722 3.656 1 1.261-.472 1.96-1.45 2.344-2.5" /><path d="M16 8c-1.236.588-1.673 2.143-1 4" /><path d="M9 16.85C10.571 15.617 12.43 15 14.587 15 19.38 15 22 19.163 22 22" /><path d="M13 9c3.6 0 5 1 5 3.5 0 2.485-1.17 4.5-2 4.5-.513 0-1-1-1-1" />
-                              </svg>
-                            </span>
-                            <Input 
-                              placeholder="e.g. dog, lion, dolphin..." 
-                              className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
-                              {...field} 
-                            />
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-            )}
+            {/* Character creation has been moved to the Characters tab */}
             
             {formType === "children" && !isBiblicalNarrative && (
               <FormField
@@ -724,9 +469,8 @@ export default function StoryForm({
                         </span>
                         <Select
                           onValueChange={(value) => {
-                            // When a character is selected, clear the custom character
-                            if (value && useCustomCharacter) {
-                              setUseCustomCharacter(false);
+                            // When a character is selected, ensure "useCharacter" is set to false
+                            if (value) {
                               form.setValue("useCharacter", false);
                             }
                             field.onChange(value);
