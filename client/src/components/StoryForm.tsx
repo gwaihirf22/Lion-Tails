@@ -246,7 +246,7 @@ export default function StoryForm({
                       </div>
                     </FormControl>
                     <FormDescription>
-                      Select an existing character to use in your story. Characters can be used with any story type.
+                      Select an existing character to use in your story. Characters can be used with any story type (Regular Bedtime Story, Moral Bedtime Story, Biblical Narrative, or even with Time Travel).
                     </FormDescription>
                     <FormMessage />
                     <div className="flex justify-between mt-1">

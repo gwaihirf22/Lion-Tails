@@ -181,7 +181,7 @@ export const storyRequestSchema = z.object({
   // If time travel is disabled, useCharacter is disabled, and it's not a biblical narrative, childName and gender are required
   return !!data.childName && !!data.gender;
 }, {
-  message: "For time travel stories, a character selection is required. For stories with custom characters, character details are required. For regular stories without custom characters, the child's name and gender are required. Biblical narratives don't require character information.",
+  message: "You can select a character for any story type. If no character is selected, the child's name and gender are required (except for Biblical narratives).",
   path: ["characterId"]
 });
 
