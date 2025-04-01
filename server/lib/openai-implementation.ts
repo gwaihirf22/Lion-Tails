@@ -134,11 +134,41 @@ Format your response as valid JSON with the following structure:
       "imagePrompt": "A short description for an illustration of a key scene in the biblical style"
     }`;
     
-    // Use a model with broader availability (gpt-3.5-turbo) to avoid permission issues
-    // We'll use the user's model if provided, otherwise fall back to gpt-3.5-turbo
-    // Using a more widely available model to ensure compatibility
-    const model = userModel || "gpt-3.5-turbo";
+    // Use the best available model based on length requirements
+    // For longer stories, we need a model with higher token capacity
+    // We'll prioritize the user's chosen model, but ensure we choose a model capable of longer output
+    let model = userModel || "gpt-4o-mini";
+    
+    // Increase model capabilities if longer story is requested
+    if (storyLength === "long" || storyLength === "extended") {
+      model = userModel || "gpt-4o"; // Use the most capable model for longer stories
+    }
+    
     console.log("Using OpenAI model:", model);
+    
+    // Calculate appropriate max_tokens based on story length
+    let maxTokens = 3500; // Default for "medium" length
+    
+    // Adjust token count based on story length
+    switch(storyLength) {
+      case "very-short":
+        maxTokens = 2000;
+        break;
+      case "short":
+        maxTokens = 3000;
+        break;
+      case "medium":
+        maxTokens = 4000;
+        break;
+      case "long":
+        maxTokens = 6000;
+        break;
+      case "extended":
+        maxTokens = 8000;
+        break;
+      default:
+        maxTokens = 4000; // Default to medium if unspecified
+    }
     
     // Call OpenAI API with a fresh client using the appropriate API key
     const openaiClient = getOpenAIClient(userApiKey || undefined);
@@ -150,7 +180,7 @@ Format your response as valid JSON with the following structure:
       ],
       response_format: { type: "json_object" },
       temperature: 0.7,
-      max_tokens: 3500
+      max_tokens: maxTokens
     });
     
     // Extract the response content
@@ -574,5 +604,29 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
     prompt += ` IMPORTANT: Filter any inappropriate content or themes from this custom request. ONLY include elements that are consistent with traditional Christian values and appropriate for young children. Completely ignore any requests for content that might be harmful, inappropriate, or contrary to wholesome Christian teachings.`;
   }
 
+  // Add story length specification
+  let lengthDescription;
+  switch(storyLength) {
+    case "very-short":
+      lengthDescription = "very short (about 2-3 minutes reading time, 500-750 words)";
+      break;
+    case "short":
+      lengthDescription = "short (about 4-5 minutes reading time, 750-1000 words)";
+      break;
+    case "medium":
+      lengthDescription = "medium length (about 8-10 minutes reading time, 1500-2000 words)";
+      break;
+    case "long":
+      lengthDescription = "long (about 15-20 minutes reading time, 2500-3500 words)";
+      break;
+    case "extended":
+      lengthDescription = "very long (about 25-30 minutes reading time, 4000-5000 words)";
+      break;
+    default:
+      lengthDescription = "medium length (about 8-10 minutes reading time, 1500-2000 words)";
+  }
+  
+  prompt += ` Make sure to create a ${lengthDescription} story that will deeply engage the child while teaching important biblical principles.`;
+  
   return prompt;
 }
