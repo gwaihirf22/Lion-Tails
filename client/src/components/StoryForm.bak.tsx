@@ -217,9 +217,9 @@ export default function StoryForm({
                         </span>
                         <Select
                           onValueChange={(value) => {
-                            // When a character is selected, ensure time travel characters work properly
+                            // When a character is selected, ensure "useCharacter" is set to false
                             if (value) {
-                              // No need for useCharacter flag since we're using the characterId directly
+                              form.setValue("useCharacter", false);
                             }
                             field.onChange(value);
                           }}
