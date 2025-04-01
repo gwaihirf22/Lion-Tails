@@ -1,4 +1,5 @@
 // Database of popular Christian songs for searching
+import { Song, ChordDiagram, Verse } from "@shared/schema";
 
 export interface SongSearchEntry {
   id: string;
@@ -7,6 +8,121 @@ export interface SongSearchEntry {
   lyrics: string;
   tags?: string[];
 }
+
+// Common guitar chords with fingering information
+export const commonChords: Record<string, ChordDiagram> = {
+  'G': {
+    name: 'G',
+    fingering: {
+      string1: 3, // 3rd fret on high E
+      string2: 0, // open B
+      string3: 0, // open G
+      string4: 0, // open D
+      string5: 2, // 2nd fret on A
+      string6: 3, // 3rd fret on low E
+    }
+  },
+  'C': {
+    name: 'C',
+    fingering: {
+      string1: 0, // open high E
+      string2: 1, // 1st fret on B
+      string3: 0, // open G
+      string4: 2, // 2nd fret on D
+      string5: 3, // 3rd fret on A
+      string6: -1, // don't play low E
+    }
+  },
+  'D': {
+    name: 'D',
+    fingering: {
+      string1: 2, // 2nd fret on high E
+      string2: 3, // 3rd fret on B
+      string3: 2, // 2nd fret on G
+      string4: 0, // open D
+      string5: -1, // don't play A
+      string6: -1, // don't play low E
+    }
+  },
+  'A': {
+    name: 'A',
+    fingering: {
+      string1: 0, // open high E
+      string2: 2, // 2nd fret on B
+      string3: 2, // 2nd fret on G
+      string4: 2, // 2nd fret on D
+      string5: 0, // open A
+      string6: -1, // don't play low E
+    }
+  },
+  'E': {
+    name: 'E',
+    fingering: {
+      string1: 0, // open high E
+      string2: 0, // open B
+      string3: 1, // 1st fret on G
+      string4: 2, // 2nd fret on D
+      string5: 2, // 2nd fret on A
+      string6: 0, // open low E
+    }
+  },
+  'F': {
+    name: 'F',
+    fingering: {
+      string1: 1, // 1st fret on high E
+      string2: 1, // 1st fret on B
+      string3: 2, // 2nd fret on G
+      string4: 3, // 3rd fret on D
+      string5: 3, // 3rd fret on A
+      string6: 1, // 1st fret on low E (barre)
+    },
+    barres: [{ fromString: 1, toString: 6, fret: 1 }]
+  },
+  'Am': {
+    name: 'Am',
+    fingering: {
+      string1: 0, // open high E
+      string2: 1, // 1st fret on B
+      string3: 2, // 2nd fret on G
+      string4: 2, // 2nd fret on D
+      string5: 0, // open A
+      string6: -1, // don't play low E
+    }
+  },
+  'Em': {
+    name: 'Em',
+    fingering: {
+      string1: 0, // open high E
+      string2: 0, // open B
+      string3: 0, // open G
+      string4: 2, // 2nd fret on D
+      string5: 2, // 2nd fret on A
+      string6: 0, // open low E
+    }
+  },
+  'Dm': {
+    name: 'Dm',
+    fingering: {
+      string1: 1, // 1st fret on high E
+      string2: 3, // 3rd fret on B
+      string3: 2, // 2nd fret on G
+      string4: 0, // open D
+      string5: -1, // don't play A
+      string6: -1, // don't play low E
+    }
+  },
+  'Bm': {
+    name: 'Bm',
+    fingering: {
+      string1: 2, // 2nd fret on high E
+      string2: 3, // 3rd fret on B
+      string3: 4, // 4th fret on G
+      string4: 4, // 4th fret on D
+      string5: 2, // 2nd fret on A
+      string6: -1, // don't play low E
+    }
+  },
+};
 
 // Popular Christian songs
 export const songDatabase: SongSearchEntry[] = [
@@ -210,6 +326,126 @@ export const songDatabase: SongSearchEntry[] = [
   }
 ];
 
+// Function to convert lyrics from string format to structured verse format
+export function convertLyricsToStucturedSong(id: string, title: string, artist: string, lyricsText: string, tags: string[]): Song {
+  // Split lyrics into sections (verses/chorus)
+  const lines = lyricsText.split('\n');
+  
+  // We'll identify chorus as repeated sections or sections after blank lines
+  let verses: Verse[] = [];
+  let chorus: Verse | null = null;
+  let bridge: Verse | null = null;
+  
+  let currentVerse: string[] = [];
+  let inChorus = false;
+  
+  // Basic parsing - not perfect but works for simple songs
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Empty line indicates section break
+    if (line.trim() === '') {
+      if (currentVerse.length > 0) {
+        // If this looks like a chorus (repeated lines or after first verse)
+        if (!chorus && (verses.length > 0 || currentVerse.some(l => l.includes('chorus') || l.toLowerCase().includes('hallelujah')))) {
+          chorus = {
+            lyrics: currentVerse,
+            chords: currentVerse.map(() => '') // Empty chords for now
+          };
+        } else {
+          verses.push({
+            lyrics: currentVerse,
+            chords: currentVerse.map(() => '') // Empty chords for now
+          });
+        }
+        currentVerse = [];
+      }
+      continue;
+    }
+    
+    currentVerse.push(line);
+  }
+  
+  // Add the final section
+  if (currentVerse.length > 0) {
+    verses.push({
+      lyrics: currentVerse,
+      chords: currentVerse.map(() => '') // Empty chords for now
+    });
+  }
+  
+  // Generate some basic chords based on common patterns
+  const songChords = generateChordsForSong(id, tags);
+  
+  // Create complete song object
+  return {
+    id,
+    title,
+    artist,
+    verses,
+    chorus,
+    bridge,
+    chords: songChords,
+    backgroundColor: getBackgroundColorForSong(tags)
+  };
+}
+
+// Generate chord progressions based on song type
+function generateChordsForSong(songId: string, tags: string[]): ChordDiagram[] {
+  // Common chord progressions by type
+  const progressions = {
+    contemporary: ['G', 'Em', 'C', 'D'],
+    worship: ['C', 'G', 'Am', 'F'],
+    hymn: ['D', 'A', 'Bm', 'G'],
+    lullaby: ['G', 'C', 'D', 'Em'],
+    praise: ['E', 'B', 'C#m', 'A'],
+    children: ['C', 'F', 'G', 'C']
+  };
+  
+  // Pick a chord progression based on tags
+  let progression: string[] = [];
+  
+  for (const tag of tags) {
+    const key = Object.keys(progressions).find(k => tag.toLowerCase().includes(k));
+    if (key) {
+      progression = progressions[key as keyof typeof progressions];
+      break;
+    }
+  }
+  
+  // Default to contemporary if no match
+  if (progression.length === 0) {
+    progression = progressions.contemporary;
+  }
+  
+  // Return chord diagrams for the progression
+  return progression
+    .map(chordName => commonChords[chordName])
+    .filter(chord => chord !== undefined);
+}
+
+// Choose a background color based on the song theme
+function getBackgroundColorForSong(tags: string[]): string {
+  const colorMap: Record<string, string> = {
+    worship: '#f8f0ff', // light purple
+    hymn: '#f0f4ff',    // light blue
+    classic: '#f0fff4',  // light green
+    lullaby: '#fff0f7',  // light pink
+    children: '#fffbeb',  // light yellow
+    praise: '#fff0f0',   // light red
+    contemporary: '#f0ffff' // light cyan
+  };
+  
+  for (const tag of tags) {
+    const key = Object.keys(colorMap).find(k => tag.toLowerCase().includes(k));
+    if (key) {
+      return colorMap[key];
+    }
+  }
+  
+  return '#f8f9fa'; // default light gray
+}
+
 // Additional songs: Up to 50 total songs
 export const additionalSongs: SongSearchEntry[] = [
   {
@@ -251,3 +487,17 @@ export const additionalSongs: SongSearchEntry[] = [
 
 // Combine all songs for the search database
 export const allSongsForSearch = [...songDatabase, ...additionalSongs];
+
+// Export a function to create full song objects from search entries
+export function getStructuredSongById(id: string): Song | undefined {
+  const songEntry = allSongsForSearch.find(song => song.id === id);
+  if (!songEntry) return undefined;
+  
+  return convertLyricsToStucturedSong(
+    songEntry.id,
+    songEntry.title,
+    songEntry.artist || "Traditional",
+    songEntry.lyrics,
+    songEntry.tags || []
+  );
+}

@@ -4,16 +4,14 @@ import { storage } from "./storage";
 import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema } from "@shared/schema";
 import { heroesOfFaithData } from "./data/heroesOfFaith";
 import { generateStory } from "./lib/openai";
-import { generateSongChords } from "./lib/songGenerator";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
-import { songs } from "./data/songs";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
-import { searchSongs, findSongById, getPopularSongs } from "./lib/songSearch";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { v4 as uuidv4 } from "uuid";
 import { authenticate } from "./lib/middleware";
 import { setupAuth } from "./auth";
+import { registerSongRoutes } from "./songs";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication with passport and session
@@ -183,70 +181,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // API routes for songs
-  
-  // Get all songs
-  app.get("/api/songs", (req, res) => {
-    res.json(songs);
-  });
-
-  // Search for songs - must come before /:id route
-  app.get("/api/songs/search", async (req, res) => {
-    try {
-      const query = req.query.q as string;
-      
-      if (!query || query.length < 2) {
-        return res.status(400).json({ message: "Search query must be at least 2 characters" });
-      }
-      
-      console.log(`Searching songs with query: ${query}`);
-      const results = searchSongs(query);
-      console.log(`Found ${results.length} song matches`);
-      
-      return res.json(results);
-    } catch (error) {
-      console.error("Error searching songs:", error);
-      return res.status(500).json({ message: "Failed to search songs" });
-    }
-  });
-  
-  // Get popular songs - must come before /:id route
-  app.get("/api/songs/popular", async (req, res) => {
-    try {
-      const limit = parseInt(req.query.limit as string || "10");
-      console.log(`Getting popular songs, limit: ${limit}`);
-      
-      const results = getPopularSongs(limit);
-      console.log(`Returning ${results.length} popular songs`);
-      
-      return res.json(results);
-    } catch (error) {
-      console.error("Error fetching popular songs:", error);
-      return res.status(500).json({ message: "Failed to fetch popular songs" });
-    }
-  });
-  
-  // Find song lyrics by ID and generate chords - must come before /:id route
-  app.get("/api/songs/find/:id/generate-chords", async (req, res) => {
-    try {
-      const songEntry = findSongById(req.params.id);
-      
-      if (!songEntry) {
-        return res.status(404).json({ message: "Song not found" });
-      }
-      
-      // Generate chords for the found song
-      const songWithChords = await generateSongChords(songEntry.title, songEntry.lyrics);
-      
-      // Save the song with chords
-      const savedSong = await storage.createSong(songWithChords);
-      
-      res.json(savedSong);
-    } catch (error) {
-      console.error("Error finding song and generating chords:", error);
-      res.status(500).json({ message: "Failed to generate chords for the song" });
-    }
-  });
+  // Register song routes
+  registerSongRoutes(app);
 
   // Generate a story - requires authentication
   app.post("/api/generate-story", async (req, res) => {
