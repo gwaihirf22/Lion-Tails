@@ -178,7 +178,12 @@ export const storyRequestSchema = z.object({
     return !!data.characterDetails;
   }
   
-  // If time travel is disabled, useCharacter is disabled, and it's not a biblical narrative, childName and gender are required
+  // If characterId is provided, it overrides the need for childName and gender
+  if (data.characterId) {
+    return true;
+  }
+  
+  // If characterId not provided, time travel is disabled, useCharacter is disabled, and it's not a biblical narrative, childName and gender are required
   return !!data.childName && !!data.gender;
 }, {
   message: "You can select a character for any story type. If no character is selected, the child's name and gender are required (except for Biblical narratives).",

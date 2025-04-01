@@ -217,9 +217,13 @@ export default function StoryForm({
                         </span>
                         <Select
                           onValueChange={(value) => {
-                            // When a character is selected, ensure time travel characters work properly
+                            // When a character is selected, ensure character info is used properly for all story types
                             if (value) {
-                              // No need for useCharacter flag since we're using the characterId directly
+                              // Set default values for these fields so they don't get in the way
+                              form.setValue("childName", "Character"); 
+                              form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
+                              form.setValue("animal", "none");
+                              form.clearErrors(['childName', 'gender', 'animal']);
                             }
                             field.onChange(value);
                           }}
@@ -263,7 +267,12 @@ export default function StoryForm({
                           variant="outline" 
                           size="sm" 
                           className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
-                          onClick={() => field.onChange(undefined)}
+                          onClick={() => {
+                            field.onChange(undefined); 
+                            // Clear the placeholder values when character is removed
+                            form.setValue("childName", "");
+                            form.setValue("gender", "boy");
+                          }}
                         >
                           Reset Selection
                         </Button>
