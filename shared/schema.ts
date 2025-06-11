@@ -150,6 +150,10 @@ export const storyRequestSchema = z.object({
     "long", 
     "extended"
   ]).default("medium"),
+  // Custom prompts for Parent Mode
+  customSystemPrompt: z.string().optional(),
+  customUserPrompt: z.string().optional(),
+  useCustomPrompts: z.boolean().default(false),
   // Character details for both time travel and regular stories
   useCharacter: z.boolean().default(false), // Toggle for including custom character in any story type
   characterDetails: z.object({

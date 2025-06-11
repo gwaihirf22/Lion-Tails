@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import AnimalAutocomplete from "./AnimalAutocomplete";
 import CharacterForm from "./CharacterForm";
+import PromptEditor from "./PromptEditor";
 
 interface StoryFormProps {
   onSubmit: (data: StoryRequest) => void;
@@ -127,6 +128,10 @@ export default function StoryForm({
       readingLevel: "early-elementary", // Default reading level
       storyLength: "medium", // Default story length
       useCharacter: false, // Default to not using custom character
+      // Custom prompts for Parent Mode
+      customSystemPrompt: "",
+      customUserPrompt: "",
+      useCustomPrompts: false,
       characterDetails: {
         age: 8,
         hair: "",

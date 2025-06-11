@@ -79,24 +79,19 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
     const generateUserPrompt = () => {
       let prompt = `Create a children's story with the following details:\n\n`;
       
-      if (storyRequest.type === 'children') {
-        prompt += `Story Type: Children's Story\n`;
-        if (storyRequest.childName) prompt += `Child's Name: ${storyRequest.childName}\n`;
-        if (storyRequest.childAge) prompt += `Child's Age: ${storyRequest.childAge}\n`;
-        if (storyRequest.characters?.length) {
-          prompt += `Characters: ${storyRequest.characters.map(c => `${c.name} (${c.species})`).join(', ')}\n`;
-        }
-        if (storyRequest.theme) prompt += `Theme/Lesson: ${storyRequest.theme}\n`;
-        if (storyRequest.setting) prompt += `Setting: ${storyRequest.setting}\n`;
-        if (storyRequest.additionalDetails) prompt += `Additional Details: ${storyRequest.additionalDetails}\n`;
-      } else if (storyRequest.type === 'historical') {
-        prompt += `Story Type: Historical/Biblical Story\n`;
-        if (storyRequest.heroId) prompt += `Hero of Faith: ${storyRequest.heroId}\n`;
-        if (storyRequest.theme) prompt += `Theme/Lesson: ${storyRequest.theme}\n`;
-        if (storyRequest.timeTravel) prompt += `Include Time Travel Elements: Yes\n`;
-        if (storyRequest.additionalDetails) prompt += `Additional Details: ${storyRequest.additionalDetails}\n`;
-      }
+      prompt += `Story Type: ${storyRequest.storyType}\n`;
       
+      if (storyRequest.childName) prompt += `Child's Name: ${storyRequest.childName}\n`;
+      if (storyRequest.characterDetails?.age) prompt += `Child's Age: ${storyRequest.characterDetails.age}\n`;
+      if (storyRequest.theme) prompt += `Theme/Lesson: ${storyRequest.theme}\n`;
+      if (storyRequest.animal && storyRequest.useAnimal) prompt += `Animal Friend: ${storyRequest.animal}\n`;
+      if (storyRequest.heroOfFaith) prompt += `Hero of Faith: ${storyRequest.heroOfFaith}\n`;
+      if (storyRequest.useTimeTravel) prompt += `Include Time Travel Elements: Yes\n`;
+      if (storyRequest.biblePassage) prompt += `Bible Passage: ${storyRequest.biblePassage}\n`;
+      if (storyRequest.biblicalEvent) prompt += `Biblical Event: ${storyRequest.biblicalEvent}\n`;
+      
+      prompt += `Reading Level: ${storyRequest.readingLevel}\n`;
+      prompt += `Story Length: ${storyRequest.storyLength}\n`;
       prompt += `\nPlease create an engaging, faith-based story that incorporates these elements naturally and includes 5 application questions at the end.`;
       
       return prompt;
