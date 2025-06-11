@@ -41,9 +41,9 @@ export async function generateStoryWithOpenAI(request: StoryRequest, userId: num
   const userApiKey = await storage.getUserOpenAIKey(userId);
   const userModel = await storage.getUserOpenAIModel(userId);
   
-  // Get character information if time travel is enabled
+  // Get character information if characterId is provided
   let character = undefined;
-  if (useTimeTravel && characterId) {
+  if (characterId) {
     character = await storage.getCharacterById(characterId);
   }
   
@@ -63,15 +63,28 @@ export async function generateStoryWithOpenAI(request: StoryRequest, userId: num
       throw new Error("OpenAI API key not found");
     }
 
-    // Handle the new useAnimal toggle
-    // If useAnimal is false, we pass an empty string to ensure no animal is included
-    const animalToUse = useAnimal ? (animal || "lion") : "";
+    // Override with character data if a character is selected
+    let nameToUse = childName || "Child";
+    let genderToUse = gender || "boy";
+    let animalToUse = useAnimal ? (animal || "lion") : "";
     
-    // Build the user prompt with the appropriate animal value based on useAnimal toggle
+    if (character) {
+      nameToUse = character.name;
+      genderToUse = character.gender;
+      if (character.favoriteAnimal && character.favoriteAnimal !== "none") {
+        animalToUse = character.favoriteAnimal;
+      }
+    } else {
+      // Handle the new useAnimal toggle only when no character is selected
+      // If useAnimal is false, we pass an empty string to ensure no animal is included
+      animalToUse = useAnimal ? (animal || "lion") : "";
+    }
+    
+    // Build the user prompt with character data or form data
     const prompt = buildStoryPrompt(
-      childName || "Child", 
-      gender || "boy", 
-      animalToUse, // Use the toggle-controlled animal value
+      nameToUse, 
+      genderToUse, 
+      animalToUse,
       theme, 
       biblicalEvent, 
       storyTemplate, 
