@@ -29,7 +29,7 @@ export default function Footer() {
           </div>
         </div>
         <div className="mt-6 text-center text-sm text-white/80">
-          <p>© {new Date().getFullYear()} Lion Tails. All stories are generated locally and do not store any personal information.</p>
+          <p>© {new Date().getFullYear()} Lion Tails. Stories and user data are stored securely and used only for providing our service.</p>
         </div>
       </div>
     </footer>
