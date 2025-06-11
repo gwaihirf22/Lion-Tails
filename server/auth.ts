@@ -10,6 +10,9 @@ import { User as SelectUser } from "@shared/schema";
 declare global {
   namespace Express {
     interface User extends SelectUser {}
+    interface Session {
+      parentModeExpiry?: number;
+    }
   }
 }
 
@@ -226,5 +229,55 @@ export function setupAuth(app: Express) {
     } catch (error) {
       next(error);
     }
+  });
+
+  // Password verification endpoint for Parent Mode
+  app.post("/api/auth/verify-password", async (req, res, next) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const { password } = req.body;
+      if (!password) {
+        return res.status(400).json({ error: "Password is required" });
+      }
+
+      const user = await storage.getUserByUsername((req.user as any).username);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const isValid = await comparePasswords(password, user.password);
+      
+      if (isValid) {
+        // Set session flag with 30-minute expiration
+        if (req.session) {
+          (req.session as any).parentModeExpiry = Date.now() + (30 * 60 * 1000); // 30 minutes
+        }
+        res.json({ 
+          success: true, 
+          expiresAt: (req.session as any)?.parentModeExpiry 
+        });
+      } else {
+        res.status(401).json({ error: "Invalid password" });
+      }
+    } catch (error) {
+      console.error("Password verification error:", error);
+      next(error);
+    }
+  });
+
+  // Check Parent Mode status
+  app.get("/api/auth/parent-mode-status", (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    
+    const isActive = (req.session as any)?.parentModeExpiry && Date.now() < (req.session as any).parentModeExpiry;
+    res.json({ 
+      isActive: !!isActive, 
+      expiresAt: (req.session as any)?.parentModeExpiry || null 
+    });
   });
 }
