@@ -196,10 +196,12 @@ export type StoryRequest = z.infer<typeof storyRequestSchema>;
 export const storyResponseSchema = z.object({
   title: z.string(),
   content: z.string(),
+  moralOutcome: z.enum(["positive", "learning", "consequences", "creative"]),
   bibleVerse: z.object({
     text: z.string(),
     reference: z.string(),
-  }),
+  }).optional(),
+  applicationQuestions: z.array(z.string()).min(5).max(5),
   imagePrompt: z.string().optional(),
   imageUrl: z.string().optional(),
 });

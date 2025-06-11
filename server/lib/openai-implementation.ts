@@ -30,6 +30,10 @@ function getOpenAIClient(apiKey?: string | null) {
 export async function generateStoryWithOpenAI(request: StoryRequest, userId: number = 1): Promise<StoryResponse> {
   const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType, customPrompt, useAnimal, biblePassage, readingLevel, storyLength } = request;
 
+  // Determine moral outcome type (25% each)
+  const moralOutcomes: Array<"positive" | "learning" | "consequences" | "creative"> = ["positive", "learning", "consequences", "creative"];
+  const moralOutcome = moralOutcomes[Math.floor(Math.random() * 4)];
+
   const storyTemplate = biblicalEvent && biblicalEvent !== 'none' ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
   const bibleVerse = getBibleVerseByTheme(theme && theme !== 'none' ? theme : 'faith');
   
@@ -82,38 +86,36 @@ export async function generateStoryWithOpenAI(request: StoryRequest, userId: num
       storyLength || "medium" // Pass the story length
     );
     
+    // Build moral outcome specific instructions
+    const moralOutcomeInstructions = {
+      positive: "Create a story where the main character demonstrates good choices throughout and experiences positive outcomes. Show how following Christian values leads to blessing and joy.",
+      learning: "Create a story where the main character makes a significant mistake or poor choice early in the story, realizes their error, feels genuine remorse, and takes action to make things right. Show the process of learning from mistakes, asking forgiveness, and growing in character.",
+      consequences: "Create a story where the main character makes poor choices and experiences realistic consequences. DO NOT resolve the conflict - end the story with the character facing the results of their actions. Conclude with thoughtful questions that help readers reflect on what could have been done differently.",
+      creative: "You have complete creative freedom for this story. Focus on unique, engaging storytelling while maintaining Christian values. Be innovative with plot, setting, and character development."
+    };
+
     // System prompt that defines what kind of response we want
     const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author and Bible teacher. Create wholesome, faith-based stories and Bible teachings with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
-    
+
+MORAL OUTCOME FOR THIS STORY: ${moralOutcome.toUpperCase()}
+${moralOutcomeInstructions[moralOutcome]}
+
 Your content should:
 1. Be the appropriate length as specified in the prompt
-2. Include clear moral lessons based on Christian values
+2. Include clear moral lessons based on Christian values  
 3. Be appropriate for the reading level specified in the prompt (ages 3-14)
 4. If the story type is a biblical narrative, focus entirely on biblical events and characters with historical accuracy
 5. For regular stories, include the specified child's name, gender, animal, and theme when provided
 6. If a biblical event is specified, incorporate it into the narrative
 7. If a time traveling character is specified, include them as an important part of the story
 8. Never include content from Mormon, Jehovah's Witness, or other non-orthodox Christian theologies
-9. End with a message about God's love that connects to the Bible verse that will be added later
-10. When a specific Bible passage is provided, create either:
+9. For "positive" and "learning" outcomes: End with a message about God's love that connects to a Bible verse
+10. For "consequences" outcome: End with 2-3 thoughtful questions instead of a Bible verse
+11. When a specific Bible passage is provided, create either:
    a. A detailed narrative retelling of the passage if it contains a story
    b. A clear, educational explanation of the passage's meaning if it's theological/teaching content
-   c. Include at least 2 references to credible Christian sources (scholars, theologians, websites)
-11. ALWAYS end ALL stories with a "Further Learning" section that contains 2-3 credible Christian websites where readers can learn more about the biblical concepts, characters, or themes in the story. These must be actual legitimate websites such as:
-   - BibleGateway.com
-   - GotQuestions.org
-   - BibleStudyTools.com 
-   - Christianity.com
-   - BlueLetterBible.org
-   - Bible.org
-   - Biblehub.com
-   - ReasonableTheology.org
-   - Ligonier.org
-   - DesiringGod.org
-   - TheGospelCoalition.org
-   - Crosswalk.com
-   - BibleProject.com
-   Format this section as "For Further Learning:" followed by website names and brief descriptions of what readers will find there related to this specific story's content.
+12. ALWAYS end ALL stories with a "Further Learning" section with 2-3 credible Christian websites
+13. ALWAYS include exactly 5 application questions at the end that help children apply the story's lessons to their own lives
 
 IMPORTANT STORYTELLING GUIDELINES:
 - Be CREATIVE with your story openings. AVOID generic openings like "Once upon a time" or "In a quaint little village"
@@ -122,8 +124,8 @@ IMPORTANT STORYTELLING GUIDELINES:
 - Use VARIED sentence structures and vocabulary appropriate for children
 - Include UNEXPECTED but age-appropriate plot developments
 - For biblical narratives, maintain historical accuracy while using engaging storytelling techniques
-- If a custom prompt is provided, incorporate those elements while ensuring the story remains appropriate for children
 - NEVER use the same story structure repeatedly; each story should feel fresh and unique
+- Make stories feel natural and conversational, not overly formal or scripted
 - When creating content for a specific Bible passage, focus on making the theological content understandable to children while maintaining accuracy
 - Ensure the Further Learning websites are specifically relevant to the story's central themes or biblical characters
 
@@ -131,6 +133,9 @@ Format your response as valid JSON with the following structure:
     {
       "title": "Story title",
       "content": "The full story content with proper paragraphs",
+      "moralOutcome": "${moralOutcome}",
+      "bibleVerse": ${moralOutcome === 'consequences' ? 'null' : '{"text": "Bible verse text", "reference": "Book Chapter:Verse"}'},
+      "applicationQuestions": ["Question 1 about applying the lesson", "Question 2", "Question 3", "Question 4", "Question 5"],
       "imagePrompt": "A short description for an illustration of a key scene in the biblical style"
     }`;
     
@@ -301,11 +306,19 @@ Format your response as valid JSON with the following structure:
       finalContent += furtherLearningSection;
     }
     
-    // Return the story with the bible verse and image
+    // Return the story with all required fields
     return {
       title: jsonContent.title || defaultTitle,
       content: finalContent,
-      bibleVerse: bibleVerse,
+      moralOutcome: moralOutcome,
+      bibleVerse: moralOutcome === 'consequences' ? undefined : bibleVerse,
+      applicationQuestions: jsonContent.applicationQuestions || [
+        "What would you do in a similar situation?",
+        "How can you apply this lesson in your daily life?",
+        "What does this story teach us about God's love?",
+        "How can you share this lesson with others?",
+        "What Bible verses come to mind when you think about this story?"
+      ],
       imagePrompt: imagePrompt,
       imageUrl: imageUrl || undefined
     };
