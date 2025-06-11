@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { getQueryFn } from "@/lib/queryClient";
+import { getQueryFn, queryClient } from "@/lib/queryClient";
 import { 
   Form, 
   FormControl, 
@@ -19,7 +19,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { StoryRequest, storyRequestSchema, type Character } from "@shared/schema";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import AnimalAutocomplete from "./AnimalAutocomplete";
+import CharacterForm from "./CharacterForm";
 
 interface StoryFormProps {
   onSubmit: (data: StoryRequest) => void;
@@ -59,6 +61,28 @@ export default function StoryForm({
   const [hasSelectedHeroOfFaith, setHasSelectedHeroOfFaith] = useState(false);
   const [isBiblicalNarrative, setIsBiblicalNarrative] = useState(false);
   const [historicalAccuracy, setHistoricalAccuracy] = useState(true);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedCharacter, setSelectedCharacter] = useState<Character | undefined>();
+  
+  // Function to handle editing a character
+  const handleEditCharacter = () => {
+    const characterId = form.getValues("characterId");
+    if (characterId) {
+      const character = characters.find(c => c.id === characterId);
+      if (character) {
+        setSelectedCharacter(character);
+        setEditDialogOpen(true);
+      }
+    }
+  };
+
+  // Function to handle character update completion
+  const handleCharacterUpdated = () => {
+    setEditDialogOpen(false);
+    setSelectedCharacter(undefined);
+    // Refresh characters list to show updated character
+    queryClient.invalidateQueries({ queryKey: ['/api/characters'] });
+  };
   
   // Fetch characters for selection - always fetch them as they can be used in any story type
   const { data: characters = [], isLoading: charactersLoading } = useQuery<Character[]>({
@@ -254,7 +278,7 @@ export default function StoryForm({
                       Select an existing character to use in your story. Characters can be used with any story type (Regular Bedtime Story, Moral Bedtime Story, Biblical Narrative, or even with Time Travel).
                     </FormDescription>
                     <FormMessage />
-                    <div className="flex justify-between mt-1">
+                    <div className="flex justify-between items-center mt-1">
                       {characters.length === 0 && (
                         <div className="text-xs text-secondary/70">
                           <a href="/characters" className="text-secondary font-medium underline">
@@ -263,20 +287,31 @@ export default function StoryForm({
                         </div>
                       )}
                       {field.value && (
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          size="sm" 
-                          className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
-                          onClick={() => {
-                            field.onChange(undefined); 
-                            // Clear the placeholder values when character is removed
-                            form.setValue("childName", "");
-                            form.setValue("gender", "boy");
-                          }}
-                        >
-                          Reset Selection
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs"
+                            onClick={handleEditCharacter}
+                          >
+                            Edit
+                          </Button>
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                            onClick={() => {
+                              field.onChange(undefined); 
+                              // Clear the placeholder values when character is removed
+                              form.setValue("childName", "");
+                              form.setValue("gender", "boy");
+                            }}
+                          >
+                            Reset Selection
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </FormItem>
