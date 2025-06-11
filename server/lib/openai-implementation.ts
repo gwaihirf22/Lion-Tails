@@ -190,6 +190,15 @@ Format your response as valid JSON with the following structure:
     
     // Call OpenAI API with a fresh client using the appropriate API key
     const openaiClient = getOpenAIClient(userApiKey || undefined);
+    
+    // Log the request being sent to OpenAI
+    console.log("\n=== OPENAI REQUEST ===");
+    console.log("Model:", model);
+    console.log("Max Tokens:", maxTokens);
+    console.log("System Prompt:", systemPrompt);
+    console.log("User Prompt:", prompt.toString());
+    console.log("=====================\n");
+    
     const response = await openaiClient.chat.completions.create({
       model: model,
       messages: [
@@ -203,6 +212,12 @@ Format your response as valid JSON with the following structure:
     
     // Extract the response content
     const responseContent = response.choices[0].message.content || '';
+    
+    // Log the response from OpenAI
+    console.log("\n=== OPENAI RESPONSE ===");
+    console.log("Raw Response:", responseContent);
+    console.log("Usage:", response.usage);
+    console.log("======================\n");
     
     // Parse the JSON response
     let jsonContent;
@@ -378,6 +393,13 @@ export async function generateStoryImage(imagePrompt: string, userId: number = 1
     // Call DALL-E API to generate the image with user's key if available
     // Convert null to undefined if needed
     const openaiClient = getOpenAIClient(apiKey || undefined);
+    
+    // Log the image generation request
+    console.log("\n=== DALL-E REQUEST ===");
+    console.log("Enhanced Prompt:", enhancedPrompt);
+    console.log("Model: dall-e-3");
+    console.log("======================\n");
+    
     const response = await openaiClient.images.generate({
       model: "dall-e-3",
       prompt: enhancedPrompt,
@@ -443,6 +465,12 @@ export async function analyzeImageWithOpenAI(imageBase64: string, userId: number
     // Call OpenAI API with a fresh client using the appropriate API key
     const openaiClient = getOpenAIClient(apiKey || undefined);
     
+    // Log the image analysis request
+    console.log("\n=== IMAGE ANALYSIS REQUEST ===");
+    console.log("User ID:", userId);
+    console.log("Image Base64 Length:", imageBase64.length);
+    console.log("===============================\n");
+    
     // System prompt that defines what kind of analysis we want
     const systemPrompt = `You are a helpful Christian children's content analyzer. 
     Analyze the provided image and describe it in detail, focusing on:
@@ -478,6 +506,13 @@ export async function analyzeImageWithOpenAI(imageBase64: string, userId: number
     
     // Extract the response content
     const analysisText = response.choices[0].message.content || 'Could not analyze the image.';
+    
+    // Log the image analysis response
+    console.log("\n=== IMAGE ANALYSIS RESPONSE ===");
+    console.log("Analysis:", analysisText);
+    console.log("Usage:", response.usage);
+    console.log("===============================\n");
+    
     return analysisText;
     
   } catch (error) {

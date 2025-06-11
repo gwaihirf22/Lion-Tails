@@ -4,6 +4,11 @@ import { StoryRequest, StoryResponse } from "@shared/schema";
 // Function to generate a story with OpenAI
 export async function generateStory(storyRequest: StoryRequest): Promise<StoryResponse> {
   try {
+    // Log the story request being sent to the server
+    console.log("=== CLIENT STORY REQUEST ===");
+    console.log("Story Request:", storyRequest);
+    console.log("============================");
+    
     const response = await apiRequest('POST', '/api/generate-story', storyRequest);
     if (!response.ok) {
       throw new Error('Failed to generate story');
@@ -33,6 +38,11 @@ export function fileToBase64(file: File): Promise<string> {
 // Function to analyze an image with OpenAI
 export async function analyzeImage(imageBase64: string): Promise<string> {
   try {
+    // Log the image analysis request
+    console.log("=== CLIENT IMAGE ANALYSIS REQUEST ===");
+    console.log("Image Base64 Length:", imageBase64.length);
+    console.log("======================================");
+    
     const response = await apiRequest('POST', '/api/analyze-image', { image: imageBase64 });
     if (!response.ok) {
       throw new Error('Failed to analyze image');
