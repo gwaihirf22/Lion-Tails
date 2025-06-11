@@ -38,7 +38,37 @@ const formSchema = characterSchema
 const hairColors = ["brown", "black", "blonde", "red", "white", "gray", "purple", "blue", "green"];
 const eyeColors = ["brown", "blue", "green", "hazel", "gray", "amber"];
 const favoriteColors = ["red", "blue", "green", "yellow", "purple", "orange", "pink", "teal", "gold", "silver"];
-const favoriteAnimals = ["lion", "dog", "cat", "horse", "rabbit", "dolphin", "elephant", "panda", "butterfly", "eagle"];
+const favoriteAnimals = [
+  // Domestic Animals
+  "dog", "cat", "rabbit", "hamster", "guinea pig", "bird", "fish", "turtle", "ferret", "chinchilla",
+  
+  // Farm Animals  
+  "horse", "cow", "pig", "sheep", "goat", "chicken", "duck", "goose", "donkey", "llama", "alpaca",
+  
+  // Wild Animals - African
+  "lion", "elephant", "giraffe", "zebra", "rhinoceros", "hippopotamus", "cheetah", "leopard", "hyena", "meerkat",
+  
+  // Wild Animals - Forest
+  "bear", "wolf", "fox", "deer", "moose", "elk", "raccoon", "squirrel", "chipmunk", "beaver", "otter",
+  
+  // Wild Animals - Jungle/Tropical
+  "tiger", "jaguar", "panther", "monkey", "orangutan", "gorilla", "chimpanzee", "sloth", "toucan", "parrot",
+  
+  // Ocean Animals
+  "dolphin", "whale", "shark", "seal", "sea lion", "octopus", "jellyfish", "starfish", "seahorse", "turtle",
+  
+  // Birds
+  "eagle", "hawk", "owl", "cardinal", "robin", "blue jay", "hummingbird", "penguin", "flamingo", "peacock",
+  
+  // Small Creatures
+  "butterfly", "ladybug", "bee", "dragonfly", "grasshopper", "cricket", "spider", "snail", "frog", "lizard",
+  
+  // Unique/Exotic
+  "panda", "koala", "kangaroo", "platypus", "armadillo", "anteater", "hedgehog", "skunk", "porcupine", "badger",
+  
+  // Biblical Animals
+  "lamb", "dove", "camel", "locust", "raven", "sparrow", "quail", "ox", "colt", "serpent"
+];
 const hobbies = [
   "reading", "drawing", "singing", "dancing", "sports", "cooking", 
   "hiking", "gardening", "collecting", "writing", "music", "astronomy"

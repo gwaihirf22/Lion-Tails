@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "demo-key" });
 
 // Common Christian chord progressions (for demo mode)
-const commonChordProgressions = [
+const commonChordProgressions: string[][] = [
   ['G', 'D', 'Em', 'C'],
   ['C', 'G', 'Am', 'F'],
   ['D', 'A', 'Bm', 'G'],
@@ -15,7 +15,23 @@ const commonChordProgressions = [
 ];
 
 // Common guitar chords with fingering information
-const commonChords = {
+const commonChords: Record<string, {
+  name: string;
+  fingering: {
+    string1: number;
+    string2: number;
+    string3: number;
+    string4: number;
+    string5: number;
+    string6: number;
+  };
+  barres?: {
+    fromString: number;
+    toString: number;
+    fret: number;
+  }[];
+  position?: number;
+}> = {
   'G': {
     name: 'G',
     fingering: {
@@ -155,16 +171,21 @@ const commonChords = {
  * Generate chord recommendations for a Christian song
  * @param title The title of the song
  * @param lyrics The lyrics of the song (as a string or array of lines)
+ * @param artist Optional artist name
  * @returns A Song object with chord suggestions
  */
-export async function generateSongChords(title: string, lyrics: string | string[]): Promise<Song> {
+export async function generateSongChords(
+  title: string, 
+  lyrics: string | string[], 
+  artist: string = "User Created"
+): Promise<Song> {
   // Convert lyrics array to string if necessary
   const lyricsText = Array.isArray(lyrics) ? lyrics.join('\n') : lyrics;
   
   try {
     // If no API key is set, return demo chords
     if (process.env.OPENAI_API_KEY === undefined || process.env.OPENAI_API_KEY === "demo-key") {
-      return getDemoSong(title, lyricsText);
+      return getDemoSong(title, lyricsText, artist);
     }
     
     const response = await openai.chat.completions.create({
@@ -176,10 +197,15 @@ export async function generateSongChords(title: string, lyrics: string | string[
           Analyze the song lyrics and provide appropriate chord suggestions for a simple guitar arrangement.
           Select chords that would be suitable for beginners to intermediate players, focusing on common chord progressions in Christian music.
           For each line or section of lyrics, suggest appropriate chords that match the emotional tone and theological content.
+          Also determine the best key signature and tempo for this song.
           
           Format your response as valid JSON with the following structure:
           {
             "title": "Song title",
+            "key": "C",
+            "tempo": 90,
+            "timeSignature": "4/4",
+            "difficulty": "beginner",
             "verses": [
               {
                 "lyrics": ["Line 1", "Line 2", ...],
@@ -193,11 +219,14 @@ export async function generateSongChords(title: string, lyrics: string | string[
             "bridge": {
               "lyrics": ["Line 1", "Line 2", ...],
               "chords": ["Chord 1", "Chord 2", ...]
-            }
+            },
+            "tags": ["worship", "hymn", "contemporary", etc.]
           }
           
           Note that the bridge is optional if the song doesn't have one. Each chord in the chords array corresponds to the matching line in the lyrics array.
-          Stick to common, easy-to-play chords like G, D, Em, C, Am, F, etc.`
+          Stick to common, easy-to-play chords like G, D, Em, C, Am, F, etc.
+          For difficulty, choose between "beginner", "intermediate", or "advanced".
+          For tags, include relevant descriptors like "worship", "hymn", "contemporary", "traditional", "children", etc.`
         },
         { 
           role: "user", 
@@ -216,45 +245,38 @@ export async function generateSongChords(title: string, lyrics: string | string[
     const messageContent = response.choices[0].message.content || '{}';
     const jsonContent = JSON.parse(messageContent);
     
-    // Transform the OpenAI response into our Song schema format
-    const songWithChords: Song = {
-      id: uuidv4(),
-      title: jsonContent.title || title,
-      artist: "User Created",
-      verses: jsonContent.verses || [],
-      chorus: jsonContent.chorus || null,
-      bridge: jsonContent.bridge || null,
-      chords: []
-    };
-    
     // Add chord diagrams for each unique chord
     const allChords = new Set<string>();
     
     // Extract unique chords from verses
-    songWithChords.verses.forEach(verse => {
-      verse.chords.forEach(chord => {
-        allChords.add(chord);
+    if (jsonContent.verses) {
+      jsonContent.verses.forEach(verse => {
+        if (verse.chords) {
+          verse.chords.forEach(chord => {
+            allChords.add(chord);
+          });
+        }
       });
-    });
+    }
     
     // Extract unique chords from chorus
-    if (songWithChords.chorus) {
-      songWithChords.chorus.chords.forEach(chord => {
+    if (jsonContent.chorus && jsonContent.chorus.chords) {
+      jsonContent.chorus.chords.forEach(chord => {
         allChords.add(chord);
       });
     }
     
     // Extract unique chords from bridge
-    if (songWithChords.bridge) {
-      songWithChords.bridge.chords.forEach(chord => {
+    if (jsonContent.bridge && jsonContent.bridge.chords) {
+      jsonContent.bridge.chords.forEach(chord => {
         allChords.add(chord);
       });
     }
     
     // Map chords to chord diagrams
-    songWithChords.chords = Array.from(allChords).map(chordName => {
+    const chordDiagrams = Array.from(allChords).map(chordName => {
       // Try to find the chord in our predefined list, or create a basic one if not found
-      const chord = commonChords[chordName] || {
+      return commonChords[chordName] || {
         name: chordName,
         fingering: {
           string1: 0,
@@ -265,17 +287,32 @@ export async function generateSongChords(title: string, lyrics: string | string[
           string6: 0
         }
       };
-      
-      return chord;
     });
     
-    return songWithChords;
+    // Create a full song object using all the AI-generated data
+    return {
+      id: uuidv4(),
+      title: jsonContent.title || title,
+      artist: artist,
+      verses: jsonContent.verses || [],
+      chorus: jsonContent.chorus || null,
+      bridge: jsonContent.bridge || null,
+      chords: chordDiagrams,
+      difficulty: jsonContent.difficulty || "beginner",
+      key: jsonContent.key || "C",
+      timeSignature: jsonContent.timeSignature || "4/4",
+      tempo: jsonContent.tempo || 120,
+      tags: jsonContent.tags || ["worship"],
+      hasGeneratedAudio: false,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
     
   } catch (error) {
     console.error("Error generating song chords with OpenAI:", error);
     
     // Fallback to demo song if there's an error
-    return getDemoSong(title, lyricsText);
+    return getDemoSong(title, lyricsText, artist);
   }
 }
 
@@ -283,9 +320,10 @@ export async function generateSongChords(title: string, lyrics: string | string[
  * Generate a demo song with simple chord progressions
  * @param title The title of the song
  * @param lyrics The lyrics of the song
+ * @param artist The artist name for the song
  * @returns A Song object with chord suggestions
  */
-function getDemoSong(title: string, lyrics: string): Song {
+function getDemoSong(title: string, lyrics: string, artist: string = "User Created"): Song {
   // Split lyrics into lines
   const lyricsLines = lyrics.split('\n').filter(line => line.trim().length > 0);
   
@@ -294,6 +332,13 @@ function getDemoSong(title: string, lyrics: string): Song {
   
   // Decide whether it has a bridge
   const hasBridge = lyricsLines.some(line => line.trim().toLowerCase().includes('bridge'));
+  
+  // Choose a random key
+  const keys = ["C", "G", "D", "A", "E", "F"];
+  const randomKey = keys[Math.floor(Math.random() * keys.length)];
+  
+  // Generate a random tempo between 60 and 140 BPM
+  const randomTempo = Math.floor(Math.random() * 80) + 60;
   
   // Get a random chord progression
   const chordProgression = commonChordProgressions[Math.floor(Math.random() * commonChordProgressions.length)];
@@ -404,13 +449,38 @@ function getDemoSong(title: string, lyrics: string): Song {
     };
   });
   
+  // Determine best tags based on content
+  const tags: string[] = ["worship"];
+  if (lyrics.toLowerCase().includes("jesus") || lyrics.toLowerCase().includes("christ")) {
+    tags.push("christian");
+  }
+  if (lyrics.toLowerCase().includes("lord") || lyrics.toLowerCase().includes("god")) {
+    tags.push("praise");
+  }
+  if (lyrics.toLowerCase().includes("child") || lyrics.toLowerCase().includes("children")) {
+    tags.push("children");
+  }
+  if (hasChorus) {
+    tags.push("contemporary");
+  } else {
+    tags.push("hymn");
+  }
+  
   return {
     id: uuidv4(),
     title,
-    artist: "User Created",
+    artist,
     verses,
     chorus,
     bridge,
-    chords: chordDiagrams
+    chords: chordDiagrams,
+    difficulty: "beginner",
+    key: randomKey,
+    timeSignature: "4/4",
+    tempo: randomTempo,
+    tags,
+    hasGeneratedAudio: false,
+    createdAt: new Date(),
+    updatedAt: new Date()
   };
 }

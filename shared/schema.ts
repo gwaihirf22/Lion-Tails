@@ -263,16 +263,44 @@ export const verseSchema = z.object({
 
 export type Verse = z.infer<typeof verseSchema>;
 
-// Updated song schema
+// Music note schema for tablature/notation
+export const musicNoteSchema = z.object({
+  time: z.number(),  // position in song (milliseconds or beats)
+  note: z.string(),  // musical note (e.g., "C4", "D#3")
+  duration: z.number(),  // duration of note
+  instrument: z.string().default("guitar"),
+  position: z.object({
+    string: z.number().optional(),  // for guitar: which string (1-6)
+    fret: z.number().optional(),    // for guitar: which fret
+  }).optional(),
+});
+
+export type MusicNote = z.infer<typeof musicNoteSchema>;
+
+// Updated song schema with audio support
 export const songSchema = z.object({
   id: z.string(),
   title: z.string(),
-  artist: z.string(),
+  artist: z.string().optional(),
   verses: z.array(verseSchema),
   chorus: verseSchema.nullable(),
   bridge: verseSchema.nullable(),
-  chords: z.array(chordDiagramSchema),
+  chords: z.array(chordDiagramSchema).default([]),
+  audioUrl: z.string().optional(),  // URL to audio file
+  hasGeneratedAudio: z.boolean().default(false),
+  musicNotes: z.array(musicNoteSchema).optional(),  // For playable sheet music/tablature
+  difficulty: z.enum(["beginner", "intermediate", "advanced"]).default("beginner"),
+  key: z.string().default("C"),  // Musical key
+  timeSignature: z.string().default("4/4"),
+  tempo: z.number().default(120),  // BPM
+  tags: z.array(z.string()).default([]),
   backgroundColor: z.string().optional(),
+  createdAt: z.date().or(z.string()).transform(val => 
+    typeof val === 'string' ? new Date(val) : val
+  ).default(() => new Date()),
+  updatedAt: z.date().or(z.string()).transform(val => 
+    typeof val === 'string' ? new Date(val) : val
+  ).default(() => new Date()),
 });
 
 export type Song = z.infer<typeof songSchema>;

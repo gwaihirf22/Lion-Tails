@@ -364,22 +364,126 @@ export default function StoryForm({
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">None</SelectItem>
-                              <SelectItem value="lion">Lion</SelectItem>
-                              <SelectItem value="lamb">Lamb</SelectItem>
-                              <SelectItem value="dove">Dove</SelectItem>
-                              <SelectItem value="fish">Fish</SelectItem>
-                              <SelectItem value="sheep">Sheep</SelectItem>
-                              <SelectItem value="camel">Camel</SelectItem>
+                              {/* Domestic Animals */}
                               <SelectItem value="dog">Dog</SelectItem>
                               <SelectItem value="cat">Cat</SelectItem>
+                              <SelectItem value="rabbit">Rabbit</SelectItem>
+                              <SelectItem value="hamster">Hamster</SelectItem>
+                              <SelectItem value="guinea pig">Guinea Pig</SelectItem>
+                              <SelectItem value="bird">Bird</SelectItem>
+                              <SelectItem value="fish">Fish</SelectItem>
+                              <SelectItem value="turtle">Turtle</SelectItem>
+                              <SelectItem value="ferret">Ferret</SelectItem>
+                              <SelectItem value="chinchilla">Chinchilla</SelectItem>
+                              
+                              {/* Farm Animals */}
+                              <SelectItem value="horse">Horse</SelectItem>
+                              <SelectItem value="cow">Cow</SelectItem>
+                              <SelectItem value="pig">Pig</SelectItem>
+                              <SelectItem value="sheep">Sheep</SelectItem>
+                              <SelectItem value="goat">Goat</SelectItem>
+                              <SelectItem value="chicken">Chicken</SelectItem>
+                              <SelectItem value="duck">Duck</SelectItem>
+                              <SelectItem value="goose">Goose</SelectItem>
+                              <SelectItem value="donkey">Donkey</SelectItem>
+                              <SelectItem value="llama">Llama</SelectItem>
+                              <SelectItem value="alpaca">Alpaca</SelectItem>
+                              
+                              {/* Wild Animals - African */}
+                              <SelectItem value="lion">Lion</SelectItem>
                               <SelectItem value="elephant">Elephant</SelectItem>
                               <SelectItem value="giraffe">Giraffe</SelectItem>
-                              <SelectItem value="tiger">Tiger</SelectItem>
+                              <SelectItem value="zebra">Zebra</SelectItem>
+                              <SelectItem value="rhinoceros">Rhinoceros</SelectItem>
+                              <SelectItem value="hippopotamus">Hippopotamus</SelectItem>
+                              <SelectItem value="cheetah">Cheetah</SelectItem>
+                              <SelectItem value="leopard">Leopard</SelectItem>
+                              <SelectItem value="hyena">Hyena</SelectItem>
+                              <SelectItem value="meerkat">Meerkat</SelectItem>
+                              
+                              {/* Wild Animals - Forest */}
                               <SelectItem value="bear">Bear</SelectItem>
-                              <SelectItem value="donkey">Donkey</SelectItem>
+                              <SelectItem value="wolf">Wolf</SelectItem>
                               <SelectItem value="fox">Fox</SelectItem>
+                              <SelectItem value="deer">Deer</SelectItem>
+                              <SelectItem value="moose">Moose</SelectItem>
+                              <SelectItem value="elk">Elk</SelectItem>
+                              <SelectItem value="raccoon">Raccoon</SelectItem>
+                              <SelectItem value="squirrel">Squirrel</SelectItem>
+                              <SelectItem value="chipmunk">Chipmunk</SelectItem>
+                              <SelectItem value="beaver">Beaver</SelectItem>
+                              <SelectItem value="otter">Otter</SelectItem>
+                              
+                              {/* Wild Animals - Jungle/Tropical */}
+                              <SelectItem value="tiger">Tiger</SelectItem>
+                              <SelectItem value="jaguar">Jaguar</SelectItem>
+                              <SelectItem value="panther">Panther</SelectItem>
+                              <SelectItem value="monkey">Monkey</SelectItem>
+                              <SelectItem value="orangutan">Orangutan</SelectItem>
+                              <SelectItem value="gorilla">Gorilla</SelectItem>
+                              <SelectItem value="chimpanzee">Chimpanzee</SelectItem>
+                              <SelectItem value="sloth">Sloth</SelectItem>
+                              <SelectItem value="toucan">Toucan</SelectItem>
+                              <SelectItem value="parrot">Parrot</SelectItem>
+                              
+                              {/* Ocean Animals */}
+                              <SelectItem value="dolphin">Dolphin</SelectItem>
                               <SelectItem value="whale">Whale</SelectItem>
-                              <SelectItem value="rabbit">Rabbit</SelectItem>
+                              <SelectItem value="shark">Shark</SelectItem>
+                              <SelectItem value="seal">Seal</SelectItem>
+                              <SelectItem value="sea lion">Sea Lion</SelectItem>
+                              <SelectItem value="octopus">Octopus</SelectItem>
+                              <SelectItem value="jellyfish">Jellyfish</SelectItem>
+                              <SelectItem value="starfish">Starfish</SelectItem>
+                              <SelectItem value="seahorse">Seahorse</SelectItem>
+                              
+                              {/* Birds */}
+                              <SelectItem value="eagle">Eagle</SelectItem>
+                              <SelectItem value="hawk">Hawk</SelectItem>
+                              <SelectItem value="owl">Owl</SelectItem>
+                              <SelectItem value="cardinal">Cardinal</SelectItem>
+                              <SelectItem value="robin">Robin</SelectItem>
+                              <SelectItem value="blue jay">Blue Jay</SelectItem>
+                              <SelectItem value="hummingbird">Hummingbird</SelectItem>
+                              <SelectItem value="penguin">Penguin</SelectItem>
+                              <SelectItem value="flamingo">Flamingo</SelectItem>
+                              <SelectItem value="peacock">Peacock</SelectItem>
+                              
+                              {/* Small Creatures */}
+                              <SelectItem value="butterfly">Butterfly</SelectItem>
+                              <SelectItem value="ladybug">Ladybug</SelectItem>
+                              <SelectItem value="bee">Bee</SelectItem>
+                              <SelectItem value="dragonfly">Dragonfly</SelectItem>
+                              <SelectItem value="grasshopper">Grasshopper</SelectItem>
+                              <SelectItem value="cricket">Cricket</SelectItem>
+                              <SelectItem value="spider">Spider</SelectItem>
+                              <SelectItem value="snail">Snail</SelectItem>
+                              <SelectItem value="frog">Frog</SelectItem>
+                              <SelectItem value="lizard">Lizard</SelectItem>
+                              
+                              {/* Unique/Exotic */}
+                              <SelectItem value="panda">Panda</SelectItem>
+                              <SelectItem value="koala">Koala</SelectItem>
+                              <SelectItem value="kangaroo">Kangaroo</SelectItem>
+                              <SelectItem value="platypus">Platypus</SelectItem>
+                              <SelectItem value="armadillo">Armadillo</SelectItem>
+                              <SelectItem value="anteater">Anteater</SelectItem>
+                              <SelectItem value="hedgehog">Hedgehog</SelectItem>
+                              <SelectItem value="skunk">Skunk</SelectItem>
+                              <SelectItem value="porcupine">Porcupine</SelectItem>
+                              <SelectItem value="badger">Badger</SelectItem>
+                              
+                              {/* Biblical Animals */}
+                              <SelectItem value="lamb">Lamb</SelectItem>
+                              <SelectItem value="dove">Dove</SelectItem>
+                              <SelectItem value="camel">Camel</SelectItem>
+                              <SelectItem value="locust">Locust</SelectItem>
+                              <SelectItem value="raven">Raven</SelectItem>
+                              <SelectItem value="sparrow">Sparrow</SelectItem>
+                              <SelectItem value="quail">Quail</SelectItem>
+                              <SelectItem value="ox">Ox</SelectItem>
+                              <SelectItem value="colt">Colt</SelectItem>
+                              <SelectItem value="serpent">Serpent</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>

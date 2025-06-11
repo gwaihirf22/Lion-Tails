@@ -1,17 +1,22 @@
 // Song-related routes
 import { Express } from "express";
-import { allSongsForSearch, getStructuredSongById } from './data/songDatabase';
+import { getAllSongs, getSongById, searchSongs, getPopularSongs, addSong, updateSong, deleteSong } from './data/songDatabase';
 import { generateSongChords } from "./lib/songGenerator";
-import { storage } from "./storage";
 import { Song, songSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { v4 as uuidv4 } from "uuid";
 
 export function registerSongRoutes(app: Express) {
-  // Get all songs for searching
+  // Get all songs
   app.get("/api/songs", (_, res) => {
-    res.json(allSongsForSearch);
+    try {
+      const songs = getAllSongs();
+      res.json(songs);
+    } catch (error) {
+      console.error("Error fetching all songs:", error);
+      res.status(500).json({ message: "Failed to fetch songs" });
+    }
   });
 
   // Search for songs
@@ -24,12 +29,7 @@ export function registerSongRoutes(app: Express) {
       }
       
       console.log(`Searching songs with query: ${query}`);
-      // Search by title, artist or lyrics
-      const results = allSongsForSearch.filter(song => 
-        song.title.toLowerCase().includes(query.toLowerCase()) ||
-        (song.artist && song.artist.toLowerCase().includes(query.toLowerCase())) ||
-        song.lyrics.toLowerCase().includes(query.toLowerCase())
-      );
+      const results = searchSongs(query);
       console.log(`Found ${results.length} song matches`);
       
       return res.json(results);
@@ -45,10 +45,7 @@ export function registerSongRoutes(app: Express) {
       const limit = parseInt(req.query.limit as string || "10");
       console.log(`Getting popular songs, limit: ${limit}`);
       
-      // Get a randomized selection of songs for "popular"
-      const shuffled = [...allSongsForSearch].sort(() => 0.5 - Math.random());
-      const results = shuffled.slice(0, limit);
-      
+      const results = getPopularSongs(limit);
       console.log(`Returning ${results.length} popular songs`);
       
       return res.json(results);
@@ -58,10 +55,10 @@ export function registerSongRoutes(app: Express) {
     }
   });
   
-  // Get a full structured song by ID
+  // Get a song by ID
   app.get("/api/songs/:id", async (req, res) => {
     try {
-      const song = getStructuredSongById(req.params.id);
+      const song = getSongById(req.params.id);
       
       if (!song) {
         return res.status(404).json({ message: "Song not found" });
@@ -78,7 +75,7 @@ export function registerSongRoutes(app: Express) {
   app.post("/api/songs", async (req, res) => {
     try {
       const songData = songSchema.parse(req.body);
-      const song = await storage.createSong(songData);
+      const song = addSong(songData);
       res.status(201).json(song);
     } catch (error) {
       console.error("Error creating song:", error);
@@ -92,44 +89,66 @@ export function registerSongRoutes(app: Express) {
     }
   });
 
-  // Find song by ID and generate chords
-  app.get("/api/songs/:id/generate-chords", async (req, res) => {
+  // Update a song by ID
+  app.put("/api/songs/:id", async (req, res) => {
     try {
-      const songEntry = allSongsForSearch.find(s => s.id === req.params.id);
+      const updates = req.body;
+      const updatedSong = updateSong(req.params.id, updates);
       
-      if (!songEntry) {
+      if (!updatedSong) {
         return res.status(404).json({ message: "Song not found" });
       }
       
-      // Generate chords for the found song
-      const songWithChords = await generateSongChords(songEntry.title, songEntry.lyrics);
-      
-      // Save the song with chords
-      const savedSong = await storage.createSong(songWithChords);
-      
-      res.json(savedSong);
+      return res.json(updatedSong);
     } catch (error) {
-      console.error("Error finding song and generating chords:", error);
-      res.status(500).json({ message: "Failed to generate chords for the song" });
+      console.error("Error updating song:", error);
+      
+      if (error instanceof ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ message: validationError.message });
+      }
+      
+      return res.status(500).json({ message: "Failed to update song" });
     }
   });
 
-  // Generate chords for a custom song
+  // Delete a song by ID
+  app.delete("/api/songs/:id", async (req, res) => {
+    try {
+      const deleted = deleteSong(req.params.id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Song not found" });
+      }
+      
+      return res.status(204).end();
+    } catch (error) {
+      console.error("Error deleting song:", error);
+      return res.status(500).json({ message: "Failed to delete song" });
+    }
+  });
+  
+  // Generate chords for a song
   app.post("/api/generate-chords", async (req, res) => {
     try {
-      const { title, lyrics } = req.body;
+      const { title, lyrics, artist = "Unknown Artist" } = req.body;
       
       if (!title || !lyrics) {
-        return res.status(400).json({ message: "Title and lyrics are required" });
+        return res.status(400).json({ 
+          message: "Title and lyrics are required."
+        });
       }
       
       console.log(`Generating chords for custom song: ${title}`);
       
-      // Generate chords for the song
-      const songWithChords = await generateSongChords(title, lyrics);
+      // Convert lyrics to array if it's a string
+      const lyricsList = Array.isArray(lyrics) ? lyrics : lyrics.split('\n');
       
-      // Save the song with chords
-      const savedSong = await storage.createSong(songWithChords);
+      // Generate chords for the song
+      const songWithChords = await generateSongChords(title, lyricsList, artist);
+      
+      // Add the song to our database
+      const savedSong = addSong(songWithChords);
       
       res.status(201).json(savedSong);
     } catch (error) {
@@ -137,4 +156,36 @@ export function registerSongRoutes(app: Express) {
       res.status(500).json({ message: "Failed to generate chords" });
     }
   });
+}
+
+// Helper function to process raw lyrics into verses
+function processLyricsIntoVerses(lyrics: string[]): { lyrics: string[], chords: string[] }[] {
+  // Split lyrics into verses (empty line indicates verse break)
+  const verses: { lyrics: string[], chords: string[] }[] = [];
+  let currentVerse: string[] = [];
+  
+  // Process all lyrics
+  for (const line of lyrics) {
+    if (line.trim() === "") {
+      if (currentVerse.length > 0) {
+        verses.push({
+          lyrics: [...currentVerse],
+          chords: currentVerse.map(() => "") // Empty chords initially
+        });
+        currentVerse = [];
+      }
+    } else {
+      currentVerse.push(line);
+    }
+  }
+  
+  // Add the last verse if any
+  if (currentVerse.length > 0) {
+    verses.push({
+      lyrics: [...currentVerse],
+      chords: currentVerse.map(() => "") // Empty chords initially
+    });
+  }
+  
+  return verses;
 }
