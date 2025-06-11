@@ -223,6 +223,15 @@ Format your response as valid JSON with the following structure:
       jsonContent = {
         title: defaultTitle,
         content: responseContent,
+        moralOutcome: moralOutcome,
+        bibleVerse: moralOutcome === 'consequences' ? null : { text: bibleVerse.text, reference: bibleVerse.reference },
+        applicationQuestions: [
+          "What would you do in a similar situation?",
+          "How can you apply this lesson in your daily life?",
+          "What does this story teach us about God's love?",
+          "How can you share this lesson with others?",
+          "What Bible verses come to mind when you think about this story?"
+        ],
         imagePrompt: defaultImagePrompt
       };
     }

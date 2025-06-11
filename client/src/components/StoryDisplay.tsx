@@ -142,10 +142,10 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
         <body>
           <h1>${story.title}</h1>
           <div>${story.content.replace(/\n/g, '<br>')}</div>
-          <div class="verse">
-            <p>${story.bibleVerse.text}</p>
-            <p class="reference">— ${story.bibleVerse.reference}</p>
-          </div>
+          ${story.bibleVerse ? `<div class="verse">
+            <p>${story.bibleVerse!.text}</p>
+            <p class="reference">— ${story.bibleVerse!.reference}</p>
+          </div>` : ''}
         </body>
         </html>
       `);
@@ -168,8 +168,8 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
       
       ${story.content}
       
-      "${story.bibleVerse.text}"
-      — ${story.bibleVerse.reference}
+      ${story.bibleVerse ? `"${story.bibleVerse!.text}"
+      — ${story.bibleVerse!.reference}` : ''}
     `;
     
     const file = new Blob([formattedStory], { type: 'text/plain' });
@@ -367,18 +367,33 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
       <div ref={storyContentRef} className="hidden">
         <h4 className="text-xl font-bold mb-5 text-center">{story.title}</h4>
         <div dangerouslySetInnerHTML={{ __html: story.content.replace(/\n/g, '<br>') }} />
-        <div className="mt-6 p-4 bg-secondary/20 rounded-lg text-center italic">
-          <p className="text-textDark">{story.bibleVerse.text}</p>
-          <p className="font-semibold mt-2">— {story.bibleVerse.reference}</p>
-        </div>
+        {story.bibleVerse && (
+          <div className="mt-6 p-4 bg-secondary/20 rounded-lg text-center italic">
+            <p className="text-textDark">{story.bibleVerse.text}</p>
+            <p className="font-semibold mt-2">— {story.bibleVerse.reference}</p>
+          </div>
+        )}
+        {story.applicationQuestions && story.applicationQuestions.length > 0 && (
+          <div className="mt-6">
+            <h4 className="text-lg font-bold mb-3">Think About It:</h4>
+            <ol className="space-y-2">
+              {story.applicationQuestions.map((question, index) => (
+                <li key={index} className="flex items-start">
+                  <span className="font-semibold mr-2">{index + 1}.</span>
+                  <span>{question}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
       </div>
       
       {/* Book Page Component */}
       <BookPage
         title={story.title}
         content={scrollMode ? story.content : currentPageContent}
-        verseText={scrollMode || showBibleVerse ? story.bibleVerse.text : undefined}
-        verseReference={scrollMode || showBibleVerse ? story.bibleVerse.reference : undefined}
+        verseText={scrollMode || showBibleVerse ? story.bibleVerse?.text : undefined}
+        verseReference={scrollMode || showBibleVerse ? story.bibleVerse?.reference : undefined}
         onNextPage={goToNextPage}
         onPrevPage={goToPrevPage}
         hasNextPage={currentPage < totalPages}
@@ -388,6 +403,40 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
         scrollMode={scrollMode}
         onScrollModeChange={(mode) => setScrollMode(mode)}
       />
+
+      {/* Application Questions Section */}
+      {story.applicationQuestions && story.applicationQuestions.length > 0 && (
+        <div className="mt-8 p-6 bg-gradient-to-br from-blue-50 to-purple-50 border border-blue-200 rounded-xl shadow-sm">
+          <h3 className="text-xl font-bold mb-4 text-blue-800 flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M9,9h6v6H9V9z"/>
+              <path d="M9 1v6m6-6v6"/>
+            </svg>
+            Think About It
+          </h3>
+          <p className="text-blue-700 mb-4 text-sm">
+            Here are some questions to help you think about how this story applies to your own life:
+          </p>
+          <div className="space-y-3">
+            {story.applicationQuestions.map((question, index) => (
+              <div key={index} className="flex items-start space-x-3 p-3 bg-white/60 rounded-lg border border-blue-100">
+                <div className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+                  {index + 1}
+                </div>
+                <p className="text-blue-800 font-medium">{question}</p>
+              </div>
+            ))}
+          </div>
+          {story.moralOutcome === 'consequences' && (
+            <div className="mt-4 p-3 bg-amber-100 border border-amber-200 rounded-lg">
+              <p className="text-amber-800 text-sm font-medium">
+                💭 Take some time to think about these questions - sometimes the best lessons come from thinking about what we would do differently.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Image Display on First Page */}
       {currentPage === 1 && (
