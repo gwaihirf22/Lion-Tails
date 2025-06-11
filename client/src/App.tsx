@@ -18,6 +18,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { AuthProvider } from "@/hooks/use-auth";
+import { ParentModeProvider } from "@/hooks/use-parent-mode";
 
 // Import the background image
 import lionTailsBackground from "@assets/Lion tails.jpg";
@@ -65,17 +66,19 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <div className="min-h-screen flex flex-col font-body text-textDark" style={appBackgroundStyle}>
-          <div style={overlayStyle}></div>
-          <Header />
-          <main className="flex-grow container mx-auto p-4 md:px-8 md:py-6 relative z-10">
-            <div className="content-container rounded-2xl shadow-xl p-4 md:p-6 border border-primary/10 bg-white/80 backdrop-blur-sm">
-              <Router />
-            </div>
-          </main>
-          <Footer />
-        </div>
-        <Toaster />
+        <ParentModeProvider>
+          <div className="min-h-screen flex flex-col font-body text-textDark" style={appBackgroundStyle}>
+            <div style={overlayStyle}></div>
+            <Header />
+            <main className="flex-grow container mx-auto p-4 md:px-8 md:py-6 relative z-10">
+              <div className="content-container rounded-2xl shadow-xl p-4 md:p-6 border border-primary/10 bg-white/80 backdrop-blur-sm">
+                <Router />
+              </div>
+            </main>
+            <Footer />
+          </div>
+          <Toaster />
+        </ParentModeProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
