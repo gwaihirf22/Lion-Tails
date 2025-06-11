@@ -211,7 +211,7 @@ const AnimalAutocomplete: React.FC<AnimalAutocompleteProps> = ({
           )}
           {suggestions.map((animal, index) => (
             <button
-              key={animal}
+              key={`${animal}-${index}`}
               type="button"
               className={`w-full text-left px-3 py-2 text-sm hover:bg-secondary/80 transition-colors ${
                 index === focusedIndex ? 'bg-secondary/80' : ''

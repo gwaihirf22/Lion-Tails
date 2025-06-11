@@ -185,19 +185,22 @@ export function searchAnimals(query: string, limit: number = 20): string[] {
   
   const normalizedQuery = query.toLowerCase().trim();
   
+  // Remove duplicates from database first
+  const uniqueAnimals = [...new Set(animalDatabase)];
+  
   // Exact matches first
-  const exactMatches = animalDatabase.filter(animal => 
+  const exactMatches = uniqueAnimals.filter(animal => 
     animal.toLowerCase() === normalizedQuery
   );
   
   // Starts with matches
-  const startsWithMatches = animalDatabase.filter(animal => 
+  const startsWithMatches = uniqueAnimals.filter(animal => 
     animal.toLowerCase().startsWith(normalizedQuery) && 
     !exactMatches.includes(animal)
   );
   
   // Contains matches
-  const containsMatches = animalDatabase.filter(animal => 
+  const containsMatches = uniqueAnimals.filter(animal => 
     animal.toLowerCase().includes(normalizedQuery) && 
     !exactMatches.includes(animal) && 
     !startsWithMatches.includes(animal)

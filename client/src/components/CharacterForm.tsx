@@ -295,20 +295,14 @@ export default function CharacterForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Favorite Animal</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select favorite animal" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {favoriteAnimals.map((animal) => (
-                          <SelectItem key={animal} value={animal}>
-                            {animal.charAt(0).toUpperCase() + animal.slice(1)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <AnimalAutocomplete
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Type any animal name..."
+                        allowNone={false}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
