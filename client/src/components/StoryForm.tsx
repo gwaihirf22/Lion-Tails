@@ -77,7 +77,7 @@ export default function StoryForm({
   };
 
   // Function to handle character update completion
-  const handleCharacterUpdated = () => {
+  const handleCharacterUpdated = (updatedCharacterData: any) => {
     setEditDialogOpen(false);
     setSelectedCharacter(undefined);
     // Refresh characters list to show updated character
@@ -220,6 +220,7 @@ export default function StoryForm({
   // Character creation is now handled exclusively through the Character tab
 
   return (
+    <>
     <Card className={`content-container rounded-2xl shadow-lg ${formType === "historical" ? "border-amber-200" : "border-blue-200"}`}>
       <CardContent className="p-6">
         {/* Only show child fields when needed */}
@@ -897,5 +898,22 @@ export default function StoryForm({
         </Form>
       </CardContent>
     </Card>
+
+    {/* Character Edit Dialog */}
+    <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Character</DialogTitle>
+        </DialogHeader>
+        {selectedCharacter && (
+          <CharacterForm
+            initialCharacter={selectedCharacter}
+            onSubmit={handleCharacterUpdated}
+            loading={false}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
