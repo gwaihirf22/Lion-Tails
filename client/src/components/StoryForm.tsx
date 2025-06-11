@@ -870,6 +870,18 @@ export default function StoryForm({
               />
             )}
 
+            {/* Prompt Editor for Parent Mode */}
+            <div className="mt-6">
+              <PromptEditor
+                storyRequest={form.getValues()}
+                onPromptsChanged={(systemPrompt, userPrompt) => {
+                  form.setValue("customSystemPrompt", systemPrompt);
+                  form.setValue("customUserPrompt", userPrompt);
+                  form.setValue("useCustomPrompts", true);
+                }}
+              />
+            </div>
+
             <div className="rounded-xl overflow-hidden mt-6">
               <Button 
                 type="submit" 

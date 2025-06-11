@@ -198,8 +198,6 @@ export default function GenerateStory() {
         )}
       </div>
 
-      <ParentModeToggle />
-
       <div className="grid grid-cols-1 gap-8">
         <div className="relative">
           <StoryGeneratorTabs 
@@ -266,6 +264,8 @@ export default function GenerateStory() {
           </div>
         )}
       </div>
+
+      <ParentModeToggle />
     </div>
   );
 }
