@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
+import AnimalAutocomplete from "./AnimalAutocomplete";
 
 // Create a form schema based on the Character schema, but make specific fields required
 const formSchema = characterSchema

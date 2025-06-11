@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { StoryRequest, storyRequestSchema, type Character } from "@shared/schema";
 import { Textarea } from "@/components/ui/textarea";
+import AnimalAutocomplete from "./AnimalAutocomplete";
 
 interface StoryFormProps {
   onSubmit: (data: StoryRequest) => void;
@@ -349,144 +350,12 @@ export default function StoryForm({
                     <FormItem>
                       <FormLabel className="text-sm font-medium">Favorite Animal</FormLabel>
                       <FormControl>
-                        <div className="relative">
-                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-dog">
-                              <path d="M10 5.172C10 3.782 8.423 2.679 6.5 3c-2.823.47-4.113 6.006-4 7 .08.703 1.725 1.722 3.656 1 1.261-.472 1.96-1.45 2.344-2.5" /><path d="M14.267 5.172c0-1.39 1.577-2.493 3.5-2.172 2.823.47 4.113 6.006 4 7-.08.703-1.725 1.722-3.656 1-1.261-.472-1.855-1.45-2.239-2.5" /><path d="M8 14v.5" /><path d="M16 14v.5" /><path d="M11.25 16.25h1.5L12 17l-.75-.75Z" /><path d="M4.42 11.247A13.152 13.152 0 0 0 4 14.556C4 17.59 7 20 12 20s8-2.41 8-5.444c0-1.135-.134-2.252-.396-3.309" />
-                            </svg>
-                          </span>
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                          >
-                            <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                              <SelectValue placeholder="Select an animal if desired" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">None</SelectItem>
-                              {/* Domestic Animals */}
-                              <SelectItem value="dog">Dog</SelectItem>
-                              <SelectItem value="cat">Cat</SelectItem>
-                              <SelectItem value="rabbit">Rabbit</SelectItem>
-                              <SelectItem value="hamster">Hamster</SelectItem>
-                              <SelectItem value="guinea pig">Guinea Pig</SelectItem>
-                              <SelectItem value="bird">Bird</SelectItem>
-                              <SelectItem value="fish">Fish</SelectItem>
-                              <SelectItem value="turtle">Turtle</SelectItem>
-                              <SelectItem value="ferret">Ferret</SelectItem>
-                              <SelectItem value="chinchilla">Chinchilla</SelectItem>
-                              
-                              {/* Farm Animals */}
-                              <SelectItem value="horse">Horse</SelectItem>
-                              <SelectItem value="cow">Cow</SelectItem>
-                              <SelectItem value="pig">Pig</SelectItem>
-                              <SelectItem value="sheep">Sheep</SelectItem>
-                              <SelectItem value="goat">Goat</SelectItem>
-                              <SelectItem value="chicken">Chicken</SelectItem>
-                              <SelectItem value="duck">Duck</SelectItem>
-                              <SelectItem value="goose">Goose</SelectItem>
-                              <SelectItem value="donkey">Donkey</SelectItem>
-                              <SelectItem value="llama">Llama</SelectItem>
-                              <SelectItem value="alpaca">Alpaca</SelectItem>
-                              
-                              {/* Wild Animals - African */}
-                              <SelectItem value="lion">Lion</SelectItem>
-                              <SelectItem value="elephant">Elephant</SelectItem>
-                              <SelectItem value="giraffe">Giraffe</SelectItem>
-                              <SelectItem value="zebra">Zebra</SelectItem>
-                              <SelectItem value="rhinoceros">Rhinoceros</SelectItem>
-                              <SelectItem value="hippopotamus">Hippopotamus</SelectItem>
-                              <SelectItem value="cheetah">Cheetah</SelectItem>
-                              <SelectItem value="leopard">Leopard</SelectItem>
-                              <SelectItem value="hyena">Hyena</SelectItem>
-                              <SelectItem value="meerkat">Meerkat</SelectItem>
-                              
-                              {/* Wild Animals - Forest */}
-                              <SelectItem value="bear">Bear</SelectItem>
-                              <SelectItem value="wolf">Wolf</SelectItem>
-                              <SelectItem value="fox">Fox</SelectItem>
-                              <SelectItem value="deer">Deer</SelectItem>
-                              <SelectItem value="moose">Moose</SelectItem>
-                              <SelectItem value="elk">Elk</SelectItem>
-                              <SelectItem value="raccoon">Raccoon</SelectItem>
-                              <SelectItem value="squirrel">Squirrel</SelectItem>
-                              <SelectItem value="chipmunk">Chipmunk</SelectItem>
-                              <SelectItem value="beaver">Beaver</SelectItem>
-                              <SelectItem value="otter">Otter</SelectItem>
-                              
-                              {/* Wild Animals - Jungle/Tropical */}
-                              <SelectItem value="tiger">Tiger</SelectItem>
-                              <SelectItem value="jaguar">Jaguar</SelectItem>
-                              <SelectItem value="panther">Panther</SelectItem>
-                              <SelectItem value="monkey">Monkey</SelectItem>
-                              <SelectItem value="orangutan">Orangutan</SelectItem>
-                              <SelectItem value="gorilla">Gorilla</SelectItem>
-                              <SelectItem value="chimpanzee">Chimpanzee</SelectItem>
-                              <SelectItem value="sloth">Sloth</SelectItem>
-                              <SelectItem value="toucan">Toucan</SelectItem>
-                              <SelectItem value="parrot">Parrot</SelectItem>
-                              
-                              {/* Ocean Animals */}
-                              <SelectItem value="dolphin">Dolphin</SelectItem>
-                              <SelectItem value="whale">Whale</SelectItem>
-                              <SelectItem value="shark">Shark</SelectItem>
-                              <SelectItem value="seal">Seal</SelectItem>
-                              <SelectItem value="sea lion">Sea Lion</SelectItem>
-                              <SelectItem value="octopus">Octopus</SelectItem>
-                              <SelectItem value="jellyfish">Jellyfish</SelectItem>
-                              <SelectItem value="starfish">Starfish</SelectItem>
-                              <SelectItem value="seahorse">Seahorse</SelectItem>
-                              
-                              {/* Birds */}
-                              <SelectItem value="eagle">Eagle</SelectItem>
-                              <SelectItem value="hawk">Hawk</SelectItem>
-                              <SelectItem value="owl">Owl</SelectItem>
-                              <SelectItem value="cardinal">Cardinal</SelectItem>
-                              <SelectItem value="robin">Robin</SelectItem>
-                              <SelectItem value="blue jay">Blue Jay</SelectItem>
-                              <SelectItem value="hummingbird">Hummingbird</SelectItem>
-                              <SelectItem value="penguin">Penguin</SelectItem>
-                              <SelectItem value="flamingo">Flamingo</SelectItem>
-                              <SelectItem value="peacock">Peacock</SelectItem>
-                              
-                              {/* Small Creatures */}
-                              <SelectItem value="butterfly">Butterfly</SelectItem>
-                              <SelectItem value="ladybug">Ladybug</SelectItem>
-                              <SelectItem value="bee">Bee</SelectItem>
-                              <SelectItem value="dragonfly">Dragonfly</SelectItem>
-                              <SelectItem value="grasshopper">Grasshopper</SelectItem>
-                              <SelectItem value="cricket">Cricket</SelectItem>
-                              <SelectItem value="spider">Spider</SelectItem>
-                              <SelectItem value="snail">Snail</SelectItem>
-                              <SelectItem value="frog">Frog</SelectItem>
-                              <SelectItem value="lizard">Lizard</SelectItem>
-                              
-                              {/* Unique/Exotic */}
-                              <SelectItem value="panda">Panda</SelectItem>
-                              <SelectItem value="koala">Koala</SelectItem>
-                              <SelectItem value="kangaroo">Kangaroo</SelectItem>
-                              <SelectItem value="platypus">Platypus</SelectItem>
-                              <SelectItem value="armadillo">Armadillo</SelectItem>
-                              <SelectItem value="anteater">Anteater</SelectItem>
-                              <SelectItem value="hedgehog">Hedgehog</SelectItem>
-                              <SelectItem value="skunk">Skunk</SelectItem>
-                              <SelectItem value="porcupine">Porcupine</SelectItem>
-                              <SelectItem value="badger">Badger</SelectItem>
-                              
-                              {/* Biblical Animals */}
-                              <SelectItem value="lamb">Lamb</SelectItem>
-                              <SelectItem value="dove">Dove</SelectItem>
-                              <SelectItem value="camel">Camel</SelectItem>
-                              <SelectItem value="locust">Locust</SelectItem>
-                              <SelectItem value="raven">Raven</SelectItem>
-                              <SelectItem value="sparrow">Sparrow</SelectItem>
-                              <SelectItem value="quail">Quail</SelectItem>
-                              <SelectItem value="ox">Ox</SelectItem>
-                              <SelectItem value="colt">Colt</SelectItem>
-                              <SelectItem value="serpent">Serpent</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        <AnimalAutocomplete
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="Type any animal name or leave empty for none"
+                          allowNone={true}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
