@@ -47,7 +47,7 @@ async function canGenerateStoryWithFreeTier(userId: number = 1): Promise<boolean
 
 // Main story generation function
 export async function generateStory(request: StoryRequest, userId: number = 1): Promise<StoryResponse> {
-  const { childName, gender, animal, useAnimal, theme, biblicalEvent, useTimeTravel, characterId, storyType, heroOfFaith } = request;
+  const { childName, gender, animal, useAnimal, theme, biblicalEvent, useTimeTravel, characterId, storyType, heroOfFaith, useCustomPrompts, customSystemPrompt, customUserPrompt } = request;
   
   try {
     // Get the user's OpenAI key if they've provided one
@@ -117,7 +117,8 @@ export async function generateStory(request: StoryRequest, userId: number = 1): 
     }
     
     // Use the OpenAI implementation to generate a story with userId for API key access
-    const generatedStory = await generateStoryWithOpenAI(request, userId);
+    // Pass custom prompts if Parent Mode is active and prompts are provided
+    const generatedStory = await generateStoryWithOpenAI(request, userId, useCustomPrompts ? { systemPrompt: customSystemPrompt, userPrompt: customUserPrompt } : undefined);
     
     // Add the bible verse to the response
     return {
@@ -131,6 +132,14 @@ export async function generateStory(request: StoryRequest, userId: number = 1): 
     return {
       title: "Story Generation Error",
       content: "There was a problem generating your story. Please try again or check your API key settings.",
+      moralOutcome: "positive" as const,
+      applicationQuestions: [
+        "What would you do if something didn't work the way you expected?",
+        "How can we trust God when things go wrong?",
+        "What does it mean to lean on God's understanding?",
+        "How can you show patience when facing difficulties?",
+        "What are some ways to ask for help when you need it?"
+      ],
       bibleVerse: {
         text: "Trust in the LORD with all your heart and lean not on your own understanding.",
         reference: "Proverbs 3:5"

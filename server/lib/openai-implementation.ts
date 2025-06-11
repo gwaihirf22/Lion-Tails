@@ -27,7 +27,7 @@ function getOpenAIClient(apiKey?: string | null) {
   return new OpenAI({ apiKey: key });
 }
 
-export async function generateStoryWithOpenAI(request: StoryRequest, userId: number = 1): Promise<StoryResponse> {
+export async function generateStoryWithOpenAI(request: StoryRequest, userId: number = 1, customPrompts?: { systemPrompt?: string; userPrompt?: string }): Promise<StoryResponse> {
   const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType, customPrompt, useAnimal, biblePassage, readingLevel, storyLength } = request;
 
   // Determine moral outcome type (25% each)
@@ -107,8 +107,8 @@ export async function generateStoryWithOpenAI(request: StoryRequest, userId: num
       creative: "You have complete creative freedom for this story. Focus on unique, engaging storytelling while maintaining Christian values. Be innovative with plot, setting, and character development."
     };
 
-    // System prompt that defines what kind of response we want
-    const systemPrompt = `You are a traditional orthodox Christian children's bedtime story author and Bible teacher. Create wholesome, faith-based stories and Bible teachings with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
+    // Use custom system prompt if provided via Parent Mode, otherwise use default
+    const systemPrompt = customPrompts?.systemPrompt || `You are a traditional orthodox Christian children's bedtime story author and Bible teacher. Create wholesome, faith-based stories and Bible teachings with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
 
 MORAL OUTCOME FOR THIS STORY: ${moralOutcome.toUpperCase()}
 ${moralOutcomeInstructions[moralOutcome]}
@@ -199,11 +199,14 @@ Format your response as valid JSON with the following structure:
     console.log("User Prompt:", prompt.toString());
     console.log("=====================\n");
     
+    // Use custom user prompt if provided via Parent Mode, otherwise use generated prompt
+    const userPrompt = customPrompts?.userPrompt || prompt.toString();
+    
     const response = await openaiClient.chat.completions.create({
       model: model,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: prompt.toString() }
+        { role: "user", content: userPrompt }
       ],
       response_format: { type: "json_object" },
       temperature: 0.7,
