@@ -61,6 +61,14 @@ export async function generateStory(request: StoryRequest, userId: number = 1): 
         return {
           title: "Story Generation Limit Reached",
           content: "You've reached your free story generation limit. Please provide your own OpenAI API key in Settings to continue generating stories, or wait until next month when your free quota refreshes.",
+          moralOutcome: "positive" as const,
+          applicationQuestions: [
+            "How can we be patient when we have to wait for something?",
+            "What are some ways God provides for our needs?",
+            "How can we be grateful for what we have?",
+            "What does it mean to trust in God's timing?",
+            "How can we help others while we wait?"
+          ],
           bibleVerse: {
             text: "And my God will meet all your needs according to the riches of his glory in Christ Jesus.",
             reference: "Philippians 4:19"
@@ -315,6 +323,14 @@ That night, as ${childName} gazed out the window before bed, a spring shower beg
   return {
     title,
     content: content + bibleVerseText,
+    moralOutcome: "positive" as const,
+    applicationQuestions: [
+      "How can you show courage when facing something scary?",
+      "What does it mean to trust God in difficult times?",
+      "How can you help others even when you're afraid?",
+      "What are some ways God shows His faithfulness to us?",
+      "How can you practice obedience like Noah did?"
+    ],
     bibleVerse,
     imageUrl: undefined // This will be generated separately if needed
   };
