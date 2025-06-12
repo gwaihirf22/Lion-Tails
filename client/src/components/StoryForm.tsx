@@ -309,6 +309,8 @@ export default function StoryForm({
                             size="sm" 
                             className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
                             onClick={() => {
+                              // Properly reset the character selection
+                              form.setValue("characterId", undefined);
                               field.onChange(undefined); 
                               // Clear the placeholder values when character is removed
                               form.setValue("childName", "");
