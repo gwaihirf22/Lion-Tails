@@ -38,13 +38,33 @@ interface PromptValidation {
   suggestions: string[];
 }
 
-const DEFAULT_SYSTEM_PROMPT = `You are a Christian children's storyteller who creates engaging, faith-based stories that teach valuable lessons. Your stories should be:
+const generateDefaultSystemPrompt = (storyRequest: StoryRequest) => {
+  const lengthMapping = {
+    "very-short": "500-700 words",
+    "short": "700-1000 words", 
+    "medium": "1000-1500 words",
+    "long": "1500-2500 words",
+    "extended": "2500+ words (20+ minutes reading time)"
+  };
 
-1. Age-appropriate and engaging for children aged 4-12
+  const readingLevelMapping = {
+    "preschool": "ages 3-4",
+    "kindergarten": "ages 5-6", 
+    "early-elementary": "ages 6-8",
+    "late-elementary": "ages 9-11",
+    "middle-school": "ages 12-14"
+  };
+
+  const targetLength = lengthMapping[storyRequest.storyLength] || "1000+ words";
+  const targetAge = readingLevelMapping[storyRequest.readingLevel] || "ages 4-12";
+
+  return `You are a Christian children's storyteller who creates engaging, faith-based stories that teach valuable lessons. Your stories should be:
+
+1. Age-appropriate and engaging for children ${targetAge}
 2. Incorporate biblical values and Christian themes naturally
 3. Feature relatable characters and situations
 4. Include a clear moral lesson or spiritual truth
-5. Be approximately 1000+ words in length
+5. Be approximately ${targetLength} in length
 6. End with 5 application questions to help children apply the lesson
 
 Story Structure:
@@ -56,17 +76,18 @@ Story Structure:
 - 5 practical application questions at the end
 
 Content Guidelines:
-- Use simple, age-appropriate language
+- Use simple, age-appropriate language appropriate for ${targetAge}
 - Avoid scary or inappropriate content
 - Emphasize God's love, grace, and care
 - Show characters learning from mistakes
 - Include elements of adventure, friendship, or family
 - Reference biblical stories or principles when appropriate`;
+};
 
 export default function PromptEditor({ storyRequest, onPromptsChanged, className }: PromptEditorProps) {
   const { isActive } = useParentMode();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
+  const [systemPrompt, setSystemPrompt] = useState("");
   const [userPrompt, setUserPrompt] = useState("");
   const [validation, setValidation] = useState<PromptValidation>({ 
     isValid: true, 
@@ -74,7 +95,7 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
     suggestions: [] 
   });
 
-  // Generate user prompt from story request
+  // Generate both system and user prompts from story request - updates when storyRequest changes
   useEffect(() => {
     const generateUserPrompt = () => {
       let prompt = `Create a children's story with the following details:\n\n`;
@@ -97,7 +118,12 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
       return prompt;
     };
 
-    setUserPrompt(generateUserPrompt());
+    // Update both prompts when story request changes
+    const newSystemPrompt = generateDefaultSystemPrompt(storyRequest);
+    const newUserPrompt = generateUserPrompt();
+    
+    setSystemPrompt(newSystemPrompt);
+    setUserPrompt(newUserPrompt);
   }, [storyRequest]);
 
   // Validate prompts
@@ -146,7 +172,8 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
   };
 
   const handleResetPrompts = () => {
-    setSystemPrompt(DEFAULT_SYSTEM_PROMPT);
+    const defaultSystemPrompt = generateDefaultSystemPrompt(storyRequest);
+    setSystemPrompt(defaultSystemPrompt);
     // User prompt will be regenerated from story request via useEffect
   };
 

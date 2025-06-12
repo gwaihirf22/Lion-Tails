@@ -873,7 +873,7 @@ export default function StoryForm({
             {/* Prompt Editor for Parent Mode */}
             <div className="mt-6">
               <PromptEditor
-                storyRequest={form.getValues()}
+                storyRequest={form.watch()}
                 onPromptsChanged={(systemPrompt, userPrompt) => {
                   form.setValue("customSystemPrompt", systemPrompt);
                   form.setValue("customUserPrompt", userPrompt);
