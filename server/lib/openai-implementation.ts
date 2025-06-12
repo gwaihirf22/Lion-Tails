@@ -330,8 +330,21 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       defaultTitle = childName ? `${childName}'s Biblical Adventure` : `Biblical Adventure`;
     }
     
-    // Check if the content includes "For Further Learning:" section
-    let finalContent = jsonContent.content || responseContent;
+    // Debug content extraction
+    console.log("=== CONTENT EXTRACTION DEBUG ===");
+    console.log("jsonContent.content exists:", !!jsonContent.content);
+    console.log("jsonContent.content length:", jsonContent.content?.length || 0);
+    console.log("jsonContent keys:", Object.keys(jsonContent));
+    console.log("===============================");
+    
+    // Extract content properly - never use the raw JSON response as content
+    let finalContent = jsonContent.content;
+    
+    // If content is missing, create a fallback story
+    if (!finalContent || finalContent.trim() === '') {
+      console.warn("Content field missing from JSON response, creating fallback");
+      finalContent = `Once upon a time, there was a child named ${childName || 'Child'} who learned an important lesson about ${theme || 'faith'}. Through their adventures, they discovered the joy of following God's teachings and living with kindness and love.`;
+    }
     
     // If "For Further Learning:" section is missing, add it
     if (!finalContent.includes("For Further Learning:") && !finalContent.includes("For Further Learning")) {
