@@ -210,13 +210,18 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       finalUserPrompt = `Please respond in JSON format as specified in the system prompt. ${finalUserPrompt}`;
     }
 
-    console.log("=== COMPLETE PROMPT DEBUG ===");
-    console.log("Final System Prompt:");
+    console.log("\n" + "=".repeat(50));
+    console.log("PROMPT DEBUG - SENDING TO OPENAI");
+    console.log("=".repeat(50));
+    console.log("System Prompt:");
+    console.log("-".repeat(20));
     console.log(finalSystemPrompt);
-    console.log("\nFinal User Prompt:");
+    console.log("\nUser Prompt:");
+    console.log("-".repeat(20));
     console.log(finalUserPrompt);
-    console.log("Max Tokens:", maxTokens);
-    console.log("============================");
+    console.log("\nSettings:");
+    console.log(`Max Tokens: ${maxTokens}, Model: ${model}`);
+    console.log("=".repeat(50) + "\n");
 
     const response = await openaiClient.chat.completions.create({
       model: model,
@@ -232,11 +237,14 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     // Extract the response content
     const responseContent = response.choices[0].message.content || '';
 
-    console.log("=== COMPLETE OPENAI RESPONSE ===");
-    console.log("Raw response content:");
+    console.log("\n" + "=".repeat(50));
+    console.log("OPENAI RESPONSE RECEIVED");
+    console.log("=".repeat(50));
+    console.log(`Response Length: ${responseContent.length} characters`);
+    console.log("Raw Content:");
+    console.log("-".repeat(20));
     console.log(responseContent);
-    console.log("Response length:", responseContent.length);
-    console.log("===============================");
+    console.log("=".repeat(50));
 
     // Parse the JSON response
     let jsonContent;
