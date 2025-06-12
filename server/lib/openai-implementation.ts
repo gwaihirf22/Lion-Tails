@@ -483,7 +483,7 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
     // Return the story with all required fields
     return {
       title: finalTitle,
-      content: finalContent,
+      content: storyContent,
       moralOutcome: moralOutcome,
       bibleVerse: moralOutcome === 'consequences' ? undefined : bibleVerse,
       applicationQuestions: finalApplicationQuestions,
