@@ -200,13 +200,24 @@ Format your response as valid JSON with the following structure (respond only wi
     console.log("=====================\n");
     
     // Use custom user prompt if provided via Parent Mode, otherwise use generated prompt
-    const userPrompt = customPrompts?.userPrompt || prompt.toString();
+    let finalUserPrompt = customPrompts?.userPrompt || prompt.toString();
+    
+    // Ensure the word "json" appears in the user prompt for OpenAI API requirement
+    if (!finalUserPrompt.toLowerCase().includes('json')) {
+      finalUserPrompt += ' Please respond in JSON format as specified.';
+    }
+    
+    // Also ensure the system prompt contains "json" if using custom prompts
+    let finalSystemPrompt = systemPrompt;
+    if (customPrompts?.systemPrompt && !finalSystemPrompt.toLowerCase().includes('json')) {
+      finalSystemPrompt += ' Always respond in JSON format.';
+    }
     
     const response = await openaiClient.chat.completions.create({
       model: model,
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
+        { role: "system", content: finalSystemPrompt },
+        { role: "user", content: finalUserPrompt }
       ],
       response_format: { type: "json_object" },
       temperature: 0.7,
