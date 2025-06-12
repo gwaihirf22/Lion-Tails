@@ -344,35 +344,52 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     if (!finalContent && jsonContent.story) {
       const story = jsonContent.story;
       
-      // Build the complete story from all components
+      console.log("\n" + "=".repeat(50));
+      console.log("EXTRACTING STORY CONTENT");
+      console.log("=".repeat(50));
+      console.log("Available story properties:", Object.keys(story));
+      
+      // Build the complete story from all components in proper order
       const storyParts = [];
       
-      // Add opening if available
+      // Add story components in narrative order
       if (story.opening) {
+        console.log("✓ Adding opening");
         storyParts.push(story.opening);
       }
       
-      // Add plot components if available
-      if (story.plot) {
-        const plot = story.plot;
-        if (plot.introduction) storyParts.push(plot.introduction);
-        if (plot.risingAction) storyParts.push(plot.risingAction);
-        if (plot.challenge) storyParts.push(plot.challenge);
-        if (plot.climax) storyParts.push(plot.climax);
-        if (plot.resolution) storyParts.push(plot.resolution);
-        if (plot.conclusion) storyParts.push(plot.conclusion);
+      if (story.rising_action) {
+        console.log("✓ Adding rising_action");
+        storyParts.push(story.rising_action);
       }
       
-      // Add other story components
+      if (story.conflict) {
+        console.log("✓ Adding conflict");
+        storyParts.push(story.conflict);
+      }
+      
+      if (story.resolution) {
+        console.log("✓ Adding resolution");
+        storyParts.push(story.resolution);
+      }
+      
+      if (story.moral) {
+        console.log("✓ Adding moral");
+        storyParts.push(story.moral);
+      }
+      
+      // Add any other story components that might be present
       if (story.characterDevelopment) storyParts.push(story.characterDevelopment);
-      if (story.rising_action) storyParts.push(story.rising_action);
       if (story.risingAction) storyParts.push(story.risingAction);
       if (story.adventure) storyParts.push(story.adventure);
-      if (story.conflict) storyParts.push(story.conflict);
       if (story.climax) storyParts.push(story.climax);
-      if (story.resolution) storyParts.push(story.resolution);
+      if (story.conclusion) storyParts.push(story.conclusion);
       
       finalContent = storyParts.filter(Boolean).join('\n\n');
+      
+      console.log(`Final extracted content length: ${finalContent.length} characters`);
+      console.log("Content preview:", finalContent.substring(0, 200) + "...");
+      console.log("=".repeat(50) + "\n");
     }
 
     // If content is still missing, use a simple fallback
