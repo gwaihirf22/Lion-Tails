@@ -193,15 +193,6 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     // Call OpenAI API with a fresh client using the appropriate API key
     const openaiClient = getOpenAIClient(userApiKey || undefined);
     
-    // Log the request being sent to OpenAI
-    console.log("\n=== OPENAI REQUEST ===");
-    console.log("Model:", model);
-    console.log("Max Tokens:", maxTokens);
-    console.log("Using Custom Prompts:", !!customPrompts);
-    console.log("System Prompt:", baseSystemPrompt);
-    console.log("User Prompt:", prompt.toString());
-    console.log("=====================\n");
-    
     // Ensure both prompts contain "json" requirement for OpenAI API
     let finalSystemPrompt = baseSystemPrompt;
     if (!finalSystemPrompt.toLowerCase().includes('json')) {
@@ -214,13 +205,7 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       finalUserPrompt = `Please respond in JSON format as specified in the system prompt. ${finalUserPrompt}`;
     }
     
-    // Log the final prompts being sent
-    console.log("\n=== FINAL PROMPTS ===");
-    console.log("Final System Prompt:", finalSystemPrompt);
-    console.log("Final User Prompt:", finalUserPrompt);
-    console.log("System contains 'json':", finalSystemPrompt.toLowerCase().includes('json'));
-    console.log("User contains 'json':", finalUserPrompt.toLowerCase().includes('json'));
-    console.log("====================\n");
+
     
     const response = await openaiClient.chat.completions.create({
       model: model,
@@ -236,11 +221,7 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     // Extract the response content
     const responseContent = response.choices[0].message.content || '';
     
-    // Log the response from OpenAI
-    console.log("\n=== OPENAI RESPONSE ===");
-    console.log("Raw Response:", responseContent);
-    console.log("Usage:", response.usage);
-    console.log("======================\n");
+
     
     // Parse the JSON response
     let jsonContent;
@@ -330,19 +311,26 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       defaultTitle = childName ? `${childName}'s Biblical Adventure` : `Biblical Adventure`;
     }
     
-    // Debug content extraction
-    console.log("=== CONTENT EXTRACTION DEBUG ===");
-    console.log("jsonContent.content exists:", !!jsonContent.content);
-    console.log("jsonContent.content length:", jsonContent.content?.length || 0);
-    console.log("jsonContent keys:", Object.keys(jsonContent));
-    console.log("===============================");
+
     
-    // Extract content properly - never use the raw JSON response as content
+    // Extract content from JSON response (handle different response formats)
     let finalContent = jsonContent.content;
     
-    // If content is missing, create a fallback story
+    // Handle nested story structure format
+    if (!finalContent && jsonContent.story) {
+      const story = jsonContent.story;
+      finalContent = [
+        story.opening,
+        story.characterDevelopment,
+        story.risingAction,
+        story.conflict,
+        story.resolution,
+        story.moralLesson
+      ].filter(Boolean).join('\n\n');
+    }
+    
+    // If content is still missing, use a simple fallback
     if (!finalContent || finalContent.trim() === '') {
-      console.warn("Content field missing from JSON response, creating fallback");
       finalContent = `Once upon a time, there was a child named ${childName || 'Child'} who learned an important lesson about ${theme || 'faith'}. Through their adventures, they discovered the joy of following God's teachings and living with kindness and love.`;
     }
     
