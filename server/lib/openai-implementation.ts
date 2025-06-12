@@ -44,7 +44,7 @@ function countWords(text: string): number {
   return text.split(/\s+/).filter(word => word.length > 0).length;
 }
 
-export async function generateStoryWithOpenAI(request: StoryRequest, userId: number = 1, customPrompts?: { systemPrompt?: string; userPrompt?: string }): Promise<StoryResponse> {
+export async function generateStoryWithOpenAI(request: StoryRequest, userId: number = 1, customPrompts?: { systemPrompt?: string; userPrompt?: string }): Promise<StoryResponse & { debugData?: any[] }> {
   const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType, customPrompt, useAnimal, biblePassage, readingLevel, storyLength } = request;
 
   // Determine moral outcome type (25% each)
@@ -249,6 +249,7 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
     let storyContent = '';
     let wordCount = 0;
     const maxAttempts = 3;
+    const debugData: any[] = [];
 
     while (attempt < maxAttempts) {
       attempt++;
@@ -275,6 +276,20 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
       });
 
       const responseContent = response.choices[0].message.content || '';
+      
+      // Store debug data for this attempt
+      debugData.push({
+        systemPrompt: systemPromptForAttempt,
+        userPrompt: userPromptForAttempt,
+        response: responseContent,
+        wordCount: 0, // Will be updated below
+        targetWordCount,
+        attempt,
+        maxAttempts,
+        timestamp: new Date().toISOString(),
+        model,
+        maxTokens
+      });
       
       try {
         const jsonContent = JSON.parse(responseContent);
@@ -313,6 +328,9 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
         wordCount = countWords(storyContent);
         console.log(`Attempt ${attempt}: Generated ${wordCount} words (target: ${targetWordCount})`);
         
+        // Update debug data with actual word count
+        debugData[debugData.length - 1].wordCount = wordCount;
+        
         // Accept if we have at least 70% of target word count or if this is the last attempt
         if (wordCount >= targetWordCount * 0.7 || attempt === maxAttempts) {
           break;
@@ -320,6 +338,8 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
         
       } catch (parseError) {
         console.error(`Attempt ${attempt}: JSON parse error:`, parseError);
+        // Update debug data with error info
+        debugData[debugData.length - 1].parseError = parseError instanceof Error ? parseError.message : String(parseError);
         if (attempt === maxAttempts) {
           throw parseError;
         }
@@ -480,7 +500,7 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
       typeof q === 'string' ? q : q.question || q
     );
 
-    // Return the story with all required fields
+    // Return the story with all required fields including debug data
     return {
       title: finalTitle,
       content: storyContent,
@@ -488,7 +508,8 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
       bibleVerse: moralOutcome === 'consequences' ? undefined : bibleVerse,
       applicationQuestions: finalApplicationQuestions,
       imagePrompt: imagePrompt,
-      imageUrl: imageUrl || undefined
+      imageUrl: imageUrl || undefined,
+      debugData: debugData
     };
   } catch (error) {
     console.error("Error generating story with OpenAI:", error);

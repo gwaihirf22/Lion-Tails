@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { BookPage } from "@/components/BookPage";
+import { DebugPanel } from "@/components/DebugPanel";
 import { Star, Printer, Download, ChevronLeft, ChevronRight, UserPlus } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { 
