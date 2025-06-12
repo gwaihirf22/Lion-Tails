@@ -400,6 +400,16 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       }
       
       // Add direct story components (alternative structure)
+      if (story.characterDevelopment) {
+        console.log("✓ Adding characterDevelopment");
+        storyParts.push(story.characterDevelopment);
+      }
+      
+      if (story.risingAction) {
+        console.log("✓ Adding risingAction");
+        storyParts.push(story.risingAction);
+      }
+      
       if (story.rising_action) {
         console.log("✓ Adding direct rising_action");
         storyParts.push(story.rising_action);
@@ -413,6 +423,11 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       if (story.resolution) {
         console.log("✓ Adding direct resolution");
         storyParts.push(story.resolution);
+      }
+      
+      if (story.moralLesson) {
+        console.log("✓ Adding moralLesson");
+        storyParts.push(story.moralLesson);
       }
       
       if (story.moral) {
@@ -477,7 +492,7 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
                       (jsonContent.story?.title) || 
                       defaultTitle;
 
-    const finalApplicationQuestions = jsonContent.applicationQuestions || 
+    let finalApplicationQuestions = jsonContent.applicationQuestions || 
                                     (jsonContent.story?.application_questions) || 
                                     [
                                       "What would you do in a similar situation?",
@@ -486,6 +501,11 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
                                       "How can you share this lesson with others?",
                                       "What Bible verses come to mind when you think about this story?"
                                     ];
+
+    // Normalize application questions to strings (handle both string and object formats)
+    finalApplicationQuestions = finalApplicationQuestions.map((q: any) => 
+      typeof q === 'string' ? q : q.question || q
+    );
 
     // Return the story with all required fields
     return {

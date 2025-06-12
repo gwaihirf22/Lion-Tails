@@ -424,7 +424,9 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
                 <div className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-semibold">
                   {index + 1}
                 </div>
-                <p className="text-blue-800 font-medium">{question}</p>
+                <p className="text-blue-800 font-medium">
+                  {typeof question === 'string' ? question : (question as any).question}
+                </p>
               </div>
             ))}
           </div>
