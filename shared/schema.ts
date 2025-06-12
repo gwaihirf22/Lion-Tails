@@ -218,7 +218,7 @@ export const storyResponseSchema = z.object({
     maxAttempts: z.number(),
     timestamp: z.string(),
     model: z.string(),
-    maxTokens: z.number(),
+    maxTokens: z.union([z.number(), z.string()]),
     parseError: z.string().optional(),
   })).optional(),
 });

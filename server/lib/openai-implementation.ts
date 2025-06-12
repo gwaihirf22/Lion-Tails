@@ -265,7 +265,7 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
         maxAttempts,
         timestamp: new Date().toISOString(),
         model,
-        maxTokens
+        maxTokens: "unlimited" // No token limit set
       });
       
       try {
