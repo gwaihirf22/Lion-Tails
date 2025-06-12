@@ -262,7 +262,7 @@ export default function SongSearch({ onSave }: SongSearchProps) {
                           <h5 className="font-medium">{song.title}</h5>
                         </div>
                         {song.artist && <p className="text-sm text-muted-foreground">{song.artist}</p>}
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{song.lyrics.substring(0, 100)}...</p>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{song.lyrics?.substring(0, 100) || ''}...</p>
                       </CardContent>
                     </Card>
                   ))}
@@ -297,7 +297,7 @@ export default function SongSearch({ onSave }: SongSearchProps) {
                           <h5 className="font-medium">{song.title}</h5>
                         </div>
                         {song.artist && <p className="text-sm text-muted-foreground">{song.artist}</p>}
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{song.lyrics.substring(0, 100)}...</p>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{song.lyrics?.substring(0, 100) || ''}...</p>
                       </CardContent>
                     </Card>
                   ))}
