@@ -297,6 +297,7 @@ export default function StoryForm({
                           </Button>
                         </div>
                       )}
+                    </div>
                   </FormItem>
                 )}
               />
