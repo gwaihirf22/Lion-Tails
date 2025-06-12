@@ -89,6 +89,8 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
   const [dialogOpen, setDialogOpen] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [userPrompt, setUserPrompt] = useState("");
+  const [systemPromptManuallyEdited, setSystemPromptManuallyEdited] = useState(false);
+  const [userPromptManuallyEdited, setUserPromptManuallyEdited] = useState(false);
   const [validation, setValidation] = useState<PromptValidation>({ 
     isValid: true, 
     warnings: [], 
@@ -118,13 +120,18 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
       return prompt;
     };
 
-    // Update both prompts when story request changes
+    // Only update prompts if they haven't been manually edited
     const newSystemPrompt = generateDefaultSystemPrompt(storyRequest);
     const newUserPrompt = generateUserPrompt();
     
-    setSystemPrompt(newSystemPrompt);
-    setUserPrompt(newUserPrompt);
-  }, [storyRequest]);
+    if (!systemPromptManuallyEdited) {
+      setSystemPrompt(newSystemPrompt);
+    }
+    
+    if (!userPromptManuallyEdited) {
+      setUserPrompt(newUserPrompt);
+    }
+  }, [storyRequest, systemPromptManuallyEdited, userPromptManuallyEdited]);
 
   // Validate prompts
   useEffect(() => {
@@ -172,9 +179,9 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
   };
 
   const handleResetPrompts = () => {
-    const defaultSystemPrompt = generateDefaultSystemPrompt(storyRequest);
-    setSystemPrompt(defaultSystemPrompt);
-    // User prompt will be regenerated from story request via useEffect
+    setSystemPromptManuallyEdited(false);
+    setUserPromptManuallyEdited(false);
+    // Prompts will be regenerated from story request via useEffect when manually edited flags are reset
   };
 
   const getPromptPreview = (prompt: string, maxLength: number = 150) => {
@@ -259,7 +266,10 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
                       <Textarea
                         id="system-prompt"
                         value={systemPrompt}
-                        onChange={(e) => setSystemPrompt(e.target.value)}
+                        onChange={(e) => {
+                          setSystemPrompt(e.target.value);
+                          setSystemPromptManuallyEdited(true);
+                        }}
                         className="min-h-[300px] font-mono text-sm"
                         placeholder="Enter system prompt..."
                       />
@@ -280,7 +290,10 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
                       <Textarea
                         id="user-prompt"
                         value={userPrompt}
-                        onChange={(e) => setUserPrompt(e.target.value)}
+                        onChange={(e) => {
+                          setUserPrompt(e.target.value);
+                          setUserPromptManuallyEdited(true);
+                        }}
                         className="min-h-[200px] font-mono text-sm"
                         placeholder="Enter user prompt..."
                       />
@@ -328,6 +341,11 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
             <div className="flex items-center space-x-2">
               <Label className="text-sm font-medium text-amber-700">System Prompt</Label>
               <Eye className="h-4 w-4 text-amber-600" />
+              {systemPromptManuallyEdited && (
+                <Badge variant="secondary" className="bg-blue-100 text-blue-700 text-xs">
+                  Custom
+                </Badge>
+              )}
             </div>
             <div className="bg-white p-3 rounded border border-amber-200 text-xs">
               <code className="text-gray-700">{getPromptPreview(systemPrompt)}</code>
@@ -338,6 +356,11 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
             <div className="flex items-center space-x-2">
               <Label className="text-sm font-medium text-amber-700">User Prompt</Label>
               <Eye className="h-4 w-4 text-amber-600" />
+              {userPromptManuallyEdited && (
+                <Badge variant="secondary" className="bg-blue-100 text-blue-700 text-xs">
+                  Custom
+                </Badge>
+              )}
             </div>
             <div className="bg-white p-3 rounded border border-amber-200 text-xs">
               <code className="text-gray-700">{getPromptPreview(userPrompt)}</code>
@@ -348,7 +371,8 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
         <Alert className="bg-amber-50 border-amber-200">
           <Info className="h-4 w-4 text-amber-600" />
           <AlertDescription className="text-amber-700 text-sm">
-            Prompts are automatically generated from your story settings. Use the editor to customize them for more specific results.
+            Prompts automatically update when you change form fields. Once you manually edit a prompt, 
+            it becomes "Custom" and stops auto-updating. Use "Reset to Default" to restore live updates.
           </AlertDescription>
         </Alert>
       </CardContent>
