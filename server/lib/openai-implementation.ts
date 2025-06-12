@@ -159,17 +159,17 @@ IMPORTANT STORYTELLING GUIDELINES:
 - When creating content for a specific Bible passage, focus on making the theological content understandable to children while maintaining accuracy
 - Ensure the Further Learning websites are specifically relevant to the story's central themes or biblical characters
 
-IMPORTANT: You must respond with valid JSON format. The "content" field MUST contain the complete story of approximately ${getWordCountFromLength(storyLength)} words. Format your response as JSON with the following structure:
+IMPORTANT: You must respond with valid JSON format. Format your response as JSON with the following structure:
     {
       "title": "Story title",
-      "content": "The COMPLETE FULL story content with proper paragraphs - MINIMUM ${getWordCountFromLength(storyLength)} words",
+      "content": "The COMPLETE FULL story content with proper paragraphs",
       "moralOutcome": "${moralOutcome}",
       "bibleVerse": ${moralOutcome === 'consequences' ? 'null' : '{"text": "Bible verse text", "reference": "Book Chapter:Verse"}'},
       "applicationQuestions": ["Question 1 about applying the lesson", "Question 2", "Question 3", "Question 4", "Question 5"],
       "imagePrompt": "A short description for an illustration of a key scene in the biblical style"
     }
 
-    CRITICAL: The "content" field must contain the entire story from beginning to end, not just a summary. Write the full narrative with dialogue, character development, and detailed scenes. The story must be AT LEAST ${getWordCountFromLength(storyLength)} words long.
+    CRITICAL: The "content" field must contain the entire story from beginning to end, not just a summary. Write the full narrative with dialogue, character development, and detailed scenes.
     
     Respond with JSON only - no other text.`;
 
@@ -178,30 +178,8 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
 
     console.log("Using OpenAI model:", model);
 
-    // Calculate appropriate max_tokens based on story length - increased for better length consistency
-    let maxTokens = 5000; // Default for "medium" length
-    let targetWordCount = getWordCountFromLength(storyLength);
-
-    // Adjust token count based on story length (tokens ≈ words * 1.3-1.5 for safety)
-    switch(storyLength) {
-      case "very-short":
-        maxTokens = 1000;
-        break;
-      case "short":
-        maxTokens = 2000;
-        break;
-      case "medium":
-        maxTokens = 4000;
-        break;
-      case "long":
-        maxTokens = 6000;
-        break;
-      case "extended":
-        maxTokens = 10000;
-        break;
-      default:
-        maxTokens = 5000; // Default to medium if unspecified
-    }
+    // Remove token limits to allow OpenAI to generate longer content
+    const targetWordCount = getWordCountFromLength(storyLength);
 
     // Call OpenAI API with a fresh client using the appropriate API key
     const openaiClient = getOpenAIClient(userApiKey || undefined);
@@ -240,7 +218,7 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
     console.log("-".repeat(20));
     console.log(finalUserPrompt);
     console.log("\nSettings:");
-    console.log(`Max Tokens: ${maxTokens}, Model: ${model}, Target Words: ${targetWordCount}`);
+    console.log(`Model: ${model}, Target Words: ${targetWordCount} (no token limit)`);
     console.log("=".repeat(50) + "\n");
 
     // Attempt to generate story with retry logic for proper length
@@ -271,8 +249,7 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
           { role: "user", content: userPromptForAttempt }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
-        max_tokens: maxTokens
+        temperature: 0.7
       });
 
       const responseContent = response.choices[0].message.content || '';
@@ -791,7 +768,7 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
     readingLevelText = "using more advanced vocabulary suitable for ages 12-14. Include complex sentence structures and deeper concepts.";
   }
 
-  prompt += ` The story should be approximately ${wordCount} words ${readingLevelText} Include a clear moral lesson at the end that relates to traditional Christian values.`;
+  prompt += ` Write the story ${readingLevelText} Include a clear moral lesson at the end that relates to traditional Christian values.`;
 
   // Include Heroes of Faith if provided
   if (heroOfFaith && heroOfFaith !== 'none' && heroOfFaith !== '') {
@@ -824,29 +801,10 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
     prompt += ` IMPORTANT: Filter any inappropriate content or themes from this custom request. ONLY include elements that are consistent with traditional Christian values and appropriate for young children. Completely ignore any requests for content that might be harmful, inappropriate, or contrary to wholesome Christian teachings.`;
   }
 
-  // Add story length specification
-  let lengthDescription;
-  switch(storyLength) {
-    case "very-short":
-      lengthDescription = "very short (about 2-3 minutes reading time, 500-750 words)";
-      break;
-    case "short":
-      lengthDescription = "short (about 4-5 minutes reading time, 750-1000 words)";
-      break;
-    case "medium":
-      lengthDescription = "medium length (about 8-10 minutes reading time, 1500-2000 words)";
-      break;
-    case "long":
-      lengthDescription = "long (about 15-20 minutes reading time, 2500-3500 words)";
-      break;
-    case "extended":
-      lengthDescription = "very long (about 25-30 minutes reading time, 4000-5000 words)";
-      break;
-    default:
-      lengthDescription = "medium length (about 8-10 minutes reading time, 1500-2000 words)";
-  }
-
-  prompt += ` Make sure to create a ${lengthDescription} story that will deeply engage the child while teaching important biblical principles. Please respond with valid JSON format as specified in the system instructions.`;
+  // Add story length specification with target word count only
+  const targetWords = getWordCountFromLength(storyLength);
+  
+  prompt += ` Make sure to create a story of exactly ${targetWords} words that will deeply engage the child while teaching important biblical principles. Please respond with valid JSON format as specified in the system instructions.`;
 
   return prompt;
 }
