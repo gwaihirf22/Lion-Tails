@@ -352,24 +352,66 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       // Build the complete story from all components in proper order
       const storyParts = [];
       
-      // Add story components in narrative order
+      // Add introduction if available
+      if (story.introduction) {
+        console.log("✓ Adding introduction");
+        storyParts.push(story.introduction);
+      }
+      
+      // Add opening if available (alternative structure)
       if (story.opening) {
         console.log("✓ Adding opening");
         storyParts.push(story.opening);
       }
       
+      // Handle plot object with nested components
+      if (story.plot) {
+        console.log("✓ Found plot object with components:", Object.keys(story.plot));
+        const plot = story.plot;
+        
+        if (plot.beginning) {
+          console.log("✓ Adding plot.beginning");
+          storyParts.push(plot.beginning);
+        }
+        if (plot.middle) {
+          console.log("✓ Adding plot.middle");
+          storyParts.push(plot.middle);
+        }
+        if (plot.conflict) {
+          console.log("✓ Adding plot.conflict");
+          storyParts.push(plot.conflict);
+        }
+        if (plot.rising_action) {
+          console.log("✓ Adding plot.rising_action");
+          storyParts.push(plot.rising_action);
+        }
+        if (plot.climax) {
+          console.log("✓ Adding plot.climax");
+          storyParts.push(plot.climax);
+        }
+        if (plot.resolution) {
+          console.log("✓ Adding plot.resolution");
+          storyParts.push(plot.resolution);
+        }
+        if (plot.conclusion) {
+          console.log("✓ Adding plot.conclusion");
+          storyParts.push(plot.conclusion);
+        }
+      }
+      
+      // Add direct story components (alternative structure)
       if (story.rising_action) {
-        console.log("✓ Adding rising_action");
+        console.log("✓ Adding direct rising_action");
         storyParts.push(story.rising_action);
       }
       
       if (story.conflict) {
-        console.log("✓ Adding conflict");
+        console.log("✓ Adding direct conflict");
         storyParts.push(story.conflict);
       }
       
       if (story.resolution) {
-        console.log("✓ Adding resolution");
+        console.log("✓ Adding direct resolution");
         storyParts.push(story.resolution);
       }
       
