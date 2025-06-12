@@ -202,18 +202,16 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     console.log("User Prompt:", prompt.toString());
     console.log("=====================\n");
     
-    // Use custom user prompt if provided via Parent Mode, otherwise use generated prompt
-    let finalUserPrompt = customPrompts?.userPrompt || prompt.toString();
-    
-    // Ensure the word "json" appears in the user prompt for OpenAI API requirement
-    if (!finalUserPrompt.toLowerCase().includes('json')) {
-      finalUserPrompt += ' Please respond in JSON format as specified.';
-    }
-    
-    // Ensure system prompt always contains JSON requirement
+    // Ensure both prompts contain "json" requirement for OpenAI API
     let finalSystemPrompt = baseSystemPrompt;
     if (!finalSystemPrompt.toLowerCase().includes('json')) {
       finalSystemPrompt = `${finalSystemPrompt}\n\nIMPORTANT: You must respond with valid JSON format only.`;
+    }
+    
+    let finalUserPrompt = customPrompts?.userPrompt || prompt.toString();
+    // Always prepend JSON requirement to user prompt to ensure it's prominent
+    if (!finalUserPrompt.toLowerCase().includes('json')) {
+      finalUserPrompt = `Please respond in JSON format as specified in the system prompt. ${finalUserPrompt}`;
     }
     
     // Log the final prompts being sent
