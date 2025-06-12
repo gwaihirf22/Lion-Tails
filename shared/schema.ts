@@ -208,6 +208,19 @@ export const storyResponseSchema = z.object({
   applicationQuestions: z.array(z.string()).min(5).max(5),
   imagePrompt: z.string().optional(),
   imageUrl: z.string().optional(),
+  debugData: z.array(z.object({
+    systemPrompt: z.string(),
+    userPrompt: z.string(),
+    response: z.string(),
+    wordCount: z.number(),
+    targetWordCount: z.number(),
+    attempt: z.number(),
+    maxAttempts: z.number(),
+    timestamp: z.string(),
+    model: z.string(),
+    maxTokens: z.number(),
+    parseError: z.string().optional(),
+  })).optional(),
 });
 
 export type StoryResponse = z.infer<typeof storyResponseSchema>;

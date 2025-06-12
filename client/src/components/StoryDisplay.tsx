@@ -495,6 +495,11 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
           </div>
         </div>
       )}
+      
+      {/* Debug Panel - Only show if debug data is available */}
+      {story.debugData && story.debugData.length > 0 && (
+        <DebugPanel debugData={story.debugData} isVisible={true} />
+      )}
     </div>
   );
 }
