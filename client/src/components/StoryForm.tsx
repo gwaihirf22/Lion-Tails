@@ -3,12 +3,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { getQueryFn, queryClient } from "@/lib/queryClient";
-import { 
-  Form, 
-  FormControl, 
-  FormField, 
-  FormItem, 
-  FormLabel, 
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
   FormMessage,
   FormDescription
 } from "@/components/ui/form";
@@ -41,8 +41,8 @@ interface StoryFormProps {
   showCustomCharacter?: boolean;
 }
 
-export default function StoryForm({ 
-  onSubmit, 
+export default function StoryForm({
+  onSubmit,
   loading = false,
   formType = "children",
   showChildFields = true,
@@ -64,7 +64,6 @@ export default function StoryForm({
   const [historicalAccuracy, setHistoricalAccuracy] = useState(true);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState<Character | undefined>();
-  
   // Function to handle editing a character
   const handleEditCharacter = () => {
     const characterId = form.getValues("characterId");
@@ -76,7 +75,6 @@ export default function StoryForm({
       }
     }
   };
-
   // Function to handle character update completion
   const handleCharacterUpdated = (updatedCharacterData: any) => {
     setEditDialogOpen(false);
@@ -84,7 +82,6 @@ export default function StoryForm({
     // Refresh characters list to show updated character
     queryClient.invalidateQueries({ queryKey: ['/api/characters'] });
   };
-  
   // Fetch characters for selection - always fetch them as they can be used in any story type
   const { data: characters = [], isLoading: charactersLoading } = useQuery<Character[]>({
     queryKey: ['/api/characters'],
@@ -94,7 +91,6 @@ export default function StoryForm({
     // Always fetch characters as they can be used in any story type
     enabled: true,
   });
-  
   // Fetch heroes of faith for selection
   const { data: heroesOfFaith = [], isLoading: heroesLoading } = useQuery({
     queryKey: ['/api/heroes'],
@@ -103,10 +99,8 @@ export default function StoryForm({
     }),
     enabled: showHeroOfFaith
   });
-  
   // Check localStorage for a pre-selected hero of faith
   const selectedHeroFromStorage = typeof window !== 'undefined' ? localStorage.getItem('selectedHeroOfFaith') : null;
-  
   const form = useForm<StoryRequest>({
     resolver: zodResolver(storyRequestSchema),
     defaultValues: {
@@ -144,72 +138,59 @@ export default function StoryForm({
       },
     },
   });
-  
   // Effect to set hasSelectedHeroOfFaith based on selectedHeroFromStorage
   useEffect(() => {
     if (selectedHeroFromStorage) {
       setHasSelectedHeroOfFaith(true);
-      
       // If we're in historical mode and have a hero selected, make sure biblical event is cleared
       if (formType === "historical") {
         form.setValue("biblicalEvent", "");
         setHasSelectedBiblicalEvent(false);
       }
-      
       // Clear localStorage after we've used the value
       localStorage.removeItem('selectedHeroOfFaith');
     }
   }, [selectedHeroFromStorage, form, formType]);
-
   // Update the form when the time travel checkbox or biblical narrative option changes
   useEffect(() => {
     form.setValue("useTimeTravel", useTimeTravel);
-    
     if (formType === "historical") {
       // In historical mode, child's name, gender, and animal are not needed
       form.clearErrors(['childName', 'gender', 'animal']);
-      
       // Set default values for these fields that satisfy type constraints
       form.setValue("childName", "Biblical Character");
       form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
       form.setValue("animal", "none");
       form.setValue("storyType", "biblical_narrative");
-      
       // Keep character selection even for historical mode
       // Character selection remains optional; don't clear it
       form.setValue("useTimeTravel", false);
-      
       // Set historical accuracy
       form.setValue("historicalAccuracy", historicalAccuracy);
-    } 
+    }
     else if (isBiblicalNarrative) {
       // In biblical narrative mode, child's name, gender, and animal are not needed
       form.clearErrors(['childName', 'gender', 'animal']);
-      
       // Set default values for these fields that satisfy type constraints
       form.setValue("childName", "Biblical Character");
       form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
       form.setValue("animal", "none");
-      
       // Keep character selection even for biblical narrative
       // Character selection remains optional; don't clear it
-      
       // Make sure time travel is disabled for biblical narrative
       if (useTimeTravel) {
         setUseTimeTravel(false);
         form.setValue("useTimeTravel", false);
       }
-    } 
+    }
     else if (useTimeTravel) {
       // In time travel mode, child's name, gender, and animal are not needed
       // (they will be handled by the character's details)
       form.clearErrors(['childName', 'gender', 'animal']);
-      
       // Set default values for these fields so they don't get sent to the server
       form.setValue("childName", "Character");
       form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
       form.setValue("animal", "none");
-      
       // Set focus on character selection dropdown
       setTimeout(() => {
         const characterDropdown = document.querySelector('[name="characterId"]');
@@ -217,21 +198,15 @@ export default function StoryForm({
           (characterDropdown as HTMLElement).focus();
         }
       }, 100);
-    } 
-    // Keep character selection even when time travel is not enabled
-    // This allows using the character in regular stories too
+    }
   }, [useTimeTravel, isBiblicalNarrative, form, formType, historicalAccuracy]);
-
-  // Character creation is now handled exclusively through the Character tab
 
   return (
     <>
     <Card className={`content-container rounded-2xl shadow-lg ${formType === "historical" ? "border-amber-200" : "border-blue-200"}`}>
       <CardContent className="p-6">
-        {/* Only show child fields when needed */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Character Selection - Moved to the top and available for all story types, including biblical narratives */}
             {(formType === "children" || formType === "historical") && (
               <FormField
                 control={form.control}
@@ -242,17 +217,14 @@ export default function StoryForm({
                     <FormControl>
                       <div className="relative">
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-user">
-                            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-                          </svg>
+                          {/* User Icon SVG */}
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-user"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
                         </span>
                         <Select
                           onValueChange={(value) => {
-                            // When a character is selected, ensure character info is used properly for all story types
                             if (value) {
-                              // Set default values for these fields so they don't get in the way
-                              form.setValue("childName", "Character"); 
-                              form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
+                              form.setValue("childName", "Character");
+                              form.setValue("gender", "boy");
                               form.setValue("animal", "none");
                               form.clearErrors(['childName', 'gender', 'animal']);
                             }
@@ -266,9 +238,7 @@ export default function StoryForm({
                           </SelectTrigger>
                           <SelectContent>
                             {characters.length === 0 ? (
-                              <SelectItem value="create-new" disabled>
-                                Create a character in the Character Creator first
-                              </SelectItem>
+                              <SelectItem value="create-new" disabled>Create a character first</SelectItem>
                             ) : (
                               characters.map((character) => (
                                 <SelectItem key={character.id} value={character.id}>
@@ -281,47 +251,52 @@ export default function StoryForm({
                       </div>
                     </FormControl>
                     <FormDescription>
-                      Select an existing character to use in your story. Characters can be used with any story type (Regular Bedtime Story, Moral Bedtime Story, Biblical Narrative, or even with Time Travel).
+                      Select an existing character to use in your story. Characters can be used with any story type.
                     </FormDescription>
                     <FormMessage />
                     <div className="flex justify-between items-center mt-1">
                       {characters.length === 0 && (
                         <div className="text-xs text-secondary/70">
-                          <a href="/characters" className="text-secondary font-medium underline">
-                            Click here to create a character for stories
-                          </a>
+                          <a href="/characters" className="text-secondary font-medium underline">Create a character</a>
                         </div>
                       )}
                       {field.value && (
                         <div className="flex gap-2">
-                          <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="sm" 
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
                             className="text-xs"
                             onClick={handleEditCharacter}
                           >
                             Edit
                           </Button>
-                          <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="sm" 
+
+                          {/* This button now contains the complete and correct reset logic */}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
                             className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
                             onClick={() => {
-                              // Properly reset the character selection
+                              // 1. Reset the main control value to show the placeholder
                               form.setValue("characterId", undefined);
-                              field.onChange(undefined); 
-                              // Clear the placeholder values when character is removed
+                              field.onChange(undefined);
+
+                              // 2. Reset ALL related fields to their default empty/initial state
                               form.setValue("childName", "");
-                              form.setValue("gender", "boy");
+                              form.setValue("gender", "boy"); // Set to your form's default
+                              form.setValue("animal", ""); // IMPORTANT: Clear the animal
+                              form.setValue("useAnimal", true); // IMPORTANT: Reset the checkbox to its default
+
+                              // 3. (Optional but good practice) Clear any validation errors
+                              form.clearErrors(["characterId", "childName"]);
                             }}
                           >
                             Reset Selection
                           </Button>
                         </div>
                       )}
-                    </div>
                   </FormItem>
                 )}
               />
