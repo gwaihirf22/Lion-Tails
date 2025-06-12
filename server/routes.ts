@@ -225,6 +225,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Authentication required to generate stories" });
       }
       
+      // Debug request body
+      console.log("=== REQUEST BODY DEBUG ===");
+      console.log("useCustomPrompts:", req.body.useCustomPrompts);
+      console.log("customSystemPrompt:", req.body.customSystemPrompt);
+      console.log("customUserPrompt:", req.body.customUserPrompt);
+      console.log("==========================");
+      
       // Validate request body
       const validatedData = storyRequestSchema.parse(req.body);
       
