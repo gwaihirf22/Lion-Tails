@@ -210,7 +210,13 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       finalUserPrompt = `Please respond in JSON format as specified in the system prompt. ${finalUserPrompt}`;
     }
 
-
+    console.log("=== COMPLETE PROMPT DEBUG ===");
+    console.log("Final System Prompt:");
+    console.log(finalSystemPrompt);
+    console.log("\nFinal User Prompt:");
+    console.log(finalUserPrompt);
+    console.log("Max Tokens:", maxTokens);
+    console.log("============================");
 
     const response = await openaiClient.chat.completions.create({
       model: model,
@@ -226,10 +232,19 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     // Extract the response content
     const responseContent = response.choices[0].message.content || '';
 
+    console.log("=== COMPLETE OPENAI RESPONSE ===");
+    console.log("Raw response content:");
+    console.log(responseContent);
+    console.log("Response length:", responseContent.length);
+    console.log("===============================");
+
     // Parse the JSON response
     let jsonContent;
     try {
       jsonContent = JSON.parse(responseContent);
+      console.log("=== PARSED JSON DEBUG ===");
+      console.log("JSON structure:", JSON.stringify(jsonContent, null, 2));
+      console.log("========================");
     } catch (parseError) {
       console.error("Error parsing OpenAI response as JSON:", parseError);
       console.log("Raw response:", responseContent);
