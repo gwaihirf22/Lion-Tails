@@ -195,17 +195,29 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     
     // Ensure both prompts contain "json" requirement for OpenAI API
     let finalSystemPrompt = baseSystemPrompt;
+    
+    // If using custom prompts, ensure length and formatting requirements are preserved
+    if (customPrompts?.systemPrompt) {
+      const lengthRequirement = `\n\nSTORY LENGTH REQUIREMENT: Create a ${storyLength} length story (${storyLength === 'short' ? '800-1200' : storyLength === 'medium' ? '1200-1800' : storyLength === 'long' ? '1800-2500' : '2500-3500'} words) appropriate for ${readingLevel} reading level.`;
+      finalSystemPrompt = `${finalSystemPrompt}${lengthRequirement}`;
+    }
+    
     if (!finalSystemPrompt.toLowerCase().includes('json')) {
       finalSystemPrompt = `${finalSystemPrompt}\n\nIMPORTANT: You must respond with valid JSON format only.`;
     }
     
     let finalUserPrompt = customPrompts?.userPrompt || prompt.toString();
+    
+    // If using custom prompts, ensure length requirements are included in user prompt
+    if (customPrompts?.userPrompt) {
+      const wordCount = storyLength === 'short' ? '800-1200' : storyLength === 'medium' ? '1200-1800' : storyLength === 'long' ? '1800-2500' : '2500-3500';
+      finalUserPrompt = `${finalUserPrompt}\n\nIMPORTANT: Create a ${storyLength} length story (${wordCount} words) suitable for ${readingLevel} reading level.`;
+    }
+    
     // Always prepend JSON requirement to user prompt to ensure it's prominent
     if (!finalUserPrompt.toLowerCase().includes('json')) {
       finalUserPrompt = `Please respond in JSON format as specified in the system prompt. ${finalUserPrompt}`;
     }
-    
-
     
     const response = await openaiClient.chat.completions.create({
       model: model,
@@ -220,8 +232,6 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     
     // Extract the response content
     const responseContent = response.choices[0].message.content || '';
-    
-
     
     // Parse the JSON response
     let jsonContent;
@@ -310,8 +320,6 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     } else {
       defaultTitle = childName ? `${childName}'s Biblical Adventure` : `Biblical Adventure`;
     }
-    
-
     
     // Extract content from JSON response (handle different response formats)
     let finalContent = jsonContent.content;
