@@ -232,10 +232,19 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     // Extract the response content
     const responseContent = response.choices[0].message.content || '';
     
+    console.log("=== RAW OPENAI RESPONSE ===");
+    console.log("Response content:", responseContent);
+    console.log("===========================");
+    
     // Parse the JSON response
     let jsonContent;
     try {
       jsonContent = JSON.parse(responseContent);
+      console.log("=== PARSED JSON CONTENT ===");
+      console.log("JSON keys:", Object.keys(jsonContent));
+      console.log("Has 'content' field:", !!jsonContent.content);
+      console.log("Has 'story' field:", !!jsonContent.story);
+      console.log("===========================");
     } catch (parseError) {
       console.error("Error parsing OpenAI response as JSON:", parseError);
       console.log("Raw response:", responseContent);
