@@ -17,12 +17,12 @@ import {
 function getOpenAIClient(apiKey?: string | null) {
   // Use the provided key if available, otherwise use the system key
   const key = apiKey || process.env.OPENAI_API_KEY;
-  
+
   if (!key) {
     console.error("No OpenAI API key available");
     throw new Error("OpenAI API key not found");
   }
-  
+
   console.log("Using OpenAI client with API key:", key ? "API key is set" : "No API key available");
   return new OpenAI({ apiKey: key });
 }
@@ -36,17 +36,17 @@ export async function generateStoryWithOpenAI(request: StoryRequest, userId: num
 
   const storyTemplate = biblicalEvent && biblicalEvent !== 'none' ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
   const bibleVerse = getBibleVerseByTheme(theme && theme !== 'none' ? theme : 'faith');
-  
+
   // Get user's API key and model using the provided userId
   const userApiKey = await storage.getUserOpenAIKey(userId);
   const userModel = await storage.getUserOpenAIModel(userId);
-  
+
   // Get character information if characterId is provided
   let character = undefined;
   if (characterId) {
     character = await storage.getCharacterById(characterId);
   }
-  
+
   // Get hero of faith information if one is selected
   let heroOfFaithName = undefined;
   if (heroOfFaith && heroOfFaith !== 'none') {
@@ -67,7 +67,7 @@ export async function generateStoryWithOpenAI(request: StoryRequest, userId: num
     let nameToUse = childName || "Child";
     let genderToUse = gender || "boy";
     let animalToUse = useAnimal ? (animal || "lion") : "";
-    
+
     if (character) {
       nameToUse = character.name;
       genderToUse = character.gender;
@@ -79,7 +79,7 @@ export async function generateStoryWithOpenAI(request: StoryRequest, userId: num
       // If useAnimal is false, we pass an empty string to ensure no animal is included
       animalToUse = useAnimal ? (animal || "lion") : "";
     }
-    
+
     // Build the user prompt with character data or form data
     const prompt = buildStoryPrompt(
       nameToUse, 
@@ -98,7 +98,7 @@ export async function generateStoryWithOpenAI(request: StoryRequest, userId: num
       readingLevel || "early-elementary", // Pass the reading level
       storyLength || "medium" // Pass the story length
     );
-    
+
     // Build moral outcome specific instructions
     const moralOutcomeInstructions = {
       positive: "Create a story where the main character demonstrates good choices throughout and experiences positive outcomes. Show how following Christian values leads to blessing and joy.",
@@ -151,24 +151,17 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       "applicationQuestions": ["Question 1 about applying the lesson", "Question 2", "Question 3", "Question 4", "Question 5"],
       "imagePrompt": "A short description for an illustration of a key scene in the biblical style"
     }
-    
+
     Respond with JSON only - no other text.`;
-    
-    // Use the best available model based on length requirements
-    // For longer stories, we need a model with higher token capacity
-    // We'll prioritize the user's chosen model, but ensure we choose a model capable of longer output
-    let model = userModel || "gpt-4o-mini";
-    
-    // Increase model capabilities if longer story is requested
-    if (storyLength === "long" || storyLength === "extended") {
-      model = userModel || "gpt-4o"; // Use the most capable model for longer stories
-    }
-    
+
+    // Use gpt-4o for all cases as requested
+    let model = userModel || "gpt-4o";
+
     console.log("Using OpenAI model:", model);
-    
+
     // Calculate appropriate max_tokens based on story length
     let maxTokens = 3500; // Default for "medium" length
-    
+
     // Adjust token count based on story length
     switch(storyLength) {
       case "very-short":
@@ -189,25 +182,25 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       default:
         maxTokens = 4000; // Default to medium if unspecified
     }
-    
+
     // Call OpenAI API with a fresh client using the appropriate API key
     const openaiClient = getOpenAIClient(userApiKey || undefined);
-    
+
 
     // Ensure both prompts contain "json" requirement for OpenAI API
     let finalSystemPrompt = baseSystemPrompt;
     if (!finalSystemPrompt.toLowerCase().includes('json')) {
       finalSystemPrompt = `${finalSystemPrompt}\n\nIMPORTANT: You must respond with valid JSON format only.`;
     }
-    
+
     let finalUserPrompt = customPrompts?.userPrompt || prompt.toString();
     // Always prepend JSON requirement to user prompt to ensure it's prominent
     if (!finalUserPrompt.toLowerCase().includes('json')) {
       finalUserPrompt = `Please respond in JSON format as specified in the system prompt. ${finalUserPrompt}`;
     }
-    
 
-    
+
+
     const response = await openaiClient.chat.completions.create({
       model: model,
       messages: [
@@ -218,10 +211,10 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       temperature: 0.7,
       max_tokens: maxTokens
     });
-    
+
     // Extract the response content
     const responseContent = response.choices[0].message.content || '';
-    
+
     // Parse the JSON response
     let jsonContent;
     try {
@@ -229,16 +222,16 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     } catch (parseError) {
       console.error("Error parsing OpenAI response as JSON:", parseError);
       console.log("Raw response:", responseContent);
-      
+
       // If we can't parse as JSON, use default values based on story type
       let defaultImagePrompt = '';
       let defaultTitle = '';
-      
+
       if (storyType === "biblical_narrative") {
         defaultImagePrompt = biblicalEvent ? 
           `A biblical scene depicting ${biblicalEvent} in historically accurate detail` : 
           `A historically accurate biblical scene`;
-          
+
         defaultTitle = biblicalEvent ? 
           `The Story of ${biblicalEvent}` : 
           `Biblical Narrative`;
@@ -250,7 +243,7 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
         }
         defaultTitle = `${childName || "Child"}'s Biblical Adventure`;
       }
-      
+
       jsonContent = {
         title: defaultTitle,
         content: responseContent,
@@ -266,10 +259,10 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
         imagePrompt: defaultImagePrompt
       };
     }
-    
+
     // Get the image prompt with fallback
     let fallbackImagePrompt = '';
-    
+
     if (biblePassage && biblePassage.trim() !== "" && biblePassage !== 'none') {
       fallbackImagePrompt = `A biblical scene depicting ${biblePassage} in historically accurate detail`;
     } else if (storyType === "biblical_narrative") {
@@ -284,7 +277,7 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       }
     }
     const imagePrompt = jsonContent.imagePrompt || fallbackImagePrompt;
-    
+
     // Generate an image for the story only if the user is using their own API key
     // gpt-4o-mini doesn't support image generation, so we need to check if we're using a custom key
     let imageUrl = null;
@@ -297,7 +290,7 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
         // Continue without an image if there's an error
       }
     }
-    
+
     // Prepare default title for different story types
     let defaultTitle = '';
     if (biblePassage && biblePassage.trim() !== "" && biblePassage !== 'none') {
@@ -309,10 +302,10 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     } else {
       defaultTitle = childName ? `${childName}'s Biblical Adventure` : `Biblical Adventure`;
     }
-    
+
     // Extract content from JSON response (handle different response formats)
     let finalContent = jsonContent.content;
-    
+
     // Handle nested story structure format (from custom prompts)
     if (!finalContent && jsonContent.story) {
       const story = jsonContent.story;
@@ -329,17 +322,17 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
         story.moral_lesson
       ].filter(Boolean).join('\n\n');
     }
-    
+
     // If content is still missing, use a simple fallback
     if (!finalContent || finalContent.trim() === '') {
       finalContent = `Once upon a time, there was a child named ${childName || 'Child'} who learned an important lesson about ${theme || 'faith'}. Through their adventures, they discovered the joy of following God's teachings and living with kindness and love.`;
     }
-    
+
     // If "For Further Learning:" section is missing, add it
     if (!finalContent.includes("For Further Learning:") && !finalContent.includes("For Further Learning")) {
       // Add default further learning section based on story type
       let furtherLearningSection = "\n\n**For Further Learning:**\n\n";
-      
+
       if (biblePassage && biblePassage.trim() !== "" && biblePassage !== 'none') {
         furtherLearningSection += `- **BibleGateway.com** - Read ${biblePassage} in multiple translations and access study notes about this passage.\n`;
         furtherLearningSection += `- **BibleStudyTools.com** - Find commentary and historical context for ${biblePassage}.\n`;
@@ -364,15 +357,15 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
         furtherLearningSection += `- **GotQuestions.org** - Find answers to questions about Christian faith in simple language.\n`;
         furtherLearningSection += `- **BibleProject.com** - Watch animated videos that explain biblical concepts for all ages.`;
       }
-      
+
       finalContent += furtherLearningSection;
     }
-    
+
     // Extract title and application questions from nested structure if needed
     const finalTitle = jsonContent.title || 
                       (jsonContent.story?.title) || 
                       defaultTitle;
-    
+
     const finalApplicationQuestions = jsonContent.applicationQuestions || 
                                     (jsonContent.story?.application_questions) || 
                                     [
@@ -404,7 +397,7 @@ export async function generateStoryImage(imagePrompt: string, userId: number = 1
   try {
     // Get the user's API key using the provided userId
     const apiKey = await storage.getUserOpenAIKey(userId);
-    
+
     // Check if we have any API key to use (user's or environment)
     if (!apiKey && !process.env.OPENAI_API_KEY) {
       console.error("OpenAI API key not found for image generation");
@@ -420,20 +413,20 @@ export async function generateStoryImage(imagePrompt: string, userId: number = 1
     // Create a filename for the new image
     const filename = `story_${uuidv4()}.png`;
     const filepath = path.join(imagesDir, filename);
-    
+
     // Append biblical art style to the prompt
     const enhancedPrompt = `${imagePrompt}. Render in a beautiful, child-friendly biblical illustration style with soft colors.`;
-    
+
     // Call DALL-E API to generate the image with user's key if available
     // Convert null to undefined if needed
     const openaiClient = getOpenAIClient(apiKey || undefined);
-    
+
     // Log the image generation request
     console.log("\n=== DALL-E REQUEST ===");
     console.log("Enhanced Prompt:", enhancedPrompt);
     console.log("Model: dall-e-3");
     console.log("======================\n");
-    
+
     const response = await openaiClient.images.generate({
       model: "dall-e-3",
       prompt: enhancedPrompt,
@@ -489,7 +482,7 @@ export async function analyzeImageWithOpenAI(imageBase64: string, userId: number
   try {
     // Get the user's API key using the provided userId
     const apiKey = await storage.getUserOpenAIKey(userId);
-    
+
     // Check if we have any API key to use (user's or environment)
     if (!apiKey && !process.env.OPENAI_API_KEY) {
       console.error("OpenAI API key not found for image analysis");
@@ -498,13 +491,13 @@ export async function analyzeImageWithOpenAI(imageBase64: string, userId: number
 
     // Call OpenAI API with a fresh client using the appropriate API key
     const openaiClient = getOpenAIClient(apiKey || undefined);
-    
+
     // Log the image analysis request
     console.log("\n=== IMAGE ANALYSIS REQUEST ===");
     console.log("User ID:", userId);
     console.log("Image Base64 Length:", imageBase64.length);
     console.log("===============================\n");
-    
+
     // System prompt that defines what kind of analysis we want
     const systemPrompt = `You are a helpful Christian children's content analyzer. 
     Analyze the provided image and describe it in detail, focusing on:
@@ -514,9 +507,9 @@ export async function analyzeImageWithOpenAI(imageBase64: string, userId: number
     4. Any potential biblical or Christian themes present
     5. How this image might connect to Biblical stories or principles
     6. How this image could be used in a children's Bible story
-    
+
     Keep your description child-friendly and appropriate for young readers. Aim for 3-4 paragraphs of analysis.`;
-    
+
     // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
     const response = await openaiClient.chat.completions.create({
       model: "gpt-4o",
@@ -537,18 +530,18 @@ export async function analyzeImageWithOpenAI(imageBase64: string, userId: number
       ],
       max_tokens: 1000
     });
-    
+
     // Extract the response content
     const analysisText = response.choices[0].message.content || 'Could not analyze the image.';
-    
+
     // Log the image analysis response
     console.log("\n=== IMAGE ANALYSIS RESPONSE ===");
     console.log("Analysis:", analysisText);
     console.log("Usage:", response.usage);
     console.log("===============================\n");
-    
+
     return analysisText;
-    
+
   } catch (error) {
     console.error("Error analyzing image with OpenAI:", error);
     throw error;
@@ -557,7 +550,7 @@ export async function analyzeImageWithOpenAI(imageBase64: string, userId: number
 
 function buildStoryPrompt(childName: string = "", gender: string = "boy", animal: string = "", theme: string = "", biblicalEvent?: string | undefined, storyTemplate?: string | null, useTimeTravel?: boolean, character?: any, storyType: string = "regular", heroOfFaith?: string | undefined, customPrompt?: string | undefined, useAnimal?: boolean, biblePassage?: string | undefined, readingLevel: string = "early-elementary", storyLength: string = "medium"): string {
   let storyFormat = "bedtime story";
-  
+
   // Determine story format based on type
   if (storyType === "poem") {
     storyFormat = "bedtime poem with rhyming verses";
@@ -568,11 +561,11 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
   }
 
   let prompt = "";
-  
+
   // Biblical narrative format - focus solely on the biblical event/characters
   if (storyType === "biblical_narrative") {
     prompt = `Write a traditional orthodox Christian ${storyFormat} based on biblical events and characters`;
-    
+
     // Add biblical event if provided
     if (biblicalEvent && biblicalEvent !== 'none' && biblicalEvent !== '') {
       if (storyTemplate) {
@@ -581,42 +574,42 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
         prompt += `, specifically about ${biblicalEvent}`;
       }
     }
-    
+
     prompt += `. This should be a faithful retelling of biblical events with historical accuracy while using engaging storytelling techniques. Do not include any modern-day children or fictional characters.`;
   }
   // Handle time travel mode differently - the character IS the main character
   else if (useTimeTravel && character) {
     prompt = `Write a traditional orthodox Christian ${storyFormat} featuring ${character.name}, who is a ${character.gender === 'boy' ? 'boy' : 'girl'} of ${character.age} years old, as a time traveler`;
-    
+
     // Add character traits if available
     if (character.traits && character.traits.length > 0) {
       prompt += ` with these traits: ${character.traits.join(', ')}`;
     }
-    
+
     // Only include animal if provided in character profile
     if (character.favoriteAnimal && character.favoriteAnimal !== 'none' && character.favoriteAnimal !== '') {
       prompt += ` who loves ${character.favoriteAnimal}s`;
     }
-    
+
     prompt += `.`;
   } 
   // Regular mode - use the child's name and gender if provided
   else {
     prompt = `Write a traditional orthodox Christian ${storyFormat}`;
-    
+
     // Only add child details if they were provided (for regular stories)
     if (childName && childName !== '') {
       prompt += ` for a ${gender} named ${childName}`;
-      
+
       // Only include animal if useAnimal is true and animal is not 'none' or empty
       if (useAnimal !== false && animal && animal !== 'none' && animal !== '') {
         prompt += ` who loves ${animal}s`;
       }
     }
-    
+
     prompt += `.`;
   }
-  
+
   // Only include theme if it's not 'none' or empty (for all modes)
   if (theme && theme !== 'none' && theme !== '') {
     prompt += ` The story should teach about ${theme}.`;
@@ -658,7 +651,7 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
   } else if (storyLength === "extended") {
     wordCount = "2500 to 3000";
   }
-  
+
   // Adjust reading level based on the selected level
   let readingLevelText = "";
   if (readingLevel === "preschool") {
@@ -672,9 +665,9 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
   } else if (readingLevel === "middle-school") {
     readingLevelText = "using more advanced vocabulary suitable for ages 12-14. Include complex sentence structures and deeper concepts.";
   }
-  
+
   prompt += ` The story should be approximately ${wordCount} words ${readingLevelText} Include a clear moral lesson at the end that relates to traditional Christian values.`;
-  
+
   // Include Heroes of Faith if provided
   if (heroOfFaith && heroOfFaith !== 'none' && heroOfFaith !== '') {
     if (storyType === "biblical_narrative") {
@@ -683,28 +676,26 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
       prompt += ` Also, include the historical Christian figure ${heroOfFaith} in the story. They should make an appearance or be mentioned as part of the narrative, teaching about faith through their example or story.`;
     }
   }
-  
+
   prompt += ` IMPORTANT: Ensure the story adheres ONLY to traditional orthodox Christian theology (Catholic, Orthodox, Protestant). Avoid ANY theological concepts from Mormon, Jehovah's Witness, or other non-traditional denominations. Focus on biblical teachings accepted in mainstream Christianity.
-  
+
   REMEMBER: End ALL stories with a "For Further Learning:" section that lists 2-3 credible Christian websites where parents and children can learn more about the specific biblical concepts, characters, or themes in this story. Include brief descriptions of what they'll find on each site relevant to THIS specific story's content.`;
 
   // Add Bible passage if provided
   if (biblePassage && biblePassage.trim() !== "" && biblePassage !== 'none') {
     prompt += ` IMPORTANT: This request is specifically focused on the Bible passage "${biblePassage}". 
-    
+
     Create a detailed explanation and narrative about this passage. If it's a narrative passage, create a story that faithfully retells the events with historical accuracy and engaging details. If it's not a narrative passage (like Psalms, Proverbs, or Epistles), provide educational and insightful information about its meaning, context, and the lessons it teaches.
-    
+
     Include at least 2 references to credible Christian sources or commentaries about this passage. These should be from well-known Christian theologians, Bible scholars, or respected Christian websites. Format these as proper citations at the end of the content.
-    
+
     Make sure to explain the spiritual and moral lessons from this passage in a way that's understandable to children. Regardless of whether it's a narrative or teaching passage, focus on making the biblical content engaging, accurate, and educational.`;
   }
 
   // Add the custom prompt if provided
   if (customPrompt && customPrompt.trim() !== "") {
     // Clean the prompt of any inappropriate content by adding a safety instruction
-    prompt += ` Additionally, the user has requested the following to be included in the story (while maintaining age-appropriate content and Christian values): ${customPrompt.trim()}`;
-    
-    // Add strong filtering instruction to ensure content remains appropriate
+    prompt += ` Additionally, the user has requested the following to be included in the story (while maintaining age-appropriate content and Christian values): ${customPrompt.trim()}`;    // Add strong filtering instruction to ensure content remains appropriate
     prompt += ` IMPORTANT: Filter any inappropriate content or themes from this custom request. ONLY include elements that are consistent with traditional Christian values and appropriate for young children. Completely ignore any requests for content that might be harmful, inappropriate, or contrary to wholesome Christian teachings.`;
   }
 
@@ -729,8 +720,8 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
     default:
       lengthDescription = "medium length (about 8-10 minutes reading time, 1500-2000 words)";
   }
-  
+
   prompt += ` Make sure to create a ${lengthDescription} story that will deeply engage the child while teaching important biblical principles. Please respond with valid JSON format as specified in the system instructions.`;
-  
+
   return prompt;
 }
