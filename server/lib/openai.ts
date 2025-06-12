@@ -11,6 +11,12 @@ const MONTH_IN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
 
 // Function to check if user can generate a story with the free tier
 async function canGenerateStoryWithFreeTier(userId: number = 1): Promise<boolean> {
+  // Check if this is paulblake's account - bypass limits
+  const user = await storage.getUser(userId);
+  if (user && user.username === 'paulblake') {
+    return true;
+  }
+  
   // Default to user ID 1 if not authenticated
   const count = await storage.getStoryGenerationCount(userId);
   const lastResetDate = await storage.getLastResetDate(userId);
