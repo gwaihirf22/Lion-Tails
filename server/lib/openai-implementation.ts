@@ -309,6 +309,11 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     // Handle nested story structure format (from custom prompts)
     if (!finalContent && jsonContent.story) {
       const story = jsonContent.story;
+      console.log("=== STORY STRUCTURE DEBUG ===");
+      console.log("Story object keys:", Object.keys(story));
+      console.log("Story components:", story);
+      console.log("============================");
+      
       finalContent = [
         story.opening,
         story.characterDevelopment,
@@ -321,6 +326,11 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
         story.moralLesson,
         story.moral_lesson
       ].filter(Boolean).join('\n\n');
+      
+      console.log("=== FINAL CONTENT DEBUG ===");
+      console.log("Final content length:", finalContent.length);
+      console.log("Final content preview:", finalContent.substring(0, 200));
+      console.log("===========================");
     }
 
     // If content is still missing, use a simple fallback
