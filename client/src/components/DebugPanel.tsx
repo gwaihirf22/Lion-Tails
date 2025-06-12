@@ -17,7 +17,7 @@ interface DebugData {
   maxAttempts: number;
   timestamp: string;
   model: string;
-  maxTokens: number;
+  maxTokens: number | string;
 }
 
 interface DebugPanelProps {

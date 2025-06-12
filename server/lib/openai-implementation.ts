@@ -218,7 +218,7 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     console.log("-".repeat(20));
     console.log(finalUserPrompt);
     console.log("\nSettings:");
-    console.log(`Model: ${model}, Target Words: ${targetWordCount} (no token limit)`);
+    console.log(`Model: ${model}, Target Words: ${targetWordCount}, Max Tokens: 4096`);
     console.log("=".repeat(50) + "\n");
 
     // Attempt to generate story with retry logic for proper length
@@ -249,7 +249,8 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
           { role: "user", content: userPromptForAttempt }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7
+        temperature: 0.7,
+        max_tokens: 4096
       });
 
       const responseContent = response.choices[0].message.content || '';
@@ -265,7 +266,7 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
         maxAttempts,
         timestamp: new Date().toISOString(),
         model,
-        maxTokens: "unlimited" // No token limit set
+        maxTokens: 4096
       });
       
       try {
