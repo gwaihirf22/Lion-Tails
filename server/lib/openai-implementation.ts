@@ -193,14 +193,7 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     // Call OpenAI API with a fresh client using the appropriate API key
     const openaiClient = getOpenAIClient(userApiKey || undefined);
     
-    // Debug custom prompts
-    console.log("=== CUSTOM PROMPTS DEBUG ===");
-    console.log("customPrompts object:", customPrompts);
-    console.log("customPrompts?.systemPrompt:", customPrompts?.systemPrompt);
-    console.log("customPrompts?.userPrompt:", customPrompts?.userPrompt);
-    console.log("baseSystemPrompt length:", baseSystemPrompt.length);
-    console.log("============================");
-    
+
     // Ensure both prompts contain "json" requirement for OpenAI API
     let finalSystemPrompt = baseSystemPrompt;
     if (!finalSystemPrompt.toLowerCase().includes('json')) {
@@ -213,10 +206,7 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       finalUserPrompt = `Please respond in JSON format as specified in the system prompt. ${finalUserPrompt}`;
     }
     
-    console.log("=== FINAL PROMPTS DEBUG ===");
-    console.log("Final system prompt length:", finalSystemPrompt.length);
-    console.log("Final user prompt length:", finalUserPrompt.length);
-    console.log("===============================");
+
     
     const response = await openaiClient.chat.completions.create({
       model: model,
@@ -232,19 +222,10 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     // Extract the response content
     const responseContent = response.choices[0].message.content || '';
     
-    console.log("=== RAW OPENAI RESPONSE ===");
-    console.log("Response content:", responseContent);
-    console.log("===========================");
-    
     // Parse the JSON response
     let jsonContent;
     try {
       jsonContent = JSON.parse(responseContent);
-      console.log("=== PARSED JSON CONTENT ===");
-      console.log("JSON keys:", Object.keys(jsonContent));
-      console.log("Has 'content' field:", !!jsonContent.content);
-      console.log("Has 'story' field:", !!jsonContent.story);
-      console.log("===========================");
     } catch (parseError) {
       console.error("Error parsing OpenAI response as JSON:", parseError);
       console.log("Raw response:", responseContent);
@@ -332,16 +313,20 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     // Extract content from JSON response (handle different response formats)
     let finalContent = jsonContent.content;
     
-    // Handle nested story structure format
+    // Handle nested story structure format (from custom prompts)
     if (!finalContent && jsonContent.story) {
       const story = jsonContent.story;
       finalContent = [
         story.opening,
         story.characterDevelopment,
+        story.rising_action,
         story.risingAction,
+        story.adventure,
         story.conflict,
+        story.climax,
         story.resolution,
-        story.moralLesson
+        story.moralLesson,
+        story.moral_lesson
       ].filter(Boolean).join('\n\n');
     }
     
@@ -383,19 +368,28 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       finalContent += furtherLearningSection;
     }
     
+    // Extract title and application questions from nested structure if needed
+    const finalTitle = jsonContent.title || 
+                      (jsonContent.story?.title) || 
+                      defaultTitle;
+    
+    const finalApplicationQuestions = jsonContent.applicationQuestions || 
+                                    (jsonContent.story?.application_questions) || 
+                                    [
+                                      "What would you do in a similar situation?",
+                                      "How can you apply this lesson in your daily life?",
+                                      "What does this story teach us about God's love?",
+                                      "How can you share this lesson with others?",
+                                      "What Bible verses come to mind when you think about this story?"
+                                    ];
+
     // Return the story with all required fields
     return {
-      title: jsonContent.title || defaultTitle,
+      title: finalTitle,
       content: finalContent,
       moralOutcome: moralOutcome,
       bibleVerse: moralOutcome === 'consequences' ? undefined : bibleVerse,
-      applicationQuestions: jsonContent.applicationQuestions || [
-        "What would you do in a similar situation?",
-        "How can you apply this lesson in your daily life?",
-        "What does this story teach us about God's love?",
-        "How can you share this lesson with others?",
-        "What Bible verses come to mind when you think about this story?"
-      ],
+      applicationQuestions: finalApplicationQuestions,
       imagePrompt: imagePrompt,
       imageUrl: imageUrl || undefined
     };
