@@ -1,35 +1,40 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
-import { Copy, ChevronDown, ChevronUp } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Copy, ChevronDown, ChevronUp } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
-interface DebugData {
-  systemPrompt: string;
-  userPrompt: string;
-  response: string;
-  wordCount: number;
-  targetWordCount: number;
-  attempt: number;
-  maxAttempts: number;
-  timestamp: string;
-  model: string;
-  maxTokens: number | string;
+// <<< CHANGED: New interface to match the multi-step debug data
+interface DebugStep {
+  step: string;
+  prompt?: string;
+  response?: string;
+  wordCount?: number;
+  targetWordCount?: number;
+  model?: string;
+  // Kept old fields for graceful fallback if old data is encountered
+  systemPrompt?: string;
+  userPrompt?: string;
+  maxTokens?: number | string;
 }
 
 interface DebugPanelProps {
-  debugData?: DebugData[];
+  debugData?: DebugStep[];
   isVisible?: boolean;
 }
 
-export function DebugPanel({ debugData = [], isVisible = false }: DebugPanelProps) {
+export function DebugPanel({
+  debugData = [],
+  isVisible = false,
+}: DebugPanelProps) {
   const [expanded, setExpanded] = useState(isVisible);
   const { toast } = useToast();
 
-  const copyToClipboard = (text: string, label: string) => {
+  const copyToClipboard = (text: string | undefined, label: string) => {
+    if (!text) return;
     navigator.clipboard.writeText(text);
     toast({
       title: "Copied!",
@@ -38,6 +43,14 @@ export function DebugPanel({ debugData = [], isVisible = false }: DebugPanelProp
   };
 
   if (!debugData.length && !expanded) return null;
+
+  // <<< NEW: Calculate summary stats from the entire process
+  const totalWordsGenerated = debugData.reduce(
+    (acc, step) => acc + (step.wordCount || 0),
+    0,
+  );
+  const finalTargetWords = debugData[0]?.targetWordCount || "N/A";
+  const modelUsed = debugData[0]?.model || "N/A";
 
   return (
     <Card className="mt-4 border-orange-200 bg-orange-50">
@@ -52,112 +65,132 @@ export function DebugPanel({ debugData = [], isVisible = false }: DebugPanelProp
             onClick={() => setExpanded(!expanded)}
             className="text-orange-600 hover:text-orange-800"
           >
-            {expanded ? <ChevronUp /> : <ChevronDown />}
-            {expanded ? 'Hide' : 'Show'} Debug Info
+            {expanded ? (
+              <ChevronUp className="mr-1" />
+            ) : (
+              <ChevronDown className="mr-1" />
+            )}
+            {expanded ? "Hide" : "Show"} Debug Info
           </Button>
         </div>
       </CardHeader>
-      
       {expanded && (
         <CardContent>
           {debugData.length === 0 ? (
-            <p className="text-orange-600">No debug data available. Generate a story to see OpenAI interaction details.</p>
+            <p className="text-orange-600">No debug data available.</p>
           ) : (
-            <Tabs defaultValue="0" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                {debugData.map((_, index) => (
-                  <TabsTrigger key={index} value={index.toString()}>
-                    Attempt {index + 1}
-                    <Badge variant={index === debugData.length - 1 ? "default" : "secondary"} className="ml-2">
-                      {debugData[index].wordCount}w
-                    </Badge>
-                  </TabsTrigger>
+            <>
+              {/* <<< NEW: Overall Summary Section >>> */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 border rounded-lg bg-white">
+                <div className="text-center">
+                  <p className="text-sm text-gray-600">Total Words Generated</p>
+                  <p className="text-2xl font-bold text-orange-600">
+                    {totalWordsGenerated}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-gray-600">Target Words</p>
+                  <p className="text-2xl font-bold text-gray-800">
+                    {finalTargetWords}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-gray-600">Model</p>
+                  <p className="text-lg font-semibold text-blue-600">
+                    {modelUsed}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-gray-600">Total Steps</p>
+                  <p className="text-lg font-semibold text-green-600">
+                    {debugData.length}
+                  </p>
+                </div>
+              </div>
+
+              {/* <<< CHANGED: Tabs now represent Steps, not Attempts >>> */}
+              <Tabs defaultValue="0" className="w-full">
+                <TabsList
+                  className="grid w-full"
+                  style={{
+                    gridTemplateColumns: `repeat(${debugData.length}, minmax(0, 1fr))`,
+                  }}
+                >
+                  {debugData.map((step, index) => (
+                    <TabsTrigger key={index} value={index.toString()}>
+                      {step.step.split(":")[0]}{" "}
+                      {/* Show 'generateChapter' instead of the full outline */}
+                      <Badge variant="secondary" className="ml-2">
+                        {step.wordCount || 0}w
+                      </Badge>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+                {debugData.map((data, index) => (
+                  <TabsContent
+                    key={index}
+                    value={index.toString()}
+                    className="mt-4 space-y-4"
+                  >
+                    <CodeBlock
+                      title="User Prompt"
+                      content={data.prompt || data.userPrompt}
+                      onCopy={() =>
+                        copyToClipboard(
+                          data.prompt || data.userPrompt,
+                          "User Prompt",
+                        )
+                      }
+                    />
+                    <CodeBlock
+                      title="OpenAI Response"
+                      content={data.response}
+                      onCopy={() =>
+                        copyToClipboard(data.response, "OpenAI Response")
+                      }
+                      heightClass="h-48"
+                    />
+                  </TabsContent>
                 ))}
-              </TabsList>
-              
-              {debugData.map((data, index) => (
-                <TabsContent key={index} value={index.toString()} className="space-y-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                    <div className="text-center">
-                      <p className="text-sm text-gray-600">Words Generated</p>
-                      <p className="text-2xl font-bold text-orange-600">{data.wordCount}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-gray-600">Target Words</p>
-                      <p className="text-2xl font-bold text-gray-800">{data.targetWordCount}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-gray-600">Model</p>
-                      <p className="text-lg font-semibold text-blue-600">{data.model}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-gray-600">Max Tokens</p>
-                      <p className="text-lg font-semibold text-green-600">{data.maxTokens}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-gray-800">System Prompt</h4>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => copyToClipboard(data.systemPrompt, "System prompt")}
-                        >
-                          <Copy className="w-4 h-4 mr-1" />
-                          Copy
-                        </Button>
-                      </div>
-                      <ScrollArea className="h-32 w-full border rounded p-2 bg-gray-50">
-                        <pre className="text-xs whitespace-pre-wrap">{data.systemPrompt}</pre>
-                      </ScrollArea>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-gray-800">User Prompt</h4>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => copyToClipboard(data.userPrompt, "User prompt")}
-                        >
-                          <Copy className="w-4 h-4 mr-1" />
-                          Copy
-                        </Button>
-                      </div>
-                      <ScrollArea className="h-32 w-full border rounded p-2 bg-gray-50">
-                        <pre className="text-xs whitespace-pre-wrap">{data.userPrompt}</pre>
-                      </ScrollArea>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold text-gray-800">OpenAI Response</h4>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => copyToClipboard(data.response, "OpenAI response")}
-                        >
-                          <Copy className="w-4 h-4 mr-1" />
-                          Copy
-                        </Button>
-                      </div>
-                      <ScrollArea className="h-48 w-full border rounded p-2 bg-gray-50">
-                        <pre className="text-xs whitespace-pre-wrap">{data.response}</pre>
-                      </ScrollArea>
-                    </div>
-                  </div>
-                  
-                  <div className="text-xs text-gray-500">
-                    Generated at: {data.timestamp}
-                  </div>
-                </TabsContent>
-              ))}
-            </Tabs>
+              </Tabs>
+            </>
           )}
         </CardContent>
       )}
     </Card>
+  );
+}
+
+// <<< NEW: Reusable component for displaying code blocks >>>
+interface CodeBlockProps {
+  title: string;
+  content: string | undefined;
+  onCopy: () => void;
+  heightClass?: string;
+}
+
+function CodeBlock({
+  title,
+  content,
+  onCopy,
+  heightClass = "h-32",
+}: CodeBlockProps) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="font-semibold text-gray-800">{title}</h4>
+        <Button variant="outline" size="sm" onClick={onCopy}>
+          <Copy className="w-4 h-4 mr-1" />
+          Copy
+        </Button>
+      </div>
+      <ScrollArea
+        className={`${heightClass} w-full border rounded p-2 bg-gray-50`}
+      >
+        <pre className="text-xs whitespace-pre-wrap">
+          {content || "Not available for this step."}
+        </pre>
+      </ScrollArea>
+    </div>
   );
 }
