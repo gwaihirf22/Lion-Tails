@@ -108,7 +108,7 @@ export async function generateStoryWithOpenAI(request: StoryRequest, userId: num
     };
 
     // Use custom system prompt if provided via Parent Mode, otherwise use default
-    const systemPrompt = customPrompts?.systemPrompt || `You are a traditional orthodox Christian children's bedtime story author and Bible teacher. Create wholesome, faith-based stories and Bible teachings with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
+    const baseSystemPrompt = customPrompts?.systemPrompt || `You are a traditional orthodox Christian children's bedtime story author and Bible teacher. Create wholesome, faith-based stories and Bible teachings with moral lessons suitable for young children. Include Christian themes and values that align with traditional, orthodox Christian theology.
 
 MORAL OUTCOME FOR THIS STORY: ${moralOutcome.toUpperCase()}
 ${moralOutcomeInstructions[moralOutcome]}
@@ -142,7 +142,7 @@ IMPORTANT STORYTELLING GUIDELINES:
 - When creating content for a specific Bible passage, focus on making the theological content understandable to children while maintaining accuracy
 - Ensure the Further Learning websites are specifically relevant to the story's central themes or biblical characters
 
-Format your response as valid JSON with the following structure (respond only with valid JSON):
+IMPORTANT: You must respond with valid JSON format. Format your response as JSON with the following structure:
     {
       "title": "Story title",
       "content": "The full story content with proper paragraphs",
@@ -150,7 +150,9 @@ Format your response as valid JSON with the following structure (respond only wi
       "bibleVerse": ${moralOutcome === 'consequences' ? 'null' : '{"text": "Bible verse text", "reference": "Book Chapter:Verse"}'},
       "applicationQuestions": ["Question 1 about applying the lesson", "Question 2", "Question 3", "Question 4", "Question 5"],
       "imagePrompt": "A short description for an illustration of a key scene in the biblical style"
-    }`;
+    }
+    
+    Respond with JSON only - no other text.`;
     
     // Use the best available model based on length requirements
     // For longer stories, we need a model with higher token capacity
@@ -195,7 +197,8 @@ Format your response as valid JSON with the following structure (respond only wi
     console.log("\n=== OPENAI REQUEST ===");
     console.log("Model:", model);
     console.log("Max Tokens:", maxTokens);
-    console.log("System Prompt:", systemPrompt);
+    console.log("Using Custom Prompts:", !!customPrompts);
+    console.log("System Prompt:", baseSystemPrompt);
     console.log("User Prompt:", prompt.toString());
     console.log("=====================\n");
     
@@ -207,11 +210,19 @@ Format your response as valid JSON with the following structure (respond only wi
       finalUserPrompt += ' Please respond in JSON format as specified.';
     }
     
-    // Also ensure the system prompt contains "json" if using custom prompts
-    let finalSystemPrompt = systemPrompt;
-    if (customPrompts?.systemPrompt && !finalSystemPrompt.toLowerCase().includes('json')) {
-      finalSystemPrompt += ' Always respond in JSON format.';
+    // Ensure system prompt always contains JSON requirement
+    let finalSystemPrompt = baseSystemPrompt;
+    if (!finalSystemPrompt.toLowerCase().includes('json')) {
+      finalSystemPrompt = `${finalSystemPrompt}\n\nIMPORTANT: You must respond with valid JSON format only.`;
     }
+    
+    // Log the final prompts being sent
+    console.log("\n=== FINAL PROMPTS ===");
+    console.log("Final System Prompt:", finalSystemPrompt);
+    console.log("Final User Prompt:", finalUserPrompt);
+    console.log("System contains 'json':", finalSystemPrompt.toLowerCase().includes('json'));
+    console.log("User contains 'json':", finalUserPrompt.toLowerCase().includes('json'));
+    console.log("====================\n");
     
     const response = await openaiClient.chat.completions.create({
       model: model,
