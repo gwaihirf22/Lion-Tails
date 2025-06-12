@@ -142,7 +142,7 @@ IMPORTANT STORYTELLING GUIDELINES:
 - When creating content for a specific Bible passage, focus on making the theological content understandable to children while maintaining accuracy
 - Ensure the Further Learning websites are specifically relevant to the story's central themes or biblical characters
 
-Format your response as valid JSON with the following structure:
+Format your response as valid JSON with the following structure (respond only with valid JSON):
     {
       "title": "Story title",
       "content": "The full story content with proper paragraphs",
@@ -699,7 +699,7 @@ function buildStoryPrompt(childName: string = "", gender: string = "boy", animal
       lengthDescription = "medium length (about 8-10 minutes reading time, 1500-2000 words)";
   }
   
-  prompt += ` Make sure to create a ${lengthDescription} story that will deeply engage the child while teaching important biblical principles.`;
+  prompt += ` Make sure to create a ${lengthDescription} story that will deeply engage the child while teaching important biblical principles. Please respond with valid JSON format as specified in the system instructions.`;
   
   return prompt;
 }

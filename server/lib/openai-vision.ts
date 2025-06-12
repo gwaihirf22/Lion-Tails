@@ -96,7 +96,7 @@ export async function generateStoryFromImage(
         },
         {
           role: "user",
-          content: `Here is an analysis of an image: "${imageAnalysis}"\n\nPlease create a Christian children's story based on this image, featuring a ${gender} named ${childName} and centered on the theme of "${theme}". Make the story at least 1000 words long and end with a clear moral lesson and Bible reference. Format your response with the title at the top followed by the story content.`
+          content: `Here is an analysis of an image: "${imageAnalysis}"\n\nPlease create a Christian children's story based on this image, featuring a ${gender} named ${childName} and centered on the theme of "${theme}". Make the story at least 1000 words long and end with a clear moral lesson and Bible reference. Please respond in JSON format with "title" and "content" fields.`
         }
       ],
       response_format: { type: "json_object" },

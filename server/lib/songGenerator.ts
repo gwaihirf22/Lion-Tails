@@ -235,7 +235,9 @@ export async function generateSongChords(
           Title: ${title}
           
           Lyrics:
-          ${lyricsText}`
+          ${lyricsText}
+          
+          Please respond in JSON format with the chord suggestions.`
         }
       ],
       response_format: { type: "json_object" }
