@@ -187,13 +187,24 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     const openaiClient = getOpenAIClient(userApiKey || undefined);
 
 
+    // Use custom prompts if provided, otherwise use generated prompts
+    let finalSystemPrompt, finalUserPrompt;
+    
+    if (customPrompts && customPrompts.systemPrompt && customPrompts.userPrompt) {
+      finalSystemPrompt = customPrompts.systemPrompt;
+      finalUserPrompt = customPrompts.userPrompt;
+      // Remove conflicting length specifications when using custom prompts since system prompt controls length
+      finalUserPrompt = finalUserPrompt.replace(/Story Length:\s*\w+/gi, '');
+    } else {
+      finalSystemPrompt = baseSystemPrompt;
+      finalUserPrompt = prompt.toString();
+    }
+    
     // Ensure both prompts contain "json" requirement for OpenAI API
-    let finalSystemPrompt = baseSystemPrompt;
     if (!finalSystemPrompt.toLowerCase().includes('json')) {
       finalSystemPrompt = `${finalSystemPrompt}\n\nIMPORTANT: You must respond with valid JSON format only.`;
     }
-
-    let finalUserPrompt = customPrompts?.userPrompt || prompt.toString();
+    
     // Always prepend JSON requirement to user prompt to ensure it's prominent
     if (!finalUserPrompt.toLowerCase().includes('json')) {
       finalUserPrompt = `Please respond in JSON format as specified in the system prompt. ${finalUserPrompt}`;
@@ -309,28 +320,36 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     // Handle nested story structure format (from custom prompts)
     if (!finalContent && jsonContent.story) {
       const story = jsonContent.story;
-      console.log("=== STORY STRUCTURE DEBUG ===");
-      console.log("Story object keys:", Object.keys(story));
-      console.log("Story components:", story);
-      console.log("============================");
       
-      finalContent = [
-        story.opening,
-        story.characterDevelopment,
-        story.rising_action,
-        story.risingAction,
-        story.adventure,
-        story.conflict,
-        story.climax,
-        story.resolution,
-        story.moralLesson,
-        story.moral_lesson
-      ].filter(Boolean).join('\n\n');
+      // Build the complete story from all components
+      const storyParts = [];
       
-      console.log("=== FINAL CONTENT DEBUG ===");
-      console.log("Final content length:", finalContent.length);
-      console.log("Final content preview:", finalContent.substring(0, 200));
-      console.log("===========================");
+      // Add opening if available
+      if (story.opening) {
+        storyParts.push(story.opening);
+      }
+      
+      // Add plot components if available
+      if (story.plot) {
+        const plot = story.plot;
+        if (plot.introduction) storyParts.push(plot.introduction);
+        if (plot.risingAction) storyParts.push(plot.risingAction);
+        if (plot.challenge) storyParts.push(plot.challenge);
+        if (plot.climax) storyParts.push(plot.climax);
+        if (plot.resolution) storyParts.push(plot.resolution);
+        if (plot.conclusion) storyParts.push(plot.conclusion);
+      }
+      
+      // Add other story components
+      if (story.characterDevelopment) storyParts.push(story.characterDevelopment);
+      if (story.rising_action) storyParts.push(story.rising_action);
+      if (story.risingAction) storyParts.push(story.risingAction);
+      if (story.adventure) storyParts.push(story.adventure);
+      if (story.conflict) storyParts.push(story.conflict);
+      if (story.climax) storyParts.push(story.climax);
+      if (story.resolution) storyParts.push(story.resolution);
+      
+      finalContent = storyParts.filter(Boolean).join('\n\n');
     }
 
     // If content is still missing, use a simple fallback
