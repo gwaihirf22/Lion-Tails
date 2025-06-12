@@ -27,6 +27,23 @@ function getOpenAIClient(apiKey?: string | null) {
   return new OpenAI({ apiKey: key });
 }
 
+// Helper function to get word count from length setting
+function getWordCountFromLength(length: string): number {
+  switch(length) {
+    case "very-short": return 500;
+    case "short": return 1000;
+    case "medium": return 2000;
+    case "long": return 3000;
+    case "extended": return 5000;
+    default: return 2000;
+  }
+}
+
+// Helper function to count words in text
+function countWords(text: string): number {
+  return text.split(/\s+/).filter(word => word.length > 0).length;
+}
+
 export async function generateStoryWithOpenAI(request: StoryRequest, userId: number = 1, customPrompts?: { systemPrompt?: string; userPrompt?: string }): Promise<StoryResponse> {
   const { childName, gender, animal, theme, biblicalEvent, heroOfFaith, useTimeTravel, characterId, storyType, customPrompt, useAnimal, biblePassage, readingLevel, storyLength } = request;
 
@@ -142,16 +159,18 @@ IMPORTANT STORYTELLING GUIDELINES:
 - When creating content for a specific Bible passage, focus on making the theological content understandable to children while maintaining accuracy
 - Ensure the Further Learning websites are specifically relevant to the story's central themes or biblical characters
 
-IMPORTANT: You must respond with valid JSON format. Format your response as JSON with the following structure:
+IMPORTANT: You must respond with valid JSON format. The "content" field MUST contain the complete story of approximately ${getWordCountFromLength(storyLength)} words. Format your response as JSON with the following structure:
     {
       "title": "Story title",
-      "content": "The full story content with proper paragraphs",
+      "content": "The COMPLETE FULL story content with proper paragraphs - MINIMUM ${getWordCountFromLength(storyLength)} words",
       "moralOutcome": "${moralOutcome}",
       "bibleVerse": ${moralOutcome === 'consequences' ? 'null' : '{"text": "Bible verse text", "reference": "Book Chapter:Verse"}'},
       "applicationQuestions": ["Question 1 about applying the lesson", "Question 2", "Question 3", "Question 4", "Question 5"],
       "imagePrompt": "A short description for an illustration of a key scene in the biblical style"
     }
 
+    CRITICAL: The "content" field must contain the entire story from beginning to end, not just a summary. Write the full narrative with dialogue, character development, and detailed scenes. The story must be AT LEAST ${getWordCountFromLength(storyLength)} words long.
+    
     Respond with JSON only - no other text.`;
 
     // Use gpt-4o for all cases as requested
@@ -159,16 +178,17 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
 
     console.log("Using OpenAI model:", model);
 
-    // Calculate appropriate max_tokens based on story length
-    let maxTokens = 3500; // Default for "medium" length
+    // Calculate appropriate max_tokens based on story length - increased for better length consistency
+    let maxTokens = 5000; // Default for "medium" length
+    let targetWordCount = getWordCountFromLength(storyLength);
 
-    // Adjust token count based on story length
+    // Adjust token count based on story length (tokens ≈ words * 1.3-1.5 for safety)
     switch(storyLength) {
       case "very-short":
-        maxTokens = 2000;
+        maxTokens = 1000;
         break;
       case "short":
-        maxTokens = 3000;
+        maxTokens = 2000;
         break;
       case "medium":
         maxTokens = 4000;
@@ -177,10 +197,10 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
         maxTokens = 6000;
         break;
       case "extended":
-        maxTokens = 8000;
+        maxTokens = 10000;
         break;
       default:
-        maxTokens = 4000; // Default to medium if unspecified
+        maxTokens = 5000; // Default to medium if unspecified
     }
 
     // Call OpenAI API with a fresh client using the appropriate API key
@@ -220,39 +240,98 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
     console.log("-".repeat(20));
     console.log(finalUserPrompt);
     console.log("\nSettings:");
-    console.log(`Max Tokens: ${maxTokens}, Model: ${model}`);
+    console.log(`Max Tokens: ${maxTokens}, Model: ${model}, Target Words: ${targetWordCount}`);
     console.log("=".repeat(50) + "\n");
 
-    const response = await openaiClient.chat.completions.create({
-      model: model,
-      messages: [
-        { role: "system", content: finalSystemPrompt },
-        { role: "user", content: finalUserPrompt }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-      max_tokens: maxTokens
-    });
+    // Attempt to generate story with retry logic for proper length
+    let attempt = 0;
+    let response;
+    let finalContent = '';
+    let wordCount = 0;
+    const maxAttempts = 3;
 
-    // Extract the response content
+    while (attempt < maxAttempts) {
+      attempt++;
+      console.log(`Story generation attempt ${attempt}/${maxAttempts}`);
+
+      // Add more emphasis on length for retry attempts
+      let systemPromptForAttempt = finalSystemPrompt;
+      let userPromptForAttempt = finalUserPrompt;
+      
+      if (attempt > 1) {
+        systemPromptForAttempt += `\n\nIMPORTANT: Previous attempt was too short. This story MUST be at least ${targetWordCount} words long. Write a full, detailed narrative with multiple scenes, dialogue, and character development.`;
+        userPromptForAttempt = `CRITICAL: Generate a story of AT LEAST ${targetWordCount} words. ${userPromptForAttempt}`;
+      }
+
+      response = await openaiClient.chat.completions.create({
+        model: model,
+        messages: [
+          { role: "system", content: systemPromptForAttempt },
+          { role: "user", content: userPromptForAttempt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+        max_tokens: maxTokens
+      });
+
+      const responseContent = response.choices[0].message.content || '';
+      
+      try {
+        const jsonContent = JSON.parse(responseContent);
+        finalContent = jsonContent.content || '';
+        
+        // Extract content from nested structure if needed
+        if (!finalContent && jsonContent.story) {
+          const story = jsonContent.story;
+          const storyParts = [];
+          
+          if (story.introduction) storyParts.push(story.introduction);
+          if (story.opening) storyParts.push(story.opening);
+          if (story.characterDevelopment) storyParts.push(story.characterDevelopment);
+          if (story.risingAction) storyParts.push(story.risingAction);
+          if (story.rising_action) storyParts.push(story.rising_action);
+          if (story.conflict) storyParts.push(story.conflict);
+          if (story.resolution) storyParts.push(story.resolution);
+          if (story.moralLesson) storyParts.push(story.moralLesson);
+          if (story.moral) storyParts.push(story.moral);
+          
+          // Handle plot object
+          if (story.plot) {
+            const plot = story.plot;
+            if (plot.beginning) storyParts.push(plot.beginning);
+            if (plot.middle) storyParts.push(plot.middle);
+            if (plot.conflict) storyParts.push(plot.conflict);
+            if (plot.rising_action) storyParts.push(plot.rising_action);
+            if (plot.climax) storyParts.push(plot.climax);
+            if (plot.resolution) storyParts.push(plot.resolution);
+            if (plot.conclusion) storyParts.push(plot.conclusion);
+          }
+          
+          finalContent = storyParts.filter(Boolean).join('\n\n');
+        }
+
+        wordCount = countWords(finalContent);
+        console.log(`Attempt ${attempt}: Generated ${wordCount} words (target: ${targetWordCount})`);
+        
+        // Accept if we have at least 70% of target word count or if this is the last attempt
+        if (wordCount >= targetWordCount * 0.7 || attempt === maxAttempts) {
+          break;
+        }
+        
+      } catch (parseError) {
+        console.error(`Attempt ${attempt}: JSON parse error:`, parseError);
+        if (attempt === maxAttempts) {
+          throw parseError;
+        }
+      }
+    }
+
+    // Parse the final JSON response for additional fields
     const responseContent = response.choices[0].message.content || '';
-
-    console.log("\n" + "=".repeat(50));
-    console.log("OPENAI RESPONSE RECEIVED");
-    console.log("=".repeat(50));
-    console.log(`Response Length: ${responseContent.length} characters`);
-    console.log("Raw Content:");
-    console.log("-".repeat(20));
-    console.log(responseContent);
-    console.log("=".repeat(50));
-
-    // Parse the JSON response
     let jsonContent;
     try {
       jsonContent = JSON.parse(responseContent);
-      console.log("=== PARSED JSON DEBUG ===");
-      console.log("JSON structure:", JSON.stringify(jsonContent, null, 2));
-      console.log("========================");
+      console.log(`\nFinal story generated: ${wordCount} words (target: ${targetWordCount})`);
     } catch (parseError) {
       console.error("Error parsing OpenAI response as JSON:", parseError);
       console.log("Raw response:", responseContent);
@@ -337,117 +416,7 @@ IMPORTANT: You must respond with valid JSON format. Format your response as JSON
       defaultTitle = childName ? `${childName}'s Biblical Adventure` : `Biblical Adventure`;
     }
 
-    // Extract content from JSON response (handle different response formats)
-    let finalContent = jsonContent.content;
-
-    // Handle nested story structure format (from custom prompts)
-    if (!finalContent && jsonContent.story) {
-      const story = jsonContent.story;
-      
-      console.log("\n" + "=".repeat(50));
-      console.log("EXTRACTING STORY CONTENT");
-      console.log("=".repeat(50));
-      console.log("Available story properties:", Object.keys(story));
-      
-      // Build the complete story from all components in proper order
-      const storyParts = [];
-      
-      // Add introduction if available
-      if (story.introduction) {
-        console.log("✓ Adding introduction");
-        storyParts.push(story.introduction);
-      }
-      
-      // Add opening if available (alternative structure)
-      if (story.opening) {
-        console.log("✓ Adding opening");
-        storyParts.push(story.opening);
-      }
-      
-      // Handle plot object with nested components
-      if (story.plot) {
-        console.log("✓ Found plot object with components:", Object.keys(story.plot));
-        const plot = story.plot;
-        
-        if (plot.beginning) {
-          console.log("✓ Adding plot.beginning");
-          storyParts.push(plot.beginning);
-        }
-        if (plot.middle) {
-          console.log("✓ Adding plot.middle");
-          storyParts.push(plot.middle);
-        }
-        if (plot.conflict) {
-          console.log("✓ Adding plot.conflict");
-          storyParts.push(plot.conflict);
-        }
-        if (plot.rising_action) {
-          console.log("✓ Adding plot.rising_action");
-          storyParts.push(plot.rising_action);
-        }
-        if (plot.climax) {
-          console.log("✓ Adding plot.climax");
-          storyParts.push(plot.climax);
-        }
-        if (plot.resolution) {
-          console.log("✓ Adding plot.resolution");
-          storyParts.push(plot.resolution);
-        }
-        if (plot.conclusion) {
-          console.log("✓ Adding plot.conclusion");
-          storyParts.push(plot.conclusion);
-        }
-      }
-      
-      // Add direct story components (alternative structure)
-      if (story.characterDevelopment) {
-        console.log("✓ Adding characterDevelopment");
-        storyParts.push(story.characterDevelopment);
-      }
-      
-      if (story.risingAction) {
-        console.log("✓ Adding risingAction");
-        storyParts.push(story.risingAction);
-      }
-      
-      if (story.rising_action) {
-        console.log("✓ Adding direct rising_action");
-        storyParts.push(story.rising_action);
-      }
-      
-      if (story.conflict) {
-        console.log("✓ Adding direct conflict");
-        storyParts.push(story.conflict);
-      }
-      
-      if (story.resolution) {
-        console.log("✓ Adding direct resolution");
-        storyParts.push(story.resolution);
-      }
-      
-      if (story.moralLesson) {
-        console.log("✓ Adding moralLesson");
-        storyParts.push(story.moralLesson);
-      }
-      
-      if (story.moral) {
-        console.log("✓ Adding moral");
-        storyParts.push(story.moral);
-      }
-      
-      // Add any other story components that might be present
-      if (story.characterDevelopment) storyParts.push(story.characterDevelopment);
-      if (story.risingAction) storyParts.push(story.risingAction);
-      if (story.adventure) storyParts.push(story.adventure);
-      if (story.climax) storyParts.push(story.climax);
-      if (story.conclusion) storyParts.push(story.conclusion);
-      
-      finalContent = storyParts.filter(Boolean).join('\n\n');
-      
-      console.log(`Final extracted content length: ${finalContent.length} characters`);
-      console.log("Content preview:", finalContent.substring(0, 200) + "...");
-      console.log("=".repeat(50) + "\n");
-    }
+    // Content was already extracted in the retry loop above, use that finalContent
 
     // If content is still missing, use a simple fallback
     if (!finalContent || finalContent.trim() === '') {
