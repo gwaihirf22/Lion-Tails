@@ -246,7 +246,7 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
     // Attempt to generate story with retry logic for proper length
     let attempt = 0;
     let response;
-    let finalContent = '';
+    let storyContent = '';
     let wordCount = 0;
     const maxAttempts = 3;
 
@@ -278,10 +278,10 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
       
       try {
         const jsonContent = JSON.parse(responseContent);
-        finalContent = jsonContent.content || '';
+        storyContent = jsonContent.content || '';
         
         // Extract content from nested structure if needed
-        if (!finalContent && jsonContent.story) {
+        if (!storyContent && jsonContent.story) {
           const story = jsonContent.story;
           const storyParts = [];
           
@@ -307,10 +307,10 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
             if (plot.conclusion) storyParts.push(plot.conclusion);
           }
           
-          finalContent = storyParts.filter(Boolean).join('\n\n');
+          storyContent = storyParts.filter(Boolean).join('\n\n');
         }
 
-        wordCount = countWords(finalContent);
+        wordCount = countWords(storyContent);
         console.log(`Attempt ${attempt}: Generated ${wordCount} words (target: ${targetWordCount})`);
         
         // Accept if we have at least 70% of target word count or if this is the last attempt
@@ -327,6 +327,10 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
     }
 
     // Parse the final JSON response for additional fields
+    if (!response) {
+      throw new Error('Failed to generate story after multiple attempts');
+    }
+    
     const responseContent = response.choices[0].message.content || '';
     let jsonContent;
     try {
@@ -416,15 +420,15 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
       defaultTitle = childName ? `${childName}'s Biblical Adventure` : `Biblical Adventure`;
     }
 
-    // Content was already extracted in the retry loop above, use that finalContent
+    // Use the content extracted in the retry loop above
 
     // If content is still missing, use a simple fallback
-    if (!finalContent || finalContent.trim() === '') {
-      finalContent = `Once upon a time, there was a child named ${childName || 'Child'} who learned an important lesson about ${theme || 'faith'}. Through their adventures, they discovered the joy of following God's teachings and living with kindness and love.`;
+    if (!storyContent || storyContent.trim() === '') {
+      storyContent = `Once upon a time, there was a child named ${childName || 'Child'} who learned an important lesson about ${theme || 'faith'}. Through their adventures, they discovered the joy of following God's teachings and living with kindness and love.`;
     }
 
     // If "For Further Learning:" section is missing, add it
-    if (!finalContent.includes("For Further Learning:") && !finalContent.includes("For Further Learning")) {
+    if (!storyContent.includes("For Further Learning:") && !storyContent.includes("For Further Learning")) {
       // Add default further learning section based on story type
       let furtherLearningSection = "\n\n**For Further Learning:**\n\n";
 
@@ -453,7 +457,7 @@ IMPORTANT: You must respond with valid JSON format. The "content" field MUST con
         furtherLearningSection += `- **BibleProject.com** - Watch animated videos that explain biblical concepts for all ages.`;
       }
 
-      finalContent += furtherLearningSection;
+      storyContent += furtherLearningSection;
     }
 
     // Extract title and application questions from nested structure if needed
