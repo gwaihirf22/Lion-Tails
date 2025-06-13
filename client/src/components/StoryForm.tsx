@@ -223,9 +223,20 @@ export default function StoryForm({
                         <Select
                           onValueChange={(value) => {
                             if (value) {
-                              form.setValue("childName", "Character");
-                              form.setValue("gender", "boy");
-                              form.setValue("animal", "none");
+                              // Find the selected character from the characters array
+                              const selectedCharacter = characters.find(char => char.id === value);
+                              if (selectedCharacter) {
+                                // Populate form with the selected character's actual details
+                                form.setValue("childName", selectedCharacter.name);
+                                form.setValue("gender", selectedCharacter.gender);
+                                form.setValue("animal", selectedCharacter.favoriteAnimal || "none");
+                                form.setValue("age", selectedCharacter.age);
+                              } else {
+                                // Fallback to defaults if character not found
+                                form.setValue("childName", "Character");
+                                form.setValue("gender", "boy");
+                                form.setValue("animal", "none");
+                              }
                               form.clearErrors(['childName', 'gender', 'animal']);
                             }
                             field.onChange(value);
