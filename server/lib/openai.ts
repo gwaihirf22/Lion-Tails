@@ -165,74 +165,18 @@ export async function generateStory(request: StoryRequest, userId: number = 1): 
   }
 }
 
-// Function to build prompt for story generation
-function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null, useTimeTravel?: boolean, characterId?: string, heroOfFaith?: string, useAnimal?: boolean): string {
-  // Normalize "none" values
-  const animalToUse = animal === "none" ? "lamb" : animal || "lamb";
+function getDemoStory(childName: string, gender: string, animal: string, theme: string, biblicalEvent: string | undefined, bibleVerse: { text: string; reference: string; }, heroOfFaithName: string | undefined, useAnimal?: boolean): StoryResponse {
   const themeToUse = theme === "none" ? "faith" : theme || "faith";
-  const biblicalEventToUse = biblicalEvent === "none" ? undefined : biblicalEvent;
-  
-  let promptText = `Create a Christian bedtime story for a ${gender} named ${childName}`;
-  
-  // Only include animal in the prompt if useAnimal is true (or undefined/not provided)
-  if (useAnimal !== false && animal && animal !== "none") {
-    promptText += ` about a ${animal}`;
-  }
-  
-  if (theme && theme !== "none") {
-    promptText += ` with a theme of "${theme}"`;
-  }
-  
-  if (biblicalEventToUse) {
-    promptText += ` based on the biblical event "${biblicalEventToUse}"`;
-    if (storyTemplate) {
-      promptText += `. Use this story template as a guide: ${storyTemplate}`;
-    }
-  }
-  
-  if (heroOfFaith && heroOfFaith !== "none") {
-    promptText += `. Also include the historical Christian figure "${heroOfFaith}" as part of the story, teaching the child about faith through their example.`;
-  }
-  
-  promptText += `. The story should be at least 1000 words, child-friendly, include moral lessons, and end with a Bible verse related to ${themeToUse}. Title the story appropriately.
 
-Use this format for your response:
-Title: [Story Title]
-Content: [Full story content]
-
-The story should be engaging, descriptive, and have a clear beginning, middle, and end. It should include dialogue and be written at a level that a child can understand but also enjoy. The tone should be warm, reassuring, and convey Christian values.`;
-  
-  return promptText;
+  return {
+    title: "OpenAI API Unavailable",
+    content: "Sorry — the story service is temporarily down because we cannot reach the OpenAI API. Please try again later or add your own API key in Settings.",
+    moralOutcome: "positive",
+    applicationQuestions: [],
+    bibleVerse
+  };
 }
-
-// Function to provide a demo story when not using OpenAI
-function getDemoStory(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, bibleVerse: { text: string, reference: string }, heroOfFaith?: string, useAnimal: boolean = true): StoryResponse {
-  // Normalize "none" values  
-  // Use the animal if provided and not "none"
-  const animalToUse = animal === "none" ? "lamb" : animal || "lamb";
-  
-  // Use the theme if provided and not "none"
-  const themeToUse = theme === "none" ? "faith" : theme || "faith";
-  
-  // Handle biblicalEvent
-  const biblicalEventToUse = biblicalEvent === "none" ? undefined : biblicalEvent;
-
-  // Set default title and content
-  let title = `${childName}'s Wonderful ${themeToUse.charAt(0).toUpperCase() + themeToUse.slice(1)} Adventure`;
-  
-  // Create different story content based on the useAnimal toggle
-  let content = `Once upon a time in a cozy little house at the edge of a sleepy town, there lived a child named ${childName}. `;
-  
-  // Only add animal references if useAnimal is true and an animal is provided
-  if (useAnimal && animalToUse) {
-    content += `${childName} had a special love for ${animalToUse}s and could spend hours watching them, drawing pictures of them, and reading stories about them. `;
-  }
-  
-  content += `Every night before bed, ${childName}'s parents would read Bible stories, and ${childName} would drift off to sleep imagining what it would be like to be part of those amazing adventures.
-
-"Mommy," ${childName} would ask, "do you think Noah was scared when God told him to build such a big boat?"
-
-${gender === 'boy' ? 'His' : 'Her'} mother smiled gently. "I'm sure Noah felt afraid sometimes, just like we all do. But Noah trusted God, and that's what made him brave."
+ smiled gently. "I'm sure Noah felt afraid sometimes, just like we all do. But Noah trusted God, and that's what made him brave."
 
 That night, after ${gender === 'boy' ? 'his' : 'her'} mother tucked ${gender === 'boy' ? 'him' : 'her'} into bed and kissed ${gender === 'boy' ? 'him' : 'her'} goodnight, ${childName} drifted off to sleep. In ${gender === 'boy' ? 'his' : 'her'} dreams, ${gender === 'boy' ? 'he' : 'she'} found ${gender === 'boy' ? 'himself' : 'herself'} standing in a vast field, where a kind-looking man with a long beard was measuring wood for a massive structure.
 
@@ -343,3 +287,4 @@ That night, as ${childName} gazed out the window before bed, a spring shower beg
     imageUrl: undefined // This will be generated separately if needed
   };
 }
+*/

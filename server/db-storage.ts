@@ -9,10 +9,7 @@ import { IStorage } from './storage';
 
 const PostgresStore = connectPg(session);
 
-// Helper function to check if DB is available
-function isDatabaseAvailable(): boolean {
-  return !!process.env.DATABASE_URL && !!pool && !!db;
-}
+
 
 // Define tables for DbStorage if they don't exist in schema.ts
 // For now, we'll store JSON data for some of the more complex types
@@ -51,7 +48,7 @@ export class DbStorage implements IStorage {
 
   // User methods
   async getUser(id: number): Promise<User | undefined> {
-    if (!isDatabaseAvailable()) {
+    if (!db || !pool) {
       console.warn(`Database unavailable in getUser(${id}). Using fallback empty result.`);
       return undefined;
     }
@@ -65,7 +62,7 @@ export class DbStorage implements IStorage {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    if (!isDatabaseAvailable()) {
+    if (!db || !pool) {
       console.warn(`Database unavailable in getUserByUsername(${username}). Using fallback empty result.`);
       return undefined;
     }
@@ -79,7 +76,7 @@ export class DbStorage implements IStorage {
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    if (!isDatabaseAvailable()) {
+    if (!db || !pool) {
       console.warn(`Database unavailable in getUserByEmail(${email}). Using fallback empty result.`);
       return undefined;
     }
@@ -93,7 +90,7 @@ export class DbStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    if (!isDatabaseAvailable()) {
+    if (!db || !pool) {
       console.error("Database unavailable in createUser. Cannot create user:", insertUser.username);
       throw new Error("Database connection is required to create users");
     }
@@ -107,6 +104,10 @@ export class DbStorage implements IStorage {
   }
 
   async updateUser(id: number, updates: Partial<User>): Promise<User | undefined> {
+    if (!db || !pool) {
+      console.warn(`Database unavailable in updateUser(${id}).`);
+      return undefined;
+    }
     const result = await db
       .update(users)
       .set({
@@ -120,6 +121,10 @@ export class DbStorage implements IStorage {
 
   // Verification methods
   async verifyUser(userId: number): Promise<boolean> {
+    if (!db || !pool) {
+      console.warn(`Database unavailable in verifyUser(${userId}).`);
+      return false;
+    }
     const result = await db
       .update(users)
       .set({
@@ -132,6 +137,10 @@ export class DbStorage implements IStorage {
   }
 
   async createVerificationToken(userId: number, tokenType: 'email' | 'password'): Promise<string> {
+    if (!db || !pool) {
+      console.error("Database unavailable in createVerificationToken.");
+      throw new Error("Database connection is required to create verification tokens.");
+    }
     // Generate a random token
     const token = Array.from(Array(32), () => Math.floor(Math.random() * 36).toString(36)).join('');
     
@@ -151,6 +160,10 @@ export class DbStorage implements IStorage {
   }
 
   async getVerificationToken(token: string): Promise<{ userId: number, type: string, expiresAt: Date } | undefined> {
+    if (!db || !pool) {
+      console.warn("Database unavailable in getVerificationToken.");
+      return undefined;
+    }
     const now = new Date();
     const result = await db
       .select()
@@ -173,6 +186,10 @@ export class DbStorage implements IStorage {
   }
 
   async deleteVerificationToken(token: string): Promise<boolean> {
+    if (!db || !pool) {
+      console.warn("Database unavailable in deleteVerificationToken.");
+      return false;
+    }
     const result = await db
       .delete(verificationTokens)
       .where(eq(verificationTokens.token, token))
@@ -182,6 +199,10 @@ export class DbStorage implements IStorage {
 
   // User stories method - implementing temporary JSON storage until we create proper relations
   async getUserStories(userId: number): Promise<SavedStory[]> {
+    if (!pool) {
+      console.warn("Database not available, returning empty array for user stories.");
+      return [];
+    }
     try {
       // We'll use a raw query for now to store/retrieve JSON
       // Later we'll create proper relational tables
@@ -229,7 +250,13 @@ export class DbStorage implements IStorage {
             },
             createdAt: new Date(row.created_at) || new Date(),
             expiresAt: new Date(row.expires_at) || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-            isFavorite: !!row.is_favorite
+            isFavorite: !!row.is_favorite,
+            searchMetadata: {
+              childName: "",
+              biblePassage: "",
+              topic: "",
+              tags: []
+            }
           };
         }
       });
@@ -241,6 +268,10 @@ export class DbStorage implements IStorage {
 
   // Character related methods - implementing temporary JSON storage
   async getAllCharacters(userId?: number): Promise<Character[]> {
+    if (!pool) {
+      console.warn("Database not available, returning empty array for characters.");
+      return [];
+    }
     try {
       let rows: any[];
       if (userId) {
@@ -273,16 +304,13 @@ export class DbStorage implements IStorage {
           return {
             id: row.character_id || "unknown",
             name: "Unknown Character",
-            gender: "boy" as "boy" | "girl", // Default to boy to match schema
+            createdAt: (new Date(row.created_at) || new Date()).toISOString(),
+            gender: "boy" as "boy" | "girl",
             age: 0,
-            hairColor: "",
-            eyeColor: "",
-            outfit: "",
-            favoriteActivity: "",
-            specialAbility: "",
-            personality: "",
-            backstory: "",
-            createdAt: new Date(row.created_at) || new Date()
+            hair: "",
+            eyes: "",
+            favoriteColor: "",
+            timeTravelExperience: 0,
           };
         }
       });
@@ -293,6 +321,10 @@ export class DbStorage implements IStorage {
   }
 
   async getCharacterById(id: string): Promise<Character | undefined> {
+    if (!pool) {
+      console.warn(`Database unavailable in getCharacterById(${id}).`);
+      return undefined;
+    }
     try {
       const { rows } = await pool.query(
         `SELECT * FROM user_characters WHERE character_id = $1`,
@@ -314,16 +346,13 @@ export class DbStorage implements IStorage {
         return {
           id: id,
           name: "Unknown Character",
-          gender: "boy" as "boy" | "girl", // Default to boy to match schema
+          createdAt: (new Date(rows[0].created_at) || new Date()).toISOString(),
+          gender: "boy" as "boy" | "girl",
           age: 0,
-          hairColor: "",
-          eyeColor: "",
-          outfit: "",
-          favoriteActivity: "",
-          specialAbility: "",
-          personality: "",
-          backstory: "",
-          createdAt: (new Date(rows[0].created_at) || new Date()).toISOString()
+          hair: "",
+          eyes: "",
+          favoriteColor: "",
+          timeTravelExperience: 0,
         };
       }
     } catch (error) {
@@ -333,6 +362,10 @@ export class DbStorage implements IStorage {
   }
 
   async createCharacter(characterData: Omit<Character, "id" | "createdAt">, userId: number): Promise<Character> {
+    if (!pool) {
+      console.error("Database unavailable in createCharacter. Cannot create character.");
+      throw new Error("Database connection is required to create characters");
+    }
     const id = uuidv4();
     const now = new Date();
     
@@ -352,6 +385,10 @@ export class DbStorage implements IStorage {
   }
 
   async updateCharacter(id: string, updates: Partial<Character>): Promise<Character | undefined> {
+    if (!pool) {
+      console.warn(`Database unavailable in updateCharacter(${id}).`);
+      return undefined;
+    }
     // First get the current character
     const character = await this.getCharacterById(id);
     if (!character) return undefined;
@@ -370,6 +407,10 @@ export class DbStorage implements IStorage {
   }
 
   async deleteCharacter(id: string): Promise<boolean> {
+    if (!pool) {
+      console.warn(`Database unavailable in deleteCharacter(${id}).`);
+      return false;
+    }
     const result = await pool.query(
       `DELETE FROM user_characters WHERE character_id = $1 RETURNING character_id`,
       [id]
@@ -380,11 +421,14 @@ export class DbStorage implements IStorage {
 
   // Song methods - implementing temporary JSON storage
   async getAllSongs(): Promise<Song[]> {
-    if (!isDatabaseAvailable()) {
-      console.warn("Database unavailable in getAllSongs. Using fallback empty result.");
+    if (!pool) {
+      console.warn("Database not available, returning empty array for songs.");
       return [];
     }
-
+    if (!pool) {
+      console.warn("Database not available, returning empty array for songs.");
+      return [];
+    }
     try {
       // Changed query to not order by title since that column doesn't exist in the raw table
       // The title is inside the song_data JSON
@@ -413,7 +457,14 @@ export class DbStorage implements IStorage {
             chorus: null,
             bridge: null,
             chords: [],
-            backgroundColor: "#f8f9fa"
+            backgroundColor: "#f8f9fa",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            tags: [],
+            hasGeneratedAudio: false,
+            isFavorite: false,
+            audioUrl: null,
+            imageUrl: null,
           };
         }
       });
@@ -424,11 +475,14 @@ export class DbStorage implements IStorage {
   }
 
   async getSongById(id: string): Promise<Song | undefined> {
-    if (!isDatabaseAvailable()) {
-      console.warn(`Database unavailable in getSongById(${id}). Using fallback empty result.`);
+    if (!pool) {
+      console.warn(`Database unavailable in getSongById(${id}).`);
       return undefined;
     }
-    
+    if (!pool) {
+      console.warn(`Database unavailable in getSongById(${id}).`);
+      return undefined;
+    }
     try {
       const { rows } = await pool.query(
         `SELECT * FROM songs WHERE song_id = $1`,
@@ -455,7 +509,14 @@ export class DbStorage implements IStorage {
           chorus: null,
           bridge: null,
           chords: [],
-          backgroundColor: "#f8f9fa"
+          backgroundColor: "#f8f9fa",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          tags: [],
+          hasGeneratedAudio: false,
+          isFavorite: false,
+          audioUrl: null,
+          imageUrl: null,
         };
       }
     } catch (error) {
@@ -529,9 +590,15 @@ export class DbStorage implements IStorage {
               useTimeTravel: false,
               useAnimal: true
             },
-            createdAt: new Date(row.created_at) || new Date(),
-            expiresAt: new Date(row.expires_at) || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-            isFavorite: !!row.is_favorite
+            createdAt: new Date(row.created_at).toISOString() || new Date().toISOString(),
+            expiresAt: new Date(row.expires_at).toISOString() || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+            isFavorite: !!row.is_favorite,
+            searchMetadata: {
+              childName: "",
+              biblePassage: "",
+              topic: "",
+              tags: []
+            }
           };
         }
       });
@@ -542,6 +609,10 @@ export class DbStorage implements IStorage {
   }
   
   async getStoryById(id: string, userId?: number): Promise<SavedStory | undefined> {
+    if (!pool) {
+      console.warn(`Database unavailable in getStoryById(${id}).`);
+      return undefined;
+    }
     try {
       let query = `SELECT * FROM user_stories WHERE story_id = $1`;
       const params: any[] = [id];
@@ -570,6 +641,8 @@ export class DbStorage implements IStorage {
           story: {
             title: "Story Data Error",
             content: "There was a problem loading this story. The data may be corrupted.",
+            moralOutcome: "positive",
+            applicationQuestions: [],
             bibleVerse: {
               text: "The Lord is my helper; I will not fear.",
               reference: "Hebrews 13:6"
@@ -578,18 +651,29 @@ export class DbStorage implements IStorage {
           request: {
             theme: "",
             animal: "",
-            gender: "boy" as "boy" | "girl" | undefined,
+            gender: "boy",
             childName: "",
             storyType: "regular",
             heroOfFaith: "",
             customPrompt: "",
             biblicalEvent: "",
             useTimeTravel: false,
-            useAnimal: true
+            useAnimal: true,
+            readingLevel: "early-elementary",
+            storyLength: "medium",
+            useCustomPrompts: false,
+            useCharacter: false,
           },
           createdAt: new Date(rows[0].created_at).toISOString() || new Date().toISOString(),
           expiresAt: rows[0].expires_at ? new Date(rows[0].expires_at).toISOString() : undefined,
-          isFavorite: !!rows[0].is_favorite
+          isFavorite: !!rows[0].is_favorite,
+          searchMetadata: {
+            keywords: [],
+            tags: [],
+            characters: [],
+            biblicalReferences: [],
+            themes: []
+          }
         };
       }
     } catch (error) {
@@ -599,7 +683,7 @@ export class DbStorage implements IStorage {
   }
   
   async saveStory(story: StoryResponse, request: StoryRequest, userId: number): Promise<SavedStory> {
-    if (!isDatabaseAvailable()) {
+    if (!pool) {
       console.error("Database unavailable in saveStory. Cannot save story for user:", userId);
       throw new Error("Database connection is required to save stories");
     }
@@ -618,7 +702,14 @@ export class DbStorage implements IStorage {
         request,
         createdAt: now.toISOString(),
         isFavorite: false,
-        expiresAt: expiryDate.toISOString()
+        expiresAt: expiryDate.toISOString(),
+        searchMetadata: {
+          keywords: story.title.split(' '),
+          tags: request.theme ? [request.theme] : [],
+          characters: request.characterId ? [request.characterId] : [],
+          biblicalReferences: story.bibleVerse ? [story.bibleVerse.reference] : [],
+          themes: request.theme ? [request.theme] : [],
+        }
       };
       
       // Create the table if it doesn't exist (useful in deployment scenarios)
@@ -647,7 +738,7 @@ export class DbStorage implements IStorage {
   }
   
   async toggleFavorite(id: string, isFavorite: boolean, userId: number): Promise<SavedStory | undefined> {
-    if (!isDatabaseAvailable()) {
+    if (!pool) {
       console.warn(`Database unavailable in toggleFavorite(${id}). Cannot update favorites.`);
       return undefined;
     }
@@ -699,10 +790,15 @@ export class DbStorage implements IStorage {
   }
   
   async deleteStory(id: string, userId: number): Promise<boolean> {
-    if (!isDatabaseAvailable()) {
-      console.warn(`Database unavailable in deleteStory(${id}). Cannot delete story.`);
+    if (!pool) {
+      console.warn(`Database unavailable in deleteStory(${id}).`);
       return false;
     }
+    if (!pool) {
+      console.warn(`Database unavailable in deleteStory(${id}).`);
+      return false;
+    }
+
     
     try {
       const result = await pool.query(
@@ -718,7 +814,7 @@ export class DbStorage implements IStorage {
   }
   
   async updateStoryHeroId(storyId: string, heroId: string, userId: number): Promise<SavedStory | undefined> {
-    if (!isDatabaseAvailable()) {
+    if (!pool) {
       console.warn(`Database unavailable in updateStoryHeroId(${storyId}). Cannot associate story with hero.`);
       return undefined;
     }
@@ -785,7 +881,6 @@ export class DbStorage implements IStorage {
     }
   }
   
-  // Story search methods
   async searchStories(query: string, userId?: number): Promise<SavedStory[]> {
     try {
       let sqlQuery: string;
@@ -908,8 +1003,8 @@ export class DbStorage implements IStorage {
             return row.story_data;
           }
           return JSON.parse(row.story_data);
-        } catch (error) {
-          console.error("Error parsing story data:", error);
+        } catch (parseError) {
+          console.error("Error parsing story data:", parseError);
           return {
             id: row.story_id || "unknown",
             story: {
@@ -1233,7 +1328,7 @@ export class DbStorage implements IStorage {
   
   // Usage tracking methods
   async getStoryGenerationCount(userId: number): Promise<number> {
-    if (!isDatabaseAvailable()) {
+    if (!pool) {
       console.warn(`Database unavailable in getStoryGenerationCount(${userId}). Using default count 0.`);
       return 0;
     }
@@ -1261,7 +1356,7 @@ export class DbStorage implements IStorage {
   }
   
   async incrementStoryGenerationCount(userId: number): Promise<number> {
-    if (!isDatabaseAvailable()) {
+    if (!pool) {
       console.warn(`Database unavailable in incrementStoryGenerationCount(${userId}). Cannot increment count.`);
       return 1; // Return 1 as a reasonable default
     }
@@ -1294,7 +1389,7 @@ export class DbStorage implements IStorage {
   }
   
   async resetStoryGenerationCount(userId: number): Promise<void> {
-    if (!isDatabaseAvailable()) {
+    if (!pool) {
       console.warn(`Database unavailable in resetStoryGenerationCount(${userId}). Cannot reset count.`);
       return; // Just return without doing anything
     }
@@ -1325,7 +1420,7 @@ export class DbStorage implements IStorage {
   }
   
   async getLastResetDate(userId: number): Promise<Date | null> {
-    if (!isDatabaseAvailable()) {
+    if (!pool) {
       console.warn(`Database unavailable in getLastResetDate(${userId}). Using current date as fallback.`);
       return new Date(); // Use current date as fallback to prevent unnecessary resets
     }
@@ -1344,7 +1439,7 @@ export class DbStorage implements IStorage {
   }
   
   async setLastResetDate(userId: number, date: Date): Promise<void> {
-    if (!isDatabaseAvailable()) {
+    if (!pool) {
       console.warn(`Database unavailable in setLastResetDate(${userId}). Cannot update reset date.`);
       return;
     }
@@ -1374,7 +1469,7 @@ export class DbStorage implements IStorage {
   
   // User settings methods
   async getUserOpenAIKey(userId: number): Promise<string | null> {
-    if (!isDatabaseAvailable()) {
+    if (!pool) {
       console.warn(`Database unavailable in getUserOpenAIKey(${userId}). Returning null.`);
       return null;
     }
@@ -1393,7 +1488,7 @@ export class DbStorage implements IStorage {
   }
   
   async setUserOpenAIKey(userId: number, key: string): Promise<void> {
-    if (!isDatabaseAvailable()) {
+    if (!pool) {
       console.warn(`Database unavailable in setUserOpenAIKey(${userId}). Cannot save key.`);
       return;
     }
@@ -1421,7 +1516,7 @@ export class DbStorage implements IStorage {
   }
   
   async getUserOpenAIModel(userId: number): Promise<string | null> {
-    if (!isDatabaseAvailable()) {
+    if (!pool) {
       console.warn(`Database unavailable in getUserOpenAIModel(${userId}). Using default model.`);
       return 'gpt-4o'; // Default to the newest model
     }
@@ -1440,7 +1535,7 @@ export class DbStorage implements IStorage {
   }
   
   async setUserOpenAIModel(userId: number, model: string): Promise<void> {
-    if (!isDatabaseAvailable()) {
+    if (!pool) {
       console.warn(`Database unavailable in setUserOpenAIModel(${userId}). Cannot save model.`);
       return;
     }
@@ -1469,8 +1564,12 @@ export class DbStorage implements IStorage {
 
   // Heroes of Faith methods
   async getAllHeroesOfFaith(): Promise<HeroOfFaith[]> {
-    if (!isDatabaseAvailable()) {
-      console.warn("Database unavailable in getAllHeroesOfFaith. Using fallback empty result.");
+    if (!pool) {
+      console.warn("Database not available, returning empty array for heroes of faith.");
+      return [];
+    }
+    if (!pool) {
+      console.warn("Database not available, returning empty array for heroes of faith.");
       return [];
     }
     
@@ -1506,7 +1605,12 @@ export class DbStorage implements IStorage {
               reference: "Hebrews 13:6"
             },
             imageUrl: "",
-            createdAt: new Date()
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            sources: [],
+            keyEvents: [],
+            tags: [],
+            isFavorite: false
           };
         }
       });
@@ -1518,6 +1622,10 @@ export class DbStorage implements IStorage {
   }
 
   async getHeroOfFaithById(id: string): Promise<HeroOfFaith | undefined> {
+    if (!pool) {
+      console.warn(`Database unavailable in getHeroOfFaithById(${id}).`);
+      return undefined;
+    }
     try {
       const { rows } = await pool.query(
         `SELECT * FROM heroes_of_faith WHERE hero_id = $1`,
@@ -1539,18 +1647,20 @@ export class DbStorage implements IStorage {
         return {
           id: id,
           name: "Unknown Hero",
-          description: "Data could not be parsed",
-          timePeriod: "",
-          contribution: "",
-          birthYear: "",
-          deathYear: "",
+          description: "Could not retrieve details for this hero.",
+          timePeriod: "Unknown",
+          contribution: "Unknown",
+          birthYear: "N/A",
+          deathYear: "N/A",
           famousQuote: "",
           bibleVerse: {
             text: "The Lord is my helper; I will not fear.",
             reference: "Hebrews 13:6"
           },
           imageUrl: "",
-          createdAt: new Date()
+          sources: [],
+          keyEvents: [],
+          createdAt: new Date(),
         };
       }
     } catch (error) {
@@ -1559,17 +1669,10 @@ export class DbStorage implements IStorage {
     }
   }
 
-  async createHeroOfFaith(heroData: Omit<HeroOfFaith, "id" | "createdAt">): Promise<HeroOfFaith> {
-    if (!isDatabaseAvailable()) {
-      console.warn("Database unavailable in createHeroOfFaith. Cannot create hero, but returning memory instance.");
-      // Create in-memory instance to allow app to continue working
-      const id = uuidv4();
-      const now = new Date();
-      return {
-        ...heroData,
-        id,
-        createdAt: now
-      };
+  async createHeroOfFaith(heroData: Omit<HeroOfFaith, "id" | "createdAt" | "updatedAt">): Promise<HeroOfFaith> {
+    if (!pool) {
+      console.error("Database unavailable in createHeroOfFaith. Cannot create hero.");
+      throw new Error("Database connection is required to create heroes of faith");
     }
     
     try {
@@ -1579,7 +1682,9 @@ export class DbStorage implements IStorage {
       const hero: HeroOfFaith = {
         ...heroData,
         id,
-        createdAt: now
+        createdAt: now,
+        sources: heroData.sources || [],
+        keyEvents: heroData.keyEvents || [],
       };
       
       // Create the table if it doesn't exist (helpful for deployment)
@@ -1587,14 +1692,15 @@ export class DbStorage implements IStorage {
         CREATE TABLE IF NOT EXISTS heroes_of_faith (
           hero_id TEXT PRIMARY KEY,
           hero_data JSONB NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
       `);
       
       await pool.query(
-        `INSERT INTO heroes_of_faith (hero_id, hero_data, created_at) 
-         VALUES ($1, $2, $3)`,
-        [id, JSON.stringify(hero), now]
+        `INSERT INTO heroes_of_faith (hero_id, hero_data, created_at, updated_at) 
+         VALUES ($1, $2, $3, $4)`,
+        [id, JSON.stringify(hero), now, now]
       );
       
       return hero;
@@ -1605,18 +1711,15 @@ export class DbStorage implements IStorage {
   }
 
   async updateHeroOfFaith(id: string, updates: Partial<HeroOfFaith>): Promise<HeroOfFaith | undefined> {
-    if (!isDatabaseAvailable()) {
-      console.warn(`Database unavailable in updateHeroOfFaith(${id}). Cannot update hero.`);
+    if (!pool) {
+      console.warn(`Database unavailable in updateHeroOfFaith(${id}).`);
       return undefined;
     }
     
     try {
       // Get current hero
       const hero = await this.getHeroOfFaithById(id);
-      if (!hero) {
-        console.warn(`Hero of faith not found: ${id}`);
-        return undefined;
-      }
+      if (!hero) return undefined;
       
       const updatedHero: HeroOfFaith = {
         ...hero,
@@ -1636,7 +1739,7 @@ export class DbStorage implements IStorage {
   }
 
   async deleteHeroOfFaith(id: string): Promise<boolean> {
-    if (!isDatabaseAvailable()) {
+    if (!pool) {
       console.warn(`Database unavailable in deleteHeroOfFaith(${id}). Cannot delete hero.`);
       return false;
     }
@@ -1656,6 +1759,10 @@ export class DbStorage implements IStorage {
   
   // Hero Stories Library methods
   async getAllHeroStories(heroId?: string): Promise<HeroStory[]> {
+    if (!pool) {
+      console.warn("Database unavailable in getAllHeroStories.");
+      return [];
+    }
     try {
       let query = `SELECT * FROM hero_stories`;
       const params: any[] = [];
@@ -1706,6 +1813,10 @@ export class DbStorage implements IStorage {
   }
   
   async getHeroStoryById(id: string): Promise<HeroStory | undefined> {
+    if (!pool) {
+      console.warn(`Database unavailable in getHeroStoryById(${id}).`);
+      return undefined;
+    }
     try {
       const { rows } = await pool.query(
         `SELECT * FROM hero_stories WHERE story_id = $1`,

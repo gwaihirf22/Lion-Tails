@@ -15,10 +15,11 @@ import { registerSongRoutes } from "./songs";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication with passport and session
-  setupAuth(app);
+  setupAuth(app); 
+  
   
   // Apply authentication middleware globally
-  app.use(authenticate);
+  app.use(authenticate); 
   
   // API routes for characters - all require authentication
   

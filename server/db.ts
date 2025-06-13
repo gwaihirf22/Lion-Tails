@@ -1,14 +1,14 @@
 
 import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
+import { drizzle, type NeonDatabase } from 'drizzle-orm/neon-serverless';
 import ws from "ws";
 import * as schema from "@shared/schema";
 
 neonConfig.webSocketConstructor = ws;
 
 // Variable declarations outside the conditional blocks
-let pool;
-let db;
+let pool: Pool | undefined;
+let db: NeonDatabase<typeof schema> | undefined;
 let dbConnectionStatus = 'not_initialized';
 
 async function initializeDatabase() {
@@ -37,7 +37,7 @@ async function initializeDatabase() {
     }
     
     // Initialize Drizzle if connection is good
-    db = drizzle({ client: pool, schema });
+    db = drizzle(pool, { schema });
     
     return true;
   } catch (error) {

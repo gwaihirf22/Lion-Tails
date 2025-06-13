@@ -1,0 +1,24 @@
+# docker-compose.yml
+
+version: '3.8'
+
+services:
+  # This defines our PostgreSQL database service
+  db:
+    image: postgres:15 # Use the official PostgreSQL version 15 image
+    restart: always
+    container_name: lion-tails-db
+    environment:
+      # These are the credentials the database will be created with
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: lion-tails-dev
+    ports:
+      # This maps port 5432 inside the Docker container to port 5432 on your Mac
+      - "5432:5432"
+    volumes:
+      # This ensures your database data persists even if you stop the container
+      - ./postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:
