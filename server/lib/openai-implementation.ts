@@ -145,8 +145,9 @@ async function generateStoryOutline(
   request: StoryRequest,
   wordCount: number,
   debugData: any[],
+  customPrompts?: { systemPrompt: string; userPrompt: string }
 ): Promise<string[]> {
-  const { childName, gender, animal, useAnimal, theme, biblicalEvent, heroOfFaith, characterId, characterDetails } = request;
+  const { childName, gender, animal, useAnimal, theme, biblicalEvent, heroOfFaith, characterId, characterDetails, useCustomPrompts, customSystemPrompt, customUserPrompt } = request;
   
   // Get character details if a character is selected
   let selectedCharacter = null;
@@ -168,8 +169,14 @@ async function generateStoryOutline(
   // <<< FIXED: Using the simple, direct calculation you suggested.
   const numberOfChapters = Math.ceil(wordCount / 500);
 
-  const systemPrompt = `You are a master Christian children's storyteller. Your task is to create a detailed plan for a story.`;
-  const userPrompt = `
+  // Check if custom prompts should be used for outline generation
+  const finalPrompts = (useCustomPrompts && customSystemPrompt && customUserPrompt) || customPrompts ? {
+    systemPrompt: customPrompts?.systemPrompt || customSystemPrompt || `You are a master Christian children's storyteller. Your task is to create a detailed plan for a story.`,
+    userPrompt: customPrompts?.userPrompt || customUserPrompt || `Please create a chapter-by-chapter outline for a Christian children's story.`
+  } : null;
+
+  const systemPrompt = finalPrompts?.systemPrompt || `You are a master Christian children's storyteller. Your task is to create a detailed plan for a story.`;
+  const userPrompt = finalPrompts?.userPrompt || `
     Please create a chapter-by-chapter outline for a Christian children's story.
     The final story should be approximately ${wordCount} words long.
 
@@ -343,6 +350,7 @@ export async function generateStoryWithOpenAI(
         request,
         targetWordCount,
         debugData,
+        customPrompts,
       );
       if (!outline || outline.length === 0)
         throw new Error("Failed to generate a valid story outline.");
