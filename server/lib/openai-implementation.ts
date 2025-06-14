@@ -61,16 +61,36 @@ async function generateShortStorySingleCall(
   applicationQuestions: string[];
   imagePrompt: string;
 }> {
-  const { childName, theme, readingLevel } = request;
+  const { childName, gender, animal, useAnimal, theme, readingLevel, biblicalEvent, heroOfFaith, characterId, characterDetails } = request;
+
+  // Get character details if a character is selected
+  let selectedCharacter = null;
+  if (characterId) {
+    try {
+      const characters = await storage.getAllCharacters();
+      selectedCharacter = characters.find(char => char.id === characterId);
+    } catch (error) {
+      console.log("Could not fetch character details:", error);
+    }
+  }
+
+  // Use selected character details if available, otherwise use form data or characterDetails
+  const finalName = selectedCharacter?.name || childName || "A child";
+  const finalGender = selectedCharacter?.gender || gender || "child";
+  const finalAge = selectedCharacter?.age || characterDetails?.age;
+  const finalAnimal = selectedCharacter?.favoriteAnimal || characterDetails?.favoriteAnimal || (useAnimal !== false ? animal : "");
 
   const systemPrompt = `You are a Christian children's storyteller who writes concise, self-contained short stories with a clear moral.`;
   const userPrompt = `
     Please create a complete, faith-based children's story.
 
-    Details:
-    - Main Character: ${childName || "A child"}
+    Character Details:
+    - Main Character: ${finalName} (${finalGender}${finalAge ? `, ${finalAge} years old` : ""})
+    ${finalAnimal && finalAnimal !== "none" ? `- Favorite Animal: ${finalAnimal}` : ""}
     - Theme: ${theme || "Faith and kindness"}
     - Reading Level: ${readingLevel || "early-elementary"}
+    ${biblicalEvent ? `- Biblical Event: ${biblicalEvent}` : ""}
+    ${heroOfFaith ? `- Hero of Faith: ${heroOfFaith}` : ""}
 
     CRITICAL INSTRUCTION: The entire story's content MUST be approximately ${wordCount} words long.
 
@@ -112,7 +132,25 @@ async function generateStoryOutline(
   wordCount: number,
   debugData: any[],
 ): Promise<string[]> {
-  const { childName, theme } = request;
+  const { childName, gender, animal, useAnimal, theme, biblicalEvent, heroOfFaith, characterId, characterDetails } = request;
+  
+  // Get character details if a character is selected
+  let selectedCharacter = null;
+  if (characterId) {
+    try {
+      const characters = await storage.getAllCharacters();
+      selectedCharacter = characters.find(char => char.id === characterId);
+    } catch (error) {
+      console.log("Could not fetch character details:", error);
+    }
+  }
+
+  // Use selected character details if available, otherwise use form data or characterDetails
+  const finalName = selectedCharacter?.name || childName || "A child";
+  const finalGender = selectedCharacter?.gender || gender || "child";
+  const finalAge = selectedCharacter?.age || characterDetails?.age;
+  const finalAnimal = selectedCharacter?.favoriteAnimal || characterDetails?.favoriteAnimal || (useAnimal !== false ? animal : "");
+
   // <<< FIXED: Using the simple, direct calculation you suggested.
   const numberOfChapters = Math.ceil(wordCount / 500);
 
@@ -121,8 +159,15 @@ async function generateStoryOutline(
     Please create a chapter-by-chapter outline for a Christian children's story.
     The final story should be approximately ${wordCount} words long.
 
+    Character Details:
+    - Main Character: ${finalName} (${finalGender}${finalAge ? `, ${finalAge} years old` : ""})
+    ${finalAnimal && finalAnimal !== "none" ? `- Favorite Animal: ${finalAnimal}` : ""}
+    - Theme: ${theme || "Faith and kindness"}
+    ${biblicalEvent ? `- Biblical Event: ${biblicalEvent}` : ""}
+    ${heroOfFaith ? `- Hero of Faith: ${heroOfFaith}` : ""}
+
     Instructions:
-    Create a detailed outline with EXACTLY ${numberOfChapters} parts. Each part must be a distinct scene or chapter that builds the story.
+    Create a detailed outline with EXACTLY ${numberOfChapters} parts. Each part must be a distinct scene or chapter that builds the story around the main character.
 
     Respond with ONLY a valid JSON object in the format: { "outline": ["Chapter 1...", "Chapter 2...", ...] }
   `;
