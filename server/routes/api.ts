@@ -16,6 +16,9 @@ router.use('/characters', authenticate, async (req, res, next) => {
   try {
     // GET /api/characters - Get all characters for the current user
     if (method === 'GET' && req.path === '/') {
+      if (!req.userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
       const characters = await storage.getAllCharacters(req.userId);
       return res.json(characters);
     }
@@ -49,6 +52,9 @@ router.use('/characters', authenticate, async (req, res, next) => {
         return res.status(400).json({ error: 'Name and gender are required' });
       }
       
+      if (!req.userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
       // Create character
       const character = await storage.createCharacter(req.body, req.userId);
       return res.status(201).json(character);
@@ -74,6 +80,9 @@ router.use('/characters', authenticate, async (req, res, next) => {
       
       // Update character
       const updatedCharacter = await storage.updateCharacter(id, req.body);
+      if (!updatedCharacter) {
+        return res.status(404).json({ error: 'Character not found or failed to update' });
+      }
       return res.json(updatedCharacter);
     }
     
@@ -96,7 +105,10 @@ router.use('/characters', authenticate, async (req, res, next) => {
       }
       
       // Delete character
-      await storage.deleteCharacter(id);
+      const success = await storage.deleteCharacter(id);
+      if (!success) {
+        return res.status(404).json({ error: 'Character not found or failed to delete' });
+      }
       return res.json({ success: true });
     }
     
@@ -116,12 +128,18 @@ router.use('/stories', authenticate, async (req, res, next) => {
   try {
     // GET /api/stories - Get all stories for the current user
     if (method === 'GET' && req.path === '/') {
+      if (!req.userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
       const stories = await storage.getAllStories(req.userId);
       return res.json(stories);
     }
     
     // GET /api/stories/:id - Get a story by ID
     if (method === 'GET' && req.path !== '/') {
+      if (!req.userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
       const id = req.path.substring(1); // Remove leading slash
       const story = await storage.getStoryById(id, req.userId);
       
@@ -141,6 +159,9 @@ router.use('/stories', authenticate, async (req, res, next) => {
     
     // PUT /api/stories/:id/favorite - Toggle favorite status
     if (method === 'PUT' && req.path.endsWith('/favorite')) {
+      if (!req.userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
       const id = req.path.substring(1, req.path.indexOf('/favorite')); // Extract ID
       const { isFavorite } = req.body;
       
@@ -159,6 +180,9 @@ router.use('/stories', authenticate, async (req, res, next) => {
     
     // DELETE /api/stories/:id - Delete a story
     if (method === 'DELETE' && req.path !== '/') {
+      if (!req.userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
       const id = req.path.substring(1); // Remove leading slash
       
       const success = await storage.deleteStory(id, req.userId);
@@ -180,6 +204,10 @@ router.use('/stories', authenticate, async (req, res, next) => {
 
 // User settings routes - require authentication
 router.use('/settings', authenticate, async (req, res, next) => {
+  if (!req.userId) {
+    return res.status(401).json({ error: 'User not authenticated' });
+  }
+
   const { method } = req;
   
   try {
@@ -196,8 +224,13 @@ router.use('/settings', authenticate, async (req, res, next) => {
       if (!key) {
         return res.status(400).json({ error: 'API key is required' });
       }
-      
       await storage.setUserOpenAIKey(req.userId, key);
+      return res.json({ success: true });
+    }
+    
+    // DELETE /api/settings/openai-key - Delete OpenAI API key
+    if (method === 'DELETE' && req.path === '/openai-key') {
+      await storage.setUserOpenAIKey(req.userId, '');
       return res.json({ success: true });
     }
     

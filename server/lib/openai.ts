@@ -133,7 +133,7 @@ export async function generateStory(request: StoryRequest, userId: number = 1): 
     // Use the OpenAI implementation to generate a story with userId for API key access
     // Pass custom prompts if Parent Mode is active and prompts are provided
 
-    const customPrompts = useCustomPrompts ? { systemPrompt: customSystemPrompt, userPrompt: customUserPrompt } : undefined;
+    const customPrompts = useCustomPrompts ? { systemPrompt: customSystemPrompt || '', userPrompt: customUserPrompt || '' } : undefined;
     const generatedStory = await generateStoryWithOpenAI(request, userId, customPrompts);
     
     // Add the bible verse to the response

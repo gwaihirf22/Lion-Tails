@@ -204,8 +204,6 @@ export class DbStorage implements IStorage {
       return [];
     }
     try {
-      // We'll use a raw query for now to store/retrieve JSON
-      // Later we'll create proper relational tables
       const result = await pool.query(
         `SELECT * FROM user_stories WHERE user_id = $1 AND 
          (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
@@ -267,7 +265,6 @@ export class DbStorage implements IStorage {
     }
   }
 
-  // Character related methods - implementing temporary JSON storage
   async getAllCharacters(userId?: number): Promise<Character[]> {
     if (!pool) {
       console.warn("Database not available, returning empty array for characters.");
@@ -275,18 +272,18 @@ export class DbStorage implements IStorage {
     }
     try {
       let rows: any[] = [];
-      if (userId) {
-        const result = await pool.query(
-          `SELECT * FROM user_characters WHERE user_id = $1 ORDER BY created_at DESC`,
-          [userId]
-        );
-        rows = result.rows;
-      } else {
-        const result = await pool.query(
-          `SELECT * FROM user_characters ORDER BY created_at DESC`
-        );
-        rows = result.rows;
-      }
+if (userId) {
+  const result = await pool.query(
+    `SELECT * FROM user_characters WHERE user_id = $1 ORDER BY created_at DESC`,
+    [userId]
+  );
+  rows = result.rows;
+} else {
+  const result = await pool.query(
+    `SELECT * FROM user_characters ORDER BY created_at DESC`
+  );
+  rows = result.rows;
+}
       
       if (!rows.length) return [];
 
@@ -443,9 +440,10 @@ export class DbStorage implements IStorage {
     try {
       // Changed query to not order by title since that column doesn't exist in the raw table
       // The title is inside the song_data JSON
-      const { rows } = await pool.query(
+      const result = await pool.query(
         `SELECT * FROM songs ORDER BY song_id ASC`
       );
+      const rows = result.rows;
       
       if (!rows || !rows.length) return [];
       
@@ -491,10 +489,11 @@ export class DbStorage implements IStorage {
       return undefined;
     }
     try {
-      const { rows } = await pool.query(
+      const result = await pool.query(
         `SELECT * FROM songs WHERE song_id = $1`,
         [id]
       );
+      const rows = result.rows;
       
       if (!rows || !rows.length) return undefined;
       
@@ -510,9 +509,9 @@ export class DbStorage implements IStorage {
         // Return a default song object to prevent app crashes
         return {
           id: id,
-          title: "Song Data Error",
-          artist: "Unknown",
-          verses: [{ lyrics: ["Data could not be parsed"], chords: [""] }],
+          title: "Unknown Song",
+          artist: "Unknown Artist",
+          verses: [],
           chorus: null,
           bridge: null,
           chords: [],
@@ -521,9 +520,11 @@ export class DbStorage implements IStorage {
           updatedAt: new Date(),
           tags: [],
           hasGeneratedAudio: false,
-          isFavorite: false,
-          audioUrl: null,
-          imageUrl: null,
+          audioUrl: undefined,
+          difficulty: "beginner",
+          key: "C",
+          timeSignature: "4/4",
+          tempo: 120,
         };
       }
     } catch (error) {
@@ -533,6 +534,10 @@ export class DbStorage implements IStorage {
   }
   
   async createSong(song: Song): Promise<Song> {
+    if (!pool) {
+      console.error("Database unavailable in createSong. Cannot create song.");
+      throw new Error("Database not available");
+    }
     try {
       const songWithId = song.id ? song : { ...song, id: uuidv4() };
       
@@ -556,12 +561,12 @@ export class DbStorage implements IStorage {
     
     try {
       // Admin function - get all stories
-      const { rows } = await pool.query(
+      const result = await pool.query(
         `SELECT * FROM user_stories WHERE 
          is_favorite = true OR expires_at IS NULL OR expires_at > NOW()
          ORDER BY created_at DESC`
       );
-      
+      const rows = result.rows;
       if (!rows.length) return [];
       
       return rows.map((row: any) => {
@@ -578,12 +583,9 @@ export class DbStorage implements IStorage {
           return {
             id: row.story_id || "unknown",
             story: {
-              title: "Story Data Error",
-              content: "There was a problem loading this story. The data may be corrupted.",
-              bibleVerse: {
-                text: "The Lord is my helper; I will not fear.",
-                reference: "Hebrews 13:6"
-              }
+              title: "Error Loading Story",
+              content: "There was a problem loading this story data.",
+              bibleVerse: { text: "", reference: "" }
             },
             request: {
               theme: "",
@@ -598,7 +600,6 @@ export class DbStorage implements IStorage {
               useAnimal: true
             },
             createdAt: new Date(row.created_at).toISOString() || new Date().toISOString(),
-            expiresAt: new Date(row.expires_at).toISOString() || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
             isFavorite: !!row.is_favorite,
             searchMetadata: {
               childName: "",
@@ -629,7 +630,8 @@ export class DbStorage implements IStorage {
         params.push(userId);
       }
       
-      const { rows } = await pool.query(query, params);
+      const result = await pool.query(query, params);
+      const rows = result.rows;
       
       if (!rows.length) return undefined;
       
@@ -691,10 +693,9 @@ export class DbStorage implements IStorage {
   
   async saveStory(story: StoryResponse, request: StoryRequest, userId: number): Promise<SavedStory> {
     if (!pool) {
-      console.error("Database unavailable in saveStory. Cannot save story for user:", userId);
-      throw new Error("Database connection is required to save stories");
+      console.error("Database unavailable in saveStory. Cannot save story.");
+      throw new Error("Database not available")
     }
-    
     try {
       const id = uuidv4();
       const now = new Date();
@@ -740,7 +741,7 @@ export class DbStorage implements IStorage {
       return savedStory;
     } catch (error) {
       console.error("Error saving story:", error);
-      throw new Error("Failed to save story. Please try again later.");
+      throw new Error("Failed to save story. Please try again later.")
     }
   }
   
@@ -807,7 +808,7 @@ export class DbStorage implements IStorage {
         [id, userId]
       );
       
-      return rowCount > 0;
+      return (rowCount ?? 0) > 0;
     } catch (error) {
       console.error(`Error deleting story ${id}:`, error);
       return false;
@@ -883,6 +884,10 @@ export class DbStorage implements IStorage {
   }
   
   async searchStories(query: string, userId?: number): Promise<SavedStory[]> {
+    if (!pool) {
+      console.warn(`Database unavailable in searchStories.`);
+      return [];
+    }
     try {
       let sqlQuery: string;
       let params: any[] = [];
@@ -924,7 +929,8 @@ export class DbStorage implements IStorage {
         params = [`%${query}%`];
       }
       
-      const { rows } = await pool.query(sqlQuery, params);
+      const result = await pool.query(sqlQuery, params);
+      const rows = result.rows;
       
       if (!rows.length) return [];
       
@@ -949,6 +955,9 @@ export class DbStorage implements IStorage {
               gender: "boy" as "boy" | "girl" | undefined,
               childName: "",
               storyType: "regular",
+              heroOfFaith: "",
+              customPrompt: "",
+              biblicalEvent: "",
               useTimeTravel: false,
               useAnimal: true
             },
@@ -970,6 +979,10 @@ export class DbStorage implements IStorage {
   }
   
   async searchStoriesByName(name: string, userId?: number): Promise<SavedStory[]> {
+    if (!pool) {
+      console.warn(`Database unavailable in searchStoriesByName.`);
+      return [];
+    }
     try {
       let sqlQuery: string;
       let params: any[] = [];
@@ -994,7 +1007,8 @@ export class DbStorage implements IStorage {
         params = [`%${name}%`];
       }
       
-      const { rows } = await pool.query(sqlQuery, params);
+      const result = await pool.query(sqlQuery, params);
+      const rows = result.rows;
       
       if (!rows.length) return [];
       
@@ -1019,6 +1033,9 @@ export class DbStorage implements IStorage {
               gender: "boy" as "boy" | "girl" | undefined,
               childName: "",
               storyType: "regular",
+              heroOfFaith: "",
+              customPrompt: "",
+              biblicalEvent: "",
               useTimeTravel: false,
               useAnimal: true
             },
@@ -1040,6 +1057,10 @@ export class DbStorage implements IStorage {
   }
   
   async searchStoriesByBiblePassage(passage: string, userId?: number): Promise<SavedStory[]> {
+    if (!pool) {
+      console.warn(`Database unavailable in searchStoriesByBiblePassage.`);
+      return [];
+    }
     try {
       let sqlQuery: string;
       let params: any[] = [];
@@ -1064,7 +1085,8 @@ export class DbStorage implements IStorage {
         params = [`%${passage}%`];
       }
       
-      const { rows } = await pool.query(sqlQuery, params);
+      const result = await pool.query(sqlQuery, params);
+      const rows = result.rows;
       
       if (!rows.length) return [];
       
@@ -1089,6 +1111,9 @@ export class DbStorage implements IStorage {
               gender: "boy" as "boy" | "girl" | undefined,
               childName: "",
               storyType: "regular",
+              heroOfFaith: "",
+              customPrompt: "",
+              biblicalEvent: "",
               useTimeTravel: false,
               useAnimal: true
             },
@@ -1110,6 +1135,10 @@ export class DbStorage implements IStorage {
   }
   
   async searchStoriesByTopic(topic: string, userId?: number): Promise<SavedStory[]> {
+    if (!pool) {
+      console.warn(`Database unavailable in searchStoriesByTopic.`);
+      return [];
+    }
     try {
       let sqlQuery: string;
       let params: any[] = [];
@@ -1134,7 +1163,8 @@ export class DbStorage implements IStorage {
         params = [`%${topic}%`];
       }
       
-      const { rows } = await pool.query(sqlQuery, params);
+      const result = await pool.query(sqlQuery, params);
+      const rows = result.rows;
       
       if (!rows.length) return [];
       
@@ -1159,6 +1189,9 @@ export class DbStorage implements IStorage {
               gender: "boy" as "boy" | "girl" | undefined,
               childName: "",
               storyType: "regular",
+              heroOfFaith: "",
+              customPrompt: "",
+              biblicalEvent: "",
               useTimeTravel: false,
               useAnimal: true
             },
@@ -1180,6 +1213,10 @@ export class DbStorage implements IStorage {
   }
   
   async searchStoriesByTags(tags: string[], userId?: number): Promise<SavedStory[]> {
+    if (!pool) {
+      console.warn(`Database unavailable in searchStoriesByTags.`);
+      return [];
+    }
     if (!tags.length) return [];
     
     try {
@@ -1211,7 +1248,8 @@ export class DbStorage implements IStorage {
         params = tags.map(tag => `%${tag}%`);
       }
       
-      const { rows } = await pool.query(sqlQuery, params);
+      const result = await pool.query(sqlQuery, params);
+      const rows = result.rows;
       
       if (!rows.length) return [];
       
@@ -1236,6 +1274,9 @@ export class DbStorage implements IStorage {
               gender: "boy" as "boy" | "girl" | undefined,
               childName: "",
               storyType: "regular",
+              heroOfFaith: "",
+              customPrompt: "",
+              biblicalEvent: "",
               useTimeTravel: false,
               useAnimal: true
             },
@@ -1281,7 +1322,8 @@ export class DbStorage implements IStorage {
         params = [heroId];
       }
       
-      const { rows } = await pool.query(sqlQuery, params);
+      const result = await pool.query(sqlQuery, params);
+      const rows = result.rows;
       
       if (!rows.length) return [];
       
@@ -1306,6 +1348,9 @@ export class DbStorage implements IStorage {
               gender: "boy" as "boy" | "girl" | undefined,
               childName: "",
               storyType: "regular",
+              heroOfFaith: "",
+              customPrompt: "",
+              biblicalEvent: "",
               useTimeTravel: false,
               useAnimal: true
             },
@@ -1344,10 +1389,11 @@ export class DbStorage implements IStorage {
         )
       `);
       
-      const { rows } = await pool.query(
+      const result = await pool.query(
         `SELECT count FROM user_usage WHERE user_id = $1`,
         [userId]
       );
+      const rows = result.rows;
       
       return rows.length ? rows[0].count : 0;
     } catch (error) {
@@ -1373,7 +1419,7 @@ export class DbStorage implements IStorage {
       `);
     
       // Use upsert pattern
-      const { rows } = await pool.query(
+      const result = await pool.query(
         `INSERT INTO user_usage (user_id, count) 
          VALUES ($1, 1) 
          ON CONFLICT (user_id) 
@@ -1382,7 +1428,7 @@ export class DbStorage implements IStorage {
         [userId]
       );
       
-      return rows[0].count;
+      return result.rows[0].count;
     } catch (error) {
       console.error(`Error incrementing story generation count for user ${userId}:`, error);
       return 1; // Return 1 as a fallback value
@@ -1427,10 +1473,11 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      const { rows } = await pool.query(
+      const result = await pool.query(
         `SELECT last_reset_date FROM user_usage WHERE user_id = $1`,
         [userId]
       );
+      const rows = result.rows;
       
       return rows.length && rows[0].last_reset_date ? rows[0].last_reset_date : null;
     } catch (error) {
@@ -1476,10 +1523,11 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      const { rows } = await pool.query(
+      const result = await pool.query(
         `SELECT openai_key FROM user_settings WHERE user_id = $1`,
         [userId]
       );
+      const rows = result.rows;
       
       return rows.length && rows[0].openai_key ? rows[0].openai_key : null;
     } catch (error) {
@@ -1523,10 +1571,11 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      const { rows } = await pool.query(
+      const result = await pool.query(
         `SELECT openai_model FROM user_settings WHERE user_id = $1`,
         [userId]
       );
+      const rows = result.rows;
       
       return rows.length && rows[0].openai_model ? rows[0].openai_model : 'gpt-4o'; // Default to the newest model
     } catch (error) {
@@ -1571,9 +1620,10 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      const { rows } = await pool.query(
+      const result = await pool.query(
         `SELECT * FROM heroes_of_faith ORDER BY hero_id ASC`
       );
+      const rows = result.rows;
       
       if (!rows || !rows.length) return [];
       
@@ -1624,10 +1674,11 @@ export class DbStorage implements IStorage {
       return undefined;
     }
     try {
-      const { rows } = await pool.query(
+      const result = await (pool as any).query(
         `SELECT * FROM heroes_of_faith WHERE hero_id = $1`,
         [id]
       );
+      const rows = result.rows;
       
       if (!rows.length) return undefined;
       
@@ -1669,7 +1720,7 @@ export class DbStorage implements IStorage {
   async createHeroOfFaith(heroData: Omit<HeroOfFaith, "id" | "createdAt" | "updatedAt">): Promise<HeroOfFaith> {
     if (!pool) {
       console.error("Database unavailable in createHeroOfFaith. Cannot create hero.");
-      throw new Error("Database connection is required to create heroes of faith");
+      throw new Error("Database connection is required to create heroes of faith")
     }
     
     try {
@@ -1703,7 +1754,7 @@ export class DbStorage implements IStorage {
       return hero;
     } catch (error) {
       console.error("Error creating hero of faith:", error);
-      throw new Error("Failed to create hero of faith. Please try again later.");
+      throw new Error("Failed to create hero of faith. Please try again later.")
     }
   }
 
@@ -1746,8 +1797,7 @@ export class DbStorage implements IStorage {
         `DELETE FROM heroes_of_faith WHERE hero_id = $1 RETURNING hero_id`,
         [id]
       );
-      
-      return rowCount > 0;
+      return (rowCount ?? 0) > 0;
     } catch (error) {
       console.error(`Error deleting hero of faith with ID ${id}:`, error);
       return false;
@@ -1771,7 +1821,8 @@ export class DbStorage implements IStorage {
       
       query += ` ORDER BY created_at DESC`;
       
-      const { rows } = await pool.query(query, params);
+      const result = await pool.query(query, params);
+      const rows = result.rows;
       
       if (!rows.length) return [];
       
@@ -1815,10 +1866,11 @@ export class DbStorage implements IStorage {
       return undefined;
     }
     try {
-      const { rows } = await pool.query(
+      const result = await pool.query(
         `SELECT * FROM hero_stories WHERE story_id = $1`,
         [id]
       );
+      const rows = result.rows;
       
       if (!rows.length) return undefined;
       
@@ -1859,6 +1911,10 @@ export class DbStorage implements IStorage {
   }
   
   async createHeroStory(storyData: Omit<HeroStory, "id" | "createdAt">, userId?: number): Promise<HeroStory> {
+    if (!pool) {
+      console.error("Database unavailable in createHeroStory. Cannot create hero story.");
+      throw new Error("Database not available");
+    }
     try {
       const id = uuidv4();
       const now = new Date();
@@ -1899,6 +1955,10 @@ export class DbStorage implements IStorage {
   }
   
   async updateHeroStory(id: string, updates: Partial<HeroStory>): Promise<HeroStory | undefined> {
+    if (!pool) {
+      console.error(`Database unavailable in updateHeroStory(${id}).`);
+      return undefined;
+    }
     try {
       // First get the current story
       const story = await this.getHeroStoryById(id);
@@ -1922,13 +1982,16 @@ export class DbStorage implements IStorage {
   }
   
   async deleteHeroStory(id: string): Promise<boolean> {
+    if (!pool) {
+      console.error(`Database unavailable in deleteHeroStory(${id}).`);
+      return false;
+    }
     try {
       const { rowCount } = await pool.query(
         `DELETE FROM hero_stories WHERE story_id = $1 RETURNING story_id`,
         [id]
       );
-      
-      return rowCount > 0;
+      return (rowCount ?? 0) > 0;
     } catch (error) {
       console.error(`Error deleting hero story with ID ${id}:`, error);
       return false;
@@ -1936,6 +1999,10 @@ export class DbStorage implements IStorage {
   }
   
   async toggleHeroStoryFeatured(id: string, isFeatured: boolean): Promise<HeroStory | undefined> {
+    if (!pool) {
+      console.error(`Database unavailable in toggleHeroStoryFeatured(${id}).`);
+      return undefined;
+    }
     try {
       // First get the current story
       const story = await this.getHeroStoryById(id);

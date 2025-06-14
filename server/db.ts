@@ -3,7 +3,7 @@
 import { Pool as NeonPool, neonConfig } from '@neondatabase/serverless';
 import { drizzle as drizzleNeon, type NeonDatabase } from 'drizzle-orm/neon-serverless';
 
-import { Pool as PgPool } from 'pg';
+import { Pool as PgPool, type QueryResult } from 'pg';
 import { drizzle as drizzlePg, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import ws from "ws";
@@ -12,7 +12,10 @@ import * as schema from "@shared/schema";
 neonConfig.webSocketConstructor = ws;
 
 // Variable declarations outside the conditional blocks
-type AnyPool = NeonPool | PgPool;
+type AnyPool = {
+  query: (sql: string, params?: any[]) => Promise<QueryResult>;
+  connect: () => Promise<any>;
+};
 // Allow db to be either Neon or NodePg
 type AnyDb = NeonDatabase<typeof schema> | NodePgDatabase<typeof schema>;
 
