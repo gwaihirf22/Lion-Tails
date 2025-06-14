@@ -119,24 +119,60 @@ async function generateShortStorySingleCall(
     ],
     response_format: { type: "json_object" },
     temperature: 0.7,
-    max_tokens: 2048, // Ample room for a short story + JSON
+    max_tokens: 4096, // Increased to prevent truncation of short stories + JSON overhead
   });
 
   const responseContent = response.choices[0].message.content || "";
+  
+  // Check if response was truncated
+  if (response.choices[0].finish_reason === 'length') {
+    console.warn("OpenAI response was truncated due to max_tokens limit");
+    console.warn("Response length:", responseContent.length);
+    console.warn("Last 100 characters:", responseContent.slice(-100));
+  }
+  
+  // Parse the JSON response safely
+  let parsedResponse;
+  try {
+    parsedResponse = JSON.parse(responseContent);
+  } catch (error) {
+    console.error("Failed to parse JSON response:", error);
+    console.error("Raw response length:", responseContent.length);
+    console.error("First 200 characters:", responseContent.slice(0, 200));
+    console.error("Last 200 characters:", responseContent.slice(-200));
+    throw new Error("Invalid JSON response from OpenAI");
+  }
+  
+  // Validate the parsed response has required fields
+  if (!parsedResponse.content || !parsedResponse.title) {
+    console.error("Parsed response missing required fields:", Object.keys(parsedResponse));
+    throw new Error("OpenAI response missing required story content");
+  }
+  
+  // Log content details for debugging
+  const actualWordCount = countWords(parsedResponse.content || "");
+  console.log(`Short story generation completed:
+    - Target words: ${wordCount}
+    - Actual words: ${actualWordCount}
+    - Content length: ${parsedResponse.content?.length || 0} characters
+    - Title: "${parsedResponse.title}"
+    - Content starts with: "${parsedResponse.content?.substring(0, 100) || 'N/A'}..."`);
+
   debugData.push({
     step: "generateShortStorySingleCall",
     systemPrompt: systemPrompt,
     userPrompt: userPrompt,
     prompt: userPrompt,
     response: responseContent,
-    wordCount: countWords(JSON.parse(responseContent).content || ""),
+    wordCount: actualWordCount,
     model: "gpt-4o",
     targetWordCount: wordCount,
-    maxTokens: 2048,
-    timestamp: new Date().toISOString()
+    maxTokens: 4096,
+    timestamp: new Date().toISOString(),
+    finishReason: response.choices[0].finish_reason
   });
 
-  return JSON.parse(responseContent);
+  return parsedResponse;
 }
 
 // HELPER for Long Stories (Outline Generation)
