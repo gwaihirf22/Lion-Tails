@@ -206,16 +206,17 @@ export class DbStorage implements IStorage {
     try {
       // We'll use a raw query for now to store/retrieve JSON
       // Later we'll create proper relational tables
-      const { rows } = await pool.query(
+      const result = await pool.query(
         `SELECT * FROM user_stories WHERE user_id = $1 AND 
          (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
          ORDER BY created_at DESC`,
         [userId]
       );
+      const rows = result.rows;
       
       if (!rows.length) return [];
       
-      return rows.map(row => {
+      return rows.map((row: any) => {
         try {
           // Handle the case where data might already be an object
           if (typeof row.story_data === 'object' && row.story_data !== null) {
@@ -273,7 +274,7 @@ export class DbStorage implements IStorage {
       return [];
     }
     try {
-      let rows: any[];
+      let rows: any[] = [];
       if (userId) {
         const result = await pool.query(
           `SELECT * FROM user_characters WHERE user_id = $1 ORDER BY created_at DESC`,
@@ -281,7 +282,6 @@ export class DbStorage implements IStorage {
         );
         rows = result.rows;
       } else {
-        // Admin function to get all characters
         const result = await pool.query(
           `SELECT * FROM user_characters ORDER BY created_at DESC`
         );
@@ -289,8 +289,8 @@ export class DbStorage implements IStorage {
       }
       
       if (!rows.length) return [];
-      
-      return rows.map(row => {
+
+      return rows.map((row: any) => {
         try {
           // Handle the case where data might already be an object
           if (typeof row.character_data === 'object' && row.character_data !== null) {
@@ -326,10 +326,11 @@ export class DbStorage implements IStorage {
       return undefined;
     }
     try {
-      const { rows } = await pool.query(
+      const result = await pool.query(
         `SELECT * FROM user_characters WHERE character_id = $1`,
         [id]
       );
+      const rows = result.rows;
       
       if (!rows.length) return undefined;
       
@@ -375,11 +376,16 @@ export class DbStorage implements IStorage {
       createdAt: now.toISOString()
     };
     
-    await pool.query(
-      `INSERT INTO user_characters (character_id, user_id, character_data, created_at) 
-       VALUES ($1, $2, $3, $4)`,
-      [id, userId, JSON.stringify(character), now]
-    );
+    try {
+      await pool.query(
+        `INSERT INTO user_characters (character_id, user_id, character_data, created_at) 
+         VALUES ($1, $2, $3, $4)`,
+        [id, userId, JSON.stringify(character), now]
+      );
+    } catch (error) {
+      console.error("Error creating character:", error);
+      throw error;
+    }
     
     return character;
   }
@@ -398,11 +404,16 @@ export class DbStorage implements IStorage {
       ...updates
     };
     
-    await pool.query(
-      `UPDATE user_characters SET character_data = $1 WHERE character_id = $2`,
-      [JSON.stringify(updatedCharacter), id]
-    );
-    
+    try {
+      await pool.query(
+        `UPDATE user_characters SET character_data = $1 WHERE character_id = $2`,
+        [JSON.stringify(updatedCharacter), id]
+      );
+    } catch (error) {
+      console.error("Error updating character:", error);
+      return undefined;
+    }
+
     return updatedCharacter;
   }
 
@@ -411,20 +422,20 @@ export class DbStorage implements IStorage {
       console.warn(`Database unavailable in deleteCharacter(${id}).`);
       return false;
     }
-    const result = await pool.query(
-      `DELETE FROM user_characters WHERE character_id = $1 RETURNING character_id`,
-      [id]
-    );
-    
-    return (result.rowCount || 0) > 0;
+    try {
+      const result = await pool.query(
+        `DELETE FROM user_characters WHERE character_id = $1 RETURNING character_id`,
+        [id]
+      );
+      return (result.rowCount || 0) > 0;
+    } catch (error) {
+      console.error(`Error deleting character by ID ${id}:`, error);
+      return false;
+    }
   }
 
   // Song methods - implementing temporary JSON storage
   async getAllSongs(): Promise<Song[]> {
-    if (!pool) {
-      console.warn("Database not available, returning empty array for songs.");
-      return [];
-    }
     if (!pool) {
       console.warn("Database not available, returning empty array for songs.");
       return [];
@@ -438,7 +449,7 @@ export class DbStorage implements IStorage {
       
       if (!rows || !rows.length) return [];
       
-      return rows.map(row => {
+      return rows.map((row: any) => {
         try {
           // Handle the case where data might already be an object
           if (typeof row.song_data === 'object' && row.song_data !== null) {
@@ -475,10 +486,6 @@ export class DbStorage implements IStorage {
   }
 
   async getSongById(id: string): Promise<Song | undefined> {
-    if (!pool) {
-      console.warn(`Database unavailable in getSongById(${id}).`);
-      return undefined;
-    }
     if (!pool) {
       console.warn(`Database unavailable in getSongById(${id}).`);
       return undefined;
@@ -557,7 +564,7 @@ export class DbStorage implements IStorage {
       
       if (!rows.length) return [];
       
-      return rows.map(row => {
+      return rows.map((row: any) => {
         try {
           // Handle the case where data might already be an object
           if (typeof row.story_data === 'object' && row.story_data !== null) {
@@ -794,19 +801,13 @@ export class DbStorage implements IStorage {
       console.warn(`Database unavailable in deleteStory(${id}).`);
       return false;
     }
-    if (!pool) {
-      console.warn(`Database unavailable in deleteStory(${id}).`);
-      return false;
-    }
-
-    
     try {
-      const result = await pool.query(
+      const { rowCount } = await pool.query(
         `DELETE FROM user_stories WHERE story_id = $1 AND user_id = $2 RETURNING story_id`,
         [id, userId]
       );
       
-      return (result.rowCount || 0) > 0;
+      return rowCount > 0;
     } catch (error) {
       console.error(`Error deleting story ${id}:`, error);
       return false;
@@ -927,7 +928,7 @@ export class DbStorage implements IStorage {
       
       if (!rows.length) return [];
       
-      return rows.map(row => {
+      return rows.map((row: any) => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
             return row.story_data;
@@ -997,7 +998,7 @@ export class DbStorage implements IStorage {
       
       if (!rows.length) return [];
       
-      return rows.map(row => {
+      return rows.map((row: any) => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
             return row.story_data;
@@ -1067,7 +1068,7 @@ export class DbStorage implements IStorage {
       
       if (!rows.length) return [];
       
-      return rows.map(row => {
+      return rows.map((row: any) => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
             return row.story_data;
@@ -1137,7 +1138,7 @@ export class DbStorage implements IStorage {
       
       if (!rows.length) return [];
       
-      return rows.map(row => {
+      return rows.map((row: any) => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
             return row.story_data;
@@ -1214,7 +1215,7 @@ export class DbStorage implements IStorage {
       
       if (!rows.length) return [];
       
-      return rows.map(row => {
+      return rows.map((row: any) => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
             return row.story_data;
@@ -1284,7 +1285,7 @@ export class DbStorage implements IStorage {
       
       if (!rows.length) return [];
       
-      return rows.map(row => {
+      return rows.map((row: any) => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
             return row.story_data;
@@ -1568,10 +1569,6 @@ export class DbStorage implements IStorage {
       console.warn("Database not available, returning empty array for heroes of faith.");
       return [];
     }
-    if (!pool) {
-      console.warn("Database not available, returning empty array for heroes of faith.");
-      return [];
-    }
     
     try {
       const { rows } = await pool.query(
@@ -1580,7 +1577,7 @@ export class DbStorage implements IStorage {
       
       if (!rows || !rows.length) return [];
       
-      return rows.map(row => {
+      return rows.map((row: any) => {
         try {
           // Handle the case where data might already be an object
           if (typeof row.hero_data === 'object' && row.hero_data !== null) {
@@ -1745,12 +1742,12 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      const result = await pool.query(
+      const { rowCount } = await pool.query(
         `DELETE FROM heroes_of_faith WHERE hero_id = $1 RETURNING hero_id`,
         [id]
       );
       
-      return (result.rowCount || 0) > 0;
+      return rowCount > 0;
     } catch (error) {
       console.error(`Error deleting hero of faith with ID ${id}:`, error);
       return false;
@@ -1778,7 +1775,7 @@ export class DbStorage implements IStorage {
       
       if (!rows.length) return [];
       
-      return rows.map(row => {
+      return rows.map((row: any) => {
         try {
           // Handle the case where data might already be an object
           if (typeof row.story_data === 'object' && row.story_data !== null) {
@@ -1926,12 +1923,12 @@ export class DbStorage implements IStorage {
   
   async deleteHeroStory(id: string): Promise<boolean> {
     try {
-      const result = await pool.query(
+      const { rowCount } = await pool.query(
         `DELETE FROM hero_stories WHERE story_id = $1 RETURNING story_id`,
         [id]
       );
       
-      return (result.rowCount || 0) > 0;
+      return rowCount > 0;
     } catch (error) {
       console.error(`Error deleting hero story with ID ${id}:`, error);
       return false;

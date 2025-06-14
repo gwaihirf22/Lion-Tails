@@ -176,18 +176,8 @@ function getDemoStory(childName: string, gender: string, animal: string, theme: 
     bibleVerse
   };
 }
- smiled gently. "I'm sure Noah felt afraid sometimes, just like we all do. But Noah trusted God, and that's what made him brave."
 
-That night, after ${gender === 'boy' ? 'his' : 'her'} mother tucked ${gender === 'boy' ? 'him' : 'her'} into bed and kissed ${gender === 'boy' ? 'him' : 'her'} goodnight, ${childName} drifted off to sleep. In ${gender === 'boy' ? 'his' : 'her'} dreams, ${gender === 'boy' ? 'he' : 'she'} found ${gender === 'boy' ? 'himself' : 'herself'} standing in a vast field, where a kind-looking man with a long beard was measuring wood for a massive structure.
-
-"Hello there, young one," the man said when he noticed ${childName}. "I'm Noah. Would you like to help me build God's ark?"
-
-${childName}'s eyes widened with wonder. "Really? I can help you?"
-
-Noah nodded with a warm smile. "God has given us a big job to do. When people are afraid, it helps to have friends working alongside us."
-
-${childName} was eager to help. Together with Noah and his family, ${childName} learned how to measure wood, hammer nails, and seal the ark with pitch to keep the water out. The work was hard, but ${childName} felt proud to be helping with God's special plan.
-
+/*
 "Noah," ${childName} asked one day as they worked side by side, "why aren't other people helping us build the ark?"
 
 Noah's face grew sad. "I've tried to tell them about God's plan to send rain, but they don't believe me. They've never seen rain before, so they think I'm being silly."
