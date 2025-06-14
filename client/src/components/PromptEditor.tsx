@@ -100,22 +100,58 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
   // Generate both system and user prompts from story request - updates when storyRequest changes
   useEffect(() => {
     const generateUserPrompt = () => {
-      let prompt = `Create a children's story with the following details:\n\n`;
+      let prompt = `Please create a complete, faith-based children's story.\n\n`;
       
-      prompt += `Story Type: ${storyRequest.storyType}\n`;
+      // Character Details Section
+      prompt += `Character Details:\n`;
+      if (storyRequest.childName) {
+        prompt += `- Main Character: ${storyRequest.childName}`;
+        if (storyRequest.gender) prompt += ` (${storyRequest.gender}`;
+        if (storyRequest.characterDetails?.age) prompt += `, ${storyRequest.characterDetails.age} years old`;
+        if (storyRequest.gender) prompt += `)`;
+        prompt += `\n`;
+      }
+      if (storyRequest.animal && storyRequest.useAnimal && storyRequest.animal !== "none") {
+        prompt += `- Favorite Animal: ${storyRequest.animal}\n`;
+      }
       
-      if (storyRequest.childName) prompt += `Child's Name: ${storyRequest.childName}\n`;
-      if (storyRequest.characterDetails?.age) prompt += `Child's Age: ${storyRequest.characterDetails.age}\n`;
-      if (storyRequest.theme) prompt += `Theme/Lesson: ${storyRequest.theme}\n`;
-      if (storyRequest.animal && storyRequest.useAnimal) prompt += `Animal Friend: ${storyRequest.animal}\n`;
-      if (storyRequest.heroOfFaith) prompt += `Hero of Faith: ${storyRequest.heroOfFaith}\n`;
-      if (storyRequest.useTimeTravel) prompt += `Include Time Travel Elements: Yes\n`;
-      if (storyRequest.biblePassage) prompt += `Bible Passage: ${storyRequest.biblePassage}\n`;
-      if (storyRequest.biblicalEvent) prompt += `Biblical Event: ${storyRequest.biblicalEvent}\n`;
+      // Story Details Section
+      if (storyRequest.theme && storyRequest.theme !== "none") {
+        prompt += `- Theme: ${storyRequest.theme}\n`;
+      }
+      if (storyRequest.biblicalEvent && storyRequest.biblicalEvent !== "none") {
+        prompt += `- Biblical Event: ${storyRequest.biblicalEvent}\n`;
+      }
+      if (storyRequest.heroOfFaith && storyRequest.heroOfFaith !== "none") {
+        prompt += `- Hero of Faith: ${storyRequest.heroOfFaith}\n`;
+      }
+      if (storyRequest.biblePassage) {
+        prompt += `- Bible Passage: ${storyRequest.biblePassage}\n`;
+      }
+      if (storyRequest.useTimeTravel) {
+        prompt += `- Include Time Travel Elements: Yes\n`;
+      }
       
-      prompt += `Reading Level: ${storyRequest.readingLevel}\n`;
-      prompt += `Story Length: ${storyRequest.storyLength}\n`;
-      prompt += `\nPlease create an engaging, faith-based story that incorporates these elements naturally and includes 5 application questions at the end.`;
+      prompt += `- Reading Level: ${storyRequest.readingLevel}\n`;
+      prompt += `- Story Length: ${storyRequest.storyLength}\n`;
+      
+      const lengthMapping = {
+        "very-short": "500",
+        "short": "1000", 
+        "medium": "1500",
+        "long": "2500",
+        "extended": "3500"
+      };
+      
+      const targetWords = lengthMapping[storyRequest.storyLength as keyof typeof lengthMapping] || "1500";
+      prompt += `\nCRITICAL INSTRUCTION: The entire story's content MUST be approximately ${targetWords} words long.\n\n`;
+      prompt += `Respond with a single, valid JSON object with the following structure:\n`;
+      prompt += `{\n`;
+      prompt += `  "title": "A creative story title",\n`;
+      prompt += `  "content": "The full story text, approximately ${targetWords} words.",\n`;
+      prompt += `  "applicationQuestions": ["Question 1", "Question 2", "Question 3", "Question 4", "Question 5"],\n`;
+      prompt += `  "imagePrompt": "A short description for an illustrator for a key scene."\n`;
+      prompt += `}`;
       
       return prompt;
     };
