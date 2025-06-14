@@ -255,10 +255,10 @@ async function generateStoryOutline(
     - Reading Level: ${readingLevel || "early-elementary"}
     - Historical Accuracy: Maintain biblical authenticity
     
-    Create exactly ${numberOfChapters} chapter outlines. Each chapter should be approximately ${Math.floor(wordCount / numberOfChapters)} words when written.
+    Instructions:
+    Create a detailed outline with EXACTLY ${numberOfChapters} parts. Each part must be a distinct scene or chapter that builds the biblical narrative.
 
-    Respond with a JSON array of chapter outline strings:
-    ["Chapter 1 outline...", "Chapter 2 outline...", ...]`;
+    Respond with ONLY a valid JSON object in the format: { "outline": ["Chapter 1...", "Chapter 2...", ...] }`;
   } else {
     defaultSystemPrompt = `You are a master Christian children's storyteller. Your task is to create a detailed plan for a story.`;
     defaultUserPrompt = `Please create a chapter-by-chapter outline for a Christian children's story.
@@ -271,10 +271,10 @@ async function generateStoryOutline(
     ${biblicalEvent ? `- Biblical Event: ${biblicalEvent}` : ""}
     ${heroOfFaith ? `- Hero of Faith: ${heroOfFaith}` : ""}
 
-    Create exactly ${numberOfChapters} chapter outlines. Each chapter should be approximately ${Math.floor(wordCount / numberOfChapters)} words when written.
+    Instructions:
+    Create a detailed outline with EXACTLY ${numberOfChapters} parts. Each part must be a distinct scene or chapter that builds the story around the main character.
 
-    Respond with a JSON array of chapter outline strings:
-    ["Chapter 1 outline...", "Chapter 2 outline...", ...]`;
+    Respond with ONLY a valid JSON object in the format: { "outline": ["Chapter 1...", "Chapter 2...", ...] }`;
   }
 
   const systemPrompt = finalPrompts?.systemPrompt || defaultSystemPrompt;
