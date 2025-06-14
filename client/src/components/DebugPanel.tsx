@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Copy, ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-// <<< CHANGED: New interface to match the multi-step debug data
+// Updated interface to match the new multi-step debug data structure
 interface DebugStep {
   step: string;
   prompt?: string;
@@ -15,10 +15,14 @@ interface DebugStep {
   wordCount?: number;
   targetWordCount?: number;
   model?: string;
-  // Kept old fields for graceful fallback if old data is encountered
+  timestamp?: string;
+  attempt?: number;
+  maxAttempts?: number;
+  // Legacy fields for backward compatibility
   systemPrompt?: string;
   userPrompt?: string;
   maxTokens?: number | string;
+  parseError?: string;
 }
 
 interface DebugPanelProps {
@@ -116,15 +120,26 @@ export function DebugPanel({
                     gridTemplateColumns: `repeat(${debugData.length}, minmax(0, 1fr))`,
                   }}
                 >
-                  {debugData.map((step, index) => (
-                    <TabsTrigger key={index} value={index.toString()}>
-                      {step.step.split(":")[0]}{" "}
-                      {/* Show 'generateChapter' instead of the full outline */}
-                      <Badge variant="secondary" className="ml-2">
-                        {step.wordCount || 0}w
-                      </Badge>
-                    </TabsTrigger>
-                  ))}
+                  {debugData.map((step, index) => {
+                    const stepName = step.step.includes("generateChapter") 
+                      ? `Chapter ${index}` 
+                      : step.step.includes("generateOutline") 
+                        ? "Outline"
+                        : step.step.includes("generateShortStorySingleCall")
+                          ? "Single Call"
+                          : step.step.includes("finalizeStory")
+                            ? "Finalize"
+                            : step.step.split(":")[0];
+                    
+                    return (
+                      <TabsTrigger key={index} value={index.toString()}>
+                        {stepName}
+                        <Badge variant="secondary" className="ml-2">
+                          {step.wordCount || 0}w
+                        </Badge>
+                      </TabsTrigger>
+                    );
+                  })}
                 </TabsList>
                 {debugData.map((data, index) => (
                   <TabsContent
@@ -132,6 +147,32 @@ export function DebugPanel({
                     value={index.toString()}
                     className="mt-4 space-y-4"
                   >
+                    {/* Step Details Header */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-3 bg-gray-50 rounded-lg text-sm">
+                      <div>
+                        <span className="font-medium text-gray-700">Step:</span>
+                        <p className="text-gray-900">{data.step}</p>
+                      </div>
+                      {data.wordCount && (
+                        <div>
+                          <span className="font-medium text-gray-700">Words:</span>
+                          <p className="text-gray-900">{data.wordCount}</p>
+                        </div>
+                      )}
+                      {data.targetWordCount && (
+                        <div>
+                          <span className="font-medium text-gray-700">Target:</span>
+                          <p className="text-gray-900">{data.targetWordCount}</p>
+                        </div>
+                      )}
+                      {data.model && (
+                        <div>
+                          <span className="font-medium text-gray-700">Model:</span>
+                          <p className="text-gray-900">{data.model}</p>
+                        </div>
+                      )}
+                    </div>
+
                     <CodeBlock
                       title="User Prompt"
                       content={data.prompt || data.userPrompt}
@@ -150,6 +191,17 @@ export function DebugPanel({
                       }
                       heightClass="h-48"
                     />
+                    
+                    {/* Legacy fields for backward compatibility */}
+                    {data.systemPrompt && (
+                      <CodeBlock
+                        title="System Prompt (Legacy)"
+                        content={data.systemPrompt}
+                        onCopy={() =>
+                          copyToClipboard(data.systemPrompt, "System Prompt")
+                        }
+                      />
+                    )}
                   </TabsContent>
                 ))}
               </Tabs>
