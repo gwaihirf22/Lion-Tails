@@ -55,13 +55,14 @@ async function generateShortStorySingleCall(
   request: StoryRequest,
   wordCount: number,
   debugData: any[],
+  customPrompts?: { systemPrompt: string; userPrompt: string }
 ): Promise<{
   title: string;
   content: string;
   applicationQuestions: string[];
   imagePrompt: string;
 }> {
-  const { childName, gender, animal, useAnimal, theme, readingLevel, biblicalEvent, heroOfFaith, characterId, characterDetails } = request;
+  const { childName, gender, animal, useAnimal, theme, readingLevel, biblicalEvent, heroOfFaith, characterId, characterDetails, useCustomPrompts, customSystemPrompt, customUserPrompt } = request;
 
   // Get character details if a character is selected
   let selectedCharacter = null;
@@ -80,8 +81,15 @@ async function generateShortStorySingleCall(
   const finalAge = selectedCharacter?.age || characterDetails?.age;
   const finalAnimal = selectedCharacter?.favoriteAnimal || characterDetails?.favoriteAnimal || (useAnimal !== false ? animal : "");
 
-  const systemPrompt = `You are a Christian children's storyteller who writes concise, self-contained short stories with a clear moral.`;
-  const userPrompt = `
+  // Check if custom prompts should be used
+  const finalPrompts = (request.useCustomPrompts && request.customSystemPrompt && request.customUserPrompt) || customPrompts ? {
+    systemPrompt: customPrompts?.systemPrompt || request.customSystemPrompt || `You are a Christian children's storyteller who writes concise, self-contained short stories with a clear moral.`,
+    userPrompt: customPrompts?.userPrompt || request.customUserPrompt || `Please create a complete, faith-based children's story.`
+  } : null;
+
+  const systemPrompt = finalPrompts?.systemPrompt || `You are a Christian children's storyteller who writes concise, self-contained short stories with a clear moral.`;
+  
+  const userPrompt = finalPrompts?.userPrompt || `
     Please create a complete, faith-based children's story.
 
     Character Details:
@@ -117,9 +125,15 @@ async function generateShortStorySingleCall(
   const responseContent = response.choices[0].message.content || "";
   debugData.push({
     step: "generateShortStorySingleCall",
+    systemPrompt: systemPrompt,
+    userPrompt: userPrompt,
     prompt: userPrompt,
     response: responseContent,
     wordCount: countWords(JSON.parse(responseContent).content || ""),
+    model: "gpt-4o",
+    targetWordCount: wordCount,
+    maxTokens: 2048,
+    timestamp: new Date().toISOString()
   });
 
   return JSON.parse(responseContent);
@@ -278,8 +292,9 @@ async function finalizeStoryDetails(
 export async function generateStoryWithOpenAI(
   request: StoryRequest,
   userId: number = 1,
+  customPrompts?: { systemPrompt: string; userPrompt: string }
 ): Promise<StoryResponse & { debugData?: any[] }> {
-  const { storyLength, theme } = request;
+  const { storyLength, theme, useCustomPrompts, customSystemPrompt, customUserPrompt } = request;
 
   const userApiKey = await storage.getUserOpenAIKey(userId);
   const openaiClient = getOpenAIClient(userApiKey || undefined);
@@ -310,6 +325,7 @@ export async function generateStoryWithOpenAI(
         request,
         targetWordCount,
         debugData,
+        customPrompts,
       );
       finalDetails = {
         title: shortStoryResult.title,
