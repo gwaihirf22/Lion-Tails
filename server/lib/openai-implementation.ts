@@ -62,7 +62,7 @@ async function generateShortStorySingleCall(
   applicationQuestions: string[];
   imagePrompt: string;
 }> {
-  const { childName, gender, animal, useAnimal, theme, readingLevel, biblicalEvent, heroOfFaith, characterId, characterDetails, useCustomPrompts, customSystemPrompt, customUserPrompt } = request;
+  const { childName, gender, animal, useAnimal, theme, readingLevel, biblicalEvent, heroOfFaith, characterId, characterDetails, useCustomPrompts, customSystemPrompt, customUserPrompt, storyType } = request;
 
   // Get character details if a character is selected
   let selectedCharacter = null;
@@ -87,29 +87,58 @@ async function generateShortStorySingleCall(
     userPrompt: customPrompts?.userPrompt || request.customUserPrompt || `Please create a complete, faith-based children's story.`
   } : null;
 
-  const systemPrompt = finalPrompts?.systemPrompt || `You are a Christian children's storyteller who writes concise, self-contained short stories with a clear moral.`;
+  // Adapt prompts based on story type
+  let defaultSystemPrompt, defaultUserPrompt;
   
-  const userPrompt = finalPrompts?.userPrompt || `
-    Please create a complete, faith-based children's story.
+  if (storyType === "biblical_narrative") {
+    defaultSystemPrompt = `You are a biblical storyteller who retells Bible stories with historical accuracy and age-appropriate language for children.`;
+    defaultUserPrompt = `
+      Please retell a biblical story with historical accuracy and engaging narrative.
 
-    Character Details:
-    - Main Character: ${finalName} (${finalGender}${finalAge ? `, ${finalAge} years old` : ""})
-    ${finalAnimal && finalAnimal !== "none" ? `- Favorite Animal: ${finalAnimal}` : ""}
-    - Theme: ${theme || "Faith and kindness"}
-    - Reading Level: ${readingLevel || "early-elementary"}
-    ${biblicalEvent ? `- Biblical Event: ${biblicalEvent}` : ""}
-    ${heroOfFaith ? `- Hero of Faith: ${heroOfFaith}` : ""}
+      Story Requirements:
+      ${biblicalEvent ? `- Biblical Event: ${biblicalEvent}` : ""}
+      ${heroOfFaith ? `- Focus on: ${heroOfFaith}` : ""}
+      - Theme: ${theme || "Faith and obedience"}
+      - Reading Level: ${readingLevel || "early-elementary"}
+      - Historical Accuracy: Maintain biblical authenticity
+      
+      CRITICAL INSTRUCTION: The entire story's content MUST be approximately ${wordCount} words long.
 
-    CRITICAL INSTRUCTION: The entire story's content MUST be approximately ${wordCount} words long.
+      Respond with a single, valid JSON object with the following structure:
+      {
+        "title": "Biblical story title",
+        "content": "The complete biblical narrative, approximately ${wordCount} words.",
+        "applicationQuestions": ["Question 1", "Question 2", "Question 3", "Question 4", "Question 5"],
+        "imagePrompt": "A biblically accurate scene description for illustration."
+      }
+    `;
+  } else {
+    defaultSystemPrompt = `You are a Christian children's storyteller who writes concise, self-contained short stories with a clear moral.`;
+    defaultUserPrompt = `
+      Please create a complete, faith-based children's story.
 
-    Respond with a single, valid JSON object with the following structure:
-    {
-      "title": "A creative story title",
-      "content": "The full story text, approximately ${wordCount} words.",
-      "applicationQuestions": ["Question 1", "Question 2", "Question 3", "Question 4", "Question 5"],
-      "imagePrompt": "A short description for an illustrator for a key scene."
-    }
-  `;
+      Character Details:
+      - Main Character: ${finalName} (${finalGender}${finalAge ? `, ${finalAge} years old` : ""})
+      ${finalAnimal && finalAnimal !== "none" ? `- Favorite Animal: ${finalAnimal}` : ""}
+      - Theme: ${theme || "Faith and kindness"}
+      - Reading Level: ${readingLevel || "early-elementary"}
+      ${biblicalEvent ? `- Biblical Event: ${biblicalEvent}` : ""}
+      ${heroOfFaith ? `- Hero of Faith: ${heroOfFaith}` : ""}
+
+      CRITICAL INSTRUCTION: The entire story's content MUST be approximately ${wordCount} words long.
+
+      Respond with a single, valid JSON object with the following structure:
+      {
+        "title": "A creative story title",
+        "content": "The full story text, approximately ${wordCount} words.",
+        "applicationQuestions": ["Question 1", "Question 2", "Question 3", "Question 4", "Question 5"],
+        "imagePrompt": "A short description for an illustrator for a key scene."
+      }
+    `;
+  }
+
+  const systemPrompt = finalPrompts?.systemPrompt || defaultSystemPrompt;
+  const userPrompt = finalPrompts?.userPrompt || defaultUserPrompt;
 
   const response = await client.chat.completions.create({
     model: "gpt-4o",
@@ -183,7 +212,7 @@ async function generateStoryOutline(
   debugData: any[],
   customPrompts?: { systemPrompt: string; userPrompt: string }
 ): Promise<string[]> {
-  const { childName, gender, animal, useAnimal, theme, biblicalEvent, heroOfFaith, characterId, characterDetails, useCustomPrompts, customSystemPrompt, customUserPrompt } = request;
+  const { childName, gender, animal, useAnimal, theme, biblicalEvent, heroOfFaith, characterId, characterDetails, useCustomPrompts, customSystemPrompt, customUserPrompt, storyType, readingLevel } = request;
   
   // Get character details if a character is selected
   let selectedCharacter = null;
@@ -211,9 +240,28 @@ async function generateStoryOutline(
     userPrompt: customPrompts?.userPrompt || customUserPrompt || `Please create a chapter-by-chapter outline for a Christian children's story.`
   } : null;
 
-  const systemPrompt = finalPrompts?.systemPrompt || `You are a master Christian children's storyteller. Your task is to create a detailed plan for a story.`;
-  const userPrompt = finalPrompts?.userPrompt || `
-    Please create a chapter-by-chapter outline for a Christian children's story.
+  // Adapt prompts based on story type
+  let defaultSystemPrompt, defaultUserPrompt;
+  
+  if (storyType === "biblical_narrative") {
+    defaultSystemPrompt = `You are a biblical storyteller who creates detailed outlines for historically accurate Bible stories for children.`;
+    defaultUserPrompt = `Please create a chapter-by-chapter outline for a biblical narrative.
+    The final story should be approximately ${wordCount} words long.
+
+    Story Requirements:
+    ${biblicalEvent ? `- Biblical Event: ${biblicalEvent}` : ""}
+    ${heroOfFaith ? `- Focus on: ${heroOfFaith}` : ""}
+    - Theme: ${theme || "Faith and obedience"}
+    - Reading Level: ${readingLevel || "early-elementary"}
+    - Historical Accuracy: Maintain biblical authenticity
+    
+    Create exactly ${numberOfChapters} chapter outlines. Each chapter should be approximately ${Math.floor(wordCount / numberOfChapters)} words when written.
+
+    Respond with a JSON array of chapter outline strings:
+    ["Chapter 1 outline...", "Chapter 2 outline...", ...]`;
+  } else {
+    defaultSystemPrompt = `You are a master Christian children's storyteller. Your task is to create a detailed plan for a story.`;
+    defaultUserPrompt = `Please create a chapter-by-chapter outline for a Christian children's story.
     The final story should be approximately ${wordCount} words long.
 
     Character Details:
@@ -223,11 +271,14 @@ async function generateStoryOutline(
     ${biblicalEvent ? `- Biblical Event: ${biblicalEvent}` : ""}
     ${heroOfFaith ? `- Hero of Faith: ${heroOfFaith}` : ""}
 
-    Instructions:
-    Create a detailed outline with EXACTLY ${numberOfChapters} parts. Each part must be a distinct scene or chapter that builds the story around the main character.
+    Create exactly ${numberOfChapters} chapter outlines. Each chapter should be approximately ${Math.floor(wordCount / numberOfChapters)} words when written.
 
-    Respond with ONLY a valid JSON object in the format: { "outline": ["Chapter 1...", "Chapter 2...", ...] }
-  `;
+    Respond with a JSON array of chapter outline strings:
+    ["Chapter 1 outline...", "Chapter 2 outline...", ...]`;
+  }
+
+  const systemPrompt = finalPrompts?.systemPrompt || defaultSystemPrompt;
+  const userPrompt = finalPrompts?.userPrompt || defaultUserPrompt;
 
   const response = await client.chat.completions.create({
     model: "gpt-4o",
