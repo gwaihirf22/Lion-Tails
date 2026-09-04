@@ -9,7 +9,7 @@ import type { Pool as PgPool } from "pg";
 const { Pool } = pg;
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { getTableColumns, getTableName, is } from "drizzle-orm";
-import { PgTable } from "drizzle-orm/pg-core";
+import { PgTable, type AnyPgTable } from "drizzle-orm/pg-core";
 import * as schema from "@shared/schema";
 
 let pool: PgPool | undefined;
@@ -33,9 +33,9 @@ let schemaProblems: string[] = [];
  * there is covered automatically rather than needing to be remembered here.
  */
 async function verifyOrmSchema(activePool: PgPool): Promise<void> {
-  const tables = Object.values(schema).filter((value): value is PgTable =>
+  const tables = Object.values(schema).filter((value) =>
     is(value, PgTable),
-  );
+  ) as AnyPgTable[];
 
   const problems: string[] = [];
   try {

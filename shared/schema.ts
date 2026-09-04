@@ -26,9 +26,9 @@ export const users = pgTable("users", {
   isAdmin: boolean("is_admin").default(false).notNull(),
   verificationToken: text("verification_token"),
   resetPasswordToken: text("reset_password_token"),
-  resetPasswordExpires: timestamp("reset_password_expires"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  resetPasswordExpires: timestamp("reset_password_expires", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // Verification tokens
@@ -37,8 +37,8 @@ export const verificationTokens = pgTable("verification_tokens", {
   userId: integer("user_id").notNull(),
   token: text("token").notNull(),
   type: text("type").notNull(), // 'email' or 'password'
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // ---------------------------------------------------------------------------
