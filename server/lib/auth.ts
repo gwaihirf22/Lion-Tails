@@ -21,18 +21,32 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
  * an unconfigured mailer is a supported state, not a failure.
  */
 function isEmailConfigured(): boolean {
-  return Boolean(process.env.EMAIL_HOST);
+  const host = process.env.EMAIL_HOST;
+  if (!host) return false;
+
+  // A half-configured mailer is worse than an unconfigured one: with a host and
+  // a username but no password, nodemailer connects and then fails SMTP auth on
+  // every send, which is the noisy per-signup failure this guard exists to
+  // avoid. Treat that as unconfigured. A host with no username at all is a
+  // legitimate open-relay setup and is allowed through.
+  const user = process.env.EMAIL_USER;
+  const pass = process.env.EMAIL_PASSWORD;
+  if (user && !pass) return false;
+
+  return true;
 }
 
 function buildTransport() {
+  const user = process.env.EMAIL_USER;
+  const pass = process.env.EMAIL_PASSWORD;
+
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST,
     port: parseInt(process.env.EMAIL_PORT || "587"),
     secure: process.env.EMAIL_SECURE === "true",
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD,
-    },
+    // Omit auth entirely rather than passing undefined credentials, which
+    // makes nodemailer attempt AUTH against servers that don't want it.
+    ...(user && pass ? { auth: { user, pass } } : {}),
   });
 }
 

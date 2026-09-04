@@ -168,7 +168,10 @@ this app has any business reaching it.
 
 ## Known gaps
 
-- Email is optional and currently unconfigured. Account verification is not
+- Email is optional. It is treated as configured only when `EMAIL_HOST` is set
+  AND, if `EMAIL_USER` is set, `EMAIL_PASSWORD` is set too — a half-configured
+  mailer fails SMTP auth on every send instead of being cleanly skipped.
+  Account verification is not
   enforced anywhere (server or client), so signups work fine without it — but
   **password reset does not work until the `EMAIL_*` variables are set**, since
   the reset link is only ever delivered by email.
