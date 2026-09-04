@@ -45,8 +45,8 @@ npm run db:init           # creates the tables
 | `npm run build` | Build client to `dist/public` and server to `dist/prod.js` |
 | `npm start` | Run the production build |
 | `npm run check` | TypeScript typecheck |
-| `npm run db:init` | Create any missing tables (idempotent) |
-| `npm run db:push` | Push the Drizzle schema (covers only the tables declared in `shared/schema.ts`) |
+| `npm run db:generate` | Generate a migration from `shared/schema.ts` (dev only; needs drizzle-kit) |
+| `npm run db:migrate` | Apply pending migrations |
 
 ### Why there are two server entrypoints
 
@@ -72,6 +72,23 @@ See `.env.example`. Summary:
 | `SESSION_SECRET` | **yes in prod** | App refuses to start without it when `NODE_ENV=production`. |
 | `OPENAI_API_KEY` | for AI features | Users can also supply their own key in app settings. |
 | `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_SECURE` / `EMAIL_USER` / `EMAIL_PASSWORD` / `EMAIL_FROM` | no | SMTP for account verification and password resets; only used in production. |
+
+## Schema and migrations
+
+`shared/schema.ts` is the single source of truth for all ten tables, including
+`session` (owned by connect-pg-simple, which is configured with
+`createTableIfMissing: false` so migrations own it instead).
+
+Change the schema by editing that file, then `npm run db:generate` and commit
+the generated SQL under `migrations/`. `scripts/migrate.js` applies them at
+container start using `drizzle-orm`'s migrator — note that **drizzle-kit is a
+devDependency and is not in the runtime image**, which is why generation is a
+development step and only application happens at boot.
+
+At startup `server/db.ts` verifies every declared table against
+`information_schema`, deriving the expectation from Drizzle's own
+`getTableColumns()` so there is no second list to drift. A mismatch is reported
+by `/api/health` as a 503.
 
 ## Deployment
 
@@ -109,9 +126,9 @@ restart. With no `DATABASE_URL` at all it returns 200 with
 `"persistence": false`, since that is a deliberate choice rather than a fault.
 
 On startup `entrypoint.sh` waits for Postgres (`scripts/wait-for-db.js`) and
-then applies the schema (`scripts/ensure-database.js`, idempotent
-`CREATE TABLE IF NOT EXISTS`). A database failure is logged loudly but does not
-stop the container, because the app has an in-memory fallback.
+applies pending migrations (`scripts/migrate.js`). A database failure is logged
+loudly but does not stop the container, because the app has an in-memory
+fallback — enforcement is the `/api/health` 503, not a refusal to boot.
 
 `.github/workflows/ci.yml` runs on every PR: typecheck, build, the
 no-Vite-in-the-bundle assertion, a Docker build, a Trivy scan, and `npm audit`.
@@ -176,14 +193,6 @@ this app has any business reaching it.
   **password reset does not work until the `EMAIL_*` variables are set**, since
   the reset link is only ever delivered by email.
 
-- **There are still two schema definitions.** `shared/schema.ts` declares only
-  `users` and `verification_tokens` (the tables read through Drizzle); the other
-  seven exist solely as raw SQL in `scripts/ensure-database.js`, and some are
-  also created lazily in `server/db-storage.ts`. That split is what let the
-  script's `users` table drift to 6 of its 13 columns, and what let it create
-  `characters`/`stories` while the app queried `user_characters`/`user_stories`.
-  Both are fixed and the schema is now verified at startup, but real Drizzle
-  migrations covering all nine tables remain the proper fix.
-- `characters` and `stories` tables may still exist on older databases. They were
-  never read by anything and are safe to drop.
+- `characters` and `stories` tables may still exist on databases created before
+  the migration cutover. They were never read by anything and are safe to drop.
 - There is no test suite.

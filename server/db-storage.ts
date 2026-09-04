@@ -40,7 +40,9 @@ export class DbStorage implements IStorage {
       this.sessionStore = new PostgresStore({
         pool: pool as any, // type assertion to avoid Pool compatibility issues
         tableName: 'session',
-        createTableIfMissing: true
+        // The session table is declared in shared/schema.ts and created by
+        // migrations, so connect-pg-simple must not create its own.
+        createTableIfMissing: false
       });
     } catch (error) {
       console.error("Failed to initialize PostgreSQL session store:", error);
@@ -759,24 +761,36 @@ export class DbStorage implements IStorage {
         WHERE story_id = $2 AND user_id = $3
       `, [JSON.stringify(heroId), storyId, userId]);
       
-      // Add "hero of faith" tag if not already there
+      // Add the "hero of faith" tag if it isn't already present.
+      //
+      // This statement was broken three ways before: jsonb_append is not a
+      // PostgreSQL function (array append is the || operator); it referenced
+      // $2/$3 while binding three parameters, so $1's type could not be
+      // inferred; and if a story had no searchMetadata key, jsonb_set received
+      // NULL and returns NULL for the whole document -- which would have
+      // erased story_data rather than tagging it.
+      //
+      // The inner jsonb_set guarantees searchMetadata exists before the outer
+      // one writes into it.
       await pool!.query(`
         UPDATE user_stories
         SET story_data = jsonb_set(
-          story_data,
+          jsonb_set(
+            story_data,
+            '{searchMetadata}',
+            COALESCE(story_data->'searchMetadata', '{}'::jsonb),
+            true
+          ),
           '{searchMetadata,tags}',
-          CASE 
-            WHEN NOT story_data->'searchMetadata'->'tags' ? 'hero of faith' 
-            THEN jsonb_append(
-              story_data->'searchMetadata'->'tags', 
-              '$', 
-              '"hero of faith"'
-            )
-            ELSE story_data->'searchMetadata'->'tags'
-          END
+          CASE
+            WHEN COALESCE(story_data->'searchMetadata'->'tags', '[]'::jsonb) ? 'hero of faith'
+            THEN COALESCE(story_data->'searchMetadata'->'tags', '[]'::jsonb)
+            ELSE COALESCE(story_data->'searchMetadata'->'tags', '[]'::jsonb) || '["hero of faith"]'::jsonb
+          END,
+          true
         )
-        WHERE story_id = $2 AND user_id = $3
-      `, [heroId, storyId, userId]);
+        WHERE story_id = $1 AND user_id = $2
+      `, [storyId, userId]);
       
       console.log(`Associated story ${storyId} with hero ${heroId}`);
       
@@ -800,10 +814,10 @@ export class DbStorage implements IStorage {
           SELECT * FROM user_stories 
           WHERE user_id = $1 
           AND (
-            story_data->>'title' ILIKE $2 
-            OR story_data->>'content' ILIKE $2 
-            OR story_data->'bibleVerse'->>'text' ILIKE $2 
-            OR story_data->'bibleVerse'->>'reference' ILIKE $2
+            story_data->'story'->>'title' ILIKE $2 
+            OR story_data->'story'->>'content' ILIKE $2 
+            OR story_data->'story'->'bibleVerse'->>'text' ILIKE $2 
+            OR story_data->'story'->'bibleVerse'->>'reference' ILIKE $2
             OR story_data->'request'->>'theme' ILIKE $2
             OR story_data->'request'->>'childName' ILIKE $2
             OR story_data->'request'->>'animal' ILIKE $2
@@ -818,10 +832,10 @@ export class DbStorage implements IStorage {
         sqlQuery = `
           SELECT * FROM user_stories 
           WHERE 
-            story_data->>'title' ILIKE $1 
-            OR story_data->>'content' ILIKE $1 
-            OR story_data->'bibleVerse'->>'text' ILIKE $1 
-            OR story_data->'bibleVerse'->>'reference' ILIKE $1
+            story_data->'story'->>'title' ILIKE $1 
+            OR story_data->'story'->>'content' ILIKE $1 
+            OR story_data->'story'->'bibleVerse'->>'text' ILIKE $1 
+            OR story_data->'story'->'bibleVerse'->>'reference' ILIKE $1
             OR story_data->'request'->>'theme' ILIKE $1
             OR story_data->'request'->>'childName' ILIKE $1
             OR story_data->'request'->>'animal' ILIKE $1
@@ -956,7 +970,7 @@ export class DbStorage implements IStorage {
         sqlQuery = `
           SELECT * FROM user_stories 
           WHERE user_id = $1 
-          AND story_data->'bibleVerse'->>'reference' ILIKE $2
+          AND story_data->'story'->'bibleVerse'->>'reference' ILIKE $2
           AND (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
           ORDER BY created_at DESC
         `;
@@ -965,7 +979,7 @@ export class DbStorage implements IStorage {
         // Admin search all stories
         sqlQuery = `
           SELECT * FROM user_stories 
-          WHERE story_data->'bibleVerse'->>'reference' ILIKE $1
+          WHERE story_data->'story'->'bibleVerse'->>'reference' ILIKE $1
           ORDER BY created_at DESC
         `;
         params = [`%${passage}%`];

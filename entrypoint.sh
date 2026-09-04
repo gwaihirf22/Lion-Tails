@@ -10,8 +10,8 @@ set -e
 if [ -z "$DATABASE_URL" ]; then
   echo "⚠️  DATABASE_URL is not set — starting with in-memory storage. Data will NOT persist."
 elif node scripts/wait-for-db.js; then
-  echo "🔄 Ensuring database schema..."
-  node scripts/ensure-database.js || echo "⚠️  Schema check failed; continuing."
+  echo "🔄 Applying database migrations..."
+  node scripts/migrate.js || echo "⚠️  Migrations failed; continuing (health check will report it)."
 else
   echo "⚠️  Starting anyway with in-memory storage. Data will NOT persist."
 fi
