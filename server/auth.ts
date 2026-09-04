@@ -6,6 +6,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
+import { requiredSecret } from "./config";
 
 declare global {
   namespace Express {
@@ -33,7 +34,7 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || "lion-tails-secret-key",
+    secret: requiredSecret("SESSION_SECRET", "lion-tails-dev-session-secret"),
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,

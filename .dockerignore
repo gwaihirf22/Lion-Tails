@@ -1,0 +1,33 @@
+# Dependencies / build output — rebuilt inside the image
+node_modules
+dist
+
+# VCS & CI
+.git
+.gitignore
+.github
+
+# Secrets — never bake these into an image
+.env
+.env.*
+!.env.example
+
+# Docker / docs
+Dockerfile*
+docker-compose*
+.dockerignore
+*.md
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+npm-debug.log*
+*.tsbuildinfo
+
+# NOTE: public/ is deliberately NOT ignored — it ships static assets and is the
+# runtime write target for generated story images.
+# NOTE: attached_assets/ is deliberately NOT ignored — client/src/App.tsx
+# imports "@assets/Lion tails.jpg" at build time.

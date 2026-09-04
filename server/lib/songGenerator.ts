@@ -3,7 +3,19 @@ import { Song } from "@shared/schema";
 import { v4 as uuidv4 } from "uuid";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "demo-key" });
+// Instantiated lazily so the module can load without an API key configured.
+// Previously this defaulted to a literal "demo-key", which turned a missing
+// credential into a confusing upstream 401 instead of a clear error.
+let openaiClient: OpenAI | undefined;
+function getOpenAI(): OpenAI {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+  if (!openaiClient) {
+    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return openaiClient;
+}
 
 // Common Christian chord progressions (for demo mode)
 const commonChordProgressions: string[][] = [
@@ -188,7 +200,7 @@ export async function generateSongChords(
       return getDemoSong(title, lyricsText, artist);
     }
     
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-4o",
       messages: [
         { 

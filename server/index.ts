@@ -1,46 +1,10 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { log } from "./static";
 import path from "path";
-// Import PostgreSQL for database check
-import { Pool } from '@neondatabase/serverless';
-
-const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-
-// Serve static files from the public directory
-app.use('/public', express.static(path.join(process.cwd(), 'public')));
-
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
-    }
-  });
-
-  next();
-});
+import type { Server } from "http";
+// Standard PostgreSQL client for the startup connectivity check
+import { Pool } from "pg";
 
 // Function to check database connection
 async function checkDatabase(): Promise<boolean> {
@@ -48,11 +12,11 @@ async function checkDatabase(): Promise<boolean> {
     log("No DATABASE_URL provided, will use in-memory storage");
     return false;
   }
-  
+
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     const client = await pool.connect();
-    await client.query('SELECT NOW()');
+    await client.query("SELECT NOW()");
     client.release();
     log("Database connection successful");
     return true;
@@ -62,11 +26,60 @@ async function checkDatabase(): Promise<boolean> {
       log("Error details: " + error.message);
     }
     return false;
+  } finally {
+    await pool.end().catch(() => {});
   }
 }
 
-(async () => {
-  // Ensure database is ready before starting server
+/**
+ * Builds the Express app and registers every route that is common to both the
+ * development and production servers.
+ *
+ * The caller is responsible for attaching the client-serving layer afterwards
+ * (Vite middleware in dev, static files in prod) because that catch-all route
+ * must be registered last, and because the Vite path must never be imported by
+ * the production bundle.
+ */
+export async function createApp(): Promise<{ app: express.Express; server: Server }> {
+  const app = express();
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: false }));
+
+  // Serve static files from the public directory
+  app.use("/public", express.static(path.join(process.cwd(), "public")));
+
+  app.use((req, res, next) => {
+    const start = Date.now();
+    const reqPath = req.path;
+    let capturedJsonResponse: Record<string, any> | undefined = undefined;
+
+    const originalResJson = res.json;
+    res.json = function (bodyJson, ...args) {
+      capturedJsonResponse = bodyJson;
+      return originalResJson.apply(res, [bodyJson, ...args]);
+    };
+
+    res.on("finish", () => {
+      const duration = Date.now() - start;
+      if (reqPath.startsWith("/api")) {
+        let logLine = `${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`;
+        if (capturedJsonResponse) {
+          logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        }
+
+        if (logLine.length > 80) {
+          logLine = logLine.slice(0, 79) + "…";
+        }
+
+        log(logLine);
+      }
+    });
+
+    next();
+  });
+
+  // Ensure database is reachable before starting; the app has an in-memory
+  // fallback, so a failure here is logged rather than fatal.
   try {
     log("Checking database connection...");
     await checkDatabase();
@@ -88,27 +101,16 @@ async function checkDatabase(): Promise<boolean> {
     const message = err.message || "Internal Server Error";
 
     res.status(status).json({ message });
-    throw err;
+    console.error(err);
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
+  return { app, server };
+}
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+/** Starts listening. Port is configurable so the container can be remapped. */
+export function startServer(server: Server) {
+  const port = Number(process.env.PORT) || 5000;
+  server.listen({ port, host: "0.0.0.0" }, () => {
     log(`serving on port ${port}`);
   });
-})();
+}

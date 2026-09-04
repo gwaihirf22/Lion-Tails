@@ -1,0 +1,74 @@
+# Reference copy of the production compose file.
+#
+# The authoritative file lives on the Unraid host at
+# /mnt/user/appdata/lion-tails/docker-compose.yml. CI deliberately does NOT
+# overwrite it — keep the two in sync by hand when the service shape changes.
+#
+# Secrets come from a .env file alongside it, written transiently by the deploy
+# workflow and removed afterwards.
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: lion-tails-postgres
+    restart: unless-stopped
+    # No published port: 5432 on the host is already taken by neighborly-postgres.
+    # SWAG and the app reach this over the paulproxy network instead.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=liontails
+      - POSTGRES_USER=liontails
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    networks:
+      - paulproxy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U liontails"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  lion-tails:
+    image: flyingoat03/lion-tails:latest
+    container_name: lion-tails
+    restart: unless-stopped
+    ports:
+      - "3003:5000" # host 3003 -> container 5000 (3002 is taken by libation-gui)
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      # Generated DALL-E story images, written to process.cwd()/public/images/stories
+      - story_images:/app/public/images/stories
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - DATABASE_URL=postgresql://liontails:${POSTGRES_PASSWORD}@postgres:5432/liontails
+      - FRONTEND_URL=https://liontails.paul-blake.com
+      - SESSION_SECRET=${SESSION_SECRET}
+      - JWT_SECRET=${JWT_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=587
+      - EMAIL_SECURE=false
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - EMAIL_FROM=Lion Tails <no-reply@paul-blake.com>
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - paulproxy
+
+networks:
+  paulproxy:
+    external: true
+
+volumes:
+  postgres_data:
+    driver: local
+  story_images:
+    driver: local
