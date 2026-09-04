@@ -3,8 +3,14 @@ import { registerRoutes } from "./routes";
 import { log } from "./static";
 import path from "path";
 import type { Server } from "http";
-// Standard PostgreSQL client for the startup connectivity check
-import { Pool } from "pg";
+// pg is a CommonJS module. The production bundle is ESM built with
+// --packages=external, so Node loads pg as CJS at runtime and cannot
+// destructure named exports from it:
+//   SyntaxError: Named export 'Pool' not found.
+// Import the default and destructure at runtime; the type import erases at
+// compile time and is safe.
+import pg from "pg";
+const { Pool } = pg;
 
 // Function to check database connection
 async function checkDatabase(): Promise<boolean> {

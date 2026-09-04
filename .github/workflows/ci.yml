@@ -42,6 +42,52 @@ jobs:
           fi
           echo "OK: dist/prod.js has no Vite import."
 
+      # Building the bundle is not enough. esbuild emits ESM with
+      # --packages=external, so a named import from a CommonJS dependency
+      # (e.g. `import { Pool } from "pg"`) compiles fine and only fails when
+      # Node instantiates the module at runtime. Boot it for real.
+      - name: Smoke-test the production bundle
+        env:
+          NODE_ENV: production
+          PORT: '5001'
+          # Required in production by server/config.ts; values are irrelevant here.
+          SESSION_SECRET: ci-smoke-session-secret
+          JWT_SECRET: ci-smoke-jwt-secret
+          # No DATABASE_URL on purpose: exercises the in-memory path, where
+          # /api/health must still answer 200 with persistence:false.
+        run: |
+          set -euo pipefail
+          node dist/prod.js > /tmp/app.log 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+
+          ok=0
+          for _ in $(seq 1 30); do
+            if ! kill -0 "$APP_PID" 2>/dev/null; then
+              echo "The server process exited during startup."
+              break
+            fi
+            if curl -fsS http://127.0.0.1:5001/api/health -o /tmp/health.json 2>/dev/null; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+
+          echo "--- server output ---"
+          cat /tmp/app.log
+
+          if [ "$ok" -ne 1 ]; then
+            echo "FAIL: the production bundle did not serve /api/health."
+            exit 1
+          fi
+
+          echo "--- /api/health ---"
+          cat /tmp/health.json
+          grep -q '"status":"ok"' /tmp/health.json
+          grep -q '"persistence":false' /tmp/health.json
+          echo "OK: production bundle boots and serves /api/health."
+
   docker:
     name: Docker build and scan
     runs-on: ubuntu-latest
