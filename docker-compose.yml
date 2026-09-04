@@ -8,12 +8,17 @@
 # workflow and removed afterwards.
 
 services:
-  postgres:
+  # NB: the service name becomes a DNS alias on every network this container
+  # joins. It must NOT be a generic name like "postgres" -- paulproxy is a
+  # SHARED external network and neighborly-postgres already publishes the
+  # "postgres" alias there. Two containers sharing an alias makes Docker
+  # round-robin between them, which silently sent roughly half of neighborly's
+  # new database connections to this database instead.
+  lion-tails-db:
     image: postgres:15
     container_name: lion-tails-postgres
     restart: unless-stopped
     # No published port: 5432 on the host is already taken by neighborly-postgres.
-    # SWAG and the app reach this over the paulproxy network instead.
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -21,7 +26,9 @@ services:
       - POSTGRES_USER=liontails
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     networks:
-      - paulproxy
+      # Deliberately NOT on paulproxy: the database has no business being
+      # reachable by the ~30 other containers on the shared proxy network.
+      - lion-tails-internal
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U liontails"]
       interval: 30s
@@ -35,7 +42,7 @@ services:
     ports:
       - "3003:5000" # host 3003 -> container 5000 (3002 is taken by libation-gui)
     depends_on:
-      postgres:
+      lion-tails-db:
         condition: service_healthy
     volumes:
       # Generated DALL-E story images, written to process.cwd()/public/images/stories
@@ -43,7 +50,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5000
-      - DATABASE_URL=postgresql://liontails:${POSTGRES_PASSWORD}@postgres:5432/liontails
+      - DATABASE_URL=postgresql://liontails:${POSTGRES_PASSWORD}@lion-tails-db:5432/liontails
       - FRONTEND_URL=https://liontails.paul-blake.com
       - SESSION_SECRET=${SESSION_SECRET}
       - JWT_SECRET=${JWT_SECRET}
@@ -61,11 +68,14 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - paulproxy
+      - paulproxy          # reachable by SWAG
+      - lion-tails-internal # reaches the database
 
 networks:
   paulproxy:
     external: true
+  lion-tails-internal:
+    driver: bridge
 
 volumes:
   postgres_data:

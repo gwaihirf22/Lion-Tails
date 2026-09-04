@@ -155,6 +155,17 @@ Remaining:
    Docker tab, or it will not survive a reboot.
 4. Create the `flyingoat03/lion-tails` repository on Docker Hub.
 
+### Shared-network naming rule
+
+`paulproxy` is a **shared external** network. A compose *service name* becomes
+a DNS alias on every network its container joins, so a generic service name
+(`postgres`, `redis`, `db`, `cache`, `api`) collides with any other app that
+picked the same one. Docker then round-robins between them, which fails
+intermittently rather than outright — the worst kind of failure. This app's
+database is therefore named `lion-tails-db` and lives on a private
+`lion-tails-internal` network rather than on `paulproxy`, since nothing outside
+this app has any business reaching it.
+
 ## Known gaps
 
 - Email is optional and currently unconfigured. Account verification is not
