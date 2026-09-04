@@ -82,7 +82,7 @@ Deployed to an Unraid server as a Docker container, published through SWAG at
 ```
 Cloudflare (orange cloud, SSL Full-Strict)
   └── SWAG (nginx)                     ── docker network: paulproxy
-        └── lion-tails            :5000  (host 3002)
+        └── lion-tails            :5000  (host 3003)
               └── lion-tails-postgres :5432  (not published to the host)
 ```
 
@@ -121,20 +121,32 @@ no-Vite-in-the-bundle assertion, a Docker build, a Trivy scan, and `npm audit`.
 | `OPENAI_API_KEY` | |
 | `EMAIL_HOST` / `EMAIL_USER` / `EMAIL_PASSWORD` | Optional; leave unset to disable email |
 
-### One-time server setup
+### Server setup
 
-1. `mkdir -p /mnt/user/appdata/lion-tails` and copy `docker-compose.yml` there.
-2. Confirm the `paulproxy` network exists: `docker network ls | grep paulproxy`.
-3. Confirm host port 3002 is free: `docker ps --format '{{.Names}}\t{{.Ports}}'`.
-4. Register a self-hosted runner for this repository with the labels
-   `self-hosted, linux, x64, unraid-lion-tails`.
-5. Copy `deploy/liontails.subdomain.conf` to
-   `/mnt/user/appdata/swag/nginx/proxy-confs/liontails.subdomain.conf`, then
-   `docker restart swag`. It points at `lion-tails:5000` — the
-   container-internal port, since SWAG reaches the app over `paulproxy` rather
-   than via the published host port.
-6. Cloudflare: A record `liontails` → server IP, proxied, SSL/TLS Full (Strict).
-7. Create the `flyingoat03/lion-tails` repository on Docker Hub.
+Most of this is already done on PaulServer:
+
+- `/mnt/user/appdata/lion-tails/docker-compose.yml` is in place (host port
+  **3003** — 3002 was already taken by `libation-gui`).
+- The `paulproxy` network exists.
+- A self-hosted runner container `Github-Runner-Lion-Tails` is registered to
+  this repository with the labels `self-hosted, linux, x64, unraid-lion-tails`.
+  Runners are per-repository on a personal account, so the paul-blake-website
+  runner could not be reused.
+- `deploy/liontails.subdomain.conf` is staged at
+  `/mnt/user/appdata/swag/nginx/proxy-confs/` and passes `nginx -t`.
+- SWAG already holds a wildcard `*.paul-blake.com` certificate via the
+  Cloudflare DNS plugin, and `liontails.paul-blake.com` already resolves — so
+  no certificate or DNS work is needed.
+
+Remaining:
+
+1. Set the GitHub secrets listed above. `POSTGRES_PASSWORD` must be set before
+   the first deploy or `postgres:15` refuses to initialize.
+2. Reload SWAG so the staged proxy conf takes effect (`docker restart swag`).
+   Until then `liontails.paul-blake.com` will not route.
+3. Enable autostart for the `Github-Runner-Lion-Tails` container in the Unraid
+   Docker tab, or it will not survive a reboot.
+4. Create the `flyingoat03/lion-tails` repository on Docker Hub.
 
 ## Known gaps
 

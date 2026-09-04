@@ -33,7 +33,7 @@ services:
     container_name: lion-tails
     restart: unless-stopped
     ports:
-      - "3002:5000" # host 3002 -> container 5000
+      - "3003:5000" # host 3003 -> container 5000 (3002 is taken by libation-gui)
     depends_on:
       postgres:
         condition: service_healthy
