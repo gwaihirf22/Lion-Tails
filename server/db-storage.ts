@@ -59,7 +59,7 @@ export class DbStorage implements IStorage {
       return undefined;
     }
     try {
-      const result = await db.select().from(users).where(eq(users.id, id));
+      const result = await db!.select().from(users).where(eq(users.id, id));
       return result[0];
     } catch (error) {
       console.error(`Error in getUser(${id}):`, error);
@@ -73,7 +73,7 @@ export class DbStorage implements IStorage {
       return undefined;
     }
     try {
-      const result = await db.select().from(users).where(eq(users.username, username));
+      const result = await db!.select().from(users).where(eq(users.username, username));
       return result[0];
     } catch (error) {
       console.error(`Error in getUserByUsername(${username}):`, error);
@@ -87,7 +87,7 @@ export class DbStorage implements IStorage {
       return undefined;
     }
     try {
-      const result = await db.select().from(users).where(eq(users.email, email));
+      const result = await db!.select().from(users).where(eq(users.email, email));
       return result[0];
     } catch (error) {
       console.error(`Error in getUserByEmail(${email}):`, error);
@@ -101,7 +101,7 @@ export class DbStorage implements IStorage {
       throw new Error("Database connection is required to create users");
     }
     try {
-      const result = await db.insert(users).values(insertUser).returning();
+      const result = await db!.insert(users).values(insertUser).returning();
       return result[0];
     } catch (error) {
       console.error(`Error in createUser(${insertUser.username}):`, error);
@@ -143,7 +143,7 @@ export class DbStorage implements IStorage {
     expiresAt.setHours(expiresAt.getHours() + 24);
     
     // Store token
-    await db.insert(verificationTokens).values({
+    await db!.insert(verificationTokens).values({
       userId,
       token,
       type: tokenType,
@@ -188,7 +188,7 @@ export class DbStorage implements IStorage {
     try {
       // We'll use a raw query for now to store/retrieve JSON
       // Later we'll create proper relational tables
-      const { rows } = await pool.query(
+      const { rows } = await pool!.query(
         `SELECT * FROM user_stories WHERE user_id = $1 AND 
          (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
          ORDER BY created_at DESC`,
@@ -247,14 +247,14 @@ export class DbStorage implements IStorage {
     try {
       let rows: any[];
       if (userId) {
-        const result = await pool.query(
+        const result = await pool!.query(
           `SELECT * FROM user_characters WHERE user_id = $1 ORDER BY created_at DESC`,
           [userId]
         );
         rows = result.rows;
       } else {
         // Admin function to get all characters
-        const result = await pool.query(
+        const result = await pool!.query(
           `SELECT * FROM user_characters ORDER BY created_at DESC`
         );
         rows = result.rows;
@@ -297,7 +297,7 @@ export class DbStorage implements IStorage {
 
   async getCharacterById(id: string): Promise<Character | undefined> {
     try {
-      const { rows } = await pool.query(
+      const { rows } = await pool!.query(
         `SELECT * FROM user_characters WHERE character_id = $1`,
         [id]
       );
@@ -345,7 +345,7 @@ export class DbStorage implements IStorage {
       createdAt: now.toISOString()
     };
     
-    await pool.query(
+    await pool!.query(
       `INSERT INTO user_characters (character_id, user_id, character_data, created_at) 
        VALUES ($1, $2, $3, $4)`,
       [id, userId, JSON.stringify(character), now]
@@ -364,7 +364,7 @@ export class DbStorage implements IStorage {
       ...updates
     };
     
-    await pool.query(
+    await pool!.query(
       `UPDATE user_characters SET character_data = $1 WHERE character_id = $2`,
       [JSON.stringify(updatedCharacter), id]
     );
@@ -373,7 +373,7 @@ export class DbStorage implements IStorage {
   }
 
   async deleteCharacter(id: string): Promise<boolean> {
-    const result = await pool.query(
+    const result = await pool!.query(
       `DELETE FROM user_characters WHERE character_id = $1 RETURNING character_id`,
       [id]
     );
@@ -391,7 +391,7 @@ export class DbStorage implements IStorage {
     try {
       // Changed query to not order by title since that column doesn't exist in the raw table
       // The title is inside the song_data JSON
-      const { rows } = await pool.query(
+      const { rows } = await pool!.query(
         `SELECT * FROM songs ORDER BY song_id ASC`
       );
       
@@ -433,7 +433,7 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      const { rows } = await pool.query(
+      const { rows } = await pool!.query(
         `SELECT * FROM songs WHERE song_id = $1`,
         [id]
       );
@@ -471,7 +471,7 @@ export class DbStorage implements IStorage {
     try {
       const songWithId = song.id ? song : { ...song, id: uuidv4() };
       
-      await pool.query(
+      await pool!.query(
         `INSERT INTO songs (song_id, song_data) VALUES ($1, $2)`,
         [songWithId.id, JSON.stringify(songWithId)]
       );
@@ -491,7 +491,7 @@ export class DbStorage implements IStorage {
     
     try {
       // Admin function - get all stories
-      const { rows } = await pool.query(
+      const { rows } = await pool!.query(
         `SELECT * FROM user_stories WHERE 
          is_favorite = true OR expires_at IS NULL OR expires_at > NOW()
          ORDER BY created_at DESC`
@@ -554,7 +554,7 @@ export class DbStorage implements IStorage {
         params.push(userId);
       }
       
-      const { rows } = await pool.query(query, params);
+      const { rows } = await pool!.query(query, params);
       
       if (!rows.length) return undefined;
       
@@ -625,7 +625,7 @@ export class DbStorage implements IStorage {
       };
       
       // Create the table if it doesn't exist (useful in deployment scenarios)
-      await pool.query(`
+      await pool!.query(`
         CREATE TABLE IF NOT EXISTS user_stories (
           story_id TEXT PRIMARY KEY,
           user_id INTEGER NOT NULL,
@@ -636,7 +636,7 @@ export class DbStorage implements IStorage {
         )
       `);
       
-      await pool.query(
+      await pool!.query(
         `INSERT INTO user_stories (story_id, user_id, story_data, created_at, is_favorite, expires_at) 
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [id, userId, JSON.stringify(savedStory), now, false, expiryDate]
@@ -674,7 +674,7 @@ export class DbStorage implements IStorage {
       const expiryDate = isFavorite ? null : story.expiresAt ? new Date(story.expiresAt) : null;
       
       // Create table if needed (for deployment scenarios)
-      await pool.query(`
+      await pool!.query(`
         CREATE TABLE IF NOT EXISTS user_stories (
           story_id TEXT PRIMARY KEY,
           user_id INTEGER NOT NULL,
@@ -685,7 +685,7 @@ export class DbStorage implements IStorage {
         )
       `);
       
-      await pool.query(
+      await pool!.query(
         `UPDATE user_stories SET 
          story_data = $1, 
          is_favorite = $2, 
@@ -708,7 +708,7 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      const result = await pool.query(
+      const result = await pool!.query(
         `DELETE FROM user_stories WHERE story_id = $1 AND user_id = $2 RETURNING story_id`,
         [id, userId]
       );
@@ -742,14 +742,14 @@ export class DbStorage implements IStorage {
       }
       
       // Update the story's heroId in the database
-      await pool.query(`
+      await pool!.query(`
         UPDATE user_stories
         SET hero_id = $1
         WHERE story_id = $2 AND user_id = $3
       `, [heroId, storyId, userId]);
       
       // Also update the heroId in the JSON data
-      await pool.query(`
+      await pool!.query(`
         UPDATE user_stories
         SET story_data = jsonb_set(
           story_data, 
@@ -760,7 +760,7 @@ export class DbStorage implements IStorage {
       `, [JSON.stringify(heroId), storyId, userId]);
       
       // Add "hero of faith" tag if not already there
-      await pool.query(`
+      await pool!.query(`
         UPDATE user_stories
         SET story_data = jsonb_set(
           story_data,
@@ -831,7 +831,7 @@ export class DbStorage implements IStorage {
         params = [`%${query}%`];
       }
       
-      const { rows } = await pool.query(sqlQuery, params);
+      const { rows } = await pool!.query(sqlQuery, params);
       
       if (!rows.length) return [];
       
@@ -901,7 +901,7 @@ export class DbStorage implements IStorage {
         params = [`%${name}%`];
       }
       
-      const { rows } = await pool.query(sqlQuery, params);
+      const { rows } = await pool!.query(sqlQuery, params);
       
       if (!rows.length) return [];
       
@@ -971,7 +971,7 @@ export class DbStorage implements IStorage {
         params = [`%${passage}%`];
       }
       
-      const { rows } = await pool.query(sqlQuery, params);
+      const { rows } = await pool!.query(sqlQuery, params);
       
       if (!rows.length) return [];
       
@@ -1041,7 +1041,7 @@ export class DbStorage implements IStorage {
         params = [`%${topic}%`];
       }
       
-      const { rows } = await pool.query(sqlQuery, params);
+      const { rows } = await pool!.query(sqlQuery, params);
       
       if (!rows.length) return [];
       
@@ -1118,7 +1118,7 @@ export class DbStorage implements IStorage {
         params = tags.map(tag => `%${tag}%`);
       }
       
-      const { rows } = await pool.query(sqlQuery, params);
+      const { rows } = await pool!.query(sqlQuery, params);
       
       if (!rows.length) return [];
       
@@ -1188,7 +1188,7 @@ export class DbStorage implements IStorage {
         params = [heroId];
       }
       
-      const { rows } = await pool.query(sqlQuery, params);
+      const { rows } = await pool!.query(sqlQuery, params);
       
       if (!rows.length) return [];
       
@@ -1243,7 +1243,7 @@ export class DbStorage implements IStorage {
     
     try {
       // Create the table if it doesn't exist (helpful for deployment)
-      await pool.query(`
+      await pool!.query(`
         CREATE TABLE IF NOT EXISTS user_usage (
           user_id INTEGER PRIMARY KEY,
           count INTEGER DEFAULT 0,
@@ -1251,7 +1251,7 @@ export class DbStorage implements IStorage {
         )
       `);
       
-      const { rows } = await pool.query(
+      const { rows } = await pool!.query(
         `SELECT count FROM user_usage WHERE user_id = $1`,
         [userId]
       );
@@ -1271,7 +1271,7 @@ export class DbStorage implements IStorage {
     
     try {
       // Create the table if it doesn't exist (helpful for deployment)
-      await pool.query(`
+      await pool!.query(`
         CREATE TABLE IF NOT EXISTS user_usage (
           user_id INTEGER PRIMARY KEY,
           count INTEGER DEFAULT 0,
@@ -1280,7 +1280,7 @@ export class DbStorage implements IStorage {
       `);
     
       // Use upsert pattern
-      const { rows } = await pool.query(
+      const { rows } = await pool!.query(
         `INSERT INTO user_usage (user_id, count) 
          VALUES ($1, 1) 
          ON CONFLICT (user_id) 
@@ -1304,7 +1304,7 @@ export class DbStorage implements IStorage {
     
     try {
       // Create the table if it doesn't exist (helpful for deployment)
-      await pool.query(`
+      await pool!.query(`
         CREATE TABLE IF NOT EXISTS user_usage (
           user_id INTEGER PRIMARY KEY,
           count INTEGER DEFAULT 0,
@@ -1314,7 +1314,7 @@ export class DbStorage implements IStorage {
     
       const now = new Date();
       
-      await pool.query(
+      await pool!.query(
         `INSERT INTO user_usage (user_id, count, last_reset_date) 
          VALUES ($1, 0, $2) 
          ON CONFLICT (user_id) 
@@ -1334,7 +1334,7 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      const { rows } = await pool.query(
+      const { rows } = await pool!.query(
         `SELECT last_reset_date FROM user_usage WHERE user_id = $1`,
         [userId]
       );
@@ -1354,7 +1354,7 @@ export class DbStorage implements IStorage {
     
     try {
       // Create the table if it doesn't exist (helpful for deployment)
-      await pool.query(`
+      await pool!.query(`
         CREATE TABLE IF NOT EXISTS user_usage (
           user_id INTEGER PRIMARY KEY,
           count INTEGER DEFAULT 0,
@@ -1362,7 +1362,7 @@ export class DbStorage implements IStorage {
         )
       `);
     
-      await pool.query(
+      await pool!.query(
         `INSERT INTO user_usage (user_id, last_reset_date) 
          VALUES ($1, $2) 
          ON CONFLICT (user_id) 
@@ -1383,7 +1383,7 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      const { rows } = await pool.query(
+      const { rows } = await pool!.query(
         `SELECT openai_key FROM user_settings WHERE user_id = $1`,
         [userId]
       );
@@ -1403,7 +1403,7 @@ export class DbStorage implements IStorage {
     
     try {
       // Create the table if it doesn't exist (helpful for deployment)
-      await pool.query(`
+      await pool!.query(`
         CREATE TABLE IF NOT EXISTS user_settings (
           user_id INTEGER PRIMARY KEY,
           openai_key TEXT,
@@ -1411,7 +1411,7 @@ export class DbStorage implements IStorage {
         )
       `);
     
-      await pool.query(
+      await pool!.query(
         `INSERT INTO user_settings (user_id, openai_key) 
          VALUES ($1, $2) 
          ON CONFLICT (user_id) 
@@ -1430,7 +1430,7 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      const { rows } = await pool.query(
+      const { rows } = await pool!.query(
         `SELECT openai_model FROM user_settings WHERE user_id = $1`,
         [userId]
       );
@@ -1450,7 +1450,7 @@ export class DbStorage implements IStorage {
     
     try {
       // Create the table if it doesn't exist (helpful for deployment)
-      await pool.query(`
+      await pool!.query(`
         CREATE TABLE IF NOT EXISTS user_settings (
           user_id INTEGER PRIMARY KEY,
           openai_key TEXT,
@@ -1458,7 +1458,7 @@ export class DbStorage implements IStorage {
         )
       `);
     
-      await pool.query(
+      await pool!.query(
         `INSERT INTO user_settings (user_id, openai_model) 
          VALUES ($1, $2) 
          ON CONFLICT (user_id) 
@@ -1478,7 +1478,7 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      const { rows } = await pool.query(
+      const { rows } = await pool!.query(
         `SELECT * FROM heroes_of_faith ORDER BY hero_id ASC`
       );
       
@@ -1522,7 +1522,7 @@ export class DbStorage implements IStorage {
 
   async getHeroOfFaithById(id: string): Promise<HeroOfFaith | undefined> {
     try {
-      const { rows } = await pool.query(
+      const { rows } = await pool!.query(
         `SELECT * FROM heroes_of_faith WHERE hero_id = $1`,
         [id]
       );
@@ -1586,7 +1586,7 @@ export class DbStorage implements IStorage {
       };
       
       // Create the table if it doesn't exist (helpful for deployment)
-      await pool.query(`
+      await pool!.query(`
         CREATE TABLE IF NOT EXISTS heroes_of_faith (
           hero_id TEXT PRIMARY KEY,
           hero_data JSONB NOT NULL,
@@ -1594,7 +1594,7 @@ export class DbStorage implements IStorage {
         )
       `);
       
-      await pool.query(
+      await pool!.query(
         `INSERT INTO heroes_of_faith (hero_id, hero_data, created_at) 
          VALUES ($1, $2, $3)`,
         [id, JSON.stringify(hero), now]
@@ -1626,7 +1626,7 @@ export class DbStorage implements IStorage {
         ...updates
       };
       
-      await pool.query(
+      await pool!.query(
         `UPDATE heroes_of_faith SET hero_data = $1 WHERE hero_id = $2`,
         [JSON.stringify(updatedHero), id]
       );
@@ -1645,7 +1645,7 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      const result = await pool.query(
+      const result = await pool!.query(
         `DELETE FROM heroes_of_faith WHERE hero_id = $1 RETURNING hero_id`,
         [id]
       );
@@ -1670,7 +1670,7 @@ export class DbStorage implements IStorage {
       
       query += ` ORDER BY created_at DESC`;
       
-      const { rows } = await pool.query(query, params);
+      const { rows } = await pool!.query(query, params);
       
       if (!rows.length) return [];
       
@@ -1710,7 +1710,7 @@ export class DbStorage implements IStorage {
   
   async getHeroStoryById(id: string): Promise<HeroStory | undefined> {
     try {
-      const { rows } = await pool.query(
+      const { rows } = await pool!.query(
         `SELECT * FROM hero_stories WHERE story_id = $1`,
         [id]
       );
@@ -1769,7 +1769,7 @@ export class DbStorage implements IStorage {
       }
       
       // Create SQL table if it doesn't exist
-      await pool.query(`
+      await pool!.query(`
         CREATE TABLE IF NOT EXISTS hero_stories (
           story_id TEXT PRIMARY KEY,
           hero_id TEXT NOT NULL,
@@ -1780,7 +1780,7 @@ export class DbStorage implements IStorage {
         )
       `);
       
-      await pool.query(
+      await pool!.query(
         `INSERT INTO hero_stories (story_id, hero_id, user_id, story_data, created_at, is_featured) 
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [id, story.heroId, userId || null, JSON.stringify(story), now, story.isFeatured || false]
@@ -1804,7 +1804,7 @@ export class DbStorage implements IStorage {
         ...updates
       };
       
-      await pool.query(
+      await pool!.query(
         `UPDATE hero_stories SET story_data = $1, is_featured = $2 WHERE story_id = $3`,
         [JSON.stringify(updatedStory), updatedStory.isFeatured || false, id]
       );
@@ -1818,7 +1818,7 @@ export class DbStorage implements IStorage {
   
   async deleteHeroStory(id: string): Promise<boolean> {
     try {
-      const result = await pool.query(
+      const result = await pool!.query(
         `DELETE FROM hero_stories WHERE story_id = $1 RETURNING story_id`,
         [id]
       );
@@ -1841,7 +1841,7 @@ export class DbStorage implements IStorage {
         isFeatured
       };
       
-      await pool.query(
+      await pool!.query(
         `UPDATE hero_stories SET story_data = $1, is_featured = $2 WHERE story_id = $3`,
         [JSON.stringify(updatedStory), isFeatured, id]
       );
