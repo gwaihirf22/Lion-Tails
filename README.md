@@ -128,9 +128,11 @@ no-Vite-in-the-bundle assertion, a Docker build, a Trivy scan, and `npm audit`.
 3. Confirm host port 3002 is free: `docker ps --format '{{.Names}}\t{{.Ports}}'`.
 4. Register a self-hosted runner for this repository with the labels
    `self-hosted, linux, x64, unraid-lion-tails`.
-5. Add `/mnt/user/appdata/swag/nginx/proxy-confs/liontails.subdomain.conf`
-   pointing at `lion-tails:5000` (the container-internal port — SWAG reaches it
-   over `paulproxy`, not via the published host port), then `docker restart swag`.
+5. Copy `deploy/liontails.subdomain.conf` to
+   `/mnt/user/appdata/swag/nginx/proxy-confs/liontails.subdomain.conf`, then
+   `docker restart swag`. It points at `lion-tails:5000` — the
+   container-internal port, since SWAG reaches the app over `paulproxy` rather
+   than via the published host port.
 6. Cloudflare: A record `liontails` → server IP, proxied, SSL/TLS Full (Strict).
 7. Create the `flyingoat03/lion-tails` repository on Docker Hub.
 
