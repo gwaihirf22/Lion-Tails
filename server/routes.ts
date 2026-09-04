@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { dbConnectionStatus, pool } from "./db";
+import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema } from "@shared/schema";
@@ -1246,10 +1246,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (timer) clearTimeout(timer);
     }
 
-    res.status(live ? 200 : 503).json({
-      status: live ? "ok" : "degraded",
+    // A reachable database is not the same as a correct one: the schema
+    // drifted once and the only symptom was a 500 on the first signup. Treat a
+    // mismatch as unhealthy so it fails the deploy rather than a user.
+    const schemaOk = schemaStatus !== "mismatch";
+    const healthy = live && schemaOk;
+
+    res.status(healthy ? 200 : 503).json({
+      status: healthy ? "ok" : "degraded",
       db: live ? "connected" : dbConnectionStatus,
       persistence: live,
+      schema: schemaStatus,
+      ...(schemaOk ? {} : { schemaProblems }),
       uptime,
     });
   });

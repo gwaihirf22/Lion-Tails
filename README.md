@@ -101,7 +101,9 @@ lives at `/mnt/user/appdata/lion-tails/docker-compose.yml` on the server; CI
 deliberately does not overwrite it. Keep the two in sync by hand.
 
 `GET /api/health` backs the container healthcheck. It probes the database live
-and returns **503** when `DATABASE_URL` is set but unreachable, so a container
+and returns **503** when `DATABASE_URL` is set but unreachable, or when the live
+schema is missing columns that `shared/schema.ts` declares (checked at startup
+against Drizzle's own metadata, so there is no hand-maintained list to drift), so a container
 that fell back to in-memory storage fails its healthcheck and fails the deploy,
 rather than reporting success while quietly losing every write on the next
 restart. With no `DATABASE_URL` at all it returns 200 with
@@ -168,12 +170,22 @@ this app has any business reaching it.
 
 ## Known gaps
 
-- Email is optional and currently unconfigured. Account verification is not
+- Email is optional. It is treated as configured only when `EMAIL_HOST` is set
+  AND, if `EMAIL_USER` is set, `EMAIL_PASSWORD` is set too — a half-configured
+  mailer fails SMTP auth on every send instead of being cleanly skipped.
+  Account verification is not
   enforced anywhere (server or client), so signups work fine without it — but
   **password reset does not work until the `EMAIL_*` variables are set**, since
   the reset link is only ever delivered by email.
 
-- The full schema is created by `scripts/ensure-database.js`, not by Drizzle
-  migrations; `shared/schema.ts` declares only a subset of the tables. Moving to
-  real migrations is the main outstanding piece of database work.
+- **There are still two schema definitions.** `shared/schema.ts` declares only
+  `users` and `verification_tokens` (the tables read through Drizzle); the other
+  seven exist solely as raw SQL in `scripts/ensure-database.js`, and some are
+  also created lazily in `server/db-storage.ts`. That split is what let the
+  script's `users` table drift to 6 of its 13 columns, and what let it create
+  `characters`/`stories` while the app queried `user_characters`/`user_stories`.
+  Both are fixed and the schema is now verified at startup, but real Drizzle
+  migrations covering all nine tables remain the proper fix.
+- `characters` and `stories` tables may still exist on older databases. They were
+  never read by anything and are safe to drop.
 - There is no test suite.
