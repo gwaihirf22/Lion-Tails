@@ -16,6 +16,16 @@ async function initializeDatabase() {
 
     pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
+    // node-postgres emits "error" on the pool when an IDLE client's backend
+    // fails -- e.g. the Postgres container restarting underneath us. With no
+    // listener, Node treats it as an uncaught exception and kills the process,
+    // which under restart:unless-stopped turns a brief blip into a restart
+    // loop. Log it and let the pool recover on the next acquisition instead.
+    pool.on("error", (err) => {
+      console.error("Unexpected error on idle Postgres client:", err);
+      dbConnectionStatus = "error";
+    });
+
     // Test the connection
     const client = await pool.connect();
     try {
