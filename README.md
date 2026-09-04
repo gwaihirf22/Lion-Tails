@@ -70,7 +70,6 @@ See `.env.example`. Summary:
 | `PORT` | no | Defaults to `5000`. |
 | `FRONTEND_URL` | production | Base URL used in verification / password-reset email links. |
 | `SESSION_SECRET` | **yes in prod** | App refuses to start without it when `NODE_ENV=production`. |
-| `JWT_SECRET` | **yes in prod** | Same. |
 | `OPENAI_API_KEY` | for AI features | Users can also supply their own key in app settings. |
 | `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_SECURE` / `EMAIL_USER` / `EMAIL_PASSWORD` / `EMAIL_FROM` | no | SMTP for account verification and password resets; only used in production. |
 
@@ -126,7 +125,6 @@ no-Vite-in-the-bundle assertion, a Docker build, a Trivy scan, and `npm audit`.
 | `SSH_PRIVATE_KEY_RAW` | SSH private key for the deploy |
 | `POSTGRES_PASSWORD` | `openssl rand -hex 32` |
 | `SESSION_SECRET` | `openssl rand -hex 32` |
-| `JWT_SECRET` | `openssl rand -hex 32` |
 | `OPENAI_API_KEY` | |
 | `EMAIL_HOST` / `EMAIL_USER` / `EMAIL_PASSWORD` | Optional; leave unset to disable email |
 

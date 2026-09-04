@@ -10,17 +10,13 @@ import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { v4 as uuidv4 } from "uuid";
-import { authenticate } from "./lib/middleware";
 import { setupAuth } from "./auth";
 import { registerSongRoutes } from "./songs";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication with passport and session
   setupAuth(app);
-  
-  // Apply authentication middleware globally
-  app.use(authenticate);
-  
+
   // API routes for characters - all require authentication
   
   // Get all characters - requires authentication

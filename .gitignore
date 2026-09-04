@@ -9,3 +9,19 @@ vite.config.ts.*
 .env
 .env.*
 !.env.example
+
+# Editor / OS
+.vscode/
+.idea/
+
+# Backups and scratch
+*.bak
+*.orig
+
+# Logs
+*.log
+npm-debug.log*
+
+# Generated at runtime; a named volume is mounted over this in production
+public/images/stories/*
+!public/images/stories/.gitkeep

@@ -52,7 +52,6 @@ jobs:
           PORT: '5001'
           # Required in production by server/config.ts; values are irrelevant here.
           SESSION_SECRET: ci-smoke-session-secret
-          JWT_SECRET: ci-smoke-jwt-secret
           # No DATABASE_URL on purpose: exercises the in-memory path, where
           # /api/health must still answer 200 with persistence:false.
         run: |

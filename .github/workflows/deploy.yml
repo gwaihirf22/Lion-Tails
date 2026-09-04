@@ -43,7 +43,6 @@ jobs:
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
@@ -69,7 +68,6 @@ jobs:
             echo "cat > .env <<'ENVEOF'"
             printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
             printf 'SESSION_SECRET=%s\n'    "$SESSION_SECRET"
-            printf 'JWT_SECRET=%s\n'        "$JWT_SECRET"
             printf 'OPENAI_API_KEY=%s\n'    "$OPENAI_API_KEY"
             printf 'EMAIL_HOST=%s\n'        "$EMAIL_HOST"
             printf 'EMAIL_USER=%s\n'        "$EMAIL_USER"
