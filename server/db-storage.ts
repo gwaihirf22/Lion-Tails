@@ -110,7 +110,7 @@ export class DbStorage implements IStorage {
   }
 
   async updateUser(id: number, updates: Partial<User>): Promise<User | undefined> {
-    const result = await db
+    const result = await db!
       .update(users)
       .set({
         ...updates,
@@ -123,7 +123,7 @@ export class DbStorage implements IStorage {
 
   // Verification methods
   async verifyUser(userId: number): Promise<boolean> {
-    const result = await db
+    const result = await db!
       .update(users)
       .set({
         isVerified: true,
@@ -155,7 +155,7 @@ export class DbStorage implements IStorage {
 
   async getVerificationToken(token: string): Promise<{ userId: number, type: string, expiresAt: Date } | undefined> {
     const now = new Date();
-    const result = await db
+    const result = await db!
       .select()
       .from(verificationTokens)
       .where(
@@ -176,7 +176,7 @@ export class DbStorage implements IStorage {
   }
 
   async deleteVerificationToken(token: string): Promise<boolean> {
-    const result = await db
+    const result = await db!
       .delete(verificationTokens)
       .where(eq(verificationTokens.token, token))
       .returning();
