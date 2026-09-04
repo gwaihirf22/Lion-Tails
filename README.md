@@ -136,6 +136,11 @@ no-Vite-in-the-bundle assertion, a Docker build, a Trivy scan, and `npm audit`.
 
 ## Known gaps
 
+- Email is optional and currently unconfigured. Account verification is not
+  enforced anywhere (server or client), so signups work fine without it — but
+  **password reset does not work until the `EMAIL_*` variables are set**, since
+  the reset link is only ever delivered by email.
+
 - The full schema is created by `scripts/ensure-database.js`, not by Drizzle
   migrations; `shared/schema.ts` declares only a subset of the tables. Moving to
   real migrations is the main outstanding piece of database work.

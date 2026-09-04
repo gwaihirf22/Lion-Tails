@@ -15,6 +15,28 @@ const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@liontails.com";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
 /**
+ * SMTP is optional. Without EMAIL_HOST there is nowhere to send, and attempting
+ * it anyway makes nodemailer fall back to localhost:587 and log a connection
+ * error on every signup. Verification is not enforced anywhere in the app, so
+ * an unconfigured mailer is a supported state, not a failure.
+ */
+function isEmailConfigured(): boolean {
+  return Boolean(process.env.EMAIL_HOST);
+}
+
+function buildTransport() {
+  return nodemailer.createTransport({
+    host: process.env.EMAIL_HOST,
+    port: parseInt(process.env.EMAIL_PORT || "587"),
+    secure: process.env.EMAIL_SECURE === "true",
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD,
+    },
+  });
+}
+
+/**
  * Hash a password with bcrypt
  */
 export async function hashPassword(password: string): Promise<string> {
@@ -164,19 +186,17 @@ export async function verifyEmail(token: string): Promise<boolean> {
  * Send a verification email to a user
  */
 export async function sendVerificationEmail(user: User, token: string): Promise<boolean> {
+  if (process.env.NODE_ENV === "production" && !isEmailConfigured()) {
+    console.warn(
+      "[email] EMAIL_HOST is not set — skipping the verification email for " +
+        user.email + ". Account verification is not enforced, so the account is usable.",
+    );
+    return false;
+  }
+
   if (process.env.NODE_ENV === "production") {
     try {
-      // Setup email transport
-      const transporter = nodemailer.createTransport({
-        // Configure your email provider here
-        host: process.env.EMAIL_HOST,
-        port: parseInt(process.env.EMAIL_PORT || "587"),
-        secure: process.env.EMAIL_SECURE === "true",
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASSWORD,
-        },
-      });
+      const transporter = buildTransport();
       
       // Send the email
       await transporter.sendMail({
@@ -232,19 +252,17 @@ export async function requestPasswordReset(email: string): Promise<boolean> {
     resetPasswordExpires: resetExpires,
   });
   
+  if (process.env.NODE_ENV === "production" && !isEmailConfigured()) {
+    console.warn(
+      "[email] EMAIL_HOST is not set — cannot send a password reset email. " +
+        "Set the EMAIL_* variables to enable password resets.",
+    );
+    return false;
+  }
+
   if (process.env.NODE_ENV === "production") {
     try {
-      // Setup email transport
-      const transporter = nodemailer.createTransport({
-        // Configure your email provider here
-        host: process.env.EMAIL_HOST,
-        port: parseInt(process.env.EMAIL_PORT || "587"),
-        secure: process.env.EMAIL_SECURE === "true",
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASSWORD,
-        },
-      });
+      const transporter = buildTransport();
       
       // Send the email
       await transporter.sendMail({
