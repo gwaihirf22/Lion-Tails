@@ -100,6 +100,13 @@ The compose file in this repo is a **reference copy**. The authoritative one
 lives at `/mnt/user/appdata/lion-tails/docker-compose.yml` on the server; CI
 deliberately does not overwrite it. Keep the two in sync by hand.
 
+`GET /api/health` backs the container healthcheck. It probes the database live
+and returns **503** when `DATABASE_URL` is set but unreachable, so a container
+that fell back to in-memory storage fails its healthcheck and fails the deploy,
+rather than reporting success while quietly losing every write on the next
+restart. With no `DATABASE_URL` at all it returns 200 with
+`"persistence": false`, since that is a deliberate choice rather than a fault.
+
 On startup `entrypoint.sh` waits for Postgres (`scripts/wait-for-db.js`) and
 then applies the schema (`scripts/ensure-database.js`, idempotent
 `CREATE TABLE IF NOT EXISTS`). A database failure is logged loudly but does not

@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { dbConnectionStatus } from "./db";
+import { dbConnectionStatus, pool } from "./db";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema } from "@shared/schema";
@@ -1204,15 +1204,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Liveness/readiness probe used by the container healthcheck.
-  // Unlike /api/system/db-status this reports the real storage mode, so a
-  // silent fall back to in-memory storage is visible rather than hidden.
-  app.get("/api/health", (_req, res) => {
-    const persistent = dbConnectionStatus === "connected";
-    res.status(200).json({
-      status: "ok",
-      db: dbConnectionStatus,
-      persistence: persistent,
-      uptime: Math.round(process.uptime()),
+  //
+  // Returns 503 when a database is configured but unreachable, so that a
+  // container which silently fell back to in-memory storage FAILS its
+  // healthcheck instead of reporting success while quietly losing every write
+  // on the next restart. The compose healthcheck only inspects the status
+  // code, so the status code has to carry that meaning.
+  //
+  // The check probes the pool live rather than reading dbConnectionStatus:
+  // that flag is only ever set to "connected" during startup, so a transient
+  // idle-client error would otherwise latch it to "error" for the lifetime of
+  // the process and the container could never recover its healthy state.
+  app.get("/api/health", async (_req, res) => {
+    const uptime = Math.round(process.uptime());
+
+    // No DATABASE_URL means in-memory storage was chosen deliberately, so this
+    // is healthy-but-not-persistent rather than broken.
+    if (!process.env.DATABASE_URL) {
+      return res.status(200).json({
+        status: "ok",
+        db: "not_configured",
+        persistence: false,
+        uptime,
+      });
+    }
+
+    let timer: NodeJS.Timeout | undefined;
+    let live = false;
+    try {
+      live = await Promise.race([
+        pool
+          ? pool.query("SELECT 1").then(() => true)
+          : Promise.resolve(false),
+        new Promise<boolean>((resolve) => {
+          timer = setTimeout(() => resolve(false), 5000);
+        }),
+      ]);
+    } catch {
+      live = false;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+
+    res.status(live ? 200 : 503).json({
+      status: live ? "ok" : "degraded",
+      db: live ? "connected" : dbConnectionStatus,
+      persistence: live,
+      uptime,
     });
   });
 
