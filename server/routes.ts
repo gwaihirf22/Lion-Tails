@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { dbConnectionStatus } from "./db";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema } from "@shared/schema";
@@ -1202,6 +1203,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Liveness/readiness probe used by the container healthcheck.
+  // Unlike /api/system/db-status this reports the real storage mode, so a
+  // silent fall back to in-memory storage is visible rather than hidden.
+  app.get("/api/health", (_req, res) => {
+    const persistent = dbConnectionStatus === "connected";
+    res.status(200).json({
+      status: "ok",
+      db: dbConnectionStatus,
+      persistence: persistent,
+      uptime: Math.round(process.uptime()),
+    });
+  });
+
   // Database status endpoint - useful for monitoring
   app.get("/api/system/db-status", async (req, res) => {
     try {
@@ -1215,7 +1229,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // We'll use the Pool class directly to test the connection
-      import('@neondatabase/serverless').then(async ({ Pool }) => {
+      import('pg').then(async ({ default: pgModule }) => {
+        const { Pool } = pgModule;
         try {
           const pool = new Pool({ connectionString: process.env.DATABASE_URL });
           

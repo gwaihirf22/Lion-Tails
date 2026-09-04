@@ -27,18 +27,13 @@ declare module 'express-session' {
  */
 export async function authenticate(req: Request, res: Response, next: NextFunction) {
   try {
-    // Get token from Authorization header or cookie
+    // Get token from the Authorization header or the session
     let token: string | undefined;
     
     // Check Authorization header with Bearer token
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith("Bearer ")) {
       token = authHeader.substring(7);
-    }
-    
-    // If no token in header, check cookies
-    if (!token && req.cookies && req.cookies.authToken) {
-      token = req.cookies.authToken;
     }
     
     // If still no token, check session (for more robust auth)

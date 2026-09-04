@@ -5,6 +5,9 @@ import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
 import { eq, and, desc, isNull, sql, or, like, ilike } from 'drizzle-orm';
 import connectPg from 'connect-pg-simple';
+// Static import: `require` is not defined in the ESM production bundle, so the
+// previous inline require() threw a ReferenceError on the fallback path.
+import createMemoryStore from 'memorystore';
 import { IStorage } from './storage';
 
 const PostgresStore = connectPg(session);
@@ -25,7 +28,7 @@ export class DbStorage implements IStorage {
     if (!process.env.DATABASE_URL || !pool) {
       console.warn("DATABASE_URL not set or database connection failed. Using fallback session store.");
       // Create memory store for sessions as fallback
-      const MemoryStore = require('memorystore')(session);
+      const MemoryStore = createMemoryStore(session);
       this.sessionStore = new MemoryStore({
         checkPeriod: 86400000 // prune expired entries every 24h
       });
@@ -42,7 +45,7 @@ export class DbStorage implements IStorage {
     } catch (error) {
       console.error("Failed to initialize PostgreSQL session store:", error);
       // Fallback to memory store if PostgreSQL session store initialization fails
-      const MemoryStore = require('memorystore')(session);
+      const MemoryStore = createMemoryStore(session);
       this.sessionStore = new MemoryStore({
         checkPeriod: 86400000 // prune expired entries every 24h
       });

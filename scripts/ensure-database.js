@@ -1,6 +1,7 @@
 // This script ensures database tables exist and verifies connection
 // It should be run during deployment or first-run
-import { Pool } from '@neondatabase/serverless';
+import pg from 'pg';
+const { Pool } = pg;
 import fs from 'fs';
 import path from 'path';
 
@@ -15,26 +16,32 @@ export async function ensureDatabase() {
     return false;
   }
   
+  // Create a new connection pool
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
   try {
-    // Create a new connection pool
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-    
     // Test connection
     const client = await pool.connect();
     console.log('Successfully connected to the database.');
-    
-    // Check and create necessary tables
-    await ensureTables(client);
-    
-    // Release client back to pool
-    client.release();
-    
+
+    try {
+      // Check and create necessary tables
+      await ensureTables(client);
+    } finally {
+      // Release client back to pool
+      client.release();
+    }
+
     console.log('Database setup completed successfully.');
     return true;
   } catch (error) {
     console.error('Error connecting to database:', error.message);
     console.error('Your application will fall back to in-memory storage.');
     return false;
+  } finally {
+    // Always drain the pool, otherwise the process never exits and the
+    // container entrypoint hangs before it can start the server.
+    await pool.end().catch(() => {});
   }
 }
 
@@ -167,8 +174,12 @@ if (import.meta.url.endsWith(process.argv[1])) {
       if (!success) {
         console.log('Warning: Data may not persist between deployments.');
       }
+      // Exit 0 either way: the app has an in-memory fallback, so a database
+      // problem should not block the container from starting.
+      process.exit(0);
     })
     .catch(error => {
       console.error('Error during database setup:', error);
+      process.exit(0);
     });
 }

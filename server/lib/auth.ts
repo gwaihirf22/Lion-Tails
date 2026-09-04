@@ -4,9 +4,10 @@ import crypto from "crypto";
 import { storage } from "../storage";
 import { InsertUser, User, LoginUser, RegisterUser } from "@shared/schema";
 import nodemailer from "nodemailer";
+import { requiredSecret } from "../config";
 
 // JWT secret from environment or a fallback for development
-const JWT_SECRET = process.env.JWT_SECRET || "lion-tails-dev-secret";
+const JWT_SECRET = requiredSecret("JWT_SECRET", "lion-tails-dev-jwt-secret");
 const JWT_EXPIRY = "7d"; // JWT expiry time
 
 // Email configuration (only for production)

@@ -1,5 +1,5 @@
 // This script can be run independently to verify database status and apply schema
-const { ensureDatabase } = require('./ensure-database');
+import { ensureDatabase } from './ensure-database.js';
 
 // Execute the check
 (async () => {
