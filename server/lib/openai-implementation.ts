@@ -195,8 +195,27 @@ async function requestModelJson<T>(opts: {
   let promptTokens: number | undefined;
 
 
+  /** Raises the budget for the next attempt, or false if there is no room. */
+  const raiseBudget = (): boolean => {
+    const next = nextTokenBudget(budget, promptTokens);
+    if (next === null) {
+      console.warn(
+        `${step}: no context headroom left at max_tokens=${budget} ` +
+          `(prompt ${promptTokens ?? "?"} of ${MODEL_CONTEXT_LIMIT}); not retrying.`,
+      );
+      return false;
+    }
+    budget = next;
+    return true;
+  };
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const reply = await opts.call(budget);
+
+    const reported = reply.usage?.prompt_tokens;
+    if (typeof reported === "number" && reported > 0) {
+      promptTokens = promptTokens === undefined ? reported : Math.min(promptTokens, reported);
+    }
 
     debugData.push({
       step,
@@ -209,41 +228,41 @@ async function requestModelJson<T>(opts: {
       usage: reply.usage,
     });
 
+    const isLastAttempt = attempt === maxAttempts;
+
+    // "stop" is the ONLY value that confirms the model finished. finish_reason
+    // has been observed as null on a reply that was demonstrably cut off
+    // mid-array, and a null was previously treated as "not truncated" -- so a
+    // resource problem got the capability remedy and was retried at the same
+    // budget. Require positive evidence of completion rather than positive
+    // evidence of truncation.
+    const mayBeTruncated = reply.finishReason !== "stop";
+
     if (reply.finishReason === "length") {
       truncated = true;
-      if (attempt < maxAttempts) {
-      const reported = reply.usage?.prompt_tokens;
-      if (typeof reported === "number" && reported > 0) {
-        promptTokens = promptTokens === undefined ? reported : Math.min(promptTokens, reported);
-      }
-        const next = nextTokenBudget(budget, promptTokens);
-        if (next === null) {
-          console.warn(
-            `${step}: truncated at max_tokens=${budget} with no context headroom left ` +
-              `(prompt ${promptTokens ?? "?"} of ${MODEL_CONTEXT_LIMIT}); not retrying.`,
-          );
-          break;
-        }
-        budget = next;
-        console.warn(
-          `${step}: model output was truncated (finish_reason=length); retrying with max_tokens=${budget}`,
-        );
-        continue;
-      }
-      break;
+      if (isLastAttempt || !raiseBudget()) break;
+      console.warn(
+        `${step}: output was truncated (finish_reason=length); retrying with max_tokens=${budget}`,
+      );
+      continue;
     }
 
     let parsed: any;
     try {
       parsed = JSON.parse(reply.content);
     } catch (error) {
-      truncated = false;
       lastError = error;
+      truncated = mayBeTruncated;
       debugData[debugData.length - 1].parseError =
         error instanceof Error ? error.message : String(error);
-      if (attempt < maxAttempts) {
-        console.warn(`${step}: reply was not valid JSON, retrying (${attempt}/${maxAttempts})`);
-      }
+      if (isLastAttempt) break;
+      // Retrying a genuinely malformed reply at a larger budget costs only
+      // time; retrying a truncated one at the same budget cannot work.
+      if (mayBeTruncated && !raiseBudget()) break;
+      console.warn(
+        `${step}: reply was not valid JSON (finish_reason=${reply.finishReason}); ` +
+          `retrying with max_tokens=${budget}`,
+      );
       continue;
     }
 
@@ -252,13 +271,15 @@ async function requestModelJson<T>(opts: {
       return validated;
     }
 
-    truncated = false;
     lastError = new Error("model reply did not match the expected shape");
+    truncated = mayBeTruncated;
     debugData[debugData.length - 1].shapeError =
       `expected keys were missing; got: ${Object.keys(parsed ?? {}).join(", ") || "(not an object)"}`;
-    if (attempt < maxAttempts) {
-      console.warn(`${step}: reply was valid JSON but the wrong shape, retrying (${attempt}/${maxAttempts})`);
-    }
+    if (isLastAttempt) break;
+    if (mayBeTruncated && !raiseBudget()) break;
+    console.warn(
+      `${step}: reply was valid JSON but the wrong shape; retrying with max_tokens=${budget}`,
+    );
   }
 
   if (truncated) {
@@ -310,6 +331,11 @@ async function requestModelText(opts: {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const reply = await opts.call(budget);
 
+    const reported = reply.usage?.prompt_tokens;
+    if (typeof reported === "number" && reported > 0) {
+      promptTokens = promptTokens === undefined ? reported : Math.min(promptTokens, reported);
+    }
+
     debugData.push({
       step,
       attempt,
@@ -322,14 +348,22 @@ async function requestModelText(opts: {
     });
 
     if (reply.finishReason !== "length") {
+      // Prose has no parse step, so unlike the JSON path there is no second
+      // signal that a reply was cut off. finish_reason has been seen as null on
+      // a demonstrably truncated reply, so an unexpected value here means the
+      // chapter MIGHT be incomplete and we cannot tell. Retrying every null
+      // would double the cost of every chapter, so record it loudly instead --
+      // if stories start ending mid-sentence, this line is where to look.
+      if (reply.finishReason !== "stop") {
+        console.warn(
+          `${step}: finish_reason was ${String(reply.finishReason)} rather than "stop"; ` +
+            `cannot confirm the chapter is complete.`,
+        );
+      }
       return reply.content;
     }
 
     if (attempt < maxAttempts) {
-    const reported = reply.usage?.prompt_tokens;
-    if (typeof reported === "number" && reported > 0) {
-      promptTokens = promptTokens === undefined ? reported : Math.min(promptTokens, reported);
-    }
       const next = nextTokenBudget(budget, promptTokens);
       if (next === null) {
         console.warn(

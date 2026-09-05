@@ -281,10 +281,15 @@ visible output.
 
 Three consequences worth keeping:
 
-- **`finish_reason` is on every response and says truncation outright.** Reading
-  it turns a cryptic `SyntaxError` into an accurate message, and distinguishes a
-  *resource* problem (retryable with a bigger budget) from a *capability* one
-  (not). Do not infer truncation from a parse failure.
+- **`finish_reason` distinguishes a resource problem from a capability one**, so
+  reading it turns a cryptic `SyntaxError` into an accurate message. But it is
+  **not always populated**: a reply cut off mid-array arrived with
+  `finish_reason: null` and zeroed usage counters. Treating that as "not
+  truncated" sent a resource problem down the capability path and retried it at
+  the *same* budget, which cannot work — it succeeded only on the variance of a
+  second draw. So `"stop"` is the only value that confirms completion; anything
+  else escalates the budget on retry. Require positive evidence that the model
+  finished, not positive evidence that it did not.
 - **The context window is shared between prompt and output.** Doubling the output
   budget past what the prompt left free achieves nothing, so the retry clamps to
   measured headroom (`usage.prompt_tokens`) and stops rather than spending an
