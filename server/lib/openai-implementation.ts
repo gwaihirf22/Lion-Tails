@@ -1,5 +1,25 @@
 import OpenAI from "openai";
 import { StoryRequest, StoryResponse } from "@shared/schema";
+import {
+  buildStoryBrief,
+  buildSystemPrompt,
+  resolveStoryCharacter,
+  type CustomPrompts,
+} from "./storyBrief";
+
+/**
+ * Everything the prompts need about what the user asked for, resolved once per
+ * request and threaded through every prompt site.
+ *
+ * Built once rather than per-helper: resolving the character does a database
+ * read, and duplicating the field list across helpers is what let them drift
+ * apart until only four of the twenty-two request fields reached a prompt.
+ */
+type StoryContext = {
+  brief: string;
+  systemPrompt: string;
+  custom?: CustomPrompts;
+};
 import { getBibleVerseByTheme } from "../data/bibleVerses";
 import { storage } from "../storage";
 import * as fs from "fs";
@@ -55,22 +75,19 @@ async function generateShortStorySingleCall(
   request: StoryRequest,
   wordCount: number,
   debugData: any[],
+  ctx: StoryContext,
 ): Promise<{
   title: string;
   content: string;
   applicationQuestions: string[];
   imagePrompt: string;
 }> {
-  const { childName, theme, readingLevel } = request;
-
-  const systemPrompt = `You are a Christian children's storyteller who writes concise, self-contained short stories with a clear moral.`;
+  const systemPrompt = ctx.systemPrompt;
   const userPrompt = `
-    Please create a complete, faith-based children's story.
+    ${ctx.custom?.userPrompt || "Please create a complete, faith-based children's story."}
 
     Details:
-    - Main Character: ${childName || "A child"}
-    - Theme: ${theme || "Faith and kindness"}
-    - Reading Level: ${readingLevel || "early-elementary"}
+    ${ctx.brief}
 
     CRITICAL INSTRUCTION: The entire story's content MUST be approximately ${wordCount} words long.
 
@@ -111,15 +128,17 @@ async function generateStoryOutline(
   request: StoryRequest,
   wordCount: number,
   debugData: any[],
+  ctx: StoryContext,
 ): Promise<string[]> {
-  const { childName, theme } = request;
-  // <<< FIXED: Using the simple, direct calculation you suggested.
   const numberOfChapters = Math.ceil(wordCount / 500);
 
-  const systemPrompt = `You are a master Christian children's storyteller. Your task is to create a detailed plan for a story.`;
+  const systemPrompt = `${ctx.systemPrompt} Your task is to create a detailed plan for a story.`;
   const userPrompt = `
     Please create a chapter-by-chapter outline for a Christian children's story.
     The final story should be approximately ${wordCount} words long.
+
+    The story must be built around these details:
+    ${ctx.brief}
 
     Instructions:
     Create a detailed outline with EXACTLY ${numberOfChapters} parts. Each part must be a distinct scene or chapter that builds the story.
@@ -154,14 +173,18 @@ async function generateStoryChapter(
   chapterOutline: string,
   storySoFar: string,
   debugData: any[],
+  ctx: StoryContext,
 ): Promise<string> {
-  const { readingLevel, storyLength } = request;
+  const { storyLength } = request;
   const totalWordCount = getWordCountFromLength(storyLength || "medium");
   const numberOfChapters = Math.max(3, Math.ceil(totalWordCount / 500));
   const wordCountPerChapter = totalWordCount / numberOfChapters;
 
-  const systemPrompt = `You are a talented Christian children's story author. Continue writing a story based on the context provided. Focus ONLY on writing the current part of the story. Do NOT summarize or add titles/questions.`;
+  const systemPrompt = `${ctx.systemPrompt} Continue writing a story based on the context provided. Focus ONLY on writing the current part of the story. Do NOT summarize or add titles/questions.`;
   const userPrompt = `
+      The story's agreed details, which must stay consistent across chapters:
+      ${ctx.brief}
+
       Here is the story so far:
       ---
       ${storySoFar || "This is the very first chapter."}
@@ -196,6 +219,7 @@ async function finalizeStoryDetails(
   client: OpenAI,
   fullStory: string,
   debugData: any[],
+  ctx: StoryContext,
 ): Promise<{
   title: string;
   applicationQuestions: string[];
@@ -207,6 +231,10 @@ async function finalizeStoryDetails(
     ---
     ${fullStory}
     ---
+
+    The illustration must match the character as described here, so carry the
+    appearance details into the image prompt:
+    ${ctx.brief}
 
     Respond with ONLY a valid JSON object: { "title": "...", "applicationQuestions": ["...", "...", "..."], "imagePrompt": "..." }
   `;
@@ -233,12 +261,25 @@ async function finalizeStoryDetails(
 export async function generateStoryWithOpenAI(
   request: StoryRequest,
   userId: number = 1,
+  // Parent Mode prompts. openai.ts has always constructed and passed these,
+  // but the parameter did not exist, so they were silently discarded and the
+  // call was a type error.
+  customPrompts?: CustomPrompts,
 ): Promise<StoryResponse & { debugData?: any[] }> {
   const { storyLength, theme } = request;
 
   const userApiKey = await storage.getUserOpenAIKey(userId);
   const openaiClient = getOpenAIClient(userApiKey || undefined);
   const targetWordCount = getWordCountFromLength(storyLength || "medium");
+
+  // Resolved once and shared by every prompt: one database read, one field
+  // list, no opportunity for the prompt sites to drift apart again.
+  const character = await resolveStoryCharacter(request, userId);
+  const ctx: StoryContext = {
+    brief: buildStoryBrief(request, character),
+    systemPrompt: buildSystemPrompt(request, customPrompts),
+    custom: customPrompts,
+  };
   const debugData: any[] = [];
   const moralOutcomes: Array<
     "positive" | "learning" | "consequences" | "creative"
@@ -265,6 +306,7 @@ export async function generateStoryWithOpenAI(
         request,
         targetWordCount,
         debugData,
+        ctx,
       );
       finalDetails = {
         title: shortStoryResult.title,
@@ -282,6 +324,7 @@ export async function generateStoryWithOpenAI(
         request,
         targetWordCount,
         debugData,
+        ctx,
       );
       if (!outline || outline.length === 0)
         throw new Error("Failed to generate a valid story outline.");
@@ -296,6 +339,7 @@ export async function generateStoryWithOpenAI(
           outline[i],
           fullStoryContent,
           debugData,
+          ctx,
         );
         fullStoryContent += (fullStoryContent ? "\n\n" : "") + chapterContent;
         console.log(
@@ -308,6 +352,7 @@ export async function generateStoryWithOpenAI(
         openaiClient,
         fullStoryContent,
         debugData,
+        ctx,
       );
       finalDetails = {
         title: finalizedParts.title,
