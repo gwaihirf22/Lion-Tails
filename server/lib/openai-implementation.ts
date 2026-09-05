@@ -367,12 +367,16 @@ export async function generateStoryWithOpenAI(
     // --- COMMON FINAL STEPS FOR ALL STORIES ---
     console.log("Assembling final response and generating image...");
     let imageUrl: string | undefined = undefined;
-    if (userApiKey) {
-      try {
-        imageUrl = await generateStoryImage(finalDetails.imagePrompt, userId);
-      } catch (imageError) {
-        console.error("Error generating story image:", imageError);
-      }
+    // No entitlement check here: generateStoryImage resolves the image tier
+    // through the policy itself and returns undefined with a logged reason when
+    // the user is not entitled. The guard that used to live here read a
+    // `userApiKey` local that the policy refactor removed, so it threw a
+    // ReferenceError on every generation -- after all the paid calls had
+    // already been made.
+    try {
+      imageUrl = await generateStoryImage(finalDetails.imagePrompt, userId);
+    } catch (imageError) {
+      console.error("Error generating story image:", imageError);
     }
 
     if (!finalDetails.content.includes("For Further Learning")) {
