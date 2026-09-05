@@ -24,7 +24,7 @@ type StoryContext = {
 };
 import { getBibleVerseByTheme } from "../data/bibleVerses";
 import { storage } from "../storage";
-import { StoryGenerationError, modelOutputAdvice } from "./storyErrors";
+import { StoryGenerationError, modelOutputAdvice, modelTruncatedAdvice } from "./storyErrors";
 import { resolveModel, createClient, type ResolvedModel } from "./modelPolicy";
 import * as fs from "fs";
 import * as path from "path";
@@ -65,45 +65,111 @@ function countWords(text: string): number {
 // =========================================================================
 
 /**
- * Runs a model call and parses its JSON reply, retrying once.
+ * Token budgets.
  *
- * Two things this fixes. First, the raw reply is recorded BEFORE parsing, so a
- * malformed reply is still in debugData when it throws -- the evidence used to
- * be destroyed at exactly the moment it was needed, because JSON.parse was
- * called inside the debugData.push() argument and threw before the push
- * completed.
+ * Sized for reasoning PLUS output, not output alone. gpt-oss:20b is a thinking
+ * model: its internal reasoning is billed to completion_tokens and counts
+ * against max_tokens. At 2048 it reasoned for the entire budget and emitted
+ * zero visible content -- finish_reason "length", 2048 completion tokens, an
+ * empty string -- so JSON.parse("") threw "Unexpected end of JSON input". The
+ * model was not bad at JSON; it never reached the JSON.
  *
- * Second, there was no retry anywhere in the generation path. The
- * attempt/maxAttempts/parseError fields in the schema were vestigial. Local
- * models in particular truncate or malform JSON intermittently, and a second
- * attempt often succeeds.
+ * That single cause explained the whole failure pattern: every call site at
+ * 2048 failed and the only site at 4096 worked, across two different models.
+ * Named constants rather than five scattered literals, because scattered
+ * duplicates of the same number are how this codebase has produced most of its
+ * bugs.
  */
-async function parseJsonReplyWithRetry<T>(
-  step: string,
-  model: string,
-  storyLength: string | undefined,
-  debugData: any[],
-  call: () => Promise<string>,
-): Promise<T> {
+const TOKEN_BUDGET = {
+  /** One-shot story, outline, or finalisation. Generous headroom for reasoning. */
+  json: 8192,
+  /** A single chapter of prose. */
+  chapter: 4096,
+} as const;
+
+type ModelReply = {
+  content: string;
+  finishReason: string | null | undefined;
+  usage?: unknown;
+};
+
+/**
+ * Runs a model call, retrying once, and records the evidence either way.
+ *
+ * Three things this fixes.
+ *
+ * The raw reply is recorded BEFORE parsing, so a bad reply is still in
+ * debugData when it throws. JSON.parse used to be called inside the
+ * debugData.push() argument, so it threw before the push completed and the
+ * evidence was destroyed at exactly the moment it was needed.
+ *
+ * finish_reason is read. It is present on every response and was checked
+ * nowhere, yet it says unambiguously "I was truncated" -- turning a cryptic
+ * SyntaxError into an accurate message. Truncation is retried with a DOUBLED
+ * budget, because unlike malformed output it is a resource problem rather than
+ * a capability one.
+ *
+ * usage is recorded. Also previously unread at every call site.
+ */
+async function requestModelJson<T>(opts: {
+  step: string;
+  model: string;
+  storyLength?: string;
+  debugData: any[];
+  maxTokens: number;
+  prompt?: string;
+  call: (maxTokens: number) => Promise<ModelReply>;
+}): Promise<T> {
+  const { step, model, storyLength, debugData, prompt } = opts;
   const maxAttempts = 2;
+  let budget = opts.maxTokens;
   let lastError: unknown;
+  let truncated = false;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const raw = await call();
-    debugData.push({ step, attempt, maxAttempts, response: raw });
+    const reply = await opts.call(budget);
+
+    debugData.push({
+      step,
+      attempt,
+      maxAttempts,
+      maxTokens: budget,
+      prompt,
+      response: reply.content,
+      finishReason: reply.finishReason,
+      usage: reply.usage,
+    });
+
+    if (reply.finishReason === "length") {
+      truncated = true;
+      if (attempt < maxAttempts) {
+        budget *= 2;
+        console.warn(
+          `${step}: model output was truncated (finish_reason=length); retrying with max_tokens=${budget}`,
+        );
+        continue;
+      }
+      break;
+    }
 
     try {
-      return JSON.parse(raw) as T;
+      return JSON.parse(reply.content) as T;
     } catch (error) {
+      truncated = false;
       lastError = error;
       debugData[debugData.length - 1].parseError =
         error instanceof Error ? error.message : String(error);
       if (attempt < maxAttempts) {
-        console.warn(`${step}: model reply was not valid JSON, retrying (${attempt}/${maxAttempts})`);
+        console.warn(`${step}: reply was not valid JSON, retrying (${attempt}/${maxAttempts})`);
       }
     }
   }
 
+  if (truncated) {
+    throw new StoryGenerationError("model_output_truncated", modelTruncatedAdvice(model, storyLength), {
+      debugData,
+    });
+  }
   throw new StoryGenerationError("model_output_invalid", modelOutputAdvice(model, storyLength), {
     cause: lastError,
     debugData,
@@ -141,44 +207,36 @@ async function generateShortStorySingleCall(
     }
   `;
 
-  const response = await client.chat.completions.create({
-    model: ctx.resolved.model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.7,
-    max_tokens: 2048, // Ample room for a short story + JSON
-  });
-
-  const responseContent = response.choices[0].message.content || "";
-
-  // Record the raw reply BEFORE parsing it. This previously called JSON.parse
-  // inside the push() argument, so a malformed reply threw before the push
-  // completed and the evidence was destroyed at exactly the moment it was
-  // needed. It also parsed the same string twice on the happy path.
-  //
-  // No retry here on purpose: the very-short path is under investigation and a
-  // retry would mask the failure being measured.
-  debugData.push({
+  const parsed = await requestModelJson<{
+    title: string;
+    content: string;
+    applicationQuestions: string[];
+    imagePrompt: string;
+  }>({
     step: "generateShortStorySingleCall",
+    model: ctx.resolved.model,
+    storyLength: request.storyLength,
+    debugData,
+    maxTokens: TOKEN_BUDGET.json,
     prompt: userPrompt,
-    response: responseContent,
+    call: async (maxTokens) => {
+      const response = await client.chat.completions.create({
+        model: ctx.resolved.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+        max_tokens: maxTokens,
+      });
+      return {
+        content: response.choices[0].message.content || "",
+        finishReason: response.choices[0].finish_reason,
+        usage: response.usage,
+      };
+    },
   });
-
-  let parsed: any;
-  try {
-    parsed = JSON.parse(responseContent);
-  } catch (error) {
-    debugData[debugData.length - 1].parseError =
-      error instanceof Error ? error.message : String(error);
-    throw new StoryGenerationError(
-      "model_output_invalid",
-      modelOutputAdvice(ctx.resolved.model, request.storyLength),
-      { cause: error, debugData },
-    );
-  }
 
   debugData[debugData.length - 1].wordCount = countWords(parsed.content || "");
   return parsed;
@@ -208,28 +266,32 @@ async function generateStoryOutline(
     Respond with ONLY a valid JSON object in the format: { "outline": ["Chapter 1...", "Chapter 2...", ...] }
   `;
 
-  const response = await client.chat.completions.create({
+  const parsed = await requestModelJson<{ outline: string[] }>({
+    step: "generateOutline",
     model: ctx.resolved.model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.7,
-    max_tokens: 2048,
+    storyLength: request.storyLength,
+    debugData,
+    maxTokens: TOKEN_BUDGET.json,
+    prompt: userPrompt,
+    call: async (maxTokens) => {
+      const response = await client.chat.completions.create({
+        model: ctx.resolved.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+        max_tokens: maxTokens,
+      });
+      return {
+        content: response.choices[0].message.content || "",
+        finishReason: response.choices[0].finish_reason,
+        usage: response.usage,
+      };
+    },
   });
-
-  const responseContent = response.choices[0].message.content || "";
-  debugData.push({ step: "generateOutline", prompt: userPrompt, response: responseContent });
-  try {
-    return JSON.parse(responseContent).outline;
-  } catch (error) {
-    throw new StoryGenerationError(
-      "model_output_invalid",
-      modelOutputAdvice(ctx.resolved.model, request.storyLength),
-      { cause: error, debugData },
-    );
-  }
+  return parsed.outline;
 }
 
 // HELPER for Long Stories (Chapter Generation)
@@ -268,15 +330,30 @@ async function generateStoryChapter(
       { role: "user", content: userPrompt },
     ],
     temperature: 0.7,
-    max_tokens: 4096,
+    max_tokens: TOKEN_BUDGET.chapter,
   });
 
   const chapterContent = response.choices[0].message.content || "";
+  const finishReason = response.choices[0].finish_reason;
   debugData.push({
     step: `generateChapter: ${chapterOutline.substring(0, 30)}...`,
     prompt: userPrompt,
+    maxTokens: TOKEN_BUDGET.chapter,
+    finishReason,
+    usage: response.usage,
     wordCount: countWords(chapterContent),
   });
+
+  // A chapter is prose rather than JSON, so truncation cannot show up as a
+  // parse error -- it would silently produce a story that stops mid-sentence.
+  if (finishReason === "length") {
+    throw new StoryGenerationError(
+      "model_output_truncated",
+      modelTruncatedAdvice(ctx.resolved.model, request.storyLength),
+      { debugData },
+    );
+  }
+
   return chapterContent;
 }
 
@@ -305,28 +382,37 @@ async function finalizeStoryDetails(
     Respond with ONLY a valid JSON object: { "title": "...", "applicationQuestions": ["...", "...", "..."], "imagePrompt": "..." }
   `;
 
-  const response = await client.chat.completions.create({
+  // This prompt embeds the entire assembled story, so it has the least headroom
+  // of any call site -- which is why it was the one that broke "long".
+  return await requestModelJson<{
+    title: string;
+    applicationQuestions: string[];
+    imagePrompt: string;
+  }>({
+    step: "finalizeStoryDetails",
     model: ctx.resolved.model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.6,
-    max_tokens: 2048,
+    debugData,
+    maxTokens: TOKEN_BUDGET.json,
+    prompt: userPrompt,
+    call: async (maxTokens) => {
+      const response = await client.chat.completions.create({
+        model: ctx.resolved.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.6,
+        max_tokens: maxTokens,
+      });
+      return {
+        content: response.choices[0].message.content || "",
+        finishReason: response.choices[0].finish_reason,
+        usage: response.usage,
+      };
+    },
   });
 
-  const responseContent = response.choices[0].message.content || "";
-  debugData.push({ step: "finalizeStory" });
-  try {
-    return JSON.parse(responseContent);
-  } catch (error) {
-    throw new StoryGenerationError(
-      "model_output_invalid",
-      modelOutputAdvice(ctx.resolved.model),
-      { cause: error, debugData },
-    );
-  }
 }
 
 // =========================================================================
