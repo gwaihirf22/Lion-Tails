@@ -25,7 +25,8 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 # Stage 3: runtime — production dependencies only
 #
-# This is only safe because server/prod.ts never imports server/vite.ts. The
+# This is only safe because server/prod.ts never imports server/vite.ts.
+# See docs/decisions.md §9. The
 # esbuild bundle uses --packages=external, so anything reachable from the entry
 # module must exist in node_modules at runtime; pulling in Vite here would drag
 # the whole devDependency tree into the image (and fail at startup without it).

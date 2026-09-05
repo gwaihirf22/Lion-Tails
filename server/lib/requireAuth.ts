@@ -1,3 +1,5 @@
+// These guards were once deleted as dead code -- correctly verified as
+// unreferenced, wrongly concluded to be unnecessary. See docs/decisions.md §12.
 /**
  * Route-level authorisation.
  *

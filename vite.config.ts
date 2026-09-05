@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 // Generates the shadcn CSS custom properties from theme.json at build time.
+// LOAD-BEARING despite the @replit scope — see docs/decisions.md §8.
 // client/src/index.css defines none of them itself, so this plugin is
 // load-bearing for theming even though it carries the @replit scope.
 import themePlugin from "@replit/vite-plugin-shadcn-theme-json";

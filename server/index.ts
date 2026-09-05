@@ -4,12 +4,12 @@ import { seedReferenceData } from "./seed";
 import { log } from "./static";
 import path from "path";
 import type { Server } from "http";
-// pg is a CommonJS module. The production bundle is ESM built with
+// pg is a CommonJS module; the production bundle is ESM built with
 // --packages=external, so Node loads pg as CJS at runtime and cannot
 // destructure named exports from it:
 //   SyntaxError: Named export 'Pool' not found.
 // Import the default and destructure at runtime; the type import erases at
-// compile time and is safe.
+// compile time and is safe. See docs/decisions.md §1.
 import pg from "pg";
 const { Pool } = pg;
 

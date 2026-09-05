@@ -4,7 +4,7 @@ import { heroesOfFaithData } from "./data/heroesOfFaith";
 import { log } from "./static";
 
 /**
- * Seeds reference data that the app expects to exist.
+ * Seeds reference data that the app expects to exist. See docs/decisions.md §3.
  *
  * This used to be a fire-and-forget async IIFE inside registerRoutes, which
  * raced database initialisation and reliably lost: getAllHeroesOfFaith() hit

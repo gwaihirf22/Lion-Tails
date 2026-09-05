@@ -4,6 +4,8 @@ import { storage } from "../storage";
 /**
  * Decides which model a request may use, and whose credentials pay for it.
  *
+ * See docs/decisions.md §2 before changing the gate or adding a model list.
+ *
  * The hardcoded gpt-4o was deliberate cost control, not an oversight: honouring
  * the stored per-user model without a gate would let any registered user pick
  * an expensive model and spend the server owner's OpenAI credits, because

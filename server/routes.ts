@@ -1209,6 +1209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Liveness/readiness probe used by the container healthcheck.
+  // See docs/decisions.md §6 before changing the status code or the probe.
   //
   // Returns 503 when a database is configured but unreachable, so that a
   // container which silently fell back to in-memory storage FAILS its
