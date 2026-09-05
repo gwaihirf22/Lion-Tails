@@ -1,0 +1,101 @@
+# Dependabot configuration for automated dependency updates
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Mirrors the configuration already used in the neighborly and
+# paul-blake-website repositories, so all three behave the same way.
+#
+# Production updates are limited to `patch` deliberately. A minor bump to a
+# runtime dependency can change behaviour, and this project's CI is a typecheck,
+# a build and two smoke tests -- enough to catch a crash, not enough to catch a
+# subtle regression. Dev dependencies get minor + patch because a broken build
+# tool fails loudly and immediately.
+
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      development-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+      production-dependencies:
+        dependency-type: "production"
+        update-types:
+          - "patch"
+    labels:
+      - "dependencies"
+      - "automated"
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore(dev)"
+      include: "scope"
+    allow:
+      - dependency-type: "all"
+    # Majors for these are reviewed by hand. Each one has a specific reason:
+    ignore:
+      # React 19 is a large migration across ~45 shadcn components.
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      # Owns the schema. A bump must be rehearsed against a real Postgres --
+      # verifyOrmSchema derives its expectation from drizzle's getTableColumns(),
+      # so an internals change can silently disable the schema guard rather than
+      # failing loudly. See docs/decisions.md.
+      - dependency-name: "drizzle-orm"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "drizzle-kit"
+        update-types: ["version-update:semver-major"]
+      # Tailwind 4 is a config-format rewrite, and tailwind-scrollbar 4 requires
+      # it -- the two move together or not at all.
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwind-scrollbar"
+        update-types: ["version-update:semver-major"]
+      # A Vite major can change the plugin API, and
+      # @replit/vite-plugin-shadcn-theme-json (unmaintained since 2024-11, no
+      # public repo) generates every shadcn CSS variable. If it stops emitting
+      # them the site loses its palette silently. Replace that plugin first.
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      # Express 5 changes routing and error handling.
+      - dependency-name: "express"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "zod"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+
+  # Picks up the root Dockerfile (node:20-alpine in all three stages).
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(docker)"
