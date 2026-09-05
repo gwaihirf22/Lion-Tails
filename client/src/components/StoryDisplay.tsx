@@ -48,7 +48,7 @@ export default function StoryDisplay({ story, storyId }: StoryDisplayProps) {
   
   // Fetch Heroes of Faith for the dropdown
   const { data: heroes = [] } = useQuery<HeroOfFaith[]>({
-    queryKey: ['/api/heroes-of-faith'],
+    queryKey: ['/api/heroes'],
     enabled: !!storyId // Only fetch if we have a storyId
   });
 

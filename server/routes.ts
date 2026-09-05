@@ -1084,17 +1084,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Get all stories for a specific hero
-  app.get("/api/heroes/:heroId/stories", async (req, res) => {
-    try {
-      const stories = await storage.getHeroStoriesByHeroId(req.params.heroId);
-      res.json(stories);
-    } catch (error) {
-      console.error("Error fetching hero's stories:", error);
-      res.status(500).json({ message: "Failed to fetch hero's stories" });
-    }
-  });
-  
   // Create a new hero story
   app.post("/api/hero-stories", async (req, res) => {
     try {
