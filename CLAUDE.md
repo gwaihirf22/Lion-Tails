@@ -85,9 +85,10 @@ At startup `verifyOrmSchema()` checks every declared table against
 
 ## Authentication and authorisation
 
-Passport local strategy with `express-session` and a Postgres-backed store.
-There is **no JWT** — `server/lib/auth.ts` is an orphan module imported by
-nothing, and no code path issues a token.
+Passport local strategy (scrypt) with `express-session` and a Postgres-backed
+store. There is **no JWT**: the bcrypt/JWT module that once lived at
+`server/lib/auth.ts` was deleted, along with `jsonwebtoken`, `bcryptjs` and
+`nodemailer`. `grep -r jsonwebtoken server/` returns nothing.
 
 Guards live in `server/lib/requireAuth.ts` and are applied **per route in the
 signature**, not via `app.use()`, so a missing guard is visible where the routes
@@ -114,9 +115,15 @@ are already six, and the settings UI still uses its own.
 
 ## Environment
 
-See `.env.example`. `SESSION_SECRET` and `JWT_SECRET` are required in
-production and the app refuses to start without them. `EMAIL_*` is currently
-unused — no code path sends mail.
+See `.env.example`. **`SESSION_SECRET` is the only secret required in
+production** — `requiredSecret()` throws without it. `JWT_SECRET` was removed
+with the JWT module and is no longer read anywhere; the bundle boots without it.
+
+`EMAIL_*` is unused: no code path sends mail. Password reset generates a valid
+token and then discards it (`server/auth.ts:185`, `// TODO: Send password reset
+email`), so the endpoints answer 200 and look functional while the delivery half
+does not exist. The token is returned in the response body only when
+`NODE_ENV=development`.
 
 ## Conventions
 
