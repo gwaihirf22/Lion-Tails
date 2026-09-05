@@ -323,6 +323,41 @@ shared GPU, and raising either takes VRAM from video transcoding.
 costs no additional VRAM (see below). `MODEL_CONTEXT_LIMIT` in this app must be
 kept in step with it — see §13.
 
+## 15. A 200 is not a success
+
+`server/lib/openai-implementation.ts`
+
+Story length is part of the request, so a story far below the requested word
+count is a failed request rather than a short one. The same model, prompt and
+code produced 4294 words against a 2500 target on one run and 794 on the next —
+both HTTP 200. "Long" meant anything from a third to nearly double what was
+asked for, and nothing anywhere noticed.
+
+Two causes, both fixed, and both worth recognising by shape:
+
+- **Structurally valid, semantically wrong.** The outline validator checked that
+  the reply was an array of strings. A model returned ONE element containing
+  every chapter joined by `\n\n` — valid JSON, correct shape, and it made the
+  chapter loop run once. The count was the thing that mattered. This is the same
+  family as a reply with the wrong keys (§13), one level up: the check tested
+  the form and not the meaning.
+- **The same quantity derived twice.** `generateStoryOutline` asked for
+  `ceil(words/500)` parts while `generateStoryChapter` sized each chapter as
+  `words / max(3, ceil(words/500))`. For a 1000-word story that meant asking for
+  2 chapters of 333 words: a structural 33% undershoot before the model was
+  involved. `getChapterCount()` is now the single source, and the per-chapter
+  target derives from the outline actually returned.
+
+Enforcement is asymmetric on purpose. An overlong story still contains what was
+asked for and is usable, so it is recorded and returned; a short one is missing
+content the user requested, so below `MINIMUM_LENGTH_RATIO` (0.6) it fails.
+
+**The wider point.** These cells were reported green because green meant "HTTP
+200 with a story", which is the exact standard this codebase already rejects for
+canned error stories. Word counts were printed beside the status the whole time
+and read as information rather than as a result. A check is only a check if
+something acts on it.
+
 ## Recurring failure shape
 
 Most incidents here have had the same form: **a check that reported success

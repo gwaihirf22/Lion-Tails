@@ -16,6 +16,7 @@ export type StoryFailureCode =
   | "no_model_available"
   | "model_output_invalid"
   | "model_output_truncated"
+  | "story_too_short"
   | "generation_failed";
 
 const STATUS: Record<StoryFailureCode, number> = {
@@ -24,6 +25,7 @@ const STATUS: Record<StoryFailureCode, number> = {
   // 502: the request was fine; the upstream model returned something unusable.
   model_output_invalid: 502,
   model_output_truncated: 502,
+  story_too_short: 502,
   generation_failed: 500,
 };
 
@@ -65,6 +67,31 @@ export function modelTruncatedAdvice(model: string, storyLength?: string): strin
   return (
     `The model (${model}) ran out of room before it finished the story${length}. ` +
     `Try a shorter story length, or switch to a stronger model in Settings.`
+  );
+}
+
+/**
+ * A story far below the requested length is not a success.
+ *
+ * The same model, prompt and code produced 4294 words against a 2500 target on
+ * one run and 794 on the next, both HTTP 200 -- so "long" meant anything from a
+ * third to nearly double what was asked for, and nothing noticed. Returning 200
+ * with a quarter-length story is the same standard this app already rejects for
+ * canned error stories, one level up.
+ *
+ * Only the undershoot fails. An overlong story still contains what was asked
+ * for and is usable; a short one is missing content the user requested.
+ */
+export function storyTooShortAdvice(
+  actualWords: number,
+  targetWords: number,
+  model: string,
+): string {
+  const pct = Math.round((actualWords / targetWords) * 100);
+  return (
+    `The model (${model}) produced only ${actualWords} words against a target of ` +
+    `${targetWords} (${pct}%). Try generating it again, choose a shorter length, ` +
+    `or switch to a stronger model in Settings.`
   );
 }
 

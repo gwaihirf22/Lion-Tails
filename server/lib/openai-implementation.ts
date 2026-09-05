@@ -24,7 +24,12 @@ type StoryContext = {
 };
 import { getBibleVerseByTheme } from "../data/bibleVerses";
 import { storage } from "../storage";
-import { StoryGenerationError, modelOutputAdvice, modelTruncatedAdvice } from "./storyErrors";
+import {
+  StoryGenerationError,
+  modelOutputAdvice,
+  modelTruncatedAdvice,
+  storyTooShortAdvice,
+} from "./storyErrors";
 import { resolveModel, createClient, type ResolvedModel } from "./modelPolicy";
 import * as fs from "fs";
 import * as path from "path";
@@ -37,6 +42,20 @@ import { v4 as uuidv4 } from "uuid";
 // "gpt-4o" sites were five places for the policy to drift.
 
 // Helper function to get word count from length setting
+/**
+ * How many chapters a story of this length is planned as.
+ *
+ * Single source: the outline prompt, the outline's length validation and the
+ * per-chapter word target all derive from this. They previously did not --
+ * generateStoryOutline asked for ceil(words/500) parts while
+ * generateStoryChapter sized each chapter as words/max(3, ceil(words/500)).
+ * For a 1000-word story that meant asking for 2 chapters of 333 words: a
+ * structural 33% undershoot before the model was even involved.
+ */
+function getChapterCount(targetWordCount: number): number {
+  return Math.max(3, Math.ceil(targetWordCount / 500));
+}
+
 function getWordCountFromLength(length: string): number {
   // Reading time is ~140 words per minute for children.
   switch (length) {
@@ -104,6 +123,16 @@ const TOKEN_BUDGET = {
  * and is under consideration.
  */
 const MODEL_CONTEXT_LIMIT = Number(process.env.MODEL_CONTEXT_LIMIT) || 32768;
+
+/**
+ * Below this fraction of the requested word count, a story is treated as a
+ * failed request rather than a short one. Set at 0.6 from observed behaviour:
+ * genuine results have landed at 81-172% of target, while the two real
+ * undershoots were 49% (a 243-word "very-short") and 32% (a 794-word "long"
+ * caused by a one-element outline). 0.6 separates those cleanly without
+ * failing on ordinary variance.
+ */
+const MINIMUM_LENGTH_RATIO = 0.6;
 
 type ModelUsage = {
   prompt_tokens?: number;
@@ -459,8 +488,8 @@ async function generateStoryOutline(
   wordCount: number,
   debugData: any[],
   ctx: StoryContext,
+  numberOfChapters: number,
 ): Promise<string[]> {
-  const numberOfChapters = Math.ceil(wordCount / 500);
 
   const systemPrompt = `${ctx.systemPrompt} Your task is to create a detailed plan for a story.`;
   const userPrompt = `
@@ -500,8 +529,15 @@ async function generateStoryOutline(
         usage: response.usage,
       };
     },
+    // Structurally valid but semantically wrong is still wrong. A model has
+    // returned ONE array element containing all the chapters joined by "\n\n":
+    // valid JSON, an array of strings, and it made the chapter loop run once,
+    // producing a story at a third of the requested length with HTTP 200.
+    // The count is what matters here, not just the shape.
     validate: (value) =>
-      Array.isArray(value?.outline) && value.outline.length > 0 ? value : undefined,
+      Array.isArray(value?.outline) && value.outline.length === numberOfChapters
+        ? value
+        : undefined,
   });
   return parsed.outline;
 }
@@ -514,11 +550,9 @@ async function generateStoryChapter(
   storySoFar: string,
   debugData: any[],
   ctx: StoryContext,
+  wordCountPerChapter: number,
 ): Promise<string> {
-  const { storyLength } = request;
-  const totalWordCount = getWordCountFromLength(storyLength || "medium");
-  const numberOfChapters = Math.max(3, Math.ceil(totalWordCount / 500));
-  const wordCountPerChapter = totalWordCount / numberOfChapters;
+
 
   const systemPrompt = `${ctx.systemPrompt} Continue writing a story based on the context provided. Focus ONLY on writing the current part of the story. Do NOT summarize or add titles/questions.`;
   const userPrompt = `
@@ -698,13 +732,20 @@ export async function generateStoryWithOpenAI(
       console.log("Using multi-step method for long story.");
 
       // Step 1: Outline
+      const expectedChapters = getChapterCount(targetWordCount);
       const outline = await generateStoryOutline(
         openaiClient,
         request,
         targetWordCount,
         debugData,
         ctx,
+        expectedChapters,
       );
+
+      // Sized from the outline we actually got, not from a second derivation of
+      // the count. If those two ever disagree the story silently comes out at
+      // the wrong length, which is exactly what used to happen.
+      const wordsPerChapter = targetWordCount / outline.length;
       // Backstop only: requestModelJson now validates the shape and retries, so
       // an empty outline reaching here means something upstream changed.
       if (!outline || outline.length === 0) {
@@ -726,6 +767,7 @@ export async function generateStoryWithOpenAI(
           fullStoryContent,
           debugData,
           ctx,
+          wordsPerChapter,
         );
         fullStoryContent += (fullStoryContent ? "\n\n" : "") + chapterContent;
         console.log(
@@ -749,6 +791,37 @@ export async function generateStoryWithOpenAI(
     }
 
     // --- COMMON FINAL STEPS FOR ALL STORIES ---
+
+    // Length is part of what was requested, so a story far below it is a failed
+    // request rather than a successful one. Checked here so it covers the
+    // single-call and multi-step paths alike.
+    //
+    // Asymmetric on purpose: an overlong story still contains what was asked
+    // for and is usable, so it is recorded but not rejected. A short one is
+    // missing content the user asked for.
+    const actualWordCount = countWords(finalDetails.content || "");
+    const lengthRatio = actualWordCount / targetWordCount;
+    debugData.push({
+      step: "lengthCheck",
+      actualWordCount,
+      targetWordCount,
+      ratio: Number(lengthRatio.toFixed(2)),
+    });
+
+    if (lengthRatio < MINIMUM_LENGTH_RATIO) {
+      throw new StoryGenerationError(
+        "story_too_short",
+        storyTooShortAdvice(actualWordCount, targetWordCount, ctx.resolved.model),
+        { debugData },
+      );
+    }
+    if (lengthRatio > 1.5) {
+      console.warn(
+        `Story ran long: ${actualWordCount} words against a ${targetWordCount} target ` +
+          `(${Math.round(lengthRatio * 100)}%). Returned anyway -- it contains what was asked for.`,
+      );
+    }
+
     console.log("Assembling final response and generating image...");
     let imageUrl: string | undefined = undefined;
     // No entitlement check here: generateStoryImage resolves the image tier
