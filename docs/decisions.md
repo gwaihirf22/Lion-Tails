@@ -290,6 +290,16 @@ Three consequences worth keeping:
   measured headroom (`usage.prompt_tokens`) and stops rather than spending an
   identical call. `MODEL_CONTEXT_LIMIT` must match Ollama's
   `OLLAMA_CONTEXT_LENGTH`.
+- **Reasoning length varies enormously run to run.** The same model, same
+  prompt and same budget has produced 754 completion tokens and `stop` on one
+  attempt and 8192 with `finish_reason: "length"` and *zero content* on the
+  next. The retry is therefore load-bearing for `gpt-oss:20b`, not a rare
+  safety net — several successful generations depend on the second attempt.
+- **`usage.prompt_tokens` is not always the prompt.** Ollama has reported 253
+  then 5037 for an identical prompt, apparently slot state on a reused slot. The
+  clamp takes the smallest value observed across attempts, since the prompt
+  string cannot grow between them; trusting the latest reading would understate
+  headroom and suppress a retry that had room.
 - **An underspecified prompt makes reasoning unbounded.** The same model at the
   same budget used 768 tokens with the real structured prompt and the entire cap
   with a stripped-down one. Pinning down the expected output is not only a

@@ -126,9 +126,8 @@ type ModelReply = {
  * is nothing to gain from an identical call -- fail immediately rather than
  * spending it.
  */
-function nextTokenBudget(current: number, usage?: ModelUsage | null): number | null {
+function nextTokenBudget(current: number, promptTokens?: number): number | null {
   const doubled = current * 2;
-  const promptTokens = usage?.prompt_tokens;
 
   if (typeof promptTokens !== "number") {
     // No measurement available; double, but never past the whole window.
@@ -184,6 +183,17 @@ async function requestModelJson<T>(opts: {
   let budget = opts.maxTokens;
   let lastError: unknown;
   let truncated = false;
+  /**
+   * Smallest prompt_tokens observed for this call.
+   *
+   * The prompt string is identical on every attempt, so its true token count
+   * cannot grow. Ollama has been seen reporting 253 on one attempt and 5037 on
+   * the next for the same prompt -- apparently slot state on a reused slot
+   * rather than the prompt itself. Taking the minimum keeps an inflated reading
+   * from understating the headroom and suppressing a retry that had room.
+   */
+  let promptTokens: number | undefined;
+
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const reply = await opts.call(budget);
@@ -202,11 +212,15 @@ async function requestModelJson<T>(opts: {
     if (reply.finishReason === "length") {
       truncated = true;
       if (attempt < maxAttempts) {
-        const next = nextTokenBudget(budget, reply.usage);
+      const reported = reply.usage?.prompt_tokens;
+      if (typeof reported === "number" && reported > 0) {
+        promptTokens = promptTokens === undefined ? reported : Math.min(promptTokens, reported);
+      }
+        const next = nextTokenBudget(budget, promptTokens);
         if (next === null) {
           console.warn(
             `${step}: truncated at max_tokens=${budget} with no context headroom left ` +
-              `(prompt ${reply.usage?.prompt_tokens ?? "?"} of ${MODEL_CONTEXT_LIMIT}); not retrying.`,
+              `(prompt ${promptTokens ?? "?"} of ${MODEL_CONTEXT_LIMIT}); not retrying.`,
           );
           break;
         }
@@ -282,6 +296,16 @@ async function requestModelText(opts: {
   const { step, model, storyLength, debugData, prompt } = opts;
   const maxAttempts = 2;
   let budget = opts.maxTokens;
+  /**
+   * Smallest prompt_tokens observed for this call.
+   *
+   * The prompt string is identical on every attempt, so its true token count
+   * cannot grow. Ollama has been seen reporting 253 on one attempt and 5037 on
+   * the next for the same prompt -- apparently slot state on a reused slot
+   * rather than the prompt itself. Taking the minimum keeps an inflated reading
+   * from understating the headroom and suppressing a retry that had room.
+   */
+  let promptTokens: number | undefined;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const reply = await opts.call(budget);
@@ -302,11 +326,15 @@ async function requestModelText(opts: {
     }
 
     if (attempt < maxAttempts) {
-      const next = nextTokenBudget(budget, reply.usage);
+    const reported = reply.usage?.prompt_tokens;
+    if (typeof reported === "number" && reported > 0) {
+      promptTokens = promptTokens === undefined ? reported : Math.min(promptTokens, reported);
+    }
+      const next = nextTokenBudget(budget, promptTokens);
       if (next === null) {
         console.warn(
           `${step}: truncated at max_tokens=${budget} with no context headroom left ` +
-            `(prompt ${reply.usage?.prompt_tokens ?? "?"} of ${MODEL_CONTEXT_LIMIT}); not retrying.`,
+            `(prompt ${promptTokens ?? "?"} of ${MODEL_CONTEXT_LIMIT}); not retrying.`,
         );
         break;
       }
