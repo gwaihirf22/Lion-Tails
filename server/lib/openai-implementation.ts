@@ -842,7 +842,7 @@ export async function generateStoryWithOpenAI(
     if (lengthRatio < MINIMUM_LENGTH_RATIO) {
       throw new StoryGenerationError(
         "story_too_short",
-        storyTooShortAdvice(actualWordCount, targetWordCount, ctx.resolved.model),
+        storyTooShortAdvice(actualWordCount, targetWordCount, ctx.resolved.model, request.storyLength),
         { debugData },
       );
     }

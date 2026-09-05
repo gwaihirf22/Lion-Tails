@@ -86,12 +86,22 @@ export function storyTooShortAdvice(
   actualWords: number,
   targetWords: number,
   model: string,
+  storyLength?: string,
 ): string {
   const pct = Math.round((actualWords / targetWords) * 100);
+
+  // "Choose a shorter length" is impossible advice at the shortest length, and
+  // that is the length most likely to trip this check: very-short takes the
+  // single-call path, so there are no chapters to make up a shortfall and both
+  // local models have undershot there.
+  const atShortestLength = storyLength === "very-short";
+  const remedies = atShortestLength
+    ? "Try generating it again, or switch to a stronger model in Settings."
+    : "Try generating it again, choose a shorter length, or switch to a stronger model in Settings.";
+
   return (
     `The model (${model}) produced only ${actualWords} words against a target of ` +
-    `${targetWords} (${pct}%). Try generating it again, choose a shorter length, ` +
-    `or switch to a stronger model in Settings.`
+    `${targetWords} (${pct}%). ${remedies}`
   );
 }
 
