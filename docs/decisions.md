@@ -277,3 +277,16 @@ without having verified the thing that mattered.**
 
 When a check passes, ask what it would have done had the thing been broken. If
 the answer is "the same", it is not a check.
+
+### Known open instance: mistyped API paths return 200 and HTML
+
+A POST to an `/api/` path that does not exist — `/api/login` rather than
+`/api/auth/login`, say — falls through to the SPA catch-all in
+`server/static.ts` and returns **HTTP 200 with index.html**. A client reads that
+as success and only discovers otherwise several requests later, when something
+downstream 401s.
+
+This was found by a benchmark harness that "successfully registered" a user
+against a route that has never existed. Unfixed at the time of writing; the
+remedy is for unmatched `/api/*` requests to 404 as JSON before the SPA
+fallback is reached.

@@ -176,6 +176,62 @@ async function requestModelJson<T>(opts: {
   });
 }
 
+/**
+ * The prose counterpart of requestModelJson.
+ *
+ * Chapters are not JSON, so truncation cannot surface as a parse error -- it
+ * would silently yield a story that stops mid-sentence. It still gets the same
+ * remedy as the JSON sites: finish_reason "length" is a resource problem, so
+ * retry once at double the budget before treating it as fatal.
+ *
+ * Symmetry matters here beyond tidiness. This path has usually already spent
+ * several paid calls by the time it fails, so throwing on the first truncation
+ * discards every completed chapter.
+ */
+async function requestModelText(opts: {
+  step: string;
+  model: string;
+  storyLength?: string;
+  debugData: any[];
+  maxTokens: number;
+  prompt?: string;
+  call: (maxTokens: number) => Promise<ModelReply>;
+}): Promise<string> {
+  const { step, model, storyLength, debugData, prompt } = opts;
+  const maxAttempts = 2;
+  let budget = opts.maxTokens;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const reply = await opts.call(budget);
+
+    debugData.push({
+      step,
+      attempt,
+      maxAttempts,
+      maxTokens: budget,
+      prompt,
+      finishReason: reply.finishReason,
+      usage: reply.usage,
+      wordCount: countWords(reply.content),
+    });
+
+    if (reply.finishReason !== "length") {
+      return reply.content;
+    }
+
+    if (attempt < maxAttempts) {
+      budget *= 2;
+      console.warn(
+        `${step}: chapter was truncated (finish_reason=length); retrying with max_tokens=${budget}`,
+      );
+    }
+  }
+
+  throw new StoryGenerationError("model_output_truncated", modelTruncatedAdvice(model, storyLength), {
+    debugData,
+  });
+}
+
 // <<< NEW HELPER for Short Stories (Single API Call) >>>
 async function generateShortStorySingleCall(
   client: OpenAI,
@@ -323,38 +379,30 @@ async function generateStoryChapter(
       CRITICAL INSTRUCTION: Write a detailed chapter of AT LEAST ${Math.round(wordCountPerChapter)} words.
     `;
 
-  const response = await client.chat.completions.create({
-    model: ctx.resolved.model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    temperature: 0.7,
-    max_tokens: TOKEN_BUDGET.chapter,
-  });
-
-  const chapterContent = response.choices[0].message.content || "";
-  const finishReason = response.choices[0].finish_reason;
-  debugData.push({
+  return await requestModelText({
     step: `generateChapter: ${chapterOutline.substring(0, 30)}...`,
-    prompt: userPrompt,
+    model: ctx.resolved.model,
+    storyLength: request.storyLength,
+    debugData,
     maxTokens: TOKEN_BUDGET.chapter,
-    finishReason,
-    usage: response.usage,
-    wordCount: countWords(chapterContent),
+    prompt: userPrompt,
+    call: async (maxTokens) => {
+      const response = await client.chat.completions.create({
+        model: ctx.resolved.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: maxTokens,
+      });
+      return {
+        content: response.choices[0].message.content || "",
+        finishReason: response.choices[0].finish_reason,
+        usage: response.usage,
+      };
+    },
   });
-
-  // A chapter is prose rather than JSON, so truncation cannot show up as a
-  // parse error -- it would silently produce a story that stops mid-sentence.
-  if (finishReason === "length") {
-    throw new StoryGenerationError(
-      "model_output_truncated",
-      modelTruncatedAdvice(ctx.resolved.model, request.storyLength),
-      { debugData },
-    );
-  }
-
-  return chapterContent;
 }
 
 // HELPER for Long Stories (Final Details)
