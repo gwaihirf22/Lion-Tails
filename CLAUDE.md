@@ -133,7 +133,12 @@ does not exist. The token is returned in the response body only when
   repeatedly produced bugs from parallel definitions: four schema sources, six
   model lists, four prompt sites, 29 inline auth checks.
 - When a check passes, ask what it would have done had the thing been broken.
-  Several outages here came from checks that could not fail.
+  Several outages here came from checks that could not fail. The mirror image is
+  just as dangerous: before acting on a check that *fails*, confirm it is
+  measuring what you think it is. See `docs/decisions.md`.
+- Model calls are not free and not instant. `max_tokens` must cover reasoning as
+  well as output on a thinking model, and the context window is shared between
+  prompt and output. See `docs/decisions.md` §13.
 
 ## Deployment
 

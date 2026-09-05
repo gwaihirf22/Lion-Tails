@@ -96,6 +96,8 @@ const TOKEN_BUDGET = {
  * ~12000 tokens of output no matter what max_tokens says. Ollama also disables
  * KV cache shifting for this context, so there is no graceful overflow.
  *
+ * See docs/decisions.md §13.
+ *
  * Sizing a budget without counting everything that shares it is the same
  * mistake as the original 2048 bug, one level up. Configurable because raising
  * Ollama's context (OLLAMA_CONTEXT_LENGTH) is cheap on a sliding-window model

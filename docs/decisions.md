@@ -261,6 +261,40 @@ depending on CI to catch it.
 
 ---
 
+## 13. Token budgets are sized for reasoning plus output
+
+`server/lib/openai-implementation.ts`
+
+`max_tokens` was 2048 at three of four story call sites and 4096 at the fourth.
+Every 2048 site failed and the 4096 site worked, across two different models.
+
+The cause is that **`gpt-oss:20b` is a thinking model**: its internal reasoning
+is billed to `completion_tokens` and counts against `max_tokens`. At 2048 it
+reasoned for the entire budget and emitted zero visible content —
+`finish_reason: "length"`, 2048 completion tokens, an empty string — so
+`JSON.parse("")` threw `Unexpected end of JSON input`. The model was not bad at
+JSON. It never reached the JSON.
+
+Measured, not guessed: one outline for a *short* story consumed 8192 tokens and
+only succeeded on a retry at 16384. Reasoning overhead routinely exceeds the
+visible output.
+
+Three consequences worth keeping:
+
+- **`finish_reason` is on every response and says truncation outright.** Reading
+  it turns a cryptic `SyntaxError` into an accurate message, and distinguishes a
+  *resource* problem (retryable with a bigger budget) from a *capability* one
+  (not). Do not infer truncation from a parse failure.
+- **The context window is shared between prompt and output.** Doubling the output
+  budget past what the prompt left free achieves nothing, so the retry clamps to
+  measured headroom (`usage.prompt_tokens`) and stops rather than spending an
+  identical call. `MODEL_CONTEXT_LIMIT` must match Ollama's
+  `OLLAMA_CONTEXT_LENGTH`.
+- **An underspecified prompt makes reasoning unbounded.** The same model at the
+  same budget used 768 tokens with the real structured prompt and the entire cap
+  with a stripped-down one. Pinning down the expected output is not only a
+  quality measure; it is what stops a thinking model reasoning until it dies.
+
 ## Recurring failure shape
 
 Most incidents here have had the same form: **a check that reported success
@@ -277,6 +311,26 @@ without having verified the thing that mattered.**
 
 When a check passes, ask what it would have done had the thing been broken. If
 the answer is "the same", it is not a check.
+
+### The mirror image: a test that fails plausibly
+
+The opposite error is rarer and more dangerous. A test that cannot fail hides a
+broken system; **a test that fails plausibly makes you break a working one.**
+
+A unit test of three newly-added validators reported 2 of 10 failing, both
+"correct shape rejected" — which, if believed, meant every story failing after
+two wasted API calls. The validators were correct. The *test* mapped them to the
+wrong call sites, because they appear in the file in a different order than
+assumed, and it reported the mismatch as a code fault.
+
+It was one step from ripping out working code on the authority of a broken test.
+What caught it was printing what the extraction had actually captured rather
+than trusting the labels attached to it — the same move as reading
+`finish_reason` instead of inferring truncation from a parse error.
+
+So: when a check fails, confirm it is measuring what you think it is measuring
+before acting on it. A plausible result is not evidence that the measurement was
+sound.
 
 ### Known open instance: mistyped API paths return 200 and HTML
 
