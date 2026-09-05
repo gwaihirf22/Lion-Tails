@@ -165,6 +165,17 @@ async function requestModelJson<T>(opts: {
   maxTokens: number;
   prompt?: string;
   call: (maxTokens: number) => Promise<ModelReply>;
+  /**
+   * Narrows a parsed reply, or returns undefined if it is the wrong shape.
+   *
+   * Well-formed JSON with the wrong keys is a realistic failure for a weaker
+   * model -- arguably likelier than syntactically broken JSON -- and it used to
+   * bypass all of this: the outline's missing-field check threw a plain Error
+   * downstream, so it surfaced as a bare 500 with no advice and no retry. A
+   * wrong shape is a model-output problem like any other, and the model may
+   * well get it right on a second attempt.
+   */
+  validate?: (parsed: any) => T | undefined;
 }): Promise<T> {
   const { step, model, storyLength, debugData, prompt } = opts;
   const maxAttempts = 2;
@@ -206,8 +217,9 @@ async function requestModelJson<T>(opts: {
       break;
     }
 
+    let parsed: any;
     try {
-      return JSON.parse(reply.content) as T;
+      parsed = JSON.parse(reply.content);
     } catch (error) {
       truncated = false;
       lastError = error;
@@ -216,6 +228,20 @@ async function requestModelJson<T>(opts: {
       if (attempt < maxAttempts) {
         console.warn(`${step}: reply was not valid JSON, retrying (${attempt}/${maxAttempts})`);
       }
+      continue;
+    }
+
+    const validated = opts.validate ? opts.validate(parsed) : (parsed as T);
+    if (validated !== undefined) {
+      return validated;
+    }
+
+    truncated = false;
+    lastError = new Error("model reply did not match the expected shape");
+    debugData[debugData.length - 1].shapeError =
+      `expected keys were missing; got: ${Object.keys(parsed ?? {}).join(", ") || "(not an object)"}`;
+    if (attempt < maxAttempts) {
+      console.warn(`${step}: reply was valid JSON but the wrong shape, retrying (${attempt}/${maxAttempts})`);
     }
   }
 
@@ -354,6 +380,8 @@ async function generateShortStorySingleCall(
         usage: response.usage,
       };
     },
+    validate: (value) =>
+      typeof value?.title === "string" && typeof value?.content === "string" ? value : undefined,
   });
 
   debugData[debugData.length - 1].wordCount = countWords(parsed.content || "");
@@ -408,6 +436,8 @@ async function generateStoryOutline(
         usage: response.usage,
       };
     },
+    validate: (value) =>
+      Array.isArray(value?.outline) && value.outline.length > 0 ? value : undefined,
   });
   return parsed.outline;
 }
@@ -521,6 +551,10 @@ async function finalizeStoryDetails(
         usage: response.usage,
       };
     },
+    validate: (value) =>
+      typeof value?.title === "string" && Array.isArray(value?.applicationQuestions)
+        ? value
+        : undefined,
   });
 
 }
@@ -544,7 +578,10 @@ export async function generateStoryWithOpenAI(
   // downgraded rather than billed to the server owner.
   const resolved = await resolveModel(userId, "chat");
   if (!resolved) {
-    throw new Error("No story model available for this account");
+    throw new StoryGenerationError(
+      "no_model_available",
+      "No story model is available for your account. Add your own OpenAI API key in Settings, or choose a local model if one is configured.",
+    );
   }
   const openaiClient = createClient(resolved);
   const targetWordCount = getWordCountFromLength(storyLength || "medium");
@@ -604,8 +641,15 @@ export async function generateStoryWithOpenAI(
         debugData,
         ctx,
       );
-      if (!outline || outline.length === 0)
-        throw new Error("Failed to generate a valid story outline.");
+      // Backstop only: requestModelJson now validates the shape and retries, so
+      // an empty outline reaching here means something upstream changed.
+      if (!outline || outline.length === 0) {
+        throw new StoryGenerationError(
+          "model_output_invalid",
+          modelOutputAdvice(ctx.resolved.model, request.storyLength),
+          { debugData },
+        );
+      }
 
       // Step 2: Chapters
       let fullStoryContent = "";
