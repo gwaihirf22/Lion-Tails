@@ -110,7 +110,7 @@ const TOKEN_BUDGET = {
  * Total context window, shared between prompt AND output.
  *
  * This is the ceiling the retry escalation has to respect. Doubling the output
- * budget past it does nothing: the local Ollama deployment runs a 32768-token
+ * budget past it does nothing: the local Ollama deployment runs a 16384-token
  * context, so a request with a 4000-token prompt can never produce more than
  * ~12000 tokens of output no matter what max_tokens says. Ollama also disables
  * KV cache shifting for this context, so there is no graceful overflow.
@@ -118,11 +118,30 @@ const TOKEN_BUDGET = {
  * See docs/decisions.md §13.
  *
  * Sizing a budget without counting everything that shares it is the same
- * mistake as the original 2048 bug, one level up. Configurable because raising
- * Ollama's context (OLLAMA_CONTEXT_LENGTH) is cheap on a sliding-window model
- * and is under consideration.
+ * mistake as the original 2048 bug, one level up.
+ *
+ * 16384 is not a placeholder. It was briefly raised to 32768 after measuring
+ * that the extra KV cache was genuinely free, and the host produced six
+ * "CUDA error: an illegal memory access was encountered" faults in 31 minutes
+ * -- on prompts as small as 306 tokens, so the 32k slot allocation itself was
+ * the trigger rather than large inputs. VRAM was not the binding constraint;
+ * driver and llama.cpp stability at that context on this card was. Do not raise
+ * this without re-testing the host under load. See docs/decisions.md §14.
+ *
+ * It was also never needed: across three benchmark runs the only call ever to
+ * reach the ceiling was one outline retry at exactly 16384, and it succeeded.
  */
-const MODEL_CONTEXT_LIMIT = Number(process.env.MODEL_CONTEXT_LIMIT) || 32768;
+const MODEL_CONTEXT_LIMIT = Number(process.env.MODEL_CONTEXT_LIMIT) || 16384;
+
+// Logged once at startup so a mismatch with Ollama's OLLAMA_CONTEXT_LENGTH is
+// visible in the container log rather than only as truncations under load.
+// These two must agree; nothing enforces it, and they were briefly out of step
+// for real during the 32768 revert.
+console.log(
+  `[model] context limit ${MODEL_CONTEXT_LIMIT} tokens ` +
+    `(${process.env.MODEL_CONTEXT_LIMIT ? "from MODEL_CONTEXT_LIMIT" : "default"}) ` +
+    `-- must match Ollama's OLLAMA_CONTEXT_LENGTH`,
+);
 
 /**
  * Below this fraction of the requested word count, a story is treated as a

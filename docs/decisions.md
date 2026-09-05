@@ -319,9 +319,21 @@ Unraid template as being set "so Plex keeps VRAM for NVENC". They look like
 conservative defaults worth tuning. They are a deliberate reservation of a
 shared GPU, and raising either takes VRAM from video transcoding.
 
-`OLLAMA_CONTEXT_LENGTH=32768` was raised from 16384 after measuring that it
-costs no additional VRAM (see below). `MODEL_CONTEXT_LIMIT` in this app must be
-kept in step with it — see §13.
+**`OLLAMA_CONTEXT_LENGTH` is 16384 and raising it is not safe on this hardware.**
+It was briefly set to 32768 after measuring that the extra KV cache cost no VRAM
+at all. The host then produced six of these in 31 minutes:
+
+    CUDA error: an illegal memory access was encountered
+    slot: n_ctx_slot = 32768, task.n_tokens = 306
+
+They struck prompts as small as 306 tokens, so the 32k slot allocation itself
+was the trigger rather than any large input. Reverted to 16384, after which they
+stopped. The GPU showed no retired pages or ECC errors and Plex was unaffected
+throughout, but the app returned HTTP 500s while it lasted.
+
+`MODEL_CONTEXT_LIMIT` in this app must be kept in step with it (§13). The two
+were genuinely out of step during the revert, which is why the effective limit
+is now logged once at startup.
 
 ## 15. A 200 is not a success
 
@@ -416,6 +428,20 @@ reasoned about was not the one that determines the outcome.
 The generalisation: an estimate that is cheap to replace with a measurement
 should be. This one cost one API call and removed the need to weigh a risk at
 all.
+
+**And then the same shape again, one level up.** That measurement was correct
+and the change was still wrong. VRAM was free at 32768, and the context was
+reverted days later because the driver and this llama.cpp build produce illegal
+memory accesses at that slot size on this card (§14). "Does it fit" had been
+measured twice, carefully. "Is it stable" was never asked.
+
+So the sequence went: a plausible number derived from the wrong quantity,
+corrected by measuring the right quantity — and the measurement was still of the
+wrong *question*. The binding constraint was the one nobody had thought of, and
+no amount of rigour applied to the constraints you have thought of will surface
+it. The only defence is to change one thing at a time and watch what breaks,
+which is what caught this: the faults were traceable to a single config change
+made 31 minutes earlier.
 
 ### Known open instance: mistyped API paths return 200 and HTML
 
