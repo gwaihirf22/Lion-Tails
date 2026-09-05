@@ -12,6 +12,7 @@ import { fromZodError } from "zod-validation-error";
 import { v4 as uuidv4 } from "uuid";
 import { setupAuth } from "./auth";
 import { registerSongRoutes } from "./songs";
+import { requireAdmin } from "./lib/requireAuth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication with passport and session
@@ -848,7 +849,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Create a new hero of faith
-  app.post("/api/heroes", async (req, res) => {
+  app.post("/api/heroes", requireAdmin, async (req, res) => {
     try {
       // The id and createdAt fields will be added by the storage method
       const { id, createdAt, ...heroData } = req.body;
@@ -872,7 +873,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Update a hero of faith
-  app.put("/api/heroes/:id", async (req, res) => {
+  app.put("/api/heroes/:id", requireAdmin, async (req, res) => {
     try {
       const { id: bodyId, createdAt, ...updates } = req.body;
       
@@ -896,7 +897,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Delete a hero of faith
-  app.delete("/api/heroes/:id", async (req, res) => {
+  app.delete("/api/heroes/:id", requireAdmin, async (req, res) => {
     try {
       const success = await storage.deleteHeroOfFaith(req.params.id);
       
@@ -1121,7 +1122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Create a new hero story
-  app.post("/api/hero-stories", async (req, res) => {
+  app.post("/api/hero-stories", requireAdmin, async (req, res) => {
     try {
       const { id, createdAt, ...storyData } = req.body;
       
@@ -1146,7 +1147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Update a hero story
-  app.put("/api/hero-stories/:id", async (req, res) => {
+  app.put("/api/hero-stories/:id", requireAdmin, async (req, res) => {
     try {
       const { id: bodyId, createdAt, ...updates } = req.body;
       
@@ -1170,7 +1171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Delete a hero story
-  app.delete("/api/hero-stories/:id", async (req, res) => {
+  app.delete("/api/hero-stories/:id", requireAdmin, async (req, res) => {
     try {
       const success = await storage.deleteHeroStory(req.params.id);
       
@@ -1186,7 +1187,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Toggle a hero story's featured status
-  app.patch("/api/hero-stories/:id/featured", async (req, res) => {
+  app.patch("/api/hero-stories/:id/featured", requireAdmin, async (req, res) => {
     try {
       const { isFeatured } = req.body;
       
@@ -1208,6 +1209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Liveness/readiness probe used by the container healthcheck.
+  // See docs/decisions.md §6 before changing the status code or the probe.
   //
   // Returns 503 when a database is configured but unreachable, so that a
   // container which silently fell back to in-memory storage FAILS its

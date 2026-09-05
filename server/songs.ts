@@ -2,6 +2,7 @@
 import { Express } from "express";
 import { getAllSongs, getSongById, searchSongs, getPopularSongs, addSong, updateSong, deleteSong } from './data/songDatabase';
 import { generateSongChords } from "./lib/songGenerator";
+import { requireAdmin } from "./lib/requireAuth";
 import { Song, songSchema } from "@shared/schema";
 import { ZodError } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -72,7 +73,7 @@ export function registerSongRoutes(app: Express) {
   });
   
   // Create a new song
-  app.post("/api/songs", async (req, res) => {
+  app.post("/api/songs", requireAdmin, async (req, res) => {
     try {
       const songData = songSchema.parse(req.body);
       const song = addSong(songData);
@@ -90,7 +91,7 @@ export function registerSongRoutes(app: Express) {
   });
 
   // Update a song by ID
-  app.put("/api/songs/:id", async (req, res) => {
+  app.put("/api/songs/:id", requireAdmin, async (req, res) => {
     try {
       const updates = req.body;
       const updatedSong = updateSong(req.params.id, updates);
@@ -113,7 +114,7 @@ export function registerSongRoutes(app: Express) {
   });
 
   // Delete a song by ID
-  app.delete("/api/songs/:id", async (req, res) => {
+  app.delete("/api/songs/:id", requireAdmin, async (req, res) => {
     try {
       const deleted = deleteSong(req.params.id);
       

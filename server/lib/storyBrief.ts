@@ -41,6 +41,7 @@ export async function resolveStoryCharacter(
 
 /**
  * Renders everything the user actually chose into a prompt fragment.
+ * See docs/decisions.md §4.
  *
  * storyRequestSchema declares 22 fields and the form collects them, but the
  * generator previously destructured only childName, theme, readingLevel and

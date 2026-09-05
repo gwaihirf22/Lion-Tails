@@ -3,7 +3,8 @@
 Personalized Christian bedtime stories for children, with a Christian song/chord
 library, "Heroes of Faith" content, character management, and image analysis.
 
-Stories are generated with OpenAI `gpt-4o`; illustrations with `dall-e-3`.
+Stories are generated with an OpenAI or self-hosted model depending on the
+user's tier (see [Model tiers](#model-tiers)); illustrations with `dall-e-3`.
 
 ## Stack
 
@@ -12,7 +13,7 @@ Stories are generated with OpenAI `gpt-4o`; illustrations with `dall-e-3`.
 | Server | Express 4 + TypeScript (ESM) |
 | Client | React 18 + Vite SPA (Wouter, TanStack Query, Tailwind + Radix/shadcn) |
 | Database | PostgreSQL via Drizzle ORM (`pg` driver) |
-| Auth | Passport local + JWT, `express-session` with a Postgres-backed store |
+| Auth | Passport local strategy + `express-session`, Postgres-backed session store |
 
 The server and the client are served by a **single process on a single port**:
 in development Vite runs as middleware with HMR, and in production the
@@ -34,7 +35,7 @@ so use a real Postgres for anything real:
 docker run -d --name liontails-pg -p 5432:5432 \
   -e POSTGRES_DB=liontails -e POSTGRES_USER=liontails -e POSTGRES_PASSWORD=liontails \
   postgres:15
-npm run db:init           # creates the tables
+npm run db:migrate        # applies migrations to create the tables
 ```
 
 ### Scripts
@@ -71,7 +72,8 @@ See `.env.example`. Summary:
 | `FRONTEND_URL` | production | Base URL used in verification / password-reset email links. |
 | `SESSION_SECRET` | **yes in prod** | App refuses to start without it when `NODE_ENV=production`. |
 | `OPENAI_API_KEY` | for AI features | Users can also supply their own key in app settings. |
-| `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_SECURE` / `EMAIL_USER` / `EMAIL_PASSWORD` / `EMAIL_FROM` | no | SMTP for account verification and password resets; only used in production. |
+| `OLLAMA_BASE_URL` | no | Self-hosted Ollama endpoint for the free local tier. Defaults to `http://ollama:11434/v1`. Use the container name, not an IP. |
+| `EMAIL_*` | no | **Currently unused.** See [Email](#email) — the live auth path sends no mail, so setting these changes nothing today. |
 
 ## Schema and migrations
 
@@ -89,6 +91,55 @@ At startup `server/db.ts` verifies every declared table against
 `information_schema`, deriving the expectation from Drizzle's own
 `getTableColumns()` so there is no second list to drift. A mismatch is reported
 by `/api/health` as a 503.
+
+## Model tiers
+
+Which model a request may use is decided by `server/lib/modelPolicy.ts`, and the
+gate is about **who pays** rather than about roles:
+
+| Tier | Models | Available to |
+|---|---|---|
+| local | `gpt-oss:20b`, `nemotron-3-nano:4b` | everyone — free, runs on the self-hosted Ollama, needs no key |
+| economy | `gpt-4o-mini` | everyone — billed to the server owner's key |
+| premium | `gpt-4o`, `dall-e-3` | admins, or **any user who has supplied their own API key** |
+
+That last rule needs no role check: you may use expensive models if you are
+paying for them.
+
+Authorisation is resolved **at use, not only at selection**. The stored
+preference is a request, never a permission — a user who selects a premium
+model with their own key and then deletes that key is downgraded at generation
+time rather than silently billing the owner.
+
+`GET /api/settings/models` returns the models a given user may select, with
+tier and quality warnings. **The settings UI does not yet call it** and offers
+its own hardcoded list, four entries of which are rejected with a 403 — see
+`docs/decisions.md`.
+
+Vision and image generation have separate allowlists, so a chat-only model
+cannot leak into an image call. Illustration is skipped with a logged reason,
+rather than failing the story, when the user is not entitled to it.
+
+## Email
+
+**No email is sent, by any path.** This is worth stating plainly because the
+code looks like it should work:
+
+- `server/auth.ts` is the live authentication path and contains no mail code.
+- `server/lib/auth.ts` contains `sendVerificationEmail`, `isEmailConfigured` and
+  a nodemailer transport — and is imported by nothing.
+- `POST /api/auth/reset-password-request` generates a valid reset token, then
+  drops it: the handler carries a literal `// TODO: Send password reset email`
+  and returns the token in the response body **only** when
+  `NODE_ENV=development`. In production the token is created and discarded.
+- `POST /api/auth/reset-password` works correctly — it is the delivery of the
+  token that is missing, not the consumption of it.
+
+Consequences: account verification email is never sent, and email verification
+is not enforced anywhere (`requireVerified` is applied to zero routes), so this
+does not block signup. Password reset is unreachable in production. Setting the
+`EMAIL_*` variables changes none of this; wiring the live path to a mailer is
+the outstanding work.
 
 ## Deployment
 
@@ -183,15 +234,18 @@ database is therefore named `lion-tails-db` and lives on a private
 `lion-tails-internal` network rather than on `paulproxy`, since nothing outside
 this app has any business reaching it.
 
+## Further reading
+
+- `docs/decisions.md` — non-obvious constraints and the reasoning behind them.
+  Read it before "tidying" anything in this repo.
+- `CLAUDE.md` — orientation for AI agents working in this codebase.
+
 ## Known gaps
 
-- Email is optional. It is treated as configured only when `EMAIL_HOST` is set
-  AND, if `EMAIL_USER` is set, `EMAIL_PASSWORD` is set too — a half-configured
-  mailer fails SMTP auth on every send instead of being cleanly skipped.
-  Account verification is not
-  enforced anywhere (server or client), so signups work fine without it — but
-  **password reset does not work until the `EMAIL_*` variables are set**, since
-  the reset link is only ever delivered by email.
+- **Email does not work, and setting `EMAIL_*` will not make it work.** The live
+  authentication path (`server/auth.ts`) contains no mail code at all. The
+  module that does (`server/lib/auth.ts`) is imported by nothing. See
+  [Email](#email).
 
 - `characters` and `stories` tables may still exist on databases created before
   the migration cutover. They were never read by anything and are safe to drop.

@@ -8,7 +8,8 @@
 # workflow and removed afterwards.
 
 services:
-  # NB: the service name becomes a DNS alias on every network this container
+  # NB: see docs/decisions.md §10.
+  # The service name becomes a DNS alias on every network this container
   # joins. It must NOT be a generic name like "postgres" -- paulproxy is a
   # SHARED external network and neighborly-postgres already publishes the
   # "postgres" alias there. Two containers sharing an alias makes Docker
