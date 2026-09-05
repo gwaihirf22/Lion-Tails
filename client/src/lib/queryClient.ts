@@ -2,18 +2,18 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
+    // Parse first, throw after. Previously the throw sat inside the try, so its
+    // own catch swallowed it and every error surfaced as "<status>: <raw json>"
+    // -- the server's message was parsed and then discarded.
+    let message: string | undefined;
     try {
-      // Clone the response before reading it to avoid "body already read" errors
-      const clonedRes = res.clone();
-      const errorData = await clonedRes.json();
-      throw new Error(errorData.error || errorData.message || res.statusText);
-    } catch (e) {
-      // If we can't parse JSON, just use the status text
-      // Clone the response before reading it to avoid "body already read" errors
-      const clonedRes = res.clone();
-      const text = await clonedRes.text();
-      throw new Error(`${res.status}: ${text || res.statusText}`);
+      const errorData = await res.clone().json();
+      message = errorData.error || errorData.message;
+    } catch {
+      const text = await res.clone().text().catch(() => "");
+      message = text || undefined;
     }
+    throw new Error(message || `${res.status}: ${res.statusText}`);
   }
 }
 

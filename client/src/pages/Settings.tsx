@@ -4,11 +4,25 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+
+/**
+ * Served by GET /api/settings/models, which derives this from MODEL_CATALOG in
+ * server/lib/modelPolicy.ts. Do NOT reintroduce a hardcoded list here: this
+ * page previously offered six models, four of which the server rejects with a
+ * 403, and omitted the free local tier entirely. See docs/decisions.md §11.
+ */
+interface SelectableModel {
+  id: string;
+  label: string;
+  tier: "local" | "economy" | "premium";
+  warning?: string;
+  allowed: boolean;
+}
 
 interface StoryStats {
   used: number;
@@ -17,15 +31,49 @@ interface StoryStats {
   lastResetDate: string | null;
 }
 
+const TIER_ORDER: SelectableModel["tier"][] = ["local", "economy", "premium"];
+
+const TIER_LABELS: Record<SelectableModel["tier"], string> = {
+  local: "Free — runs on this server",
+  economy: "Standard",
+  premium: "Premium",
+};
+
 export default function Settings() {
   const { toast } = useToast();
   const [apiKey, setApiKey] = useState("");
-  const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
+  // Deliberately empty: the current selection comes from the server. Seeding a
+  // model id here would be a hardcoded model name in the client again, and the
+  // default belongs to MODEL_CATALOG, not to this page.
+  const [selectedModel, setSelectedModel] = useState("");
   const [hasStoredKey, setHasStoredKey] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [storyStats, setStoryStats] = useState<StoryStats | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [models, setModels] = useState<SelectableModel[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+
+  // Quality caveat for the currently selected model, e.g. the local tier.
+  const selectedModelWarning = models.find((m) => m.id === selectedModel)?.warning;
+
+  // Which models this user may select depends on whether they hold their own
+  // API key, so this is refetched whenever that changes rather than only on
+  // mount.
+  const loadModels = async () => {
+    setIsLoadingModels(true);
+    try {
+      const response = await apiRequest("GET", "/api/settings/models");
+      if (response.ok) {
+        const data = await response.json();
+        setModels(data.models ?? []);
+      }
+    } catch (error) {
+      console.error("Error loading available models:", error);
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
 
   // Fetch initial data
   useEffect(() => {
@@ -40,6 +88,8 @@ export default function Settings() {
         const modelResponse = await apiRequest("GET", "/api/settings/openai-model");
         const modelData = await modelResponse.json();
         setSelectedModel(modelData.model);
+
+        await loadModels();
 
         // Get story generation stats
         setIsLoadingStats(true);
@@ -90,6 +140,8 @@ export default function Settings() {
       
       if (response.ok) {
         setHasStoredKey(true);
+        // Adding a key unlocks the premium tier.
+        await loadModels();
         setApiKey(""); // Clear the input for security
         toast({
           title: "API Key Saved",
@@ -123,6 +175,9 @@ export default function Settings() {
       
       if (response.ok) {
         setHasStoredKey(false);
+        // Removing a key revokes the premium tier; the server will downgrade a
+        // stored premium selection at generation time regardless.
+        await loadModels();
         toast({
           title: "API Key Removed",
           description: "Your OpenAI API key has been removed.",
@@ -148,28 +203,31 @@ export default function Settings() {
 
   // Handle model selection
   const handleModelChange = async (value: string) => {
+    const previous = selectedModel;
     setSelectedModel(value);
 
     try {
-      const response = await apiRequest("POST", "/api/settings/openai-model", { model: value });
-      
-      if (response.ok) {
-        toast({
-          title: "Model Updated",
-          description: `The OpenAI model has been set to ${value}.`,
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to update model selection. Please try again.",
-          variant: "destructive",
-        });
-      }
+      // apiRequest throws on a non-2xx response, so there is no falsy branch to
+      // handle here.
+      await apiRequest("POST", "/api/settings/openai-model", { model: value });
+
+      const chosen = models.find((m) => m.id === value);
+      toast({
+        title: "Model updated",
+        description: chosen ? `Stories will now use ${chosen.label}.` : `Model set to ${value}.`,
+      });
     } catch (error) {
+      // The server rejects a model the account is not entitled to. Put the
+      // selection back rather than leaving the dropdown showing a value that
+      // was not saved.
+      setSelectedModel(previous);
       console.error("Error updating model:", error);
       toast({
-        title: "Error",
-        description: "Failed to update model selection. Please try again.",
+        title: "Could not change model",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to update model selection. Please try again.",
         variant: "destructive",
       });
     }
@@ -270,33 +328,49 @@ export default function Settings() {
             )}
             
             <div className="pt-4">
-              <Label htmlFor="model">OpenAI Model</Label>
-              <Select onValueChange={handleModelChange} value={selectedModel}>
+              <Label htmlFor="model">Story model</Label>
+              <Select
+                onValueChange={handleModelChange}
+                value={selectedModel}
+                disabled={isLoadingModels || models.length === 0}
+              >
                 <SelectTrigger id="model">
-                  <SelectValue placeholder="Select model" />
+                  <SelectValue placeholder={isLoadingModels ? "Loading models…" : "Select model"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {hasStoredKey ? (
-                    <>
-                      <SelectItem value="gpt-4o">GPT-4o (Premium)</SelectItem>
-                      <SelectItem value="gpt-4-turbo">GPT-4 Turbo (Premium)</SelectItem>
-                      <SelectItem value="gpt-4">GPT-4 (Premium)</SelectItem>
-                      <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Faster)</SelectItem>
-                      <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                      <SelectItem value="gpt-4o-mini-tts">GPT-4o Mini TTS</SelectItem>
-                    </>
-                  ) : (
-                    <>
-                      <SelectItem value="gpt-4o-mini">GPT-4o Mini (Recommended)</SelectItem>
-                      <SelectItem value="gpt-4o-mini-tts">GPT-4o Mini TTS</SelectItem>
-                    </>
-                  )}
+                  {TIER_ORDER.map((tier) => {
+                    const inTier = models.filter((m) => m.tier === tier);
+                    if (inTier.length === 0) return null;
+                    return (
+                      <SelectGroup key={tier}>
+                        <SelectLabel>{TIER_LABELS[tier]}</SelectLabel>
+                        {inTier.map((model) => (
+                          <SelectItem
+                            key={model.id}
+                            value={model.id}
+                            // Locked models stay visible but unselectable, so it
+                            // is clear what supplying a key would unlock rather
+                            // than the option simply being absent.
+                            disabled={!model.allowed}
+                          >
+                            {model.label}
+                            {!model.allowed && " — needs your own API key"}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    );
+                  })}
                 </SelectContent>
               </Select>
+
+              {selectedModelWarning && (
+                <p className="text-xs text-amber-700 mt-2">{selectedModelWarning}</p>
+              )}
+
               <p className="text-xs text-muted-foreground mt-2">
-                {hasStoredKey 
-                  ? "With your own API key, you can access premium models like GPT-4o. Premium models may result in higher quality stories but will use more of your API credits."
-                  : "Without your own API key, only basic models are available. Add your OpenAI API key to unlock premium models."}
+                {hasStoredKey
+                  ? "Your own API key is in use, so premium models are available and billed to your OpenAI account."
+                  : "Local models run on this server and are free. Premium models need your own OpenAI API key."}
               </p>
             </div>
           </CardContent>
