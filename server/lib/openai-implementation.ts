@@ -87,11 +87,57 @@ const TOKEN_BUDGET = {
   chapter: 4096,
 } as const;
 
+/**
+ * Total context window, shared between prompt AND output.
+ *
+ * This is the ceiling the retry escalation has to respect. Doubling the output
+ * budget past it does nothing: the local Ollama deployment runs a 16384-token
+ * context, so a request with a 4000-token prompt can never produce more than
+ * ~12000 tokens of output no matter what max_tokens says. Ollama also disables
+ * KV cache shifting for this context, so there is no graceful overflow.
+ *
+ * Sizing a budget without counting everything that shares it is the same
+ * mistake as the original 2048 bug, one level up. Configurable because raising
+ * Ollama's context (OLLAMA_CONTEXT_LENGTH) is cheap on a sliding-window model
+ * and is under consideration.
+ */
+const MODEL_CONTEXT_LIMIT = Number(process.env.MODEL_CONTEXT_LIMIT) || 16384;
+
+type ModelUsage = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+};
+
 type ModelReply = {
   content: string;
   finishReason: string | null | undefined;
-  usage?: unknown;
+  usage?: ModelUsage | null;
 };
+
+/**
+ * Budget for the next attempt after a truncation, or null when retrying is
+ * pointless.
+ *
+ * Doubles, but clamps to what actually remains in the context window after the
+ * prompt. If that leaves no more room than the attempt that just failed, there
+ * is nothing to gain from an identical call -- fail immediately rather than
+ * spending it.
+ */
+function nextTokenBudget(current: number, usage?: ModelUsage | null): number | null {
+  const doubled = current * 2;
+  const promptTokens = usage?.prompt_tokens;
+
+  if (typeof promptTokens !== "number") {
+    // No measurement available; double, but never past the whole window.
+    const capped = Math.min(doubled, MODEL_CONTEXT_LIMIT);
+    return capped > current ? capped : null;
+  }
+
+  const headroom = MODEL_CONTEXT_LIMIT - promptTokens;
+  const capped = Math.min(doubled, headroom);
+  return capped > current ? capped : null;
+}
 
 /**
  * Runs a model call, retrying once, and records the evidence either way.
@@ -143,7 +189,15 @@ async function requestModelJson<T>(opts: {
     if (reply.finishReason === "length") {
       truncated = true;
       if (attempt < maxAttempts) {
-        budget *= 2;
+        const next = nextTokenBudget(budget, reply.usage);
+        if (next === null) {
+          console.warn(
+            `${step}: truncated at max_tokens=${budget} with no context headroom left ` +
+              `(prompt ${reply.usage?.prompt_tokens ?? "?"} of ${MODEL_CONTEXT_LIMIT}); not retrying.`,
+          );
+          break;
+        }
+        budget = next;
         console.warn(
           `${step}: model output was truncated (finish_reason=length); retrying with max_tokens=${budget}`,
         );
@@ -220,7 +274,15 @@ async function requestModelText(opts: {
     }
 
     if (attempt < maxAttempts) {
-      budget *= 2;
+      const next = nextTokenBudget(budget, reply.usage);
+      if (next === null) {
+        console.warn(
+          `${step}: truncated at max_tokens=${budget} with no context headroom left ` +
+            `(prompt ${reply.usage?.prompt_tokens ?? "?"} of ${MODEL_CONTEXT_LIMIT}); not retrying.`,
+        );
+        break;
+      }
+      budget = next;
       console.warn(
         `${step}: chapter was truncated (finish_reason=length); retrying with max_tokens=${budget}`,
       );
