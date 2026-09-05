@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1: full dependency install (build needs devDependencies)
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS deps
+FROM node:26-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -13,7 +13,7 @@ RUN npm ci --no-audit --no-fund
 # ---------------------------------------------------------------------------
 # Stage 2: build the client (dist/public) and the server (dist/prod.js)
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -31,7 +31,7 @@ RUN npm run build
 # module must exist in node_modules at runtime; pulling in Vite here would drag
 # the whole devDependency tree into the image (and fail at startup without it).
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS runner
+FROM node:26-alpine AS runner
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
