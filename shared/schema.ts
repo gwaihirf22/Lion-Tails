@@ -338,17 +338,30 @@ export const storyResponseSchema = z.object({
   applicationQuestions: z.array(z.string()).min(5).max(5),
   imagePrompt: z.string().optional(),
   imageUrl: z.string().optional(),
+  // Debug entries as the generator actually emits them. Every field is
+  // optional except `step`, because the entries differ per call site --
+  // the outline step has no wordCount, a chapter step has no targetWordCount,
+  // and so on.
+  //
+  // This previously required systemPrompt/userPrompt/attempt/maxAttempts/
+  // timestamp/maxTokens and had no `step` at all. That described an older
+  // generator; the current one pushes { step, prompt, response, wordCount }
+  // (openai-implementation.ts:109) and DebugPanel reads `step` as required.
+  // The mismatch was invisible because nothing typechecked until recently.
   debugData: z.array(z.object({
-    systemPrompt: z.string(),
-    userPrompt: z.string(),
-    response: z.string(),
-    wordCount: z.number(),
-    targetWordCount: z.number(),
-    attempt: z.number(),
-    maxAttempts: z.number(),
-    timestamp: z.string(),
-    model: z.string(),
-    maxTokens: z.union([z.number(), z.string()]),
+    step: z.string(),
+    prompt: z.string().optional(),
+    response: z.string().optional(),
+    wordCount: z.number().optional(),
+    targetWordCount: z.number().optional(),
+    model: z.string().optional(),
+    // Older shapes, kept so previously-saved stories still parse.
+    systemPrompt: z.string().optional(),
+    userPrompt: z.string().optional(),
+    attempt: z.number().optional(),
+    maxAttempts: z.number().optional(),
+    timestamp: z.string().optional(),
+    maxTokens: z.union([z.number(), z.string()]).optional(),
     parseError: z.string().optional(),
   })).optional(),
 });

@@ -252,9 +252,25 @@ export async function generateSongChords(
       response_format: { type: "json_object" }
     });
     
+    // The model's JSON, described only as far as this function reads it.
+    // Everything is optional because the response is model output, not a
+    // contract -- the guards below already assume any of it may be absent.
+    type Section = { lyrics: string[]; chords: string[] };
+    type GeneratedSong = {
+      title?: string;
+      verses?: Section[];
+      chorus?: Section | null;
+      bridge?: Section | null;
+      difficulty?: string;
+      key?: string;
+      timeSignature?: string;
+      tempo?: number;
+      tags?: string[];
+    };
+
     // Ensure we have valid content before parsing
     const messageContent = response.choices[0].message.content || '{}';
-    const jsonContent = JSON.parse(messageContent);
+    const jsonContent: GeneratedSong = JSON.parse(messageContent);
     
     // Add chord diagrams for each unique chord
     const allChords = new Set<string>();
@@ -309,7 +325,12 @@ export async function generateSongChords(
       chorus: jsonContent.chorus || null,
       bridge: jsonContent.bridge || null,
       chords: chordDiagrams,
-      difficulty: jsonContent.difficulty || "beginner",
+      // The model can return any string here, so validate rather than cast:
+      // an unrecognised value falls back instead of being trusted into a union
+      // it does not belong to.
+      difficulty: (["beginner", "intermediate", "advanced"] as const).find(
+        (d) => d === jsonContent.difficulty,
+      ) ?? "beginner",
       key: jsonContent.key || "C",
       timeSignature: jsonContent.timeSignature || "4/4",
       tempo: jsonContent.tempo || 120,

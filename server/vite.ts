@@ -19,7 +19,10 @@ export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
-    allowedHosts: true,
+    // `as const` matters: Vite types this as `true | string[] | undefined`, and
+    // a bare `true` in an un-annotated object literal widens to `boolean`,
+    // which is not assignable.
+    allowedHosts: true as const,
   };
 
   const vite = await createViteServer({

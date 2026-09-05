@@ -315,19 +315,21 @@ export class DbStorage implements IStorage {
         return JSON.parse(rows[0].character_data);
       } catch (parseError) {
         console.error("Error parsing character data:", parseError);
-        // Return a default object to prevent app crashes
+        // Return a default object to prevent app crashes.
+        //
+        // This previously used hairColor/eyeColor/outfit/favoriteActivity/
+        // specialAbility/backstory -- field names from an older schema that no
+        // longer exist on Character. It only runs when stored JSON fails to
+        // parse, so nothing exercised it and the drift went unnoticed.
         return {
           id: id,
           name: "Unknown Character",
           gender: "boy" as "boy" | "girl", // Default to boy to match schema
-          age: 0,
-          hairColor: "",
-          eyeColor: "",
-          outfit: "",
-          favoriteActivity: "",
-          specialAbility: "",
-          personality: "",
-          backstory: "",
+          age: 8,
+          hair: "brown",
+          eyes: "brown",
+          favoriteColor: "blue",
+          timeTravelExperience: 0,
           createdAt: (new Date(rows[0].created_at) || new Date()).toISOString()
         };
       }
@@ -451,7 +453,9 @@ export class DbStorage implements IStorage {
         return JSON.parse(rows[0].song_data);
       } catch (parseError) {
         console.error("Error parsing song data:", parseError);
-        // Return a default song object to prevent app crashes
+        // Return a default song object to prevent app crashes.
+        // `backgroundColor` is not on Song and was silently ignored; the
+        // required fields below were missing instead.
         return {
           id: id,
           title: "Song Data Error",
@@ -460,7 +464,14 @@ export class DbStorage implements IStorage {
           chorus: null,
           bridge: null,
           chords: [],
-          backgroundColor: "#f8f9fa"
+          key: "C",
+          difficulty: "beginner",
+          timeSignature: "4/4",
+          tempo: 120,
+          tags: [],
+          hasGeneratedAudio: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
         };
       }
     } catch (error) {
@@ -575,6 +586,8 @@ export class DbStorage implements IStorage {
           story: {
             title: "Story Data Error",
             content: "There was a problem loading this story. The data may be corrupted.",
+            moralOutcome: "learning" as const,
+            applicationQuestions: [],
             bibleVerse: {
               text: "The Lord is my helper; I will not fear.",
               reference: "Hebrews 13:6"
@@ -585,12 +598,23 @@ export class DbStorage implements IStorage {
             animal: "",
             gender: "boy" as "boy" | "girl" | undefined,
             childName: "",
-            storyType: "regular",
+            storyType: "regular" as const,
             heroOfFaith: "",
             customPrompt: "",
             biblicalEvent: "",
             useTimeTravel: false,
-            useAnimal: true
+            useAnimal: true,
+            readingLevel: "early-elementary" as const,
+            storyLength: "short" as const,
+            useCustomPrompts: false,
+            useCharacter: false
+          },
+          searchMetadata: {
+            keywords: [],
+            tags: [],
+            characters: [],
+            biblicalReferences: [],
+            themes: []
           },
           createdAt: new Date(rows[0].created_at).toISOString() || new Date().toISOString(),
           expiresAt: rows[0].expires_at ? new Date(rows[0].expires_at).toISOString() : undefined,
@@ -623,7 +647,18 @@ export class DbStorage implements IStorage {
         request,
         createdAt: now.toISOString(),
         isFavorite: false,
-        expiresAt: expiryDate.toISOString()
+        expiresAt: expiryDate.toISOString(),
+        // savedStorySchema declares searchMetadata with .default(), so the
+        // parsed type requires it even though the input does not. Writing it
+        // explicitly also means updateStoryHeroId's jsonb_set has a parent key
+        // to write into on every row this method creates.
+        searchMetadata: {
+          keywords: [],
+          tags: [],
+          characters: [],
+          biblicalReferences: [],
+          themes: []
+        }
       };
       
       // Create the table if it doesn't exist (useful in deployment scenarios)
@@ -1562,6 +1597,8 @@ export class DbStorage implements IStorage {
           birthYear: "",
           deathYear: "",
           famousQuote: "",
+          sources: [],
+          keyEvents: [],
           bibleVerse: {
             text: "The Lord is my helper; I will not fear.",
             reference: "Hebrews 13:6"
