@@ -1,21 +1,14 @@
 import OpenAI from "openai";
 import { Song } from "@shared/schema";
 import { v4 as uuidv4 } from "uuid";
+import { resolveModel, createClient } from "./modelPolicy";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 // Instantiated lazily so the module can load without an API key configured.
 // Previously this defaulted to a literal "demo-key", which turned a missing
 // credential into a confusing upstream 401 instead of a clear error.
-let openaiClient: OpenAI | undefined;
-function getOpenAI(): OpenAI {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-  if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  }
-  return openaiClient;
-}
+// Model, provider and credentials come from the shared policy so chord
+// generation cannot quietly run an expensive model on the server owner's key.
 
 // Common Christian chord progressions (for demo mode)
 const commonChordProgressions: string[][] = [
@@ -189,19 +182,23 @@ const commonChords: Record<string, {
 export async function generateSongChords(
   title: string, 
   lyrics: string | string[], 
-  artist: string = "User Created"
+  artist: string = "User Created",
+  userId: number = 1
 ): Promise<Song> {
   // Convert lyrics array to string if necessary
   const lyricsText = Array.isArray(lyrics) ? lyrics.join('\n') : lyrics;
   
   try {
-    // If no API key is set, return demo chords
-    if (process.env.OPENAI_API_KEY === undefined || process.env.OPENAI_API_KEY === "demo-key") {
+    // Ask the policy whether ANY model is available rather than checking the
+    // env key directly: with the self-hosted local tier a user with no OpenAI
+    // key at all still has a working model, and should not be dropped to demo
+    // output.
+    const resolved = await resolveModel(userId, "chat").catch(() => null);
+    if (!resolved) {
       return getDemoSong(title, lyricsText, artist);
     }
-    
-    const response = await getOpenAI().chat.completions.create({
-      model: "gpt-4o",
+    const response = await createClient(resolved).chat.completions.create({
+      model: resolved.model,
       messages: [
         { 
           role: "system", 

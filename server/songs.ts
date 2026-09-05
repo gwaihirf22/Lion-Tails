@@ -131,6 +131,14 @@ export function registerSongRoutes(app: Express) {
   // Generate chords for a song
   app.post("/api/generate-chords", async (req, res) => {
     try {
+      // This route was completely unauthenticated while calling a paid model on
+      // the server owner's API key -- anyone who could reach the site could
+      // spend his OpenAI credits in a loop.
+      if (!req.user || !req.isAuthenticated?.()) {
+        return res.status(401).json({ message: "Authentication required to generate chords" });
+      }
+      const userId = (req.user as any).id;
+
       const { title, lyrics, artist = "Unknown Artist" } = req.body;
       
       if (!title || !lyrics) {
@@ -145,7 +153,7 @@ export function registerSongRoutes(app: Express) {
       const lyricsList = Array.isArray(lyrics) ? lyrics : lyrics.split('\n');
       
       // Generate chords for the song
-      const songWithChords = await generateSongChords(title, lyricsList, artist);
+      const songWithChords = await generateSongChords(title, lyricsList, artist, userId);
       
       // Add the song to our database
       const savedSong = addSong(songWithChords);

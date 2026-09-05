@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
+import { isModelAllowedFor, listSelectableModels } from "./lib/modelPolicy";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema } from "@shared/schema";
@@ -757,6 +758,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Models this user may select, with tier and quality warnings, so the UI can
+  // present the local option honestly rather than offering models that will be
+  // rejected or silently downgraded.
+  app.get("/api/settings/models", async (req, res) => {
+    try {
+      if (!req.user || !req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const userId = (req.user as any).id;
+      const ownKey = await storage.getUserOpenAIKey(userId);
+      const isAdmin = Boolean((req.user as any).isAdmin);
+      res.json({
+        models: listSelectableModels({ isAdmin, hasOwnKey: Boolean(ownKey) }),
+        hasOwnKey: Boolean(ownKey),
+      });
+    } catch (error) {
+      console.error("Error listing models:", error);
+      res.status(500).json({ message: "Failed to list models" });
+    }
+  });
+
   // Set user's OpenAI model
   app.post("/api/settings/openai-model", async (req, res) => {
     try {
@@ -770,6 +792,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!model || typeof model !== 'string') {
         return res.status(400).json({ message: "Valid model name is required" });
+      }
+
+      // Reject anything not in the catalog, and anything this user is not
+      // entitled to. This is defence in depth, not the enforcement point --
+      // resolveModel() re-checks at generation time, because entitlement can
+      // change after a model is stored (a user can delete their own API key).
+      const ownKey = await storage.getUserOpenAIKey(userId);
+      const isAdmin = Boolean((req.user as any).isAdmin);
+      if (!isModelAllowedFor(model, "chat", { isAdmin, hasOwnKey: Boolean(ownKey) })) {
+        return res.status(403).json({
+          message:
+            "That model is not available on your account. Premium models require your own OpenAI API key.",
+          allowed: listSelectableModels({ isAdmin, hasOwnKey: Boolean(ownKey) }),
+        });
       }
       
       await storage.setUserOpenAIModel(userId, model);

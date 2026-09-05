@@ -19,27 +19,21 @@ type StoryContext = {
   brief: string;
   systemPrompt: string;
   custom?: CustomPrompts;
+  /** Resolved once per request; every chat call in this file uses it. */
+  resolved: ResolvedModel;
 };
 import { getBibleVerseByTheme } from "../data/bibleVerses";
 import { storage } from "../storage";
+import { resolveModel, createClient, type ResolvedModel } from "./modelPolicy";
 import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
 import { v4 as uuidv4 } from "uuid";
 
-// Function to get an OpenAI client with the current API key
-function getOpenAIClient(apiKey?: string | null) {
-  const key = apiKey || process.env.OPENAI_API_KEY;
-  if (!key) {
-    console.error("No OpenAI API key available");
-    throw new Error("OpenAI API key not found");
-  }
-  console.log(
-    "Using OpenAI client with API key:",
-    key ? "API key is set" : "No API key available",
-  );
-  return new OpenAI({ apiKey: key });
-}
+// Credentials, provider and model are decided exclusively by
+// resolveModel() in ./modelPolicy. Nothing here should read
+// process.env.OPENAI_API_KEY or hardcode a model name -- five hardcoded
+// "gpt-4o" sites were five places for the policy to drift.
 
 // Helper function to get word count from length setting
 function getWordCountFromLength(length: string): number {
@@ -101,7 +95,7 @@ async function generateShortStorySingleCall(
   `;
 
   const response = await client.chat.completions.create({
-    model: "gpt-4o",
+    model: ctx.resolved.model,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
@@ -147,7 +141,7 @@ async function generateStoryOutline(
   `;
 
   const response = await client.chat.completions.create({
-    model: "gpt-4o",
+    model: ctx.resolved.model,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
@@ -196,7 +190,7 @@ async function generateStoryChapter(
     `;
 
   const response = await client.chat.completions.create({
-    model: "gpt-4o",
+    model: ctx.resolved.model,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
@@ -240,7 +234,7 @@ async function finalizeStoryDetails(
   `;
 
   const response = await client.chat.completions.create({
-    model: "gpt-4o",
+    model: ctx.resolved.model,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
@@ -268,8 +262,15 @@ export async function generateStoryWithOpenAI(
 ): Promise<StoryResponse & { debugData?: any[] }> {
   const { storyLength, theme } = request;
 
-  const userApiKey = await storage.getUserOpenAIKey(userId);
-  const openaiClient = getOpenAIClient(userApiKey || undefined);
+  // Model, provider and credentials are decided once, here, and used by every
+  // call below. The stored preference is a request, not a permission: a user
+  // who picked a premium model and then removed their own API key is
+  // downgraded rather than billed to the server owner.
+  const resolved = await resolveModel(userId, "chat");
+  if (!resolved) {
+    throw new Error("No story model available for this account");
+  }
+  const openaiClient = createClient(resolved);
   const targetWordCount = getWordCountFromLength(storyLength || "medium");
 
   // Resolved once and shared by every prompt: one database read, one field
@@ -279,6 +280,7 @@ export async function generateStoryWithOpenAI(
     brief: buildStoryBrief(request, character),
     systemPrompt: buildSystemPrompt(request, customPrompts),
     custom: customPrompts,
+    resolved,
   };
   const debugData: any[] = [];
   const moralOutcomes: Array<
@@ -411,8 +413,14 @@ export async function generateStoryImage(
 ): Promise<string | undefined> {
   // ... this function remains the same ...
   try {
-    const apiKey = await storage.getUserOpenAIKey(userId);
-    if (!apiKey && !process.env.OPENAI_API_KEY) {
+    // Illustration is premium-only and has no cheap or local tier, so an
+    // unentitled user simply gets a story without a picture rather than an
+    // error -- and never silently bills the server owner.
+    const resolved = await resolveModel(userId, "image");
+    if (!resolved) {
+      console.log(
+        "Skipping illustration: image generation requires an admin account or your own OpenAI API key.",
+      );
       return undefined;
     }
     const imagesDir = path.join(process.cwd(), "public", "images", "stories");
@@ -422,9 +430,9 @@ export async function generateStoryImage(
     const filename = `story_${uuidv4()}.png`;
     const filepath = path.join(imagesDir, filename);
     const enhancedPrompt = `${imagePrompt}. Render in a beautiful, child-friendly biblical illustration style with soft colors.`;
-    const openaiClient = getOpenAIClient(apiKey || undefined);
+    const openaiClient = createClient(resolved);
     const response = await openaiClient.images.generate({
-      model: "dall-e-3",
+      model: resolved.model,
       prompt: enhancedPrompt,
       n: 1,
       size: "1024x1024",
@@ -473,14 +481,16 @@ export async function analyzeImageWithOpenAI(
 ): Promise<string> {
   // ... this function remains the same ...
   try {
-    const apiKey = await storage.getUserOpenAIKey(userId);
-    if (!apiKey && !process.env.OPENAI_API_KEY) {
-      throw new Error("OpenAI API key not found");
+    // Vision has its own allowlist: a chat-only model (a local Ollama one, say)
+    // must never leak into an image-understanding call.
+    const resolved = await resolveModel(userId, "vision");
+    if (!resolved) {
+      throw new Error("No image-analysis model available for this account");
     }
-    const openaiClient = getOpenAIClient(apiKey || undefined);
+    const openaiClient = createClient(resolved);
     const systemPrompt = `You are a helpful Christian children's content analyzer...`; // Truncated
     const response = await openaiClient.chat.completions.create({
-      model: "gpt-4o",
+      model: resolved.model,
       messages: [
         { role: "system", content: systemPrompt },
         {
