@@ -364,6 +364,43 @@ Enforcement is asymmetric on purpose. An overlong story still contains what was
 asked for and is usable, so it is recorded and returned; a short one is missing
 content the user requested, so below `MINIMUM_LENGTH_RATIO` (0.6) it fails.
 
+### Open hypothesis: models anchor to different ends of the band
+
+**Not verified. One generation of evidence. Do not act on this without more.**
+
+The chapter instruction names a target with a floor and a ceiling either side
+(±15%). On the identical prompt, target 333, band 283-383:
+
+    gpt-oss:20b   342, 424, 397   -> 1163 words (116% of target)
+    nemotron-4b   290, 291, 221   ->  802 words ( 80% of target)
+
+gpt-oss clusters at and above the target, pushing through the ceiling.
+nemotron clusters seven and eight words above the **floor**. Both are obeying
+the same instruction; they are anchoring to different numbers in it. That is
+why the band moved gpt-oss's short story from 89% to 115% and moved nemotron's
+by six words across three runs.
+
+If this holds, stating a floor gives a weak model something to satisfy minimally,
+and the floor ends up doing more work than the target. The cheap test is to
+narrow the floor toward the target — say ±5% rather than ±15% — and see whether
+nemotron's chapters follow it up while gpt-oss's stay put.
+
+It has not been run. A single generation from a model with this much variance is
+exactly the evidence you should not tune a prompt against, so this is recorded
+as a hypothesis rather than a finding, and stage 2's telemetry is the right place
+to settle it.
+
+Separately, nemotron's **final** chapter came in at 221 against a 283 floor while
+the other two cleared it — a model shortening the last chapter to wrap up. That
+alone is most of the shortfall: at 290 the story would have been 871, not 802.
+
+**Record per-chapter word counts, not just the story total.** The total said
+"nemotron short is 81%" three times and nothing more. The per-chapter numbers
+separated "the model is weak" from "the model is anchoring low" from "the last
+chapter is short" in one look, and those have different fixes. The signal was in
+debugData for all three runs; nobody looked below the total — which is the same
+mistake as reading the status column and not the word count.
+
 **The wider point.** These cells were reported green because green meant "HTTP
 200 with a story", which is the exact standard this codebase already rejects for
 canned error stories. Word counts were printed beside the status the whole time
