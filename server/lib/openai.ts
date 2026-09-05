@@ -3,6 +3,7 @@ import { getBiblicalEventStoryTemplate } from "../data/storyTemplates";
 import { getBibleVerseByTheme } from "../data/bibleVerses";
 import { generateStoryWithOpenAI } from "./openai-implementation";
 import { storage } from "../storage";
+import { resolveModel } from "./modelPolicy";
 
 // Constants for our subscription model
 const FREE_STORY_INITIAL_QUOTA = 50;
@@ -11,9 +12,11 @@ const MONTH_IN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
 
 // Function to check if user can generate a story with the free tier
 async function canGenerateStoryWithFreeTier(userId: number = 1): Promise<boolean> {
-  // Check if this is paulblake's account - bypass limits
+  // Admins bypass the quota. This used to compare username === 'paulblake',
+  // which is one rename away from locking the owner out and, worse, would grant
+  // the bypass to anyone who registered that name -- nothing reserves it.
   const user = await storage.getUser(userId);
-  if (user && user.username === 'paulblake') {
+  if (user?.isAdmin) {
     return true;
   }
   
@@ -106,8 +109,11 @@ export async function generateStory(request: StoryRequest, userId: number = 1): 
       };
     }
     
-    // For regular stories when no API key is available (neither user nor environment)
-    if (!userApiKey && !process.env.OPENAI_API_KEY) {
+    // For regular stories when no model is available at all. Asks the policy
+    // rather than the env key: the local Ollama tier needs no key, so "no
+    // OpenAI key" no longer means "no model".
+    const availableModel = await resolveModel(userId, "chat").catch(() => null);
+    if (!availableModel) {
       // Handle edge case where childName is undefined
       const safeChildName = childName || "Child";
       const safeGender = gender || "boy";

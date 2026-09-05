@@ -3,23 +3,33 @@ import fs from "fs";
 import path from "path";
 import { promisify } from "util";
 import { storage } from "../storage";
+import { resolveModel, createClient } from "./modelPolicy";
 
 // Promisify fs functions
 const readFile = promisify(fs.readFile);
 const stat = promisify(fs.stat);
 
-// Create OpenAI client with the user's API key
-async function getOpenAIClient(userId: number) {
-  // Get the user's API key
+/**
+ * Image analysis has always required the user's OWN key, with no fallback to
+ * the server owner's. That is preserved deliberately: routing it through the
+ * shared policy's env-key fallback would have made this feature billable to
+ * the owner, which is the opposite of the intent.
+ *
+ * The model name still comes from resolveModel so there is one catalog, and so
+ * a chat-only model can never leak into a vision or image call.
+ */
+async function getVisionClient(userId: number, kind: "vision" | "image") {
   const apiKey = await storage.getUserOpenAIKey(userId);
-  
-  // If no API key is found, throw an error
   if (!apiKey) {
     throw new Error("OpenAI API key is required for image analysis. Please add your API key in Settings.");
   }
-  
-  // Create a new client with the user's API key
-  return new OpenAI({ apiKey });
+
+  const resolved = await resolveModel(userId, kind);
+  if (!resolved) {
+    throw new Error("No model available for image analysis on this account.");
+  }
+
+  return { client: createClient({ ...resolved, apiKey }), model: resolved.model };
 }
 
 /**
@@ -27,10 +37,10 @@ async function getOpenAIClient(userId: number) {
  */
 export async function analyzeImage(base64Image: string, userId: number): Promise<string> {
   try {
-    const openai = await getOpenAIClient(userId);
+    const { client: openai, model } = await getVisionClient(userId, "vision");
     
     const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      model,
       messages: [
         {
           role: "system",
@@ -73,14 +83,14 @@ export async function generateStoryFromImage(
   userId: number
 ): Promise<{ title: string; content: string }> {
   try {
-    const openai = await getOpenAIClient(userId);
+    const { client: openai, model } = await getVisionClient(userId, "vision");
     
     // First, analyze the image to understand what's in it
     const imageAnalysis = await analyzeImage(base64Image, userId);
     
     // Then, generate a story based on the image analysis
     const storyResponse = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      model,
       messages: [
         {
           role: "system",
@@ -120,10 +130,10 @@ export async function generateStoryFromImage(
  */
 export async function generateIllustrationPrompt(storyContent: string, userId: number): Promise<string> {
   try {
-    const openai = await getOpenAIClient(userId);
+    const { client: openai, model } = await getVisionClient(userId, "vision");
     
     const response = await openai.chat.completions.create({
-      model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
+      model,
       messages: [
         {
           role: "system",
@@ -149,10 +159,10 @@ export async function generateIllustrationPrompt(storyContent: string, userId: n
  */
 export async function generateIllustration(prompt: string, userId: number): Promise<string | null> {
   try {
-    const openai = await getOpenAIClient(userId);
+    const { client: openai, model } = await getVisionClient(userId, "image");
     
     const response = await openai.images.generate({
-      model: "dall-e-3",
+      model,
       prompt: `${prompt} Ensure this is appropriate for children, with a gentle, colorful style reminiscent of Christian children's books.`,
       n: 1,
       size: "1024x1024",
