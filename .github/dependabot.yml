@@ -74,6 +74,13 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "zod"
         update-types: ["version-update:semver-major"]
+      # TypeScript majors reintroduce type errors wholesale. This repo reached
+      # zero errors for the first time in its history; a major goes in
+      # deliberately, on its own, not on a Monday morning.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwind-merge"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -81,6 +88,12 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+    # One PR for all action bumps rather than one per action. The first run
+    # opened five separate PRs for checkout, setup-node, login-action,
+    # setup-buildx-action and build-push-action.
+    groups:
+      github-actions:
+        patterns: ["*"]
     labels:
       - "dependencies"
       - "github-actions"
@@ -99,3 +112,10 @@ updates:
       - "docker"
     commit-message:
       prefix: "chore(docker)"
+    # The base image tracks the Node version the app is tested against.
+    # package.json says >=20 and CI runs 20, so a major bump here would put
+    # production on a runtime nothing has verified. Do it deliberately, with
+    # engines/, CI and the Dockerfile moving together.
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
