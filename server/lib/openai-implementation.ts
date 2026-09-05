@@ -91,7 +91,7 @@ const TOKEN_BUDGET = {
  * Total context window, shared between prompt AND output.
  *
  * This is the ceiling the retry escalation has to respect. Doubling the output
- * budget past it does nothing: the local Ollama deployment runs a 16384-token
+ * budget past it does nothing: the local Ollama deployment runs a 32768-token
  * context, so a request with a 4000-token prompt can never produce more than
  * ~12000 tokens of output no matter what max_tokens says. Ollama also disables
  * KV cache shifting for this context, so there is no graceful overflow.
@@ -103,7 +103,7 @@ const TOKEN_BUDGET = {
  * Ollama's context (OLLAMA_CONTEXT_LENGTH) is cheap on a sliding-window model
  * and is under consideration.
  */
-const MODEL_CONTEXT_LIMIT = Number(process.env.MODEL_CONTEXT_LIMIT) || 16384;
+const MODEL_CONTEXT_LIMIT = Number(process.env.MODEL_CONTEXT_LIMIT) || 32768;
 
 type ModelUsage = {
   prompt_tokens?: number;

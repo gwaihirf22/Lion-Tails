@@ -295,6 +295,19 @@ Three consequences worth keeping:
   with a stripped-down one. Pinning down the expected output is not only a
   quality measure; it is what stops a thinking model reasoning until it dies.
 
+## 14. The Ollama container's limits are reserved for Plex, not defaults
+
+Host configuration, `ollama` container
+
+`OLLAMA_KEEP_ALIVE=5h` and `OLLAMA_MAX_LOADED_MODELS=1` are annotated in the
+Unraid template as being set "so Plex keeps VRAM for NVENC". They look like
+conservative defaults worth tuning. They are a deliberate reservation of a
+shared GPU, and raising either takes VRAM from video transcoding.
+
+`OLLAMA_CONTEXT_LENGTH=32768` was raised from 16384 after measuring that it
+costs no additional VRAM (see below). `MODEL_CONTEXT_LIMIT` in this app must be
+kept in step with it — see §13.
+
 ## Recurring failure shape
 
 Most incidents here have had the same form: **a check that reported success
@@ -331,6 +344,28 @@ than trusting the labels attached to it — the same move as reading
 So: when a check fails, confirm it is measuring what you think it is measuring
 before acting on it. A plausible result is not evidence that the measurement was
 sound.
+
+### And the third: a plausible number, correctly derived, still wrong
+
+Raising Ollama's context from 16384 to 32768 was estimated to cost about
++384 MiB of VRAM, reasoned correctly from the model's reported KV cache size.
+The GPU is shared with Plex transcoding and had roughly 1 GiB free, so that
+estimate turned a configuration change into a judgement call about someone
+else's headroom.
+
+Measured instead — by loading the model at `num_ctx=32768` through Ollama's
+native API, which needs no restart and commits to nothing:
+
+    ctx=32768   size_vram=8780 MiB   free=1041 MiB
+    ctx=16384   size_vram=9168 MiB   free=1031 MiB
+
+Free VRAM was **identical**. The estimate was not sloppy; it was derived
+correctly from a real number and was still wrong, because the quantity it
+reasoned about was not the one that determines the outcome.
+
+The generalisation: an estimate that is cheap to replace with a measurement
+should be. This one cost one API call and removed the need to weigh a risk at
+all.
 
 ### Known open instance: mistyped API paths return 200 and HTML
 
