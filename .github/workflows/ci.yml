@@ -13,6 +13,26 @@ jobs:
   build:
     name: Typecheck and build
     runs-on: ubuntu-latest
+
+    # A throwaway Postgres for the second smoke test below. The first smoke test
+    # runs without DATABASE_URL and therefore never instantiates pg, drizzle,
+    # connect-pg-simple, the migrator or verifyOrmSchema -- which is exactly
+    # where every bug that reached production actually lived.
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: liontails
+          POSTGRES_PASSWORD: ci-postgres-password
+          POSTGRES_DB: liontails
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U liontails"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -86,6 +106,136 @@ jobs:
           grep -q '"status":"ok"' /tmp/health.json
           grep -q '"persistence":false' /tmp/health.json
           echo "OK: production bundle boots and serves /api/health."
+
+      # The smoke test above deliberately runs with no DATABASE_URL, so it never
+      # touches the database code. That leaves the modules where the real bugs
+      # lived completely unexercised in CI:
+      #
+      #   - pg / drizzle-orm / connect-pg-simple are CommonJS. A named import
+      #     from them compiles and only fails when Node instantiates the module
+      #     -- and those imports live in server/db.ts, which the no-database
+      #     path never loads.
+      #   - a migration that does not produce the schema the ORM expects (a
+      #     registration once 500'd with `column first_name of relation users
+      #     does not exist`).
+      #   - reference data seeded into memory instead of the database.
+      #
+      # So: migrate a real database, boot against it, and assert.
+      - name: Smoke-test against a real database
+        env:
+          NODE_ENV: production
+          PORT: '5002'
+          SESSION_SECRET: ci-smoke-session-secret
+          DATABASE_URL: postgresql://liontails:ci-postgres-password@127.0.0.1:5432/liontails
+        run: |
+          set -euo pipefail
+
+          # ubuntu-latest ships postgresql-client, but say so plainly if that
+          # ever changes rather than failing inside an assertion.
+          if ! command -v psql >/dev/null; then
+            echo "psql not found; installing postgresql-client."
+            sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          fi
+
+          echo "--- applying migrations ---"
+          node scripts/migrate.js
+
+          # The migration is the only thing allowed to create tables, so the
+          # table set is an assertion in itself. 10 = 9 app tables + session.
+          TABLES=$(psql "$DATABASE_URL" -tAc \
+            "select count(*) from pg_tables where schemaname='public'")
+          echo "tables in public: $TABLES"
+          if [ "$TABLES" -ne 10 ]; then
+            psql "$DATABASE_URL" -c "\dt"
+            echo "FAIL: expected exactly 10 tables."
+            exit 1
+          fi
+
+          node dist/prod.js > /tmp/app-db.log 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+
+          ok=0
+          for _ in $(seq 1 30); do
+            if ! kill -0 "$APP_PID" 2>/dev/null; then
+              echo "The server process exited during startup."
+              break
+            fi
+            if curl -fsS http://127.0.0.1:5002/api/health -o /tmp/health-db.json 2>/dev/null; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+
+          echo "--- server output ---"
+          cat /tmp/app-db.log
+
+          if [ "$ok" -ne 1 ]; then
+            echo "FAIL: the bundle did not serve /api/health against a database."
+            exit 1
+          fi
+
+          echo "--- /api/health ---"
+          cat /tmp/health-db.json
+          grep -q '"persistence":true' /tmp/health-db.json
+          grep -q '"schema":"ok"' /tmp/health-db.json
+
+          # Read the row count from SQL, NOT from /api/heroes. The in-memory
+          # fallback serves 15 heroes whether or not anything was persisted --
+          # that is precisely why the original seeding race went unnoticed, and
+          # asserting via the endpoint would not have caught it.
+          HEROES=$(psql "$DATABASE_URL" -tAc "select count(*) from heroes_of_faith")
+          echo "heroes_of_faith rows: $HEROES"
+          if [ "$HEROES" -ne 15 ]; then
+            echo "FAIL: reference data was not persisted to the database."
+            exit 1
+          fi
+
+          echo "OK: migrated, booted, schema verified, reference data persisted."
+
+      # A check that cannot fail is not a check. verifyOrmSchema is the guard
+      # against the class of bug that broke registration, so prove it actually
+      # rejects a drifted schema rather than assuming it would.
+      - name: Assert the schema check fails when the schema is wrong
+        env:
+          NODE_ENV: production
+          PORT: '5003'
+          SESSION_SECRET: ci-smoke-session-secret
+          DATABASE_URL: postgresql://liontails:ci-postgres-password@127.0.0.1:5432/liontails
+        run: |
+          set -euo pipefail
+
+          psql "$DATABASE_URL" -c "ALTER TABLE users DROP COLUMN first_name"
+
+          node dist/prod.js > /tmp/app-drift.log 2>&1 &
+          APP_PID=$!
+          trap 'kill "$APP_PID" 2>/dev/null || true' EXIT
+
+          # curl -w '%{http_code}' already prints 000 when it cannot connect, so
+          # do NOT add `|| echo 000` -- that appends a second 000 and the loop
+          # then breaks on the first attempt with a nonsense "000000".
+          CODE=000
+          for _ in $(seq 1 30); do
+            kill -0 "$APP_PID" 2>/dev/null || break
+            CODE=$(curl -s -o /tmp/health-drift.json -w '%{http_code}' \
+              http://127.0.0.1:5003/api/health) || true
+            [ "$CODE" != "000" ] && break
+            sleep 1
+          done
+
+          echo "--- /api/health returned $CODE ---"
+          cat /tmp/health-drift.json 2>/dev/null || true
+          echo
+
+          if [ "$CODE" != "503" ]; then
+            cat /tmp/app-drift.log
+            echo "FAIL: a missing column did not produce a 503. The schema check is not working."
+            exit 1
+          fi
+          grep -q '"schema":"mismatch"' /tmp/health-drift.json
+          grep -q 'first_name' /tmp/health-drift.json
+          echo "OK: schema drift is detected and reported, naming the missing column."
 
   docker:
     name: Docker build and scan
