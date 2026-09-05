@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { Song } from "@shared/schema";
 import { v4 as uuidv4 } from "uuid";
 import { resolveModel, createClient } from "./modelPolicy";
+import { StoryGenerationError } from "./storyErrors";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 // Instantiated lazily so the module can load without an API key configured.
@@ -193,9 +194,12 @@ export async function generateSongChords(
     // env key directly: with the self-hosted local tier a user with no OpenAI
     // key at all still has a working model, and should not be dropped to demo
     // output.
-    const resolved = await resolveModel(userId, "chat").catch(() => null);
+    const resolved = await resolveModel(userId, "chat");
     if (!resolved) {
-      return getDemoSong(title, lyricsText, artist);
+      throw new StoryGenerationError(
+        "no_model_available",
+        "No model is available for chord generation on your account. Add your own OpenAI API key in Settings.",
+      );
     }
     const response = await createClient(resolved).chat.completions.create({
       model: resolved.model,
@@ -341,178 +345,20 @@ export async function generateSongChords(
     };
     
   } catch (error) {
+    // Never return invented music as though it were generated. This used to
+    // fall back to a demo song with a random key, random tempo and a random
+    // chord progression -- returned as HTTP 201 and PERSISTED to the library,
+    // so confidently wrong chords were saved against the user's title.
+    if (error instanceof StoryGenerationError) {
+      throw error;
+    }
     console.error("Error generating song chords with OpenAI:", error);
-    
-    // Fallback to demo song if there's an error
-    return getDemoSong(title, lyricsText, artist);
+    throw new StoryGenerationError(
+      "generation_failed",
+      error instanceof Error && error.message
+        ? error.message
+        : "Could not generate chords for this song. Please try again.",
+      { cause: error },
+    );
   }
-}
-
-/**
- * Generate a demo song with simple chord progressions
- * @param title The title of the song
- * @param lyrics The lyrics of the song
- * @param artist The artist name for the song
- * @returns A Song object with chord suggestions
- */
-function getDemoSong(title: string, lyrics: string, artist: string = "User Created"): Song {
-  // Split lyrics into lines
-  const lyricsLines = lyrics.split('\n').filter(line => line.trim().length > 0);
-  
-  // Determine if the song has a chorus (very simple heuristic)
-  const hasChorus = lyricsLines.some(line => line.trim().toLowerCase().includes('chorus'));
-  
-  // Decide whether it has a bridge
-  const hasBridge = lyricsLines.some(line => line.trim().toLowerCase().includes('bridge'));
-  
-  // Choose a random key
-  const keys = ["C", "G", "D", "A", "E", "F"];
-  const randomKey = keys[Math.floor(Math.random() * keys.length)];
-  
-  // Generate a random tempo between 60 and 140 BPM
-  const randomTempo = Math.floor(Math.random() * 80) + 60;
-  
-  // Get a random chord progression
-  const chordProgression = commonChordProgressions[Math.floor(Math.random() * commonChordProgressions.length)];
-  const chorusProgression = commonChordProgressions[Math.floor(Math.random() * commonChordProgressions.length)];
-  const bridgeProgression = commonChordProgressions[Math.floor(Math.random() * commonChordProgressions.length)];
-  
-  // Create a simple structure for the song
-  let currentSection = 'verse';
-  const verses: { lyrics: string[], chords: string[] }[] = [];
-  let currentVerse: { lyrics: string[], chords: string[] } = { lyrics: [], chords: [] };
-  let chorus: { lyrics: string[], chords: string[] } | null = null;
-  let bridge: { lyrics: string[], chords: string[] } | null = null;
-  
-  // Process lyrics line by line
-  for (const line of lyricsLines) {
-    const trimmedLine = line.trim().toLowerCase();
-    
-    if (trimmedLine === 'chorus:' || trimmedLine === '[chorus]' || trimmedLine === 'chorus') {
-      currentSection = 'chorus';
-      chorus = { lyrics: [], chords: [] };
-      continue;
-    } else if (trimmedLine === 'bridge:' || trimmedLine === '[bridge]' || trimmedLine === 'bridge') {
-      currentSection = 'bridge';
-      bridge = { lyrics: [], chords: [] };
-      continue;
-    } else if (trimmedLine === 'verse:' || trimmedLine === '[verse]' || trimmedLine.match(/verse \d+:/) || trimmedLine.match(/\[verse \d+\]/)) {
-      if (currentVerse.lyrics.length > 0) {
-        verses.push(currentVerse);
-      }
-      currentSection = 'verse';
-      currentVerse = { lyrics: [], chords: [] };
-      continue;
-    }
-    
-    // Skip empty lines
-    if (trimmedLine.length === 0) continue;
-    
-    // Add the line to the appropriate section with chord
-    if (currentSection === 'verse') {
-      currentVerse.lyrics.push(line);
-      currentVerse.chords.push(chordProgression[currentVerse.chords.length % chordProgression.length]);
-    } else if (currentSection === 'chorus' && chorus) {
-      chorus.lyrics.push(line);
-      chorus.chords.push(chorusProgression[chorus.chords.length % chorusProgression.length]);
-    } else if (currentSection === 'bridge' && bridge) {
-      bridge.lyrics.push(line);
-      bridge.chords.push(bridgeProgression[bridge.chords.length % bridgeProgression.length]);
-    }
-  }
-  
-  // Add the last verse if it has content
-  if (currentVerse.lyrics.length > 0) {
-    verses.push(currentVerse);
-  }
-  
-  // If no explicit chorus was found but we want one, create a simple one
-  if (!chorus && hasChorus) {
-    chorus = {
-      lyrics: ["This is a simple chorus", "Praising God's eternal love"],
-      chords: [chorusProgression[0], chorusProgression[1]]
-    };
-  }
-  
-  // If no explicit bridge was found but we want one, create a simple one
-  if (!bridge && hasBridge) {
-    bridge = {
-      lyrics: ["Bridge of faith", "Connecting our hearts to God"],
-      chords: [bridgeProgression[0], bridgeProgression[1]]
-    };
-  }
-  
-  // Create a list of all unique chords
-  const allChords = new Set<string>();
-  
-  // Add chords from verses
-  verses.forEach(verse => {
-    verse.chords.forEach(chord => {
-      allChords.add(chord);
-    });
-  });
-  
-  // Add chords from chorus
-  if (chorus) {
-    chorus.chords.forEach(chord => {
-      allChords.add(chord);
-    });
-  }
-  
-  // Add chords from bridge
-  if (bridge) {
-    bridge.chords.forEach(chord => {
-      allChords.add(chord);
-    });
-  }
-  
-  // Create chord diagrams for each unique chord
-  const chordDiagrams = Array.from(allChords).map(chordName => {
-    return commonChords[chordName] || {
-      name: chordName,
-      fingering: {
-        string1: 0,
-        string2: 0,
-        string3: 0,
-        string4: 0,
-        string5: 0,
-        string6: 0
-      }
-    };
-  });
-  
-  // Determine best tags based on content
-  const tags: string[] = ["worship"];
-  if (lyrics.toLowerCase().includes("jesus") || lyrics.toLowerCase().includes("christ")) {
-    tags.push("christian");
-  }
-  if (lyrics.toLowerCase().includes("lord") || lyrics.toLowerCase().includes("god")) {
-    tags.push("praise");
-  }
-  if (lyrics.toLowerCase().includes("child") || lyrics.toLowerCase().includes("children")) {
-    tags.push("children");
-  }
-  if (hasChorus) {
-    tags.push("contemporary");
-  } else {
-    tags.push("hymn");
-  }
-  
-  return {
-    id: uuidv4(),
-    title,
-    artist,
-    verses,
-    chorus,
-    bridge,
-    chords: chordDiagrams,
-    difficulty: "beginner",
-    key: randomKey,
-    timeSignature: "4/4",
-    tempo: randomTempo,
-    tags,
-    hasGeneratedAudio: false,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  };
 }

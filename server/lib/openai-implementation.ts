@@ -24,6 +24,7 @@ type StoryContext = {
 };
 import { getBibleVerseByTheme } from "../data/bibleVerses";
 import { storage } from "../storage";
+import { StoryGenerationError, modelOutputAdvice } from "./storyErrors";
 import { resolveModel, createClient, type ResolvedModel } from "./modelPolicy";
 import * as fs from "fs";
 import * as path from "path";
@@ -62,6 +63,52 @@ function countWords(text: string): number {
 // =========================================================================
 // HELPER FUNCTIONS (DEFINED BEFORE THEY ARE USED)
 // =========================================================================
+
+/**
+ * Runs a model call and parses its JSON reply, retrying once.
+ *
+ * Two things this fixes. First, the raw reply is recorded BEFORE parsing, so a
+ * malformed reply is still in debugData when it throws -- the evidence used to
+ * be destroyed at exactly the moment it was needed, because JSON.parse was
+ * called inside the debugData.push() argument and threw before the push
+ * completed.
+ *
+ * Second, there was no retry anywhere in the generation path. The
+ * attempt/maxAttempts/parseError fields in the schema were vestigial. Local
+ * models in particular truncate or malform JSON intermittently, and a second
+ * attempt often succeeds.
+ */
+async function parseJsonReplyWithRetry<T>(
+  step: string,
+  model: string,
+  storyLength: string | undefined,
+  debugData: any[],
+  call: () => Promise<string>,
+): Promise<T> {
+  const maxAttempts = 2;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const raw = await call();
+    debugData.push({ step, attempt, maxAttempts, response: raw });
+
+    try {
+      return JSON.parse(raw) as T;
+    } catch (error) {
+      lastError = error;
+      debugData[debugData.length - 1].parseError =
+        error instanceof Error ? error.message : String(error);
+      if (attempt < maxAttempts) {
+        console.warn(`${step}: model reply was not valid JSON, retrying (${attempt}/${maxAttempts})`);
+      }
+    }
+  }
+
+  throw new StoryGenerationError("model_output_invalid", modelOutputAdvice(model, storyLength), {
+    cause: lastError,
+    debugData,
+  });
+}
 
 // <<< NEW HELPER for Short Stories (Single API Call) >>>
 async function generateShortStorySingleCall(
@@ -106,14 +153,35 @@ async function generateShortStorySingleCall(
   });
 
   const responseContent = response.choices[0].message.content || "";
+
+  // Record the raw reply BEFORE parsing it. This previously called JSON.parse
+  // inside the push() argument, so a malformed reply threw before the push
+  // completed and the evidence was destroyed at exactly the moment it was
+  // needed. It also parsed the same string twice on the happy path.
+  //
+  // No retry here on purpose: the very-short path is under investigation and a
+  // retry would mask the failure being measured.
   debugData.push({
     step: "generateShortStorySingleCall",
     prompt: userPrompt,
     response: responseContent,
-    wordCount: countWords(JSON.parse(responseContent).content || ""),
   });
 
-  return JSON.parse(responseContent);
+  let parsed: any;
+  try {
+    parsed = JSON.parse(responseContent);
+  } catch (error) {
+    debugData[debugData.length - 1].parseError =
+      error instanceof Error ? error.message : String(error);
+    throw new StoryGenerationError(
+      "model_output_invalid",
+      modelOutputAdvice(ctx.resolved.model, request.storyLength),
+      { cause: error, debugData },
+    );
+  }
+
+  debugData[debugData.length - 1].wordCount = countWords(parsed.content || "");
+  return parsed;
 }
 
 // HELPER for Long Stories (Outline Generation)
@@ -152,12 +220,16 @@ async function generateStoryOutline(
   });
 
   const responseContent = response.choices[0].message.content || "";
-  debugData.push({
-    step: "generateOutline",
-    prompt: userPrompt,
-    response: responseContent,
-  });
-  return JSON.parse(responseContent).outline;
+  debugData.push({ step: "generateOutline", prompt: userPrompt, response: responseContent });
+  try {
+    return JSON.parse(responseContent).outline;
+  } catch (error) {
+    throw new StoryGenerationError(
+      "model_output_invalid",
+      modelOutputAdvice(ctx.resolved.model, request.storyLength),
+      { cause: error, debugData },
+    );
+  }
 }
 
 // HELPER for Long Stories (Chapter Generation)
@@ -246,7 +318,15 @@ async function finalizeStoryDetails(
 
   const responseContent = response.choices[0].message.content || "";
   debugData.push({ step: "finalizeStory" });
-  return JSON.parse(responseContent);
+  try {
+    return JSON.parse(responseContent);
+  } catch (error) {
+    throw new StoryGenerationError(
+      "model_output_invalid",
+      modelOutputAdvice(ctx.resolved.model),
+      { cause: error, debugData },
+    );
+  }
 }
 
 // =========================================================================

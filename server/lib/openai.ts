@@ -1,9 +1,9 @@
 import { StoryRequest, StoryResponse } from "@shared/schema";
-import { getBiblicalEventStoryTemplate } from "../data/storyTemplates";
 import { getBibleVerseByTheme } from "../data/bibleVerses";
 import { generateStoryWithOpenAI } from "./openai-implementation";
 import { storage } from "../storage";
 import { resolveModel } from "./modelPolicy";
+import { StoryGenerationError } from "./storyErrors";
 
 // Constants for our subscription model
 const FREE_STORY_INITIAL_QUOTA = 50;
@@ -67,31 +67,16 @@ export async function generateStory(request: StoryRequest, userId: number = 1): 
       const canGenerate = await canGenerateStoryWithFreeTier(userId);
       
       if (!canGenerate) {
-        return {
-          title: "Story Generation Limit Reached",
-          content: "You've reached your free story generation limit. Please provide your own OpenAI API key in Settings to continue generating stories, or wait until next month when your free quota refreshes.",
-          moralOutcome: "positive" as const,
-          applicationQuestions: [
-            "How can we be patient when we have to wait for something?",
-            "What are some ways God provides for our needs?",
-            "How can we be grateful for what we have?",
-            "What does it mean to trust in God's timing?",
-            "How can we help others while we wait?"
-          ],
-          bibleVerse: {
-            text: "And my God will meet all your needs according to the riches of his glory in Christ Jesus.",
-            reference: "Philippians 4:19"
-          },
-          imageUrl: undefined
-        };
+        throw new StoryGenerationError(
+          "quota_exceeded",
+          "You've reached your free story generation limit. Add your own OpenAI API key in Settings to continue, or wait until next month when your free quota refreshes.",
+        );
       }
       
       // Increment the counter for free tier
       await storage.incrementStoryGenerationCount(userId);
     }
     
-    // Get a story template if there's a biblical event
-    const storyTemplate = biblicalEvent ? getBiblicalEventStoryTemplate(biblicalEvent) : null;
     
     // Get a bible verse related to the theme
     const bibleVerse = getBibleVerseByTheme(theme);
@@ -109,31 +94,19 @@ export async function generateStory(request: StoryRequest, userId: number = 1): 
       };
     }
     
-    // For regular stories when no model is available at all. Asks the policy
-    // rather than the env key: the local Ollama tier needs no key, so "no
-    // OpenAI key" no longer means "no model".
-    const availableModel = await resolveModel(userId, "chat").catch(() => null);
+    // No model at all. This used to fall through to a ~1400-word canned
+    // "Noah's Ark" story, personalised with the child's name and returned with
+    // HTTP 200 and no marker of any kind -- so asking for courage and a rabbit
+    // returned Noah's Ark and nothing said the model was never called.
+    //
+    // The .catch(() => null) that used to wrap this also swallowed the real
+    // reason from modelPolicy, e.g. "OpenAI API key not found".
+    const availableModel = await resolveModel(userId, "chat");
     if (!availableModel) {
-      // Handle edge case where childName is undefined
-      const safeChildName = childName || "Child";
-      const safeGender = gender || "boy";
-      
-      // Use default animal and theme if they are not provided
-      // Apply useAnimal toggle - set empty string if useAnimal is false
-      const safeAnimal = useAnimal === false ? "" : (animal || "lamb");
-      const safeTheme = theme || "faith";
-      
-      // Get hero of faith information if one is selected
-      let heroOfFaithName = undefined;
-      if (heroOfFaith && heroOfFaith !== 'none') {
-        const heroOfFaithObject = await storage.getHeroOfFaithById(heroOfFaith);
-        if (heroOfFaithObject) {
-          heroOfFaithName = heroOfFaithObject.name;
-        }
-      }
-      
-      console.log("No API key available, using demo story");
-      return getDemoStory(safeChildName, safeGender, safeAnimal, safeTheme, biblicalEvent, bibleVerse, heroOfFaithName, useAnimal);
+      throw new StoryGenerationError(
+        "no_model_available",
+        "No story model is available for your account. Add your own OpenAI API key in Settings, or choose a local model if one is configured.",
+      );
     }
     
     // Use the OpenAI implementation to generate a story with userId for API key access
@@ -148,204 +121,28 @@ export async function generateStory(request: StoryRequest, userId: number = 1): 
       bibleVerse
     };
   } catch (error) {
-    console.error("Error generating story:", error);
-    
-    // Return a friendly error message
-    return {
-      title: "Story Generation Error",
-      content: "There was a problem generating your story. Please try again or check your API key settings.",
-      moralOutcome: "positive" as const,
-      applicationQuestions: [
-        "What would you do if something didn't work the way you expected?",
-        "How can we trust God when things go wrong?",
-        "What does it mean to lean on God's understanding?",
-        "How can you show patience when facing difficulties?",
-        "What are some ways to ask for help when you need it?"
-      ],
-      bibleVerse: {
-        text: "Trust in the LORD with all your heart and lean not on your own understanding.",
-        reference: "Proverbs 3:5"
-      },
-      imageUrl: undefined
-    };
-  }
-}
-
-// Function to build prompt for story generation
-function buildStoryPrompt(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, storyTemplate: string | null, useTimeTravel?: boolean, characterId?: string, heroOfFaith?: string, useAnimal?: boolean): string {
-  // Normalize "none" values
-  const animalToUse = animal === "none" ? "lamb" : animal || "lamb";
-  const themeToUse = theme === "none" ? "faith" : theme || "faith";
-  const biblicalEventToUse = biblicalEvent === "none" ? undefined : biblicalEvent;
-  
-  let promptText = `Create a Christian bedtime story for a ${gender} named ${childName}`;
-  
-  // Only include animal in the prompt if useAnimal is true (or undefined/not provided)
-  if (useAnimal !== false && animal && animal !== "none") {
-    promptText += ` about a ${animal}`;
-  }
-  
-  if (theme && theme !== "none") {
-    promptText += ` with a theme of "${theme}"`;
-  }
-  
-  if (biblicalEventToUse) {
-    promptText += ` based on the biblical event "${biblicalEventToUse}"`;
-    if (storyTemplate) {
-      promptText += `. Use this story template as a guide: ${storyTemplate}`;
+    // Never convert a failure into a story. This catch used to return a valid
+    // StoryResponse titled "Story Generation Error" with HTTP 200; because it
+    // satisfied storyResponseSchema, nothing downstream could distinguish it
+    // from real output, and the client auto-saved it to the user's library
+    // with a success toast.
+    //
+    // Typed failures pass through untouched so the route can map them to a
+    // real status code; anything else is wrapped with its message preserved.
+    if (error instanceof StoryGenerationError) {
+      throw error;
     }
+
+    console.error("Error generating story:", error);
+    const wrapped = new StoryGenerationError(
+      "generation_failed",
+      error instanceof Error && error.message
+        ? error.message
+        : "There was a problem generating your story. Please try again.",
+      { cause: error, debugData: (error as any)?.debugData },
+    );
+    // debugData is attached to the thrown error by the generator and was
+    // previously discarded here.
+    throw wrapped;
   }
-  
-  if (heroOfFaith && heroOfFaith !== "none") {
-    promptText += `. Also include the historical Christian figure "${heroOfFaith}" as part of the story, teaching the child about faith through their example.`;
-  }
-  
-  promptText += `. The story should be at least 1000 words, child-friendly, include moral lessons, and end with a Bible verse related to ${themeToUse}. Title the story appropriately.
-
-Use this format for your response:
-Title: [Story Title]
-Content: [Full story content]
-
-The story should be engaging, descriptive, and have a clear beginning, middle, and end. It should include dialogue and be written at a level that a child can understand but also enjoy. The tone should be warm, reassuring, and convey Christian values.`;
-  
-  return promptText;
-}
-
-// Function to provide a demo story when not using OpenAI
-function getDemoStory(childName: string, gender: string = "boy", animal: string, theme: string, biblicalEvent: string | undefined, bibleVerse: { text: string, reference: string }, heroOfFaith?: string, useAnimal: boolean = true): StoryResponse {
-  // Normalize "none" values  
-  // Use the animal if provided and not "none"
-  const animalToUse = animal === "none" ? "lamb" : animal || "lamb";
-  
-  // Use the theme if provided and not "none"
-  const themeToUse = theme === "none" ? "faith" : theme || "faith";
-  
-  // Handle biblicalEvent
-  const biblicalEventToUse = biblicalEvent === "none" ? undefined : biblicalEvent;
-
-  // Set default title and content
-  let title = `${childName}'s Wonderful ${themeToUse.charAt(0).toUpperCase() + themeToUse.slice(1)} Adventure`;
-  
-  // Create different story content based on the useAnimal toggle
-  let content = `Once upon a time in a cozy little house at the edge of a sleepy town, there lived a child named ${childName}. `;
-  
-  // Only add animal references if useAnimal is true and an animal is provided
-  if (useAnimal && animalToUse) {
-    content += `${childName} had a special love for ${animalToUse}s and could spend hours watching them, drawing pictures of them, and reading stories about them. `;
-  }
-  
-  content += `Every night before bed, ${childName}'s parents would read Bible stories, and ${childName} would drift off to sleep imagining what it would be like to be part of those amazing adventures.
-
-"Mommy," ${childName} would ask, "do you think Noah was scared when God told him to build such a big boat?"
-
-${gender === 'boy' ? 'His' : 'Her'} mother smiled gently. "I'm sure Noah felt afraid sometimes, just like we all do. But Noah trusted God, and that's what made him brave."
-
-That night, after ${gender === 'boy' ? 'his' : 'her'} mother tucked ${gender === 'boy' ? 'him' : 'her'} into bed and kissed ${gender === 'boy' ? 'him' : 'her'} goodnight, ${childName} drifted off to sleep. In ${gender === 'boy' ? 'his' : 'her'} dreams, ${gender === 'boy' ? 'he' : 'she'} found ${gender === 'boy' ? 'himself' : 'herself'} standing in a vast field, where a kind-looking man with a long beard was measuring wood for a massive structure.
-
-"Hello there, young one," the man said when he noticed ${childName}. "I'm Noah. Would you like to help me build God's ark?"
-
-${childName}'s eyes widened with wonder. "Really? I can help you?"
-
-Noah nodded with a warm smile. "God has given us a big job to do. When people are afraid, it helps to have friends working alongside us."
-
-${childName} was eager to help. Together with Noah and his family, ${childName} learned how to measure wood, hammer nails, and seal the ark with pitch to keep the water out. The work was hard, but ${childName} felt proud to be helping with God's special plan.
-
-"Noah," ${childName} asked one day as they worked side by side, "why aren't other people helping us build the ark?"
-
-Noah's face grew sad. "I've tried to tell them about God's plan to send rain, but they don't believe me. They've never seen rain before, so they think I'm being silly."
-
-"That must make you feel lonely," ${childName} said.
-
-"Sometimes," Noah admitted. "But I know God is with me, and now I have you to help me too."
-
-As the days passed, ${childName} noticed people from the nearby village coming to point and laugh at Noah's big boat sitting on dry land. Some of them said unkind things and called Noah foolish.
-
-"Why do they make fun of us?" ${childName} asked, feeling hurt by their words.
-
-"Sometimes people are afraid of things they don't understand," Noah explained. "Instead of trying to learn, they mock what seems strange to them. But we must keep doing what God has asked, even when others don't understand."
-
-${childName} thought about this. "Like when my friends laughed at me for sharing my toys with the new kid at school?"
-
-"Exactly like that," Noah said. "You showed ${themeToUse} even when it wasn't popular. That takes real courage."
-
-Finally, after many days of hard work, the ark was complete. Noah began gathering the animals, just as God had instructed. ${childName} was amazed to see animals of every kind coming in pairs—tall giraffes, powerful elephants, tiny mice${useAnimal && animalToUse ? `, and beautiful ${animalToUse}s too` : ""}.
-
-${useAnimal && animalToUse ? `
-"Look, Noah!" ${childName} exclaimed, pointing to a pair of ${animalToUse}s approaching the ark. "Those are my favorites!"
-
-Noah smiled. "Would you like to help guide them to their special place on the ark?"
-
-${childName} nodded eagerly and gently led the ${animalToUse}s up the ramp and into the ark. The animals seemed to trust ${childName}, following quietly to their designated area where fresh hay and water awaited them.` : `
-"Look at all the animals, Noah!" ${childName} exclaimed with wonder. "There are so many!"
-
-Noah smiled. "God is bringing them to us, two by two. Would you like to help guide some of them to their places on the ark?"
-
-${childName} nodded eagerly and helped Noah organize the animals, showing them to their designated areas where fresh hay and water awaited them.`}
-
-Once all the animals were safely aboard, Noah turned to ${childName} with a serious expression. "God has told me that the rain will start today. It's time for us to enter the ark."
-
-Just as Noah's family and ${childName} settled inside, the first raindrops began to fall. Soon, the gentle patter turned into a heavy downpour. Water rose around the ark, lifting it off the ground.
-
-${childName} felt a flutter of fear in ${gender === 'boy' ? 'his' : 'her'} stomach. "Noah, what if the ark leaks? What if we drift forever? What if—"
-
-Noah placed a reassuring hand on ${childName}'s shoulder. "It's okay to feel afraid. But remember, God promised to keep us safe, and God always keeps His promises."
-
-For forty days and forty nights, the rain continued. ${childName} helped Noah and his family feed the animals and keep the ark clean. ${useAnimal && animalToUse ? `The ${animalToUse}s became ${childName}'s special friends, and they would nuzzle ${childName}'s hand whenever they came near.` : `Many of the animals became familiar with ${childName}, and some would even approach when ${gender === 'boy' ? 'he' : 'she'} came to feed them.`}
-
-One day, the rain stopped. The ark came to rest on a mountaintop, but water still covered the earth. Noah sent out a raven, and then a dove, to look for dry land, but the dove returned with nothing.
-
-"We need to be patient," Noah told ${childName}, who was eager to see land again. "God's timing is perfect, even when waiting is hard."
-
-After seven more days, Noah sent the dove out again. This time, it returned with a fresh olive leaf in its beak. ${childName} jumped with joy! "Land! There must be dry land!"
-
-"Yes," Noah agreed with a smile. "Soon we will start anew on clean earth."
-
-When the waters finally receded, God told Noah it was safe to leave the ark. As ${childName} stepped onto solid ground for the first time in many weeks, a beautiful sight appeared in the sky—a vibrant rainbow arching from one end of the horizon to the other.
-
-"What is that?" ${childName} gasped.
-
-"That is God's promise," Noah explained. "God promises never to flood the whole earth again. Whenever you see a rainbow, remember that God keeps His promises."
-
-${childName} looked at the colorful arc in the sky and felt a warm sense of peace. "Just like God kept us safe on the ark."
-
-"That's right," Noah said. "And God will always be with you, guiding you and keeping you safe, even when you face scary situations."
-
-As ${childName} helped release the animals back into the world, ${useAnimal && animalToUse ? `the ${animalToUse}s paused beside ${childName} as if to say thank you before bounding off to explore their new home.` : `the animals scattered in all directions, eager to explore their new home.`}
-
-When ${childName} awoke the next morning, the dream felt so real that they hurried to tell their mother all about helping Noah ${useAnimal && animalToUse ? `and the special ${animalToUse}s` : `and all the amazing animals`} on the ark.
-
-Mother listened with a smile. "What a wonderful dream! And what did you learn from your adventure?"
-
-${childName} thought for a moment. "I learned that being brave doesn't mean not feeling scared. It means trusting God even when we are scared. And I learned about ${themeToUse}—how important it is to keep doing the right thing even when others don't understand."
-
-"Those are beautiful lessons," Mother said, giving ${childName} a hug. "And just like God was with Noah through the flood, God is always with you too."
-
-${heroOfFaith ? `
-"You know," Mother added thoughtfully, "your story reminds me of ${heroOfFaith}, who also showed great faith in difficult times. Would you like me to tell you about ${heroOfFaith} tomorrow night?"
-
-${childName} nodded eagerly. "Yes, please! I want to learn about all the heroes of faith!"
-
-"That's wonderful," Mother smiled. "There are so many amazing examples of faithful people throughout history that we can learn from."
-` : ''}
-
-That night, as ${childName} gazed out the window before bed, a spring shower began to fall. And there, arching across the evening sky, was a beautiful rainbow—God's promise shining bright. ${childName} smiled, remembering the brave journey and the important lessons learned aboard Noah's Ark.`;
-  
-  // Add Bible verse to the output
-  const bibleVerseText = bibleVerse ? `\n\n"${bibleVerse.text}" - ${bibleVerse.reference}` : "";
-  
-  // Return the complete story response object
-  return {
-    title,
-    content: content + bibleVerseText,
-    moralOutcome: "positive" as const,
-    applicationQuestions: [
-      "How can you show courage when facing something scary?",
-      "What does it mean to trust God in difficult times?",
-      "How can you help others even when you're afraid?",
-      "What are some ways God shows His faithfulness to us?",
-      "How can you practice obedience like Noah did?"
-    ],
-    bibleVerse,
-    imageUrl: undefined // This will be generated separately if needed
-  };
 }
