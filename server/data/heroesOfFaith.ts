@@ -1,8 +1,22 @@
 import { HeroOfFaith } from '@shared/schema';
 import { v4 as uuidv4 } from 'uuid';
 
+// The raw literals below write `type: "book"` as a plain string, which does not
+// satisfy HeroOfFaith's union. Normalising that is precisely this function's
+// job (see validSources), so the parameter accepts the loose shape rather than
+// pretending the input is already valid.
+type RawHero = Omit<Partial<HeroOfFaith>, "sources"> & {
+  sources?: Array<{
+    title: string;
+    type?: string;
+    author?: string;
+    url?: string;
+    description?: string;
+  }>;
+};
+
 // Helper function to ensure all heroes have the required fields
-const createHero = (hero: Partial<HeroOfFaith>): HeroOfFaith => {
+const createHero = (hero: RawHero): HeroOfFaith => {
   // Ensure sources has the correct type
   const defaultSources = [{
     title: "Default Source",

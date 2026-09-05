@@ -63,7 +63,10 @@ export default function HeroesOfFaith() {
       title: story.story.title,
       content: story.story.content,
       isHistoricallyAccurate: story.searchMetadata?.tags?.includes("historical") || false,
-      bibleVerse: story.story.bibleVerse,
+      // StoryResponse.bibleVerse is optional but HeroStory requires it, so a
+      // saved story without one gets a placeholder rather than rendering
+      // `undefined.reference`.
+      bibleVerse: story.story.bibleVerse ?? { text: "", reference: "" },
       isFeatured: story.isFavorite || false,
       createdAt: story.createdAt,
       createdBy: undefined,

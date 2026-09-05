@@ -62,7 +62,9 @@ export default function Music() {
         </TabsList>
         
         <TabsContent value="browse" className="content-container rounded-lg p-0">
-          <MusicSection songs={songs || []} />
+          {/* MusicSection takes no props -- it renders SongLibrary, which fetches its
+              own songs. The `songs` prop here was silently ignored. */}
+          <MusicSection />
         </TabsContent>
         
         <TabsContent value="search" className="content-container rounded-lg p-6 bg-white/90 backdrop-blur-sm">

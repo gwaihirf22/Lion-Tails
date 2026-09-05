@@ -68,7 +68,7 @@ export async function analyzeImage(base64Image: string, userId: number): Promise
     return response.choices[0].message.content || "No analysis could be generated for this image.";
   } catch (error) {
     console.error("Error analyzing image:", error);
-    throw new Error(`Failed to analyze image: ${error.message}`);
+    throw new Error(`Failed to analyze image: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -113,7 +113,13 @@ export async function generateStoryFromImage(
       max_tokens: 4000,
     });
 
-    const storyContent = JSON.parse(storyResponse.choices[0].message.content);
+    // message.content is string | null. Parsing null would throw a confusing
+    // "Unexpected token" from JSON.parse; say what actually went wrong.
+    const rawStory = storyResponse.choices[0].message.content;
+    if (!rawStory) {
+      throw new Error("The model returned no content for the story.");
+    }
+    const storyContent = JSON.parse(rawStory);
     
     return {
       title: storyContent.title || "A Story From An Image",
@@ -121,7 +127,7 @@ export async function generateStoryFromImage(
     };
   } catch (error) {
     console.error("Error generating story from image:", error);
-    throw new Error(`Failed to generate story from image: ${error.message}`);
+    throw new Error(`Failed to generate story from image: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -150,7 +156,7 @@ export async function generateIllustrationPrompt(storyContent: string, userId: n
     return response.choices[0].message.content || "A Christian children's story illustration, colorful, gentle style";
   } catch (error) {
     console.error("Error generating illustration prompt:", error);
-    throw new Error(`Failed to generate illustration prompt: ${error.message}`);
+    throw new Error(`Failed to generate illustration prompt: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -172,7 +178,7 @@ export async function generateIllustration(prompt: string, userId: number): Prom
     return response.data[0].url || null;
   } catch (error) {
     console.error("Error generating illustration:", error);
-    throw new Error(`Failed to generate illustration: ${error.message}`);
+    throw new Error(`Failed to generate illustration: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
