@@ -19,16 +19,57 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 10
+    # Grouping notes, from the Dependabot options reference:
+    #
+    #   "Any outdated dependencies that do not match a rule are updated in
+    #    individual pull requests."
+    #
+    # So every category needs a group, or it arrives one-PR-per-package. The
+    # first run opened 16 PRs largely because of the two gaps below.
+    #
+    #   "applies-to ... When undefined, defaults to version updates."
+    #
+    # Security updates are therefore NOT covered by a normal group. cookie,
+    # pg-protocol, pg-cloudflare and foreground-child each got their own PR for
+    # exactly this reason. They need a group of their own.
+    #
+    # Tiers are kept in separate PRs on purpose. The point is fewer PRs, not one
+    # undifferentiated PR -- a production minor deserves a different glance from
+    # a dev patch, and merging them together would remove that distinction.
     groups:
+      # Everything a published advisory triggers, in one PR. These are the ones
+      # worth merging promptly.
+      security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
       development-dependencies:
         dependency-type: "development"
+        patterns:
+          - "*"
         update-types:
           - "minor"
           - "patch"
-      production-dependencies:
+
+      # Safest production tier: no behaviour change intended.
+      production-patch:
         dependency-type: "production"
+        patterns:
+          - "*"
         update-types:
           - "patch"
+
+      # Production minors can change behaviour, so they are batched separately
+      # rather than folded in with patches -- previously these fell through the
+      # groups entirely and arrived individually (react-icons,
+      # @radix-ui/react-tooltip).
+      production-minor:
+        dependency-type: "production"
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
     labels:
       - "dependencies"
       - "automated"
