@@ -222,9 +222,13 @@ container on a shared network a generic service name — `postgres`, `redis`,
 
 `server/lib/modelPolicy.ts`, `server/routes.ts`
 
-`client/src/pages/Settings.tsx` currently has its **own hardcoded model list**
-and never calls this endpoint. Four of its six options are rejected with a 403,
-and the local Ollama tier is not offered at all.
+`client/src/pages/Settings.tsx` renders this endpoint's response, grouped by
+tier, with unavailable models shown but disabled so it is clear what supplying
+your own key would unlock. It holds no model ids of its own — not even a default
+for the initial state, which belongs to `MODEL_CATALOG`.
+
+It previously carried two hardcoded lists totalling six options, four of which
+the server rejected with a 403, and omitted the free local tier entirely.
 
 The endpoint returns exactly the models a given user may select, with tier and
 warning text. **Extend `MODEL_CATALOG`; do not add a seventh list.**
