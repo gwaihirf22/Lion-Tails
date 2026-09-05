@@ -1,4 +1,15 @@
-import { pgTable, text, serial, integer, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  serial,
+  integer,
+  boolean,
+  jsonb,
+  json,
+  varchar,
+  timestamp,
+  index,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { v4 as uuidv4 } from 'uuid';
@@ -15,9 +26,9 @@ export const users = pgTable("users", {
   isAdmin: boolean("is_admin").default(false).notNull(),
   verificationToken: text("verification_token"),
   resetPasswordToken: text("reset_password_token"),
-  resetPasswordExpires: timestamp("reset_password_expires"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  resetPasswordExpires: timestamp("reset_password_expires", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // Verification tokens
@@ -26,9 +37,128 @@ export const verificationTokens = pgTable("verification_tokens", {
   userId: integer("user_id").notNull(),
   token: text("token").notNull(),
   type: text("type").notNull(), // 'email' or 'password'
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// Every table the application touches is declared here.
+//
+// Previously only users and verification_tokens were declared, while the other
+// seven existed solely as hand-written SQL in scripts/ensure-database.js and as
+// lazy CREATE TABLE statements inside db-storage.ts. Those definitions drifted:
+// the bootstrap created `characters` and `stories` which nothing ever read,
+// while the app queried `user_characters` and `user_stories`, and `users` was
+// created with 6 of its 13 columns. Declaring everything here makes this file
+// the single source of truth, and lets verifyOrmSchema() in server/db.ts check
+// all of it via getTableColumns() with no hand-maintained list to drift.
+//
+// Timestamps are standardised on timestamptz. Production had a mix, which was
+// an accident of two hand-written bootstraps rather than a decision.
+// ---------------------------------------------------------------------------
+
+export const userCharacters = pgTable(
+  "user_characters",
+  {
+    characterId: text("character_id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    characterData: jsonb("character_data").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("idx_user_characters_user_id").on(table.userId),
+  }),
+);
+
+export const heroesOfFaith = pgTable("heroes_of_faith", {
+  heroId: text("hero_id").primaryKey(),
+  heroData: jsonb("hero_data").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export const userStories = pgTable(
+  "user_stories",
+  {
+    storyId: text("story_id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    storyData: jsonb("story_data").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    isFavorite: boolean("is_favorite").default(false),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    // SET NULL, never cascade: deleting a hero must not delete the user's
+    // stories that happen to reference it.
+    heroId: text("hero_id").references(() => heroesOfFaith.heroId, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => ({
+    userIdx: index("idx_user_stories_user_id").on(table.userId),
+    heroIdx: index("idx_user_stories_hero_id").on(table.heroId),
+  }),
+);
+
+export const heroStories = pgTable(
+  "hero_stories",
+  {
+    storyId: text("story_id").primaryKey(),
+    heroId: text("hero_id")
+      .notNull()
+      .references(() => heroesOfFaith.heroId, { onDelete: "cascade" }),
+    userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+    storyData: jsonb("story_data").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    isFeatured: boolean("is_featured").default(false),
+  },
+  (table) => ({
+    heroIdx: index("idx_hero_stories_hero_id").on(table.heroId),
+  }),
+);
+
+export const songs = pgTable("songs", {
+  songId: text("song_id").primaryKey(),
+  songData: jsonb("song_data").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export const userUsage = pgTable("user_usage", {
+  userId: integer("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  count: integer("count").default(0),
+  lastResetDate: timestamp("last_reset_date", { withTimezone: true }),
+});
+
+export const userSettings = pgTable("user_settings", {
+  userId: integer("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  openaiKey: text("openai_key"),
+  openaiModel: text("openai_model"),
+});
+
+// Owned and written by connect-pg-simple, never by the ORM. Declared only so
+// migrations create it and verifyOrmSchema() checks it; db-storage.ts sets
+// createTableIfMissing:false accordingly.
+//
+// These column types are copied from the pre-wipe production dump, which is
+// what connect-pg-simple actually created: unbounded varchar, json (not jsonb),
+// and timestamp(6) WITHOUT time zone. Do not "improve" them -- the library
+// queries against these exact types.
+export const session = pgTable(
+  "session",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: json("sess").notNull(),
+    expire: timestamp("expire", { precision: 6 }).notNull(),
+  },
+  (table) => ({
+    expireIdx: index("IDX_session_expire").on(table.expire),
+  }),
+);
 
 // User schema for registration
 export const registerUserSchema = z.object({

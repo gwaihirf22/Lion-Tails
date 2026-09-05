@@ -45,6 +45,8 @@ RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/scripts ./scripts
+# Migration SQL is applied at boot by scripts/migrate.js via drizzle-orm.
+COPY --from=builder /app/migrations ./migrations
 COPY entrypoint.sh ./entrypoint.sh
 
 RUN addgroup --system --gid 1001 nodejs \

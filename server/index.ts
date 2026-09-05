@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { seedReferenceData } from "./seed";
 import { log } from "./static";
 import path from "path";
 import type { Server } from "http";
@@ -101,6 +102,11 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   }
 
   const server = await registerRoutes(app);
+
+  // Seed reference data before we start listening, so the app never serves a
+  // half-populated Heroes of Faith list. Resolves quickly when there is no
+  // database -- databaseReady resolves false rather than hanging.
+  await seedReferenceData();
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

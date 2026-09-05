@@ -3,7 +3,6 @@ import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema } from "@shared/schema";
-import { heroesOfFaithData } from "./data/heroesOfFaith";
 import { generateStory } from "./lib/openai";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
@@ -783,25 +782,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // API routes for Heroes of Faith
   
-  // Initialize the storage with heroes of faith data if empty
-  (async () => {
-    try {
-      const existingHeroes = await storage.getAllHeroesOfFaith();
-      if (existingHeroes.length === 0) {
-        console.log("Initializing Heroes of Faith data");
-        for (const hero of heroesOfFaithData) {
-          try {
-            // Pass hero directly as it's already a HeroOfFaith type
-            await storage.createHeroOfFaith(hero);
-          } catch (err) {
-            console.error(`Failed to create hero: ${hero.name}`, err);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error initializing Heroes of Faith data:", error);
-    }
-  })();
+  // Heroes of Faith seeding lives in server/seed.ts and runs after the database
+  // is ready. It used to be a fire-and-forget IIFE here, which raced database
+  // initialisation and silently seeded into memory.
   
   // Get all heroes of faith
   app.get("/api/heroes", async (req, res) => {

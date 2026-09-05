@@ -8,8 +8,8 @@ import pg from "pg";
 import type { Pool as PgPool } from "pg";
 const { Pool } = pg;
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
-import { getTableColumns } from "drizzle-orm";
-import { users, verificationTokens } from "@shared/schema";
+import { getTableColumns, getTableName, is } from "drizzle-orm";
+import { PgTable, type AnyPgTable } from "drizzle-orm/pg-core";
 import * as schema from "@shared/schema";
 
 let pool: PgPool | undefined;
@@ -28,29 +28,38 @@ let schemaProblems: string[] = [];
  * Compares the live columns against what Drizzle itself declares, so there is
  * no hand-maintained list here to drift in turn -- the expectation comes
  * straight from shared/schema.ts.
+ *
+ * Every pgTable exported from the schema module is checked, so a table added
+ * there is covered automatically rather than needing to be remembered here.
  */
 async function verifyOrmSchema(activePool: PgPool): Promise<void> {
-  const expected = [
-    { name: "users", table: users },
-    { name: "verification_tokens", table: verificationTokens },
-  ];
+  const tables = Object.values(schema).filter((value) =>
+    is(value, PgTable),
+  ) as AnyPgTable[];
 
   const problems: string[] = [];
   try {
-    for (const { name, table } of expected) {
-      const wanted = Object.values(getTableColumns(table)).map((c) => c.name);
-      const { rows } = await activePool.query<{ column_name: string }>(
-        `SELECT column_name FROM information_schema.columns
-          WHERE table_schema = 'public' AND table_name = $1`,
-        [name],
-      );
-      const actual = rows.map((r) => r.column_name);
+    const { rows } = await activePool.query<{ table_name: string; column_name: string }>(
+      `SELECT table_name, column_name FROM information_schema.columns
+        WHERE table_schema = 'public'`,
+    );
 
-      if (actual.length === 0) {
+    const live = new Map<string, Set<string>>();
+    for (const row of rows) {
+      if (!live.has(row.table_name)) live.set(row.table_name, new Set());
+      live.get(row.table_name)!.add(row.column_name);
+    }
+
+    for (const table of tables) {
+      const name = getTableName(table);
+      const actual = live.get(name);
+      if (!actual) {
         problems.push(`table '${name}' does not exist`);
         continue;
       }
-      const missing = wanted.filter((c) => !actual.includes(c));
+      const missing = Object.values(getTableColumns(table))
+        .map((c) => c.name)
+        .filter((c) => !actual.has(c));
       if (missing.length) {
         problems.push(`table '${name}' is missing column(s): ${missing.join(", ")}`);
       }
@@ -67,11 +76,12 @@ async function verifyOrmSchema(activePool: PgPool): Promise<void> {
   if (problems.length) {
     console.error("DATABASE SCHEMA MISMATCH -- the ORM expects columns that do not exist:");
     for (const p of problems) console.error(`  - ${p}`);
-    console.error("Run 'npm run db:init' against this database to repair it.");
+    console.error("The migrations in ./migrations have not been applied to this database.");
   } else {
-    console.log("Database schema verified against shared/schema.ts");
+    console.log(`Database schema verified against shared/schema.ts (${tables.length} tables)`);
   }
 }
+
 
 async function initializeDatabase() {
   try {
@@ -123,19 +133,26 @@ async function initializeDatabase() {
   }
 }
 
-// Initialize immediately but don't wait for it. The pool itself is assigned
-// synchronously above, so consumers importing `pool` see it right away; `db`
-// becomes available once the connection test resolves.
-initializeDatabase()
+// Kicked off immediately. The pool itself is assigned synchronously above, so
+// consumers importing `pool` see it right away; `db` becomes available only
+// once the connection test resolves.
+//
+// databaseReady is exported so that work which genuinely requires a live
+// database -- seeding reference data, for example -- can await it instead of
+// racing it. It resolves false rather than rejecting when the database is
+// unreachable, so awaiting it can never hang startup.
+const databaseReady: Promise<boolean> = initializeDatabase()
   .then((success) => {
     if (success) {
       console.log("Database and ORM initialized successfully");
     } else {
       console.warn("Database initialization failed, falling back to memory storage");
     }
+    return success;
   })
   .catch((err) => {
     console.error("Error during database initialization:", err);
+    return false;
   });
 
-export { pool, db, dbConnectionStatus, schemaStatus, schemaProblems };
+export { pool, db, dbConnectionStatus, schemaStatus, schemaProblems, databaseReady };
