@@ -126,11 +126,18 @@ const MODEL_CONTEXT_LIMIT = Number(process.env.MODEL_CONTEXT_LIMIT) || 32768;
 
 /**
  * Below this fraction of the requested word count, a story is treated as a
- * failed request rather than a short one. Set at 0.6 from observed behaviour:
- * genuine results have landed at 81-172% of target, while the two real
- * undershoots were 49% (a 243-word "very-short") and 32% (a 794-word "long"
- * caused by a one-element outline). 0.6 separates those cleanly without
- * failing on ordinary variance.
+ * failed request rather than a short one.
+ *
+ * EMPIRICAL, not arbitrary: chosen so that sixteen recorded generations across
+ * two models and two full benchmark runs, which landed between 79% and 172% of
+ * target, all pass -- while the two known-broken results fail: a 243-word
+ * "very-short" (49%) and a 794-word "long" (32%) caused by a one-element
+ * outline. The provenance matters because a bare 0.6 invites being tightened
+ * into false failures or loosened into uselessness. If you change it, re-derive
+ * it from measurements rather than from intuition.
+ *
+ * Only the undershoot fails; see the length check at the assembly point for why
+ * the two directions are treated differently.
  */
 const MINIMUM_LENGTH_RATIO = 0.6;
 
@@ -551,6 +558,7 @@ async function generateStoryChapter(
   debugData: any[],
   ctx: StoryContext,
   wordCountPerChapter: number,
+  totalChapters: number,
 ): Promise<string> {
 
 
@@ -566,7 +574,10 @@ async function generateStoryChapter(
 
       Now, write the next part of the story based on this instruction: "${chapterOutline}"
 
-      CRITICAL INSTRUCTION: Write a detailed chapter of AT LEAST ${Math.round(wordCountPerChapter)} words.
+      CRITICAL INSTRUCTION: This chapter must be close to ${Math.round(wordCountPerChapter)} words --
+      no fewer than ${Math.round(wordCountPerChapter * 0.85)} and no more than ${Math.round(wordCountPerChapter * 1.15)}.
+      The story has ${totalChapters} chapters of similar length, so do not try to finish
+      the whole story in this one.
     `;
 
   return await requestModelText({
@@ -768,6 +779,7 @@ export async function generateStoryWithOpenAI(
           debugData,
           ctx,
           wordsPerChapter,
+          outline.length,
         );
         fullStoryContent += (fullStoryContent ? "\n\n" : "") + chapterContent;
         console.log(
