@@ -6,6 +6,19 @@ on:
       - main
   workflow_dispatch:
 
+# Merging several PRs in a row otherwise queues a full image build and a
+# container restart for each one, on a single self-hosted runner. Superseded
+# runs are cancelled so a burst of merges deploys the final state once.
+#
+# The cancellation window includes the SSH step, so a run can in principle be
+# killed inside `docker compose up -d`. That is seconds out of a multi-minute
+# run and self-correcting -- the superseding run re-runs the same idempotent
+# command. Set cancel-in-progress to false to serialise instead, at the cost of
+# building every commit.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: [self-hosted, linux, x64, unraid-lion-tails]
