@@ -141,15 +141,37 @@ jobs:
           node scripts/migrate.js
 
           # The migration is the only thing allowed to create tables, so the
-          # table set is an assertion in itself. 10 = 9 app tables + session.
+          # table set is an assertion in itself. 11 = 10 app tables + session.
+          # Update this deliberately when a migration adds one: a bare count
+          # cannot say WHICH table is missing, so the names are printed on
+          # failure rather than leaving the next person to run \dt themselves.
+          EXPECTED_TABLES=11
           TABLES=$(psql "$DATABASE_URL" -tAc \
             "select count(*) from pg_tables where schemaname='public'")
           echo "tables in public: $TABLES"
-          if [ "$TABLES" -ne 10 ]; then
+          if [ "$TABLES" -ne "$EXPECTED_TABLES" ]; then
             psql "$DATABASE_URL" -c "\dt"
-            echo "FAIL: expected exactly 10 tables."
+            echo "FAIL: expected exactly $EXPECTED_TABLES tables, found $TABLES."
+            echo "If a migration added or removed one, update EXPECTED_TABLES here."
             exit 1
           fi
+
+          # generation_records is written on every attempt, so its absence is a
+          # silent loss of telemetry rather than a crash. Assert the shape the
+          # recorder depends on, and that no credential column exists.
+          psql "$DATABASE_URL" -tAc \
+            "select column_name from information_schema.columns
+             where table_name='generation_records' order by column_name" > /tmp/gr-cols.txt
+          for col in generation_id model provider tier using_own_key outcome steps; do
+            grep -qx "$col" /tmp/gr-cols.txt || {
+              echo "FAIL: generation_records is missing column $col"; cat /tmp/gr-cols.txt; exit 1; }
+          done
+          if grep -qiE "api_key|apikey|base_url|baseurl" /tmp/gr-cols.txt; then
+            echo "FAIL: generation_records has a credential-shaped column:"
+            grep -iE "api_key|apikey|base_url|baseurl" /tmp/gr-cols.txt
+            exit 1
+          fi
+          echo "generation_records shape ok, no credential columns"
 
           node dist/prod.js > /tmp/app-db.log 2>&1 &
           APP_PID=$!

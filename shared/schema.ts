@@ -94,10 +94,19 @@ export const userStories = pgTable(
     heroId: text("hero_id").references(() => heroesOfFaith.heroId, {
       onDelete: "set null",
     }),
+    // Which generation produced this story. SET NULL for the same reason as
+    // heroId: generation_records is prunable operational data, user_stories is
+    // not, so pruning records must never delete a story.
+    //
+    generationId: text("generation_id").references(
+      () => generationRecords.generationId,
+      { onDelete: "set null" },
+    ),
   },
   (table) => ({
     userIdx: index("idx_user_stories_user_id").on(table.userId),
     heroIdx: index("idx_user_stories_hero_id").on(table.heroId),
+    generationIdx: index("idx_user_stories_generation_id").on(table.generationId),
   }),
 );
 
@@ -139,6 +148,84 @@ export const userSettings = pgTable("user_settings", {
   openaiKey: text("openai_key"),
   openaiModel: text("openai_model"),
 });
+
+// One row per generation ATTEMPT, including attempts that never became a
+// story. Kept as a separate table rather than columns on user_stories for two
+// reasons: a failed attempt has no story to hang off, and stories are the
+// user's data while records are operational telemetry with a different
+// lifetime.
+//
+// SECURITY: this row is derived from ResolvedModel, which also carries apiKey
+// and baseURL. Only the five descriptive fields below are ever copied across.
+// Never spread `resolved` into this table -- it is one careless `...resolved`
+// away from writing a live API key into the database.
+export const generationRecords = pgTable(
+  "generation_records",
+  {
+    generationId: text("generation_id").primaryKey(),
+    // SET NULL rather than cascade: deleting a user must not silently delete
+    // the record of what the models were doing.
+    userId: integer("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+
+    // What was asked for.
+    storyLength: text("story_length"),
+    storyType: text("story_type"),
+    readingLevel: text("reading_level"),
+    targetWordCount: integer("target_word_count"),
+
+    // Which AI produced it. These five are the whole of what may be copied
+    // from ResolvedModel.
+    model: text("model").notNull(),
+    provider: text("provider").notNull(),
+    tier: text("tier").notNull(),
+    usingOwnKey: boolean("using_own_key").default(false).notNull(),
+    downgradedFrom: text("downgraded_from"),
+
+    // What happened.
+    outcome: text("outcome").notNull(), // "succeeded" | "failed"
+    failureCode: text("failure_code"), // StoryFailureCode, when it failed
+    failureMessage: text("failure_message"),
+
+    // Measurements. durationMs is wall clock for the whole attempt, so it
+    // includes the image call and every retry.
+    durationMs: integer("duration_ms"),
+    actualWordCount: integer("actual_word_count"),
+    promptTokens: integer("prompt_tokens"),
+    completionTokens: integer("completion_tokens"),
+    totalTokens: integer("total_tokens"),
+    modelCalls: integer("model_calls"),
+    retriedCalls: integer("retried_calls"),
+    truncatedCalls: integer("truncated_calls"),
+
+    // Which build produced this row. Prompts are deliberately not stored (see
+    // generationRecords.ts) and are only reconstructible from the request while
+    // the prompt-building code is unchanged -- buildStoryBrief and the chapter
+    // instruction both changed during stage 1, so a record from before that
+    // cannot be reconstructed with today's code. Recording the build makes a
+    // row's era knowable, and it cannot be added retroactively.
+    appVersion: text("app_version"),
+
+    // Per-chapter word counts, not just the total. The total says "81% of
+    // target" and nothing more; the per-chapter numbers separated three
+    // different causes with three different fixes when nemotron undershot.
+    chapterWordCounts: jsonb("chapter_word_counts"),
+
+    // The full debugData: prompts, raw replies, finish reasons, token usage
+    // and parse errors. Capped before writing -- see recordGeneration().
+    steps: jsonb("steps"),
+  },
+  (table) => ({
+    userIdx: index("idx_generation_records_user_id").on(table.userId),
+    createdIdx: index("idx_generation_records_created_at").on(table.createdAt),
+    modelIdx: index("idx_generation_records_model").on(table.model),
+    outcomeIdx: index("idx_generation_records_outcome").on(table.outcome),
+  }),
+);
 
 // Owned and written by connect-pg-simple, never by the ORM. Declared only so
 // migrations create it and verifyOrmSchema() checks it; db-storage.ts sets

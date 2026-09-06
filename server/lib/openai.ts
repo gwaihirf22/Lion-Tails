@@ -55,7 +55,12 @@ async function canGenerateStoryWithFreeTier(userId: number = 1): Promise<boolean
 }
 
 // Main story generation function
-export async function generateStory(request: StoryRequest, userId: number = 1): Promise<StoryResponse> {
+export async function generateStory(
+  request: StoryRequest,
+  userId: number = 1,
+  // generationId identifies the generation_records row for this attempt, so a
+  // saved story can point at the record that produced it.
+): Promise<StoryResponse & { debugData?: any[]; generationId?: string }> {
   const { childName, gender, animal, useAnimal, theme, biblicalEvent, useTimeTravel, characterId, storyType, heroOfFaith, useCustomPrompts, customSystemPrompt, customUserPrompt } = request;
   
   try {

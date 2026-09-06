@@ -35,6 +35,12 @@ FROM node:20-alpine AS runner
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
+# The commit this image was built from. Recorded on every generation_records
+# row so a reader knows which era of the prompt code produced it -- prompts
+# themselves are not stored, and are only reconstructible while that code is
+# unchanged. Defaults to "unknown" for local builds.
+ARG APP_VERSION=unknown
+ENV APP_VERSION=$APP_VERSION
 ENV NODE_ENV=production
 ENV PORT=5000
 

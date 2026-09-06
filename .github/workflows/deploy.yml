@@ -40,6 +40,8 @@ jobs:
         with:
           context: .
           platforms: linux/amd64
+          build-args: |
+            APP_VERSION=${{ github.sha }}
           push: true
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/lion-tails:latest

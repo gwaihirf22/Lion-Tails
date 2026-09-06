@@ -634,6 +634,11 @@ export class DbStorage implements IStorage {
     }
     
     try {
+      // Which generation produced this story. Carried on the response object
+      // rather than passed separately so the existing client, which posts the
+      // story back verbatim, needs no change. Null for stories saved before
+      // generation_records existed, and for any path that does not set it.
+      const generationId = (story as { generationId?: string }).generationId ?? null;
       const id = uuidv4();
       const now = new Date();
       
@@ -661,22 +666,17 @@ export class DbStorage implements IStorage {
         }
       };
       
-      // Create the table if it doesn't exist (useful in deployment scenarios)
-      await pool!.query(`
-        CREATE TABLE IF NOT EXISTS user_stories (
-          story_id TEXT PRIMARY KEY,
-          user_id INTEGER NOT NULL,
-          story_data JSONB NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-          is_favorite BOOLEAN DEFAULT FALSE,
-          expires_at TIMESTAMP WITH TIME ZONE
-        )
-      `);
-      
+      // The CREATE TABLE IF NOT EXISTS that used to sit here has been removed.
+      // It was a fifth definition of user_stories, and an out-of-date one: it
+      // declared six columns while the real table has eight, omitting hero_id
+      // and generation_id and every index. It could only ever fire on a
+      // database where migrations had not run, and would then produce a table
+      // that verifyOrmSchema correctly rejects -- so its best case was a no-op
+      // and its worst case was a subtly wrong schema. migrations/ owns this.
       await pool!.query(
-        `INSERT INTO user_stories (story_id, user_id, story_data, created_at, is_favorite, expires_at) 
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [id, userId, JSON.stringify(savedStory), now, false, expiryDate]
+        `INSERT INTO user_stories (story_id, user_id, story_data, created_at, is_favorite, expires_at, generation_id) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [id, userId, JSON.stringify(savedStory), now, false, expiryDate, generationId]
       );
       
       return savedStory;
