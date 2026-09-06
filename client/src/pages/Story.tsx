@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import StoryDisplay from "@/components/StoryDisplay";
 import { StoryResponse } from "@shared/schema";
+import { apiRequestAllowingErrors } from "@/lib/queryClient";
 
 export default function Story() {
   const [location, navigate] = useLocation();
@@ -14,24 +15,49 @@ export default function Story() {
     window.scrollTo({ top: 0, behavior: 'auto' });
     
     const urlParams = new URLSearchParams(window.location.search);
-    const dataParam = urlParams.get("data");
     const idParam = urlParams.get("id");
-    
-    if (idParam) {
-      setStoryId(idParam);
-    }
-    
-    if (dataParam) {
-      try {
-        const decodedData = JSON.parse(decodeURIComponent(dataParam));
-        setStoryData(decodedData);
-      } catch (error) {
-        console.error("Failed to parse story data:", error);
-        navigate("/");
-      }
-    } else {
+    const dataParam = urlParams.get("data");
+
+    if (!idParam && !dataParam) {
       navigate("/");
+      return;
     }
+    if (idParam) setStoryId(idParam);
+
+    // Fetch by id rather than reading the story out of the query string.
+    // The old links serialised the ENTIRE story into the URL -- including
+    // debugData, which holds every prompt and every raw model reply -- so
+    // opening a story put all of it in the address bar, in history, and in any
+    // proxy log along the way.
+    //
+    // dataParam is still honoured so links already in someone browser history
+    // keep working, but nothing produces them any more.
+    const load = async () => {
+      if (idParam) {
+        try {
+          // Non-throwing: a story that is not found is a normal case here,
+          // and we fall back rather than surfacing an error.
+          const response = await apiRequestAllowingErrors("GET", `/api/stories/${idParam}`);
+          if (response.ok) {
+            const saved = await response.json();
+            setStoryData(saved.story ?? saved);
+            return;
+          }
+        } catch (error) {
+          console.error("Failed to load story:", error);
+        }
+      }
+      if (dataParam) {
+        try {
+          setStoryData(JSON.parse(decodeURIComponent(dataParam)));
+          return;
+        } catch (error) {
+          console.error("Failed to parse story data:", error);
+        }
+      }
+      navigate("/");
+    };
+    void load();
   }, [navigate]);
 
   if (!storyData) {

@@ -11,6 +11,7 @@ import { Loader2, Save, Star, StarOff } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import type { StoryRequest, StoryResponse } from "@shared/schema";
+import { useStoryJobs, describeJob } from "@/hooks/use-story-jobs";
 
 export default function GenerateStory() {
   const { toast } = useToast();
@@ -21,6 +22,17 @@ export default function GenerateStory() {
   const [generating, setGenerating] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [watchingJobId, setWatchingJobId] = useState<string | null>(null);
+  const { jobs, enqueue, cancel } = useStoryJobs();
+
+  // The job we started this visit, if it is still in the provider list. Reading
+  // it from the shared list rather than holding a local copy means a reload or
+  // a navigation away and back picks the job up again.
+  const watchedJob = jobs.find(
+    (j) =>
+      j.job_id === watchingJobId &&
+      (j.status === "queued" || j.status === "running"),
+  );
 
   // Query for remaining story generations
   const { data: generationStats, isLoading: statsLoading } = useQuery({
@@ -99,59 +111,44 @@ export default function GenerateStory() {
     setStoryRequest(data);
     setSavedId(null);
     setIsFavorite(false);
-    
-    try {
-      const response = await fetch("/api/story/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to generate story");
-      }
-      
-      const storyData = await response.json();
-      setGeneratedStory(storyData);
-      
-      // Automatically save the story
-      try {
-        const saveResponse = await apiRequest("POST", "/api/story/save", {
-          story: storyData,
-          request: data,
-          isFavorite: false,
-        });
-        
-        const savedStory = await saveResponse.json();
-        setSavedId(savedStory.id);
-        
+
+    // Enqueue and return. The story is written by the server worker and saved
+    // by it, so this no longer holds a request open for the whole generation.
+    // A gpt-oss "extended" story measured 342 seconds against SWAG's 240s
+    // proxy timeout -- past that, nginx returns its own HTML error page and
+    // response.json() throws the Unexpected-token-'<' error.
+    //
+    // The auto-save block that used to live here is GONE. The worker saves, so
+    // "Story generated but not saved" no longer exists as a state -- and that
+    // block is also what used to persist canned error stories to the library
+    // with a success toast.
+    const outcome = await enqueue(data);
+    setGenerating(false);
+
+    if (!outcome.ok) {
+      // 409 is a state conflict, not a failure: the user already has one
+      // running. Point them at it rather than presenting a dead end.
+      if (outcome.status === 409) {
         toast({
-          title: "Story saved automatically!",
-          description: "You can find it in your saved stories.",
+          title: "A story is already being written",
+          description: outcome.message,
         });
-      } catch (saveError) {
-        console.error("Failed to auto-save story:", saveError);
-        toast({
-          title: "Story generated but not saved",
-          description: "You can manually save your story using the Save button.",
-          variant: "destructive",
-        });
+        return;
       }
-      
-      // Refresh usage stats
-      queryClient.invalidateQueries({ queryKey: ["/api/story/usage"] });
-    } catch (error) {
       toast({
-        title: "Failed to generate story",
-        description: error instanceof Error ? error.message : "Unknown error occurred",
+        title: "Could not start the story",
+        description: outcome.message,
         variant: "destructive",
       });
-    } finally {
-      setGenerating(false);
+      return;
     }
+
+    setWatchingJobId(outcome.jobId);
+    toast({
+      title: "Writing your story",
+      description:
+        "You can leave this page. It will appear in your library when it is done.",
+    });
   };
 
   // Redirect to login if not authenticated
@@ -200,22 +197,36 @@ export default function GenerateStory() {
 
       <div className="grid grid-cols-1 gap-8">
         <div className="relative">
-          <StoryGeneratorTabs 
-            onSubmit={handleGenerateStory} 
-            loading={generating}
+          <StoryGeneratorTabs
+            onSubmit={handleGenerateStory}
+            loading={generating || Boolean(watchedJob)}
           />
         </div>
 
-        {generating && (
+        {/* Progress comes from the job's own step rather than a local boolean,
+            so it survives a reload and reports where the worker actually is. */}
+        {watchedJob && (
           <div className="flex flex-col items-center justify-center py-12">
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
             <p className="text-lg text-center">
-              Creating your story...
+              {describeJob(watchedJob)}
               <br />
               <span className="text-sm text-muted-foreground">
-                This may take a minute or two
+                You can leave this page — it keeps writing, and the story will
+                be in your library when it is done.
               </span>
             </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-4"
+              onClick={() => cancel(watchedJob.job_id)}
+            >
+              Cancel
+            </Button>
+            <span className="text-xs text-muted-foreground mt-1">
+              Cancelling stops the next part; the one being written is still paid for.
+            </span>
           </div>
         )}
 

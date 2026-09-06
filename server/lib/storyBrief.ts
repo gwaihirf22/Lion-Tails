@@ -117,13 +117,39 @@ export function buildStoryBrief(
   return lines.join("\n    ");
 }
 
-/** Picks the storyteller persona for the story type, honouring Parent Mode. */
-export function buildSystemPrompt(
-  request: StoryRequest,
-  custom?: CustomPrompts,
-): string {
-  if (request.useCustomPrompts && custom?.systemPrompt) {
-    return custom.systemPrompt;
+/**
+ * The opening instruction of the user prompt, honouring Parent Mode.
+ *
+ * Derived from the request for the same reason as buildSystemPrompt: this used
+ * to be read off an optional `ctx.custom` field that a caller had to remember
+ * to populate, which is the same trap in a different shape.
+ */
+export function buildUserInstruction(request: StoryRequest): string {
+  if (request.useCustomPrompts && request.customUserPrompt) {
+    return request.customUserPrompt;
+  }
+  return "Please create a complete, faith-based children's story.";
+}
+
+/**
+ * Picks the storyteller persona for the story type, honouring Parent Mode.
+ *
+ * The Parent Mode prompts are DERIVED here rather than passed in, and the
+ * second parameter that used to carry them is gone on purpose.
+ *
+ * They are a pure function of three request fields, so every caller computed
+ * the same expression from data this function already had -- and `undefined`,
+ * the wrong answer, was a valid value that compiled silently. That bug was
+ * introduced twice in one week in two different layers: openai.ts assembled the
+ * prompts and passed them to a parameter that did not exist, and later the
+ * enqueue route passed `undefined` outright. Both times Parent Mode silently
+ * stopped working with nothing failing.
+ *
+ * A caller cannot get it wrong now because a caller no longer supplies it.
+ */
+export function buildSystemPrompt(request: StoryRequest): string {
+  if (request.useCustomPrompts && request.customSystemPrompt) {
+    return request.customSystemPrompt;
   }
 
   switch (request.storyType) {

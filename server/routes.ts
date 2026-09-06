@@ -2,10 +2,24 @@ import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
 import { isModelAllowedFor, listSelectableModels } from "./lib/modelPolicy";
 import { StoryGenerationError } from "./lib/storyErrors";
+import {
+  enqueueStoryJob,
+  getStoryJob,
+  listActiveStoryJobs,
+  cancelStoryJob,
+  countInFlight,
+} from "./lib/storyJobs";
+import {
+  buildStoryBrief,
+  buildSystemPrompt,
+  resolveStoryCharacter,
+} from "./lib/storyBrief";
+import { getWordCountFromLength } from "./lib/openai-implementation";
+import { canEnqueueWithinQuota } from "./lib/openai";
+import { requireAuth } from "./lib/requireAuth";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema } from "@shared/schema";
-import { generateStory } from "./lib/openai";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { ZodError } from "zod";
@@ -183,94 +197,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register song routes
   registerSongRoutes(app);
 
-  // Generate a story - requires authentication
-  app.post("/api/generate-story", async (req, res) => {
+  // POST /api/generate-story was deleted here. It had zero client callers and
+  // was a second generation path with different save semantics -- exactly the
+  // kind of parallel definition that has produced most of this repo's bugs.
+
+  // Enqueue-only. The URL is kept because the client posts here, but it now
+  // answers 202 with a job id instead of holding the request open for the whole
+  // generation. That request could run 500s on a local model, past SWAG's 240s
+  // proxy timeout -- at which point nginx returns its own HTML error page, the
+  // client parses it as JSON, and the user sees
+  // `Unexpected token '<', "<!DOCTYPE "`. Removing the long-lived request is
+  // what removes that failure, and it also means navigating away no longer
+  // abandons the story.
+  app.post("/api/story/generate", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to generate stories" });
-      }
-      
-      // Validate request body
       const validatedData = storyRequestSchema.parse(req.body);
-      
-      // Get user ID for authentication and tracking
       const userId = (req.user as any).id;
-      
-      // Generate the story using OpenAI with user ID for quota tracking
-      const story = await generateStory(validatedData, userId);
-      
-      // Save the story for the authenticated user
-      const savedStory = await storage.saveStory(story, validatedData, userId);
-      
-      res.json(story);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ message: validationError.message });
+
+      // Quota is charged at SUCCESS now (see storyWorker.finishSucceeded), so
+      // the check here must count work already in flight as well as work
+      // already paid for -- otherwise a user could enqueue repeatedly before
+      // any of it completed.
+      const allowed = await canEnqueueWithinQuota(userId);
+      if (!allowed.ok) {
+        return res.status(429).json({ message: allowed.message, code: "quota_exceeded" });
       }
 
-      // Generation failures now arrive as StoryGenerationError rather than as a
-      // story-shaped 200, so the real reason and a usable status code reach the
-      // client. debugData carries the prompts and raw model replies for the
-      // debug panel.
-      if (error instanceof StoryGenerationError) {
-        console.error(`Story generation failed (${error.code}):`, error.message);
-        return res.status(error.statusCode).json({
-          message: error.message,
-          code: error.code,
-          debugData: error.debugData,
+      // The brief is resolved and FROZEN here. resolveStoryCharacter reads the
+      // database, so building it at generation time would let a character
+      // deleted mid-story change the brief between chapter 4 and chapter 5.
+      const character = await resolveStoryCharacter(validatedData, userId);
+      const result = await enqueueStoryJob({
+        userId,
+        request: validatedData,
+        brief: buildStoryBrief(validatedData, character),
+        // Parent Mode is derived inside buildSystemPrompt from the request, so
+        // there is no second argument here to forget. See storyBrief.ts.
+        systemPrompt: buildSystemPrompt(validatedData),
+        targetWordCount: getWordCountFromLength(validatedData.storyLength || "medium"),
+      });
+
+      if (!result.ok) {
+        return res.status(result.status).json({
+          message: result.message,
+          code: result.code,
+          inFlight: result.inFlight,
         });
       }
-
-      console.error("Error generating story:", error);
-      res.status(500).json({ message: "Failed to generate story" });
+      return res.status(202).json({ jobId: result.jobId, status: "queued" });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: fromZodError(error).message });
+      }
+      console.error("Error enqueueing story:", error);
+      res.status(500).json({ message: "Failed to start story generation" });
     }
   });
-  
-  // New route for story/generate endpoint for compatibility with client
-  app.post("/api/story/generate", async (req, res) => {
-    try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to generate stories" });
-      }
-      
 
-      
-      // Validate request body
-      const validatedData = storyRequestSchema.parse(req.body);
-      
-      // Get user ID for authentication and tracking
-      const userId = (req.user as any).id;
-      
-      // Generate the story using OpenAI with user ID for quota tracking
-      const story = await generateStory(validatedData, userId);
-      
-      // Return the generated story
-      res.json(story);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ message: validationError.message });
-      }
-
-      // Generation failures now arrive as StoryGenerationError rather than as a
-      // story-shaped 200, so the real reason and a usable status code reach the
-      // client. debugData carries the prompts and raw model replies for the
-      // debug panel.
-      if (error instanceof StoryGenerationError) {
-        console.error(`Story generation failed (${error.code}):`, error.message);
-        return res.status(error.statusCode).json({
-          message: error.message,
-          code: error.code,
-          debugData: error.debugData,
-        });
-      }
-
-      console.error("Error generating story:", error);
-      res.status(500).json({ message: "Failed to generate story" });
+  // Poll one job. 404 rather than 403 for someone else's job, so ids are not
+  // enumerable. The full story is returned inline on success -- the poller is
+  // already asking, so make the answer complete.
+  app.get("/api/story/jobs/:jobId", requireAuth, async (req, res) => {
+    const userId = (req.user as any).id;
+    const job = await getStoryJob(req.params.jobId, userId);
+    if (!job) return res.status(404).json({ message: "Job not found" });
+    let story: unknown;
+    if (job.status === "succeeded" && job.story_id) {
+      story = await storage.getStoryById(job.story_id, userId).catch(() => undefined);
     }
+    res.json({ ...job, story });
+  });
+
+  // In-flight jobs plus anything finished in the last hour. That window is how
+  // a reloaded page rediscovers a job it was not watching, with no
+  // localStorage involved.
+  app.get("/api/story/jobs", requireAuth, async (req, res) => {
+    const userId = (req.user as any).id;
+    res.json(await listActiveStoryJobs(userId));
+  });
+
+  // Cooperative cancel, checked at step boundaries. Cancelling during chapter 4
+  // still pays for chapter 4 -- a completion already in flight cannot be
+  // recalled, and the UI should say so rather than implying otherwise.
+  app.post("/api/story/jobs/:jobId/cancel", requireAuth, async (req, res) => {
+    const userId = (req.user as any).id;
+    const ok = await cancelStoryJob(req.params.jobId, userId);
+    if (!ok) return res.status(404).json({ message: "No cancellable job with that id" });
+    res.json({ cancelled: true });
   });
   
   // Get user's story generation usage stats

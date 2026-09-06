@@ -48,6 +48,8 @@ type StepLike = {
 
 export type GenerationRecordInput = {
   generationId: string;
+  /** Set when this attempt came from a story_jobs row. */
+  jobId?: string;
   userId: number;
   resolved: ResolvedModel;
   request: {
@@ -169,6 +171,7 @@ export async function recordGeneration(input: GenerationRecordInput): Promise<bo
 
     await db.insert(generationRecords).values({
       generationId: input.generationId,
+      jobId: input.jobId ?? null,
       userId: input.userId,
       storyLength: input.request.storyLength ?? null,
       storyType: input.request.storyType ?? null,

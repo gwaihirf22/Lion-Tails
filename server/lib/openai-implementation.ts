@@ -3,8 +3,8 @@ import { StoryRequest, StoryResponse } from "@shared/schema";
 import {
   buildStoryBrief,
   buildSystemPrompt,
+  buildUserInstruction,
   resolveStoryCharacter,
-  type CustomPrompts,
 } from "./storyBrief";
 
 /**
@@ -18,7 +18,6 @@ import {
 type StoryContext = {
   brief: string;
   systemPrompt: string;
-  custom?: CustomPrompts;
   /** Resolved once per request; every chat call in this file uses it. */
   resolved: ResolvedModel;
 };
@@ -57,7 +56,7 @@ function getChapterCount(targetWordCount: number): number {
   return Math.max(3, Math.ceil(targetWordCount / 500));
 }
 
-function getWordCountFromLength(length: string): number {
+export function getWordCountFromLength(length: string): number {
   // Reading time is ~140 words per minute for children.
   switch (length) {
     case "very-short":
@@ -455,7 +454,7 @@ async function generateShortStorySingleCall(
 }> {
   const systemPrompt = ctx.systemPrompt;
   const userPrompt = `
-    ${ctx.custom?.userPrompt || "Please create a complete, faith-based children's story."}
+    ${buildUserInstruction(request)}
 
     Details:
     ${ctx.brief}
@@ -691,61 +690,41 @@ async function finalizeStoryDetails(
 // =========================================================================
 // MAIN ORCHESTRATOR FUNCTION (NOW WITH HYBRID LOGIC)
 // =========================================================================
-export async function generateStoryWithOpenAI(
+/**
+ * Hooks that make a generation resumable. Absent for the synchronous path,
+ * supplied by the worker for a job.
+ */
+export type GenerationHooks = {
+  jobId?: string;
+  resumeOutline?: string[];
+  resumeChapters?: string[];
+  /** Returns false when this worker has been evicted; the run then stops. */
+  checkpoint?: (patch: { step?: string; outline?: string[]; chapters?: string[] }) => Promise<boolean>;
+  isCancelled?: () => Promise<boolean>;
+};
+
+/** Terminal outcomes that are not a story. */
+export type GenerationOutcome = "cancelled" | "evicted";
+
+/**
+ * The generation itself, shared by the synchronous route and the job worker.
+ *
+ * One body rather than two: a second copy would drift, and this codebase has
+ * produced most of its bugs from parallel definitions of the same thing.
+ */
+async function runGeneration(
   request: StoryRequest,
-  userId: number = 1,
-  // Parent Mode prompts. openai.ts has always constructed and passed these,
-  // but the parameter did not exist, so they were silently discarded and the
-  // call was a type error.
-  customPrompts?: CustomPrompts,
-): Promise<StoryResponse & { debugData?: any[]; generationId?: string }> {
-  const { storyLength, theme } = request;
-
-  // Model, provider and credentials are decided once, here, and used by every
-  // call below. The stored preference is a request, not a permission: a user
-  // who picked a premium model and then removed their own API key is
-  // downgraded rather than billed to the server owner.
-  const resolved = await resolveModel(userId, "chat");
-  if (!resolved) {
-    throw new StoryGenerationError(
-      "no_model_available",
-      "No story model is available for your account. Add your own OpenAI API key in Settings, or choose a local model if one is configured.",
-    );
-  }
-  const openaiClient = createClient(resolved);
-  const targetWordCount = getWordCountFromLength(storyLength || "medium");
-
-  // Minted before generation rather than after, so a failed attempt is recorded
-  // under an id too. Attempts that never become a story are the ones worth
-  // having: a table of successes would say the local models work fine.
-  const generationId = newGenerationId();
-  const startedAt = Date.now();
-
-  const debugHeader = {
-    step: "request",
-    generationId,
-    // DebugPanel reads targetWordCount and model off debugData[0] and has shown
-    // "N/A" for both since it was written, because nothing ever put them there.
-    targetWordCount,
-    model: resolved.model,
-    provider: resolved.provider,
-    tier: resolved.tier,
-    // Never resolved.apiKey or resolved.baseURL: debugData is returned to the
-    // client in the response body.
-    usingOwnKey: resolved.usingOwnKey,
-    downgradedFrom: resolved.downgradedFrom,
-    storyLength: request.storyLength,
-  };
-
-  // Resolved once and shared by every prompt: one database read, one field
-  // list, no opportunity for the prompt sites to drift apart again.
-  const character = await resolveStoryCharacter(request, userId);
-  const ctx: StoryContext = {
-    brief: buildStoryBrief(request, character),
-    systemPrompt: buildSystemPrompt(request, customPrompts),
-    custom: customPrompts,
-    resolved,
-  };
+  userId: number,
+  ctx: StoryContext,
+  openaiClient: OpenAI,
+  targetWordCount: number,
+  generationId: string,
+  startedAt: number,
+  debugHeader: Record<string, unknown>,
+  hooks?: GenerationHooks,
+): Promise<(StoryResponse & { debugData?: any[]; generationId?: string }) | GenerationOutcome> {
+  const { theme } = request;
+  const resolved = ctx.resolved;
   const debugData: any[] = [debugHeader];
   const moralOutcomes: Array<
     "positive" | "learning" | "consequences" | "creative"
@@ -767,6 +746,12 @@ export async function generateStoryWithOpenAI(
     if (targetWordCount < 1000) {
       // --- SINGLE-CALL METHOD FOR SHORT STORIES ---
       console.log("Using single-call method for short story.");
+      // The single-call path has no intermediate steps to checkpoint, so
+      // without this the job sits at step="queued" for the whole generation and
+      // the UI reports "Waiting to start" while the model is actually writing.
+      if (hooks?.checkpoint && !(await hooks.checkpoint({ step: "writing" }))) {
+        return "evicted";
+      }
       const shortStoryResult = await generateShortStorySingleCall(
         openaiClient,
         request,
@@ -784,16 +769,25 @@ export async function generateStoryWithOpenAI(
       // --- MULTI-STEP METHOD FOR LONG STORIES ---
       console.log("Using multi-step method for long story.");
 
-      // Step 1: Outline
+      // Step 1: Outline. Reused from the checkpoint on a resumed job -- an
+      // outline is a paid call, and regenerating it would also produce a
+      // DIFFERENT outline, so chapters already written would no longer match
+      // the plan they were written against.
       const expectedChapters = getChapterCount(targetWordCount);
-      const outline = await generateStoryOutline(
-        openaiClient,
-        request,
-        targetWordCount,
-        debugData,
-        ctx,
-        expectedChapters,
-      );
+      const outline =
+        hooks?.resumeOutline && hooks.resumeOutline.length > 0
+          ? hooks.resumeOutline
+          : await generateStoryOutline(
+              openaiClient,
+              request,
+              targetWordCount,
+              debugData,
+              ctx,
+              expectedChapters,
+            );
+      if (hooks?.checkpoint && !(await hooks.checkpoint({ step: "outline", outline }))) {
+        return "evicted";
+      }
 
       // Sized from the outline we actually got, not from a second derivation of
       // the count. If those two ever disagree the story silently comes out at
@@ -809,9 +803,16 @@ export async function generateStoryWithOpenAI(
         );
       }
 
-      // Step 2: Chapters
-      let fullStoryContent = "";
-      for (let i = 0; i < outline.length; i++) {
+      // Step 2: Chapters. Checkpointed after each one, because each is a paid
+      // 20-90s call and losing six of seven to a container restart is the
+      // "partial work is discarded" problem this stage exists to fix.
+      const chapters: string[] = [...(hooks?.resumeChapters ?? [])];
+      if (chapters.length > 0) {
+        console.log(` - Resuming with ${chapters.length}/${outline.length} chapters already written.`);
+      }
+      let fullStoryContent = chapters.join("\n\n");
+      for (let i = chapters.length; i < outline.length; i++) {
+        if (hooks?.isCancelled && (await hooks.isCancelled())) return "cancelled";
         console.log(` - Generating part ${i + 1}/${outline.length}...`);
         const chapterContent = await generateStoryChapter(
           openaiClient,
@@ -823,10 +824,17 @@ export async function generateStoryWithOpenAI(
           wordsPerChapter,
           outline.length,
         );
+        chapters.push(chapterContent);
         fullStoryContent += (fullStoryContent ? "\n\n" : "") + chapterContent;
         console.log(
           ` - Part ${i + 1} added. Word count: ${countWords(fullStoryContent)}`,
         );
+        if (
+          hooks?.checkpoint &&
+          !(await hooks.checkpoint({ step: `chapter ${i + 1}/${outline.length}`, chapters }))
+        ) {
+          return "evicted";
+        }
       }
 
       // Step 3: Final Details
@@ -914,6 +922,7 @@ export async function generateStoryWithOpenAI(
       targetWordCount,
       startedAt,
       debugData,
+      jobId: hooks?.jobId,
       outcome: "succeeded",
       actualWordCount: countWords(finalDetails.content || ""),
     });
@@ -952,6 +961,7 @@ export async function generateStoryWithOpenAI(
       targetWordCount,
       startedAt,
       debugData,
+      jobId: hooks?.jobId,
       outcome: "failed",
       failureCode:
         error instanceof StoryGenerationError ? error.code : "generation_failed",
@@ -960,6 +970,77 @@ export async function generateStoryWithOpenAI(
     throw error;
   }
 }
+
+// generateStoryWithOpenAI() was removed here. Every generation now goes
+// through generateStoryFromJob(), driven by the worker. A synchronous entry
+// point that no route called would have been a second generation path that
+// nothing exercises -- untested, and free to drift from the one that runs.
+// runGeneration() below is the single shared body; if a synchronous caller is
+// ever needed again (a CLI, a test harness), wrap that rather than copying it.
+
+/**
+ * The worker's entry point. Differs from the synchronous path in exactly three
+ * ways: the brief is FROZEN (taken from the job rather than rebuilt from the
+ * database, so a character deleted mid-story cannot change it), credentials are
+ * re-resolved by the caller at claim time, and the hooks make it resumable.
+ */
+export async function generateStoryFromJob(opts: {
+  jobId: string;
+  userId: number;
+  request: StoryRequest;
+  brief: string;
+  systemPrompt: string;
+  targetWordCount: number;
+  resolved: ResolvedModel;
+  client: OpenAI;
+  resumeOutline?: string[];
+  resumeChapters?: string[];
+  checkpoint: GenerationHooks["checkpoint"];
+  isCancelled: GenerationHooks["isCancelled"];
+}): Promise<(StoryResponse & { debugData?: any[]; generationId?: string }) | GenerationOutcome> {
+  const generationId = newGenerationId();
+  const ctx: StoryContext = {
+    brief: opts.brief,
+    systemPrompt: opts.systemPrompt,
+    resolved: opts.resolved,
+  };
+  return runGeneration(
+    opts.request, opts.userId, ctx, opts.client, opts.targetWordCount, generationId, Date.now(),
+    buildDebugHeader(generationId, opts.targetWordCount, opts.resolved, opts.request),
+    {
+      jobId: opts.jobId,
+      resumeOutline: opts.resumeOutline,
+      resumeChapters: opts.resumeChapters,
+      checkpoint: opts.checkpoint,
+      isCancelled: opts.isCancelled,
+    },
+  );
+}
+
+/**
+ * DebugPanel reads targetWordCount and model off debugData[0] and showed "N/A"
+ * for both until this existed. Never resolved.apiKey or resolved.baseURL:
+ * debugData is returned to the client in the response body.
+ */
+function buildDebugHeader(
+  generationId: string,
+  targetWordCount: number,
+  resolved: ResolvedModel,
+  request: StoryRequest,
+): Record<string, unknown> {
+  return {
+    step: "request",
+    generationId,
+    targetWordCount,
+    model: resolved.model,
+    provider: resolved.provider,
+    tier: resolved.tier,
+    usingOwnKey: resolved.usingOwnKey,
+    downgradedFrom: resolved.downgradedFrom,
+    storyLength: request.storyLength,
+  };
+}
+
 
 // =========================================================================
 // OTHER EXPORTED FUNCTIONS (Image Generation, etc.)

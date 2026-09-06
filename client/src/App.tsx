@@ -19,6 +19,7 @@ import Footer from "@/components/Footer";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ParentModeProvider } from "@/hooks/use-parent-mode";
+import { StoryJobsProvider } from "@/hooks/use-story-jobs";
 
 // Import the background image
 import lionTailsBackground from "@assets/Lion tails.jpg";
@@ -67,6 +68,10 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ParentModeProvider>
+          {/* Above Header and Router on purpose: the job must keep being
+              watched after the user navigates away from the generate page,
+              which is the whole point of the change. */}
+          <StoryJobsProvider>
           <div className="min-h-screen flex flex-col font-body text-textDark" style={appBackgroundStyle}>
             <div style={overlayStyle}></div>
             <Header />
@@ -78,6 +83,7 @@ function App() {
             <Footer />
           </div>
           <Toaster />
+          </StoryJobsProvider>
         </ParentModeProvider>
       </AuthProvider>
     </QueryClientProvider>

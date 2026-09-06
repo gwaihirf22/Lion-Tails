@@ -1,9 +1,10 @@
 import { Link, useLocation } from "wouter";
 import { useEffect, useState, useRef } from "react";
-import { Menu, X, LogOut, User, ChevronDown, MoreHorizontal } from "lucide-react";
+import { Menu, X, LogOut, User, ChevronDown, MoreHorizontal, Loader2 } from "lucide-react";
 import appIcon from "@/assets/app-icon.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/use-auth";
+import { useStoryJobs, describeJob } from "@/hooks/use-story-jobs";
 import { Button } from "@/components/ui/button";
 import { 
   DropdownMenu,
@@ -15,6 +16,7 @@ import {
 export default function Header() {
   const [location] = useLocation();
   const isMobile = useIsMobile();
+  const { active: activeJobs } = useStoryJobs();
   const [menuOpen, setMenuOpen] = useState(false);
   const [visibleItems, setVisibleItems] = useState(4); 
   const navContainerRef = useRef<HTMLUListElement>(null);
@@ -101,6 +103,23 @@ export default function Header() {
               className="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover border-2 border-white shadow-lg"
             />
             <h1 className="text-xl md:text-3xl font-heading font-bold text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">Lion Tails</h1>
+
+            {/* The affordance that makes navigating away feel safe. The Header
+                is sticky and always mounted, so this is visible from every
+                page while a story is being written. */}
+            {activeJobs.length > 0 && (
+              <Link href="/library">
+                <span
+                  className="hidden sm:flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-xs text-white cursor-pointer hover:bg-white/30 transition"
+                  title={describeJob(activeJobs[0])}
+                >
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {activeJobs.length === 1
+                    ? describeJob(activeJobs[0])
+                    : `${activeJobs.length} stories being written`}
+                </span>
+              </Link>
+            )}
           </div>
 
           {isMobile ? (
