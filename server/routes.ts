@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
 import { isModelAllowedFor, listSelectableModels } from "./lib/modelPolicy";
+import { StoryGenerationError } from "./lib/storyErrors";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema } from "@shared/schema";
@@ -204,13 +205,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(story);
     } catch (error) {
-      console.error("Error generating story:", error);
-      
       if (error instanceof ZodError) {
         const validationError = fromZodError(error);
         return res.status(400).json({ message: validationError.message });
       }
-      
+
+      // Generation failures now arrive as StoryGenerationError rather than as a
+      // story-shaped 200, so the real reason and a usable status code reach the
+      // client. debugData carries the prompts and raw model replies for the
+      // debug panel.
+      if (error instanceof StoryGenerationError) {
+        console.error(`Story generation failed (${error.code}):`, error.message);
+        return res.status(error.statusCode).json({
+          message: error.message,
+          code: error.code,
+          debugData: error.debugData,
+        });
+      }
+
+      console.error("Error generating story:", error);
       res.status(500).json({ message: "Failed to generate story" });
     }
   });
@@ -237,13 +250,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return the generated story
       res.json(story);
     } catch (error) {
-      console.error("Error generating story:", error);
-      
       if (error instanceof ZodError) {
         const validationError = fromZodError(error);
         return res.status(400).json({ message: validationError.message });
       }
-      
+
+      // Generation failures now arrive as StoryGenerationError rather than as a
+      // story-shaped 200, so the real reason and a usable status code reach the
+      // client. debugData carries the prompts and raw model replies for the
+      // debug panel.
+      if (error instanceof StoryGenerationError) {
+        console.error(`Story generation failed (${error.code}):`, error.message);
+        return res.status(error.statusCode).json({
+          message: error.message,
+          code: error.code,
+          debugData: error.debugData,
+        });
+      }
+
+      console.error("Error generating story:", error);
       res.status(500).json({ message: "Failed to generate story" });
     }
   });

@@ -2,6 +2,7 @@
 import { Express } from "express";
 import { getAllSongs, getSongById, searchSongs, getPopularSongs, addSong, updateSong, deleteSong } from './data/songDatabase';
 import { generateSongChords } from "./lib/songGenerator";
+import { StoryGenerationError } from "./lib/storyErrors";
 import { requireAdmin } from "./lib/requireAuth";
 import { Song, songSchema } from "@shared/schema";
 import { ZodError } from "zod";
@@ -161,6 +162,11 @@ export function registerSongRoutes(app: Express) {
       
       res.status(201).json(savedSong);
     } catch (error) {
+      // addSong() is only reached on success now, so a failed generation no
+      // longer persists invented chords to the library.
+      if (error instanceof StoryGenerationError) {
+        return res.status(error.statusCode).json({ message: error.message, code: error.code });
+      }
       console.error("Error generating chords:", error);
       res.status(500).json({ message: "Failed to generate chords" });
     }
