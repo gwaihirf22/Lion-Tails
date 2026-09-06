@@ -29,6 +29,13 @@ async function getVisionClient(userId: number, kind: "vision" | "image") {
     throw new Error("No model available for image analysis on this account.");
   }
 
+  // The only place a ResolvedModel should be spread. It is safe here because
+  // the result is an SDK client held in memory, never a record that is stored
+  // or returned. ResolvedModel carries apiKey and baseURL, so the same spread
+  // in a logging, persistence or response path writes a live credential --
+  // which is why generationRecords.ts copies its five fields out by hand and
+  // CI asserts generation_records has no credential-shaped column. Do not copy
+  // this line into any of those paths.
   return { client: createClient({ ...resolved, apiKey }), model: resolved.model };
 }
 

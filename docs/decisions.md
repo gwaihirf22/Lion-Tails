@@ -132,6 +132,17 @@ only symptom was a 500 on the first signup.
 Do **not** replace this with a hardcoded list of expected columns. That would be
 a fourth schema definition, and on this codebase's record it would drift too.
 
+The last lazy `CREATE TABLE` was removed from `db-storage.ts` when
+`generation_records` was added: `saveStory()` still carried a
+`CREATE TABLE IF NOT EXISTS user_stories` declaring six columns where the real
+table has eight. It could only fire on a database where migrations had not run,
+and would then build a table this check correctly rejects.
+
+**Two table counts that look like they disagree, and both are right.** CI asserts
+11 tables scoped to `schemaname='public'`; the nightly `pg_dump` reports 12,
+because it also includes Drizzle's `__drizzle_migrations` bookkeeping table in
+its own schema. Neither number is wrong. Expect them to differ by one.
+
 ---
 
 ## 6. `/api/health` probes the database live, and returns 503 on failure
@@ -471,6 +482,34 @@ and the change was still wrong. VRAM was free at 32768, and the context was
 reverted days later because the driver and this llama.cpp build produce illegal
 memory accesses at that slot size on this card (§14). "Does it fit" had been
 measured twice, carefully. "Is it stable" was never asked.
+
+### And the fourth: independent checks that agree because they share a mistake
+
+A backup was reported healthy, then nearly reported broken, on three separate
+findings: the newest dump was dated yesterday, there was no `.cron` file in the
+scripts directory, and `crontab -l` showed nothing. Each was a real observation.
+All three were wrong in the same direction — the nightly run had not yet
+happened that day, the cron file lives at the user.scripts plugin root rather
+than under `scripts/`, and user.scripts installs into `/etc/cron.d/root` rather
+than a user crontab.
+
+Agreement between independent checks is the usual defence against one bad check.
+Here it was what made the wrong conclusion persuasive: three confirmations is
+normally where you stop looking. What settled it was not a fourth check of the
+same kind but the artefact recording what had actually happened — a log line
+with a timestamp, filename and table count:
+
+    [2026-09-05 03:15:01] OK: liontails-2026-09-05_0315.sql.gz (28K, 11 tables)
+
+When several checks agree, ask what assumption they share. These three shared a
+belief about where things live, and were each wrong for that one reason.
+
+Worth recording that two agents made opposite errors about the same backup
+within an hour — one asserting no backup existed, from a stale memory of their
+own unfinished work; the other nearly asserting a working one was broken.
+Neither had looked at the artefact.
+
+---
 
 So the sequence went: a plausible number derived from the wrong quantity,
 corrected by measuring the right quantity — and the measurement was still of the

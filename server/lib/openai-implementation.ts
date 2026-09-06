@@ -31,6 +31,7 @@ import {
   storyTooShortAdvice,
 } from "./storyErrors";
 import { resolveModel, createClient, type ResolvedModel } from "./modelPolicy";
+import { newGenerationId, recordGeneration } from "./generationRecords";
 import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
@@ -697,7 +698,7 @@ export async function generateStoryWithOpenAI(
   // but the parameter did not exist, so they were silently discarded and the
   // call was a type error.
   customPrompts?: CustomPrompts,
-): Promise<StoryResponse & { debugData?: any[] }> {
+): Promise<StoryResponse & { debugData?: any[]; generationId?: string }> {
   const { storyLength, theme } = request;
 
   // Model, provider and credentials are decided once, here, and used by every
@@ -714,6 +715,28 @@ export async function generateStoryWithOpenAI(
   const openaiClient = createClient(resolved);
   const targetWordCount = getWordCountFromLength(storyLength || "medium");
 
+  // Minted before generation rather than after, so a failed attempt is recorded
+  // under an id too. Attempts that never become a story are the ones worth
+  // having: a table of successes would say the local models work fine.
+  const generationId = newGenerationId();
+  const startedAt = Date.now();
+
+  const debugHeader = {
+    step: "request",
+    generationId,
+    // DebugPanel reads targetWordCount and model off debugData[0] and has shown
+    // "N/A" for both since it was written, because nothing ever put them there.
+    targetWordCount,
+    model: resolved.model,
+    provider: resolved.provider,
+    tier: resolved.tier,
+    // Never resolved.apiKey or resolved.baseURL: debugData is returned to the
+    // client in the response body.
+    usingOwnKey: resolved.usingOwnKey,
+    downgradedFrom: resolved.downgradedFrom,
+    storyLength: request.storyLength,
+  };
+
   // Resolved once and shared by every prompt: one database read, one field
   // list, no opportunity for the prompt sites to drift apart again.
   const character = await resolveStoryCharacter(request, userId);
@@ -723,7 +746,7 @@ export async function generateStoryWithOpenAI(
     custom: customPrompts,
     resolved,
   };
-  const debugData: any[] = [];
+  const debugData: any[] = [debugHeader];
   const moralOutcomes: Array<
     "positive" | "learning" | "consequences" | "creative"
   > = ["positive", "learning", "consequences", "creative"];
@@ -876,6 +899,25 @@ export async function generateStoryWithOpenAI(
       theme && theme !== "none" ? theme : "faith",
     );
 
+    // Awaited rather than fired and forgotten: an unawaited rejection here
+    // would be an unhandled promise rejection, and the write is a single
+    // indexed insert against a local database. recordGeneration never throws.
+    await recordGeneration({
+      generationId,
+      userId,
+      resolved,
+      request: {
+        storyLength: request.storyLength,
+        storyType: request.storyType,
+        readingLevel: request.readingLevel,
+      },
+      targetWordCount,
+      startedAt,
+      debugData,
+      outcome: "succeeded",
+      actualWordCount: countWords(finalDetails.content || ""),
+    });
+
     return {
       title: finalDetails.title,
       content: finalDetails.content,
@@ -885,12 +927,36 @@ export async function generateStoryWithOpenAI(
       imagePrompt: finalDetails.imagePrompt,
       imageUrl: imageUrl,
       debugData: debugData,
+      // Returned so /api/story/save can point the saved story at the record
+      // that produced it -- "which AI wrote this story", asked of a row rather
+      // than inferred from a timestamp.
+      generationId,
     };
   } catch (error) {
     console.error("Error in orchestrated story generation process:", error);
     if (error instanceof Error) {
       (error as any).debugData = debugData;
     }
+    // A failed attempt is recorded too. The failures are the interesting rows:
+    // which model, which length, which failure code, and how many tokens were
+    // spent before it gave up.
+    await recordGeneration({
+      generationId,
+      userId,
+      resolved,
+      request: {
+        storyLength: request.storyLength,
+        storyType: request.storyType,
+        readingLevel: request.readingLevel,
+      },
+      targetWordCount,
+      startedAt,
+      debugData,
+      outcome: "failed",
+      failureCode:
+        error instanceof StoryGenerationError ? error.code : "generation_failed",
+      failureMessage: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 }
