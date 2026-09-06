@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { seedReferenceData } from "./seed";
+import { startStoryWorker } from "./lib/storyWorker";
 import { log } from "./static";
 import path from "path";
 import type { Server } from "http";
@@ -107,6 +108,14 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   // half-populated Heroes of Faith list. Resolves quickly when there is no
   // database -- databaseReady resolves false rather than hanging.
   await seedReferenceData();
+
+  // The story worker starts behind the same database gate. That one gate does
+  // three jobs: it satisfies "no database means refuse" for the async path, it
+  // keeps the CI smoke test green (which boots with no DATABASE_URL and would
+  // otherwise have a worker polling a pool that does not exist), and it needs no
+  // new infrastructure. startStoryWorker awaits databaseReady itself and returns
+  // without starting when there is none, so this does not block startup.
+  startStoryWorker();
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

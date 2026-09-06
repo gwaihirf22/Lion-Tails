@@ -149,6 +149,91 @@ export const userSettings = pgTable("user_settings", {
   openaiModel: text("openai_model"),
 });
 
+// One row per generation REQUEST, which the client polls. Distinct from
+// generation_records (one row per attempt): a job may be claimed several times
+// -- a container restart mid-story is a new attempt at the same job -- and a job
+// is prunable operational state where a record is kept.
+//
+// The job REFERENCES a story rather than becoming one. user_stories has its own
+// lifecycle (favourite, expiry, hero association) and outlives the job that
+// produced it.
+export const storyJobs = pgTable(
+  "story_jobs",
+  {
+    jobId: text("job_id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    // queued | running | succeeded | failed | cancelled
+    status: text("status").notNull().default("queued"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+
+    // The brief is FROZEN at enqueue. resolveStoryCharacter() reads the
+    // database at generation time, so a character deleted mid-story would leave
+    // chapters 5-7 written against a different brief than 1-4.
+    request: jsonb("request").notNull(),
+    brief: text("brief").notNull(),
+    systemPrompt: text("system_prompt").notNull(),
+    targetWordCount: integer("target_word_count").notNull(),
+    // The model the user had selected AT ENQUEUE. Recorded for display and
+    // diagnosis -- it is deliberately NOT what the worker runs.
+    //
+    // The worker calls resolveModel() afresh at claim time and uses that. The
+    // model is therefore re-decided, not pinned, and that is the point: model,
+    // provider and credentials are one decision (decisions.md Â§2), and pinning
+    // the model while re-resolving only the key would let a user select a
+    // premium model with their own key, delete the key, and have the job run
+    // that premium model on the owner's account. Entitlement has to be
+    // rechecked on the same side of the line as the credentials.
+    //
+    // The BRIEF freezes because it describes what was asked for. Entitlement
+    // does not freeze, because it describes what is currently permitted.
+    //
+    // Never store apiKey or baseURL. See generationRecords.ts.
+    model: text("model").notNull(),
+
+    // The lease IS the resume mechanism. An orphaned job is exactly
+    // status='running' AND lease_expires_at < now(), and the claim query treats
+    // that as claimable. Storing "interrupted" as a state would require the
+    // write to come from the process that just died.
+    workerId: text("worker_id"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+
+    // Two counters, deliberately. attemptCount rises on every claim and guards
+    // against a runaway; errorCount rises only on application errors. Without
+    // the split, three deploys during a long generation would burn a retry
+    // budget meant for model failures. An interruption is not a failure.
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    errorCount: integer("error_count").default(0).notNull(),
+
+    // Checkpoint. Written after the outline and after every chapter: one small
+    // UPDATE buying back a paid 20-90s API call. Finer is impossible -- a
+    // single completion is not resumable.
+    step: text("step"),
+    outline: jsonb("outline"),
+    chapters: jsonb("chapters"),
+
+    // Cooperative cancel, checked at step boundaries. Cancelling during
+    // chapter 4 still pays for chapter 4.
+    cancelRequested: boolean("cancel_requested").default(false).notNull(),
+
+    storyId: text("story_id"),
+    failureCode: text("failure_code"),
+    failureMessage: text("failure_message"),
+  },
+  (table) => ({
+    userIdx: index("idx_story_jobs_user_id").on(table.userId),
+    statusIdx: index("idx_story_jobs_status").on(table.status),
+    // The claim query orders queued jobs by age; the reaper scans running jobs
+    // by lease expiry. Both hit this.
+    claimIdx: index("idx_story_jobs_claim").on(table.status, table.leaseExpiresAt),
+  }),
+);
+
 // One row per generation ATTEMPT, including attempts that never became a
 // story. Kept as a separate table rather than columns on user_stories for two
 // reasons: a failed attempt has no story to hang off, and stories are the
@@ -201,6 +286,12 @@ export const generationRecords = pgTable(
     modelCalls: integer("model_calls"),
     retriedCalls: integer("retried_calls"),
     truncatedCalls: integer("truncated_calls"),
+
+    // The job this attempt belongs to, when it came from one. SET NULL so
+    // pruning finished jobs never deletes the statistics they produced.
+    jobId: text("job_id").references(() => storyJobs.jobId, {
+      onDelete: "set null",
+    }),
 
     // Which build produced this row. Prompts are deliberately not stored (see
     // generationRecords.ts) and are only reconstructible from the request while

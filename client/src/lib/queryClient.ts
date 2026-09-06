@@ -22,33 +22,68 @@ function getAuthToken(): string | null {
   return localStorage.getItem("authToken");
 }
 
-export async function apiRequest(
+/**
+ * Fetch wrapper that THROWS on any non-2xx response.
+ *
+ * It returns a Response, so it looks like `fetch` -- and every `fetch` idiom
+ * you would reflexively write against it is wrong. In particular
+ * `if (!response.ok)` after this call is DEAD CODE: the throw already happened.
+ * That mistake has been made repeatedly here (Settings.handleModelChange showed
+ * "please try again" instead of the server reason for exactly this reason).
+ *
+ * When the STATUS is meaningful -- a 409 carrying the conflicting record, a 404
+ * you want to handle rather than surface -- use apiRequestAllowingErrors below,
+ * which returns the Response untouched.
+ */
+async function sendRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
   const headers: Record<string, string> = {};
-  
+
   // Add content-type for JSON requests
   if (data) {
     headers["Content-Type"] = "application/json";
   }
-  
+
   // Add auth token if available
   const token = getAuthToken();
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
-  
-  const res = await fetch(url, {
+
+  return fetch(url, {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include", // Include cookies
   });
+}
 
+export async function apiRequest(
+  method: string,
+  url: string,
+  data?: unknown | undefined,
+): Promise<Response> {
+  const res = await sendRequest(method, url, data);
   await throwIfResNotOk(res);
   return res;
+}
+
+/**
+ * Same request, but the caller inspects the status itself.
+ *
+ * For endpoints where a non-2xx carries information the caller needs: the
+ * enqueue route answers 409 with the in-flight job so the UI can point at it
+ * rather than showing a dead end, and that body is lost if the response throws.
+ */
+export async function apiRequestAllowingErrors(
+  method: string,
+  url: string,
+  data?: unknown | undefined,
+): Promise<Response> {
+  return sendRequest(method, url, data);
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

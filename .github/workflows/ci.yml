@@ -141,11 +141,11 @@ jobs:
           node scripts/migrate.js
 
           # The migration is the only thing allowed to create tables, so the
-          # table set is an assertion in itself. 11 = 10 app tables + session.
+          # table set is an assertion in itself. 12 = 11 app tables + session.
           # Update this deliberately when a migration adds one: a bare count
           # cannot say WHICH table is missing, so the names are printed on
           # failure rather than leaving the next person to run \dt themselves.
-          EXPECTED_TABLES=11
+          EXPECTED_TABLES=12
           TABLES=$(psql "$DATABASE_URL" -tAc \
             "select count(*) from pg_tables where schemaname='public'")
           echo "tables in public: $TABLES"

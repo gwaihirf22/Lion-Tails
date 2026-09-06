@@ -1,6 +1,4 @@
-import { StoryRequest, StoryResponse } from "@shared/schema";
-import { getBibleVerseByTheme } from "../data/bibleVerses";
-import { generateStoryWithOpenAI } from "./openai-implementation";
+import { StoryRequest } from "@shared/schema";
 import { storage } from "../storage";
 import { resolveModel } from "./modelPolicy";
 import { StoryGenerationError } from "./storyErrors";
@@ -54,100 +52,44 @@ async function canGenerateStoryWithFreeTier(userId: number = 1): Promise<boolean
   return true;
 }
 
-// Main story generation function
-export async function generateStory(
-  request: StoryRequest,
-  userId: number = 1,
-  // generationId identifies the generation_records row for this attempt, so a
-  // saved story can point at the record that produced it.
-): Promise<StoryResponse & { debugData?: any[]; generationId?: string }> {
-  const { childName, gender, animal, useAnimal, theme, biblicalEvent, useTimeTravel, characterId, storyType, heroOfFaith, useCustomPrompts, customSystemPrompt, customUserPrompt } = request;
-  
-  try {
-    // Get the user's OpenAI key if they've provided one
-    const userApiKey = await storage.getUserOpenAIKey(userId);
-    
-    // Check if user can generate a story with free tier if they don't have their own API key
-    if (!userApiKey) {
-      const canGenerate = await canGenerateStoryWithFreeTier(userId);
-      
-      if (!canGenerate) {
-        throw new StoryGenerationError(
-          "quota_exceeded",
-          "You've reached your free story generation limit. Add your own OpenAI API key in Settings to continue, or wait until next month when your free quota refreshes.",
-        );
-      }
-      
-      // Increment the counter for free tier
-      await storage.incrementStoryGenerationCount(userId);
-    }
-    
-    
-    // Get a bible verse related to the theme
-    const bibleVerse = getBibleVerseByTheme(theme);
-    
-    // For time travel stories, we need to handle them differently
-    if (useTimeTravel && characterId) {
-      // Get bible verse related to the theme
-      // Use the OpenAI implementation to generate a story
-      const generatedStory = await generateStoryWithOpenAI(request, userId);
-      
-      // Add the bible verse to the response
-      return {
-        ...generatedStory,
-        bibleVerse
-      };
-    }
-    
-    // No model at all. This used to fall through to a ~1400-word canned
-    // "Noah's Ark" story, personalised with the child's name and returned with
-    // HTTP 200 and no marker of any kind -- so asking for courage and a rabbit
-    // returned Noah's Ark and nothing said the model was never called.
-    //
-    // The .catch(() => null) that used to wrap this also swallowed the real
-    // reason from modelPolicy, e.g. "OpenAI API key not found".
-    const availableModel = await resolveModel(userId, "chat");
-    if (!availableModel) {
-      throw new StoryGenerationError(
-        "no_model_available",
-        "No story model is available for your account. Add your own OpenAI API key in Settings, or choose a local model if one is configured.",
-      );
-    }
-    
-    // Use the OpenAI implementation to generate a story with userId for API key access
-    // Pass custom prompts if Parent Mode is active and prompts are provided
+/**
+ * Quota check for the ENQUEUE path.
+ *
+ * Quota is charged at success now, not at enqueue, so this must count work
+ * already in flight as well as work already paid for. Without that a user could
+ * enqueue repeatedly before any of it completed and never be told no. A
+ * free-tier user's concurrency limit is 1, so the maximum unconsumed exposure
+ * is exactly one generation.
+ *
+ * Local generations are free. The quota exists to protect the owner's OpenAI
+ * credits, and Ollama costs electricity -- so the decision comes from the
+ * resolved model rather than from a second key lookup. This is a deliberate
+ * behaviour change: the old check was `if (!userApiKey)`, which charged local
+ * users for something that cost the owner nothing.
+ */
+export async function canEnqueueWithinQuota(
+  userId: number,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const resolved = await resolveModel(userId, "chat").catch(() => null);
+  // A missing model is not a quota problem; let the enqueue path report it.
+  if (!resolved) return { ok: true };
+  if (resolved.provider !== "openai") return { ok: true };
+  if (resolved.usingOwnKey || resolved.isAdmin) return { ok: true };
 
-    const customPrompts = useCustomPrompts ? { systemPrompt: customSystemPrompt, userPrompt: customUserPrompt } : undefined;
-    const generatedStory = await generateStoryWithOpenAI(request, userId, customPrompts);
-    
-    // Add the bible verse to the response
+  const withinQuota = await canGenerateStoryWithFreeTier(userId);
+  if (!withinQuota) {
     return {
-      ...generatedStory,
-      bibleVerse
+      ok: false,
+      message:
+        "You've reached your free story generation limit. Add your own OpenAI API key in Settings to continue, choose a local model, or wait until next month when your free quota refreshes.",
     };
-  } catch (error) {
-    // Never convert a failure into a story. This catch used to return a valid
-    // StoryResponse titled "Story Generation Error" with HTTP 200; because it
-    // satisfied storyResponseSchema, nothing downstream could distinguish it
-    // from real output, and the client auto-saved it to the user's library
-    // with a success toast.
-    //
-    // Typed failures pass through untouched so the route can map them to a
-    // real status code; anything else is wrapped with its message preserved.
-    if (error instanceof StoryGenerationError) {
-      throw error;
-    }
-
-    console.error("Error generating story:", error);
-    const wrapped = new StoryGenerationError(
-      "generation_failed",
-      error instanceof Error && error.message
-        ? error.message
-        : "There was a problem generating your story. Please try again.",
-      { cause: error, debugData: (error as any)?.debugData },
-    );
-    // debugData is attached to the thrown error by the generator and was
-    // previously discarded here.
-    throw wrapped;
   }
+  return { ok: true };
 }
+
+// generateStory() was removed here. Story generation is asynchronous now:
+// POST /api/story/generate enqueues a story_jobs row and the worker runs it
+// (server/lib/storyWorker.ts). Keeping a synchronous entry point that no
+// route called would have left a second generation path that nothing
+// exercises -- untested, and free to drift from the one that runs. The quota
+// helper below is still used, by the enqueue route.

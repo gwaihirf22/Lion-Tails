@@ -96,7 +96,30 @@ export type ResolvedModel = {
   /** Set when the stored preference was not permitted and was downgraded. */
   downgradedFrom?: string;
   usingOwnKey: boolean;
+  /**
+   * Already computed inside resolveModel and previously thrown away. Surfaced
+   * so concurrencyLimitFor() can reuse the existing premium gate rather than
+   * introducing a second notion of who is entitled to what.
+   */
+  isAdmin: boolean;
 };
+
+/**
+ * How many generations this user may have in flight at once.
+ *
+ * One, unless they are paying for it themselves AND using OpenAI. Local
+ * generations are always limited to one because Ollama serialises anyway --
+ * allowing two would not make either finish sooner, it would make both slower
+ * and the queue less predictable.
+ *
+ * The predicate is verbatim the premium gate in isModelAllowedFor: own key or
+ * admin. That is deliberate. A second definition of "entitled" is how this
+ * codebase produced six model lists and four schema sources.
+ */
+export function concurrencyLimitFor(resolved: ResolvedModel): number {
+  if (resolved.provider !== "openai") return 1;
+  return resolved.usingOwnKey || resolved.isAdmin ? 3 : 1;
+}
 
 export function isModelAllowedFor(
   model: string,
@@ -178,6 +201,7 @@ export async function resolveModel(
       apiKey: "ollama",
       downgradedFrom,
       usingOwnKey: false,
+      isAdmin,
     };
   }
 
@@ -195,6 +219,7 @@ export async function resolveModel(
     apiKey,
     downgradedFrom,
     usingOwnKey: Boolean(ownKey),
+    isAdmin,
   };
 }
 

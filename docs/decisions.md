@@ -418,6 +418,74 @@ canned error stories. Word counts were printed beside the status the whole time
 and read as information rather than as a result. A check is only a check if
 something acts on it.
 
+## 16. Every remedy we offer, we attempt -- or say why we must not
+
+`server/lib/storyErrors.ts`, `server/lib/storyWorker.ts`
+
+A failure message told the user "Try generating it again" while the worker
+marked that same failure permanently failed. The advice was right; the worker
+was right; the defect existed only in the relationship between the two files,
+and a reviewer of either change alone would have approved it.
+
+The rule is not "attempt your own advice" -- that would be wrong here. It is:
+**for each remedy offered, either the system attempts it, or there is a stated
+reason it must not.** Audited across every user-facing remedy:
+
+| remedy | attempted? |
+|---|---|
+| "Try generating it again" | Yes -- `story_too_short` re-queues with a fresh draw |
+| "Try a shorter story length" | No, and must not. Length is what the user asked for; silently shortening it delivers something other than the request |
+| "switch to a stronger model" | No, and must not. Blake's explicit instruction: no automatic fallback to a paid model, because it spends his credits unasked |
+| "ran out of room" | Yes -- the budget doubles and retries before the advice is ever shown |
+| "Add your own API key" | Cannot be attempted |
+| "wait until next month" | Cannot be attempted |
+
+Two of those are must-nots that would be bugs if attempted. A blanket "do what
+you advise" would have argued for both.
+
+**A retry has to be able to produce a different answer.** `story_too_short` is
+the only failure where every step *succeeded* and the assembled whole was
+rejected, so there is no incomplete step for resume to redo -- resuming would
+reassemble the identical story and fail identically, burning the error budget
+for nothing. It therefore discards its checkpoint (`retryNeedsFreshDraw`), which
+is the opposite of what the resume machinery is for, and makes it the most
+expensive retry in the system. The other retryables are the reverse: the failing
+step produced nothing, so resuming re-runs only that call.
+
+---
+
+## 17. `apiRequest` throws; `if (!response.ok)` after it is dead code
+
+`client/src/lib/queryClient.ts`
+
+`apiRequest` ends with `await throwIfResNotOk(res)`. It returns a `Response`, so
+it looks like `fetch` — and every `fetch` idiom written against it is wrong. An
+`if (!response.ok)` branch after it can never run.
+
+This has been written four separate times. `Settings.handleModelChange` showed
+"please try again" instead of the server's reason. The story-jobs provider had a
+409 handler that could not fire, which would have discarded the in-flight job the
+server sends specifically so the UI can point at it instead of showing a dead
+end. **The guard is not merely redundant — it silently replaces the handling you
+wrote with a thrown error.**
+
+Use `apiRequestAllowingErrors` when the STATUS is meaningful: a 409 carrying the
+conflicting record, a 404 that is a normal case rather than a failure. Both share
+one `sendRequest` body and differ only in policy.
+
+**Known remaining instances**, not fixed because they are harmless — the throw
+surfaces the server's message, which is what those call sites wanted anyway — and
+because rewriting them belongs in its own change: `SongSearch.tsx`,
+`StoryDisplay.tsx`, `use-parent-mode.tsx`, `GenerateStory.tsx`,
+`SavedStories.tsx`, `Settings.tsx`. Convert one the moment it needs to read a
+status.
+
+The general shape: a helper that returns the same type as the thing it wraps, but
+with different semantics, invites every idiom from the original. The fix was to
+document it at the definition and provide the variant, not to remember harder.
+
+---
+
 ## Recurring failure shape
 
 Most incidents here have had the same form: **a check that reported success

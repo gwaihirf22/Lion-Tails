@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { Loader2, AlertCircle } from "lucide-react";
+import { useStoryJobs, describeJob } from "@/hooks/use-story-jobs";
 import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +18,14 @@ export default function SavedStories() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
   const { toast } = useToast();
+  const { jobs, lastCompletedAt, cancel, dismiss, dismissed } = useStoryJobs();
+
+  // In-flight jobs, plus failures the user has not dismissed.
+  const visibleJobs = jobs.filter(
+    (j) =>
+      !dismissed.includes(j.job_id) &&
+      (j.status === "queued" || j.status === "running" || j.status === "failed"),
+  );
 
   // Fetch all stories
   useEffect(() => {
@@ -41,7 +51,11 @@ export default function SavedStories() {
     };
 
     fetchStories();
-  }, [toast]);
+    // lastCompletedAt changes when any job reaches a terminal state, so a story
+    // finished in another tab -- or while this page was open -- appears without
+    // a manual refresh. One dependency; deliberately not a TanStack Query
+    // rewrite, which is a worthwhile refactor and not needed here.
+  }, [toast, lastCompletedAt]);
 
   // Handle toggling favorite
   const handleToggleFavorite = async (id: string, isFavorite: boolean) => {
@@ -103,7 +117,9 @@ export default function SavedStories() {
 
   // View a specific story
   const handleViewStory = (story: SavedStory) => {
-    navigate(`/story?data=${encodeURIComponent(JSON.stringify(story.story))}&id=${story.id}`);
+    // Id only. This used to serialise the whole story -- prompts and raw
+    // model replies included -- into the address bar on every click.
+    navigate(`/story?id=${story.id}`);
   };
 
   // Filter stories based on active tab
@@ -136,7 +152,64 @@ export default function SavedStories() {
         </div>
       </div>
 
-      {stories.length === 0 ? (
+      {/* Jobs in flight and jobs that failed, above the library.
+          A failed generation used to be invisible here -- the client either
+          showed a canned error story as a success or lost the failure entirely
+          when the user navigated away. Now the reason is on the page with a
+          retry, per Blake's decision to make failures visible. */}
+      {visibleJobs.length > 0 && (
+        <div className="mb-6 space-y-3">
+          {visibleJobs.map((job) => (
+            <Card
+              key={job.job_id}
+              className={
+                job.status === "failed"
+                  ? "bg-destructive/5 border-destructive/30 rounded-xl"
+                  : "bg-white/90 rounded-xl"
+              }
+            >
+              <CardContent className="p-4 flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  {job.status === "queued" || job.status === "running" ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-primary mt-0.5" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
+                  )}
+                  <div>
+                    <p className="font-medium">
+                      {job.status === "failed"
+                        ? "This story could not be written"
+                        : describeJob(job)}
+                    </p>
+                    {job.status === "failed" && job.failure_message && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {job.failure_message}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {job.model}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  {(job.status === "queued" || job.status === "running") && (
+                    <Button variant="ghost" size="sm" onClick={() => cancel(job.job_id)}>
+                      Cancel
+                    </Button>
+                  )}
+                  {job.status === "failed" && (
+                    <Button variant="ghost" size="sm" onClick={() => dismiss(job.job_id)}>
+                      Dismiss
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {stories.length === 0 && visibleJobs.length === 0 ? (
         <Card className="bg-white/90 rounded-2xl shadow-lg">
           <CardContent className="p-8 text-center">
             <h3 className="text-2xl font-medium text-gray-700 mb-4">No Stories Yet</h3>
