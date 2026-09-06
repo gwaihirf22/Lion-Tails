@@ -70,6 +70,26 @@ updates:
           - "*"
         update-types:
           - "minor"
+
+      # Catch-all, deliberately LAST: Dependabot puts each dependency in the
+      # first group it matches, so this only sweeps up what the tiers above
+      # miss. That is indirect (transitive) dependencies -- cookie,
+      # foreground-child and serve-static each got their own PR because every
+      # group above filters on dependency-type, which matches DIRECT
+      # dependencies only, and a lockfile-only bump matches none of them.
+      #
+      # Production MAJORS are deliberately NOT swept in here. They also fall
+      # through the tiers, but batching them would defeat the point: a major is
+      # the one update that most needs looking at on its own. date-fns 3->4 and
+      # lucide-react 0->1 turned out to be clean; zod-validation-error 3->5
+      # needs a zod 4 migration first. Reviewing those as one PR would have
+      # meant either blocking two safe updates or merging a broken one.
+      indirect-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "automated"
