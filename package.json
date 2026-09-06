@@ -55,7 +55,7 @@
     "drizzle-zod": "^0.7.0",
     "express": "^4.21.2",
     "express-session": "^1.18.1",
-    "lucide-react": "^0.453.0",
+    "lucide-react": "^1.39.0",
     "memorystore": "^1.6.8",
     "openai": "^7.9.0",
     "passport": "^0.7.0",
