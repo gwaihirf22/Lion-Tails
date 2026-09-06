@@ -929,8 +929,12 @@ export async function generateStoryImage(
       n: 1,
       size: "1024x1024",
     });
-    if (response.data[0]?.url) {
-      await downloadImage(response.data[0].url, filepath);
+    // openai 7.x made ImagesResponse.data optional (`data?: Array<Image>`), so
+    // indexing it directly throws at runtime on a response that carries none --
+    // this is a real guard, not a cast to satisfy the compiler.
+    const imageUrl = response.data?.[0]?.url;
+    if (imageUrl) {
+      await downloadImage(imageUrl, filepath);
       return `/public/images/stories/${filename}`;
     }
     return undefined;

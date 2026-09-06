@@ -175,7 +175,9 @@ export async function generateIllustration(prompt: string, userId: number): Prom
       quality: "standard",
     });
 
-    return response.data[0].url || null;
+    // See the note in openai-implementation.ts: data is optional in openai 7.x.
+    // This site had no guard at all, so an empty array threw as well.
+    return response.data?.[0]?.url ?? null;
   } catch (error) {
     console.error("Error generating illustration:", error);
     throw new Error(`Failed to generate illustration: ${error instanceof Error ? error.message : String(error)}`);
