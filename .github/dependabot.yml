@@ -153,6 +153,13 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "tailwind-merge"
         update-types: ["version-update:semver-major"]
+      # 73 releases in the last year, but only 2 majors -- the minors are
+      # already batched by production-minor, so this ignore is about the majors
+      # only, which fall through every tier by design. 4.x -> 7.x needed a code
+      # change here (ad7684e guarded an image response 7.x made optional), so an
+      # SDK major gets read, not merged on a Monday.
+      - dependency-name: "openai"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
