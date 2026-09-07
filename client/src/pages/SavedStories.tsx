@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Loader2, AlertCircle } from "lucide-react";
 import { useStoryJobs, describeJob } from "@/hooks/use-story-jobs";
+import { useUniverses } from "@/hooks/use-universes";
+import UniverseCard from "@/components/UniverseCard";
 import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +21,15 @@ export default function SavedStories() {
   const [activeTab, setActiveTab] = useState("all");
   const { toast } = useToast();
   const { jobs, lastCompletedAt, cancel, dismiss, dismissed } = useStoryJobs();
+  const {
+    universes,
+    makeSummary,
+    editSummary,
+    addCanon,
+    removeCanon,
+    remove: removeUniverse,
+    moveStory,
+  } = useUniverses();
 
   // In-flight jobs, plus failures the user has not dismissed.
   const visibleJobs = jobs.filter(
@@ -129,6 +140,46 @@ export default function SavedStories() {
       ? stories.filter(story => story.isFavorite)
       : stories.filter(story => !story.isFavorite);
 
+  // Grouped by universe, with Unassigned last. Every existing story starts
+  // unassigned, so that group is the normal case rather than an edge case.
+  const byUniverse = new Map<string, typeof filteredStories>();
+  const unassigned: typeof filteredStories = [];
+  for (const story of filteredStories) {
+    const uid = (story as { universeId?: string }).universeId;
+    if (!uid) { unassigned.push(story); continue; }
+    if (!byUniverse.has(uid)) byUniverse.set(uid, []);
+    byUniverse.get(uid)!.push(story);
+  }
+
+  // A running summary job, per universe, so the card can show progress and
+  // disable its button from the same fact the server used.
+  const summaryJobFor = (universeId: string) =>
+    jobs.find(
+      (j) =>
+        j.kind === "summary" &&
+        j.universe_id === universeId &&
+        (j.status === "queued" || j.status === "running"),
+    );
+
+  const handleMakeSummary = async (universeId: string, force = false) => {
+    const r = await makeSummary(universeId, force);
+    if (!r.ok) {
+      toast({
+        title: r.code === "parent_mode_required" ? "Parent Mode needed" : "Could not start",
+        description: r.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({
+      title: "Writing the summary",
+      description:
+        r.droppedCount > 0
+          ? `Reading the ${r.coveredCount} most recent stories in full; ${r.droppedCount} earlier ones are covered by the previous summary.`
+          : `Reading ${r.coveredCount} ${r.coveredCount === 1 ? "story" : "stories"}.`,
+    });
+  };
+
   // Render loading state
   if (loading) {
     return (
@@ -235,13 +286,63 @@ export default function SavedStories() {
             </TabsList>
             
             <TabsContent value={activeTab}>
+              {universes.map((u) => {
+                const inThis = byUniverse.get(u.universeId) ?? [];
+                const busy = Boolean(summaryJobFor(u.universeId));
+                return (
+                  <UniverseCard
+                    key={u.universeId}
+                    universe={u}
+                    storyCount={inThis.length}
+                    busy={busy}
+                    onMakeSummary={(force) => handleMakeSummary(u.universeId, force)}
+                    onEditSummary={(text) => editSummary(u.universeId, text)}
+                    onAddCanon={(text) => addCanon(u.universeId, text)}
+                    onRemoveCanon={(id) => removeCanon(u.universeId, id)}
+                    onDelete={() => removeUniverse(u.universeId)}
+                  >
+                    <div className="space-y-2">
+                      {inThis.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          No stories in this universe yet.
+                        </p>
+                      )}
+                      {inThis.map((st) => (
+                        <div key={st.id} className="flex items-center justify-between gap-2 text-sm">
+                          <button
+                            className="text-left flex-1 hover:underline"
+                            onClick={() => handleViewStory(st)}
+                          >
+                            {st.story.title}
+                          </button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-xs"
+                            onClick={() => moveStory(st.id, null)}
+                          >
+                            remove
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </UniverseCard>
+                );
+              })}
+
+              {universes.length > 0 && unassigned.length > 0 && (
+                <h3 className="text-lg font-heading font-bold text-secondary mt-6 mb-2">
+                  Not in a universe
+                </h3>
+              )}
+
               <div className="grid gap-4">
-                {filteredStories.length === 0 ? (
+                {unassigned.length === 0 ? (
                   <Card className="p-6 text-center">
                     <p className="text-gray-500">No stories in this category.</p>
                   </Card>
                 ) : (
-                  filteredStories.map((savedStory) => (
+                  unassigned.map((savedStory) => (
                     <Card key={savedStory.id} className="bg-white/95 overflow-hidden transition-all duration-200 hover:shadow-md">
                       <CardContent className="p-5">
                         <div className="flex justify-between items-start">

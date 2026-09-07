@@ -203,7 +203,7 @@ export class DbStorage implements IStorage {
         try {
           // Handle the case where data might already be an object
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return row.story_data;
+            return { ...row.story_data, universeId: row.universe_id ?? undefined };
           }
           // Handle the string format with proper error handling
           return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
@@ -516,7 +516,7 @@ export class DbStorage implements IStorage {
         try {
           // Handle the case where data might already be an object
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return row.story_data;
+            return { ...row.story_data, universeId: row.universe_id ?? undefined };
           }
           // Handle the string format with proper error handling
           return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
@@ -897,7 +897,7 @@ export class DbStorage implements IStorage {
       return rows.map(row => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return row.story_data;
+            return { ...row.story_data, universeId: row.universe_id ?? undefined };
           }
           return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (error) {
@@ -967,7 +967,7 @@ export class DbStorage implements IStorage {
       return rows.map(row => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return row.story_data;
+            return { ...row.story_data, universeId: row.universe_id ?? undefined };
           }
           return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (error) {
@@ -1037,7 +1037,7 @@ export class DbStorage implements IStorage {
       return rows.map(row => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return row.story_data;
+            return { ...row.story_data, universeId: row.universe_id ?? undefined };
           }
           return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (error) {
@@ -1107,7 +1107,7 @@ export class DbStorage implements IStorage {
       return rows.map(row => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return row.story_data;
+            return { ...row.story_data, universeId: row.universe_id ?? undefined };
           }
           return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (error) {
@@ -1184,7 +1184,7 @@ export class DbStorage implements IStorage {
       return rows.map(row => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return row.story_data;
+            return { ...row.story_data, universeId: row.universe_id ?? undefined };
           }
           return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (error) {
@@ -1254,7 +1254,7 @@ export class DbStorage implements IStorage {
       return rows.map(row => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return row.story_data;
+            return { ...row.story_data, universeId: row.universe_id ?? undefined };
           }
           return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (error) {
@@ -1739,7 +1739,7 @@ export class DbStorage implements IStorage {
         try {
           // Handle the case where data might already be an object
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return row.story_data;
+            return { ...row.story_data, universeId: row.universe_id ?? undefined };
           }
           // Handle the string format with proper error handling
           return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
@@ -1781,7 +1781,7 @@ export class DbStorage implements IStorage {
       try {
         // Handle the case where data might already be an object
         if (typeof rows[0].story_data === 'object' && rows[0].story_data !== null) {
-          return rows[0].story_data;
+          return { ...rows[0].story_data, universeId: rows[0].universe_id ?? undefined };
         }
         // Handle the string format with proper error handling
         return JSON.parse(rows[0].story_data);
