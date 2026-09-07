@@ -9,7 +9,9 @@ import {
   varchar,
   timestamp,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { v4 as uuidv4 } from 'uuid';
@@ -78,6 +80,61 @@ export const heroesOfFaith = pgTable("heroes_of_faith", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
+/**
+ * A set of stories that share continuity.
+ *
+ * One summary per universe. The summary is what the next story is written
+ * against, so it is the mechanism that lets story 12 stay consistent with
+ * story 3 without putting 30,000 words in a prompt.
+ */
+export const storyUniverses = pgTable(
+  "story_universes",
+  {
+    universeId: text("universe_id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+
+    summary: text("summary"),
+    summaryUpdatedAt: timestamp("summary_updated_at", { withTimezone: true }),
+    /** Last manual Parent Mode edit, which is a different thing from a rebuild. */
+    summaryEditedAt: timestamp("summary_edited_at", { withTimezone: true }),
+    summaryModel: text("summary_model"),
+    /**
+     * Fingerprint of what the summary covers. THE staleness mechanism.
+     *
+     * A story count breaks on delete, and a timestamp watermark breaks on MOVE
+     * -- a story moved into a universe has a created_at below the watermark, so
+     * the universe would report itself current while holding unsummarised
+     * material. Moving stories between universes is a requirement, so that is
+     * the version that would ship and be quietly wrong.
+     */
+    summaryInputsHash: text("summary_inputs_hash"),
+    /** How many stories were read in full, and how many the previous summary stood in for. */
+    summaryCoveredCount: integer("summary_covered_count"),
+    summaryDroppedCount: integer("summary_dropped_count"),
+
+    /**
+     * Facts that must never be summarised away, as an array of
+     * { id, text, sourceStoryId?, createdAt, status }.
+     *
+     * Capped (see storyUniverses.ts) and that cap is the design: an uncapped
+     * canon list is a second summary that nothing compresses. Held here rather
+     * than in a table because it is always read and written whole with its
+     * universe, never queried by predicate, and editing the summary and its
+     * canon together should be one UPDATE rather than a transaction.
+     */
+    pinnedCanon: jsonb("pinned_canon").default([]).notNull(),
+  },
+  (table) => ({
+    userIdx: index("idx_story_universes_user_id").on(table.userId),
+    nameUnique: uniqueIndex("idx_story_universes_user_name").on(table.userId, table.name),
+  }),
+);
+
 export const userStories = pgTable(
   "user_stories",
   {
@@ -102,11 +159,18 @@ export const userStories = pgTable(
       () => generationRecords.generationId,
       { onDelete: "set null" },
     ),
+    // SET NULL, never cascade -- same reasoning as heroId above. Deleting a
+    // universe must drop its stories to "Unassigned", not delete the user's
+    // stories along with the folder they happened to be in.
+    universeId: text("universe_id").references(() => storyUniverses.universeId, {
+      onDelete: "set null",
+    }),
   },
   (table) => ({
     userIdx: index("idx_user_stories_user_id").on(table.userId),
     heroIdx: index("idx_user_stories_hero_id").on(table.heroId),
     generationIdx: index("idx_user_stories_generation_id").on(table.generationId),
+    universeIdx: index("idx_user_stories_universe_id").on(table.universeId),
   }),
 );
 
@@ -164,6 +228,20 @@ export const storyJobs = pgTable(
     userId: integer("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+
+    /**
+     * story | summary.
+     *
+     * A summary is a job rather than a parallel mechanism, so it inherits the
+     * SKIP LOCKED claim, the lease-as-resume, the eviction defence, the
+     * heartbeat, cancel, polling and the 409 conflict. Defaulted so every
+     * existing row is correct with no backfill.
+     */
+    kind: text("kind").notNull().default("story"),
+    /** Set for summary jobs only. CASCADE: a job is prunable, a universe is not. */
+    universeId: text("universe_id").references(() => storyUniverses.universeId, {
+      onDelete: "cascade",
+    }),
 
     // queued | running | succeeded | failed | cancelled
     status: text("status").notNull().default("queued"),
@@ -231,6 +309,13 @@ export const storyJobs = pgTable(
     // The claim query orders queued jobs by age; the reaper scans running jobs
     // by lease expiry. Both hit this.
     claimIdx: index("idx_story_jobs_claim").on(table.status, table.leaseExpiresAt),
+    /**
+     * At most one active summary per universe, enforced by Postgres rather than
+     * by an application check that two clicks could race past.
+     */
+    oneActiveSummary: uniqueIndex("idx_story_jobs_one_active_summary")
+      .on(table.universeId)
+      .where(sql`kind = 'summary' AND status IN ('queued','running')`),
   }),
 );
 
@@ -292,6 +377,13 @@ export const generationRecords = pgTable(
     jobId: text("job_id").references(() => storyJobs.jobId, {
       onDelete: "set null",
     }),
+    /**
+     * story | summary. Without it the admin stats average two unrelated
+     * workloads -- different token profiles, different word-count semantics.
+     * Not recording summaries at all would be worse: a failing summary would be
+     * invisible to telemetry.
+     */
+    kind: text("kind").notNull().default("story"),
 
     // Which build produced this row. Prompts are deliberately not stored (see
     // generationRecords.ts) and are only reconstructible from the request while
@@ -448,6 +540,13 @@ export const storyRequestSchema = z.object({
   moralOutcome: z
     .enum(["positive", "learning", "consequences", "creative"])
     .optional(),
+  // Continuation. Carried on the request rather than as a self-FK on
+  // user_stories: universe membership plus created_at ordering is everything
+  // the summariser and the library need, and this way both story_jobs.request
+  // and story_data.request persist it for free -- the same place characterId
+  // already lives.
+  continuesStoryId: z.string().optional(),
+  universeId: z.string().optional(),
   biblePassage: z.string().default("").optional(), // Bible passage to study
   learningFocus: z.string().default("").optional(), // Focus area for historical/educational stories
   // New fields for reading level and story length

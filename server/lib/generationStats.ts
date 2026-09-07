@@ -67,7 +67,8 @@ export async function getModelStats(window: StatsWindow): Promise<ModelStats[]> 
       coalesce(sum(retried_calls), 0)::int                       AS retried_calls,
       coalesce(sum(truncated_calls), 0)::int                     AS truncated_calls
     FROM generation_records
-    WHERE created_at > now() - ($1 || ' days')::interval
+    WHERE kind = 'story'
+      AND created_at > now() - ($1 || ' days')::interval
     GROUP BY model, provider, tier
     ORDER BY attempts DESC
     `,
@@ -95,7 +96,8 @@ export async function getFailureStats(window: StatsWindow): Promise<FailureStats
     `
     SELECT failure_code, count(*)::int AS n, array_agg(DISTINCT model) AS models
     FROM generation_records
-    WHERE outcome = 'failed'
+    WHERE kind = 'story'
+      AND outcome = 'failed'
       AND failure_code IS NOT NULL
       AND created_at > now() - ($1 || ' days')::interval
     GROUP BY failure_code
@@ -132,7 +134,8 @@ export async function getStepCosts(window: StatsWindow): Promise<StepCost[]> {
       count(*) FILTER (WHERE s->>'finishReason' = 'length')::int  AS truncated
     FROM generation_records g
     CROSS JOIN LATERAL jsonb_array_elements(g.steps) AS s
-    WHERE g.created_at > now() - ($1 || ' days')::interval
+    WHERE g.kind = 'story'
+      AND g.created_at > now() - ($1 || ' days')::interval
       AND g.steps IS NOT NULL
       -- Only real model calls. Bookkeeping entries (the request header, the
       -- length check) have no usage.
@@ -223,7 +226,8 @@ export async function getJobHealth(window: StatsWindow): Promise<JobHealth[]> {
            count(*)::int                                    AS n,
            count(*) FILTER (WHERE attempt_count > 1)::int   AS resumed
     FROM story_jobs
-    WHERE created_at > now() - ($1 || ' days')::interval
+    WHERE kind = 'story'
+      AND created_at > now() - ($1 || ' days')::interval
     GROUP BY status
     ORDER BY n DESC
     `,

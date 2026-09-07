@@ -23,7 +23,20 @@ import { randomUUID } from "crypto";
 import { pool, databaseReady } from "../db";
 import { resolveModel, createClient } from "./modelPolicy";
 import { StoryGenerationError } from "./storyErrors";
-import { generateStoryFromJob } from "./openai-implementation";
+import {
+  generateStoryFromJob,
+  requestModelJson,
+  MODEL_CONTEXT_LIMIT,
+  TOKEN_BUDGET,
+} from "./openai-implementation";
+import {
+  loadUniverseStories,
+  selectWindow,
+  summarySystemPrompt,
+  summaryUserPrompt,
+} from "./universeSummary";
+import { newGenerationId, recordGeneration } from "./generationRecords";
+import type { ResolvedModel } from "./modelPolicy";
 import { storage } from "../storage";
 
 /**
@@ -52,6 +65,9 @@ let timer: NodeJS.Timeout | undefined;
 export type JobRow = {
   job_id: string;
   user_id: number;
+  /** "story" | "summary" -- the only thing runJob dispatches on. */
+  kind: string;
+  universe_id: string | null;
   status: string;
   request: any;
   brief: string;
@@ -266,6 +282,230 @@ async function markCancelled(job: JobRow): Promise<void> {
   );
 }
 
+
+/**
+ * Produce a universe summary.
+ *
+ * Shares the claim, lease, heartbeat, eviction defence, cancel and retry
+ * machinery with story generation, and differs in three ways: the window is
+ * assembled at enqueue rather than a brief, the result goes to
+ * story_universes rather than user_stories, and it never touches quota.
+ */
+
+/**
+ * Rebuild a summary job's window with one fewer story, after a truncation.
+ *
+ * Returns false when there is nothing left to drop, in which case the caller
+ * lets the normal failure path run. This is what turns the character-based
+ * token estimate from a correctness requirement into an optimisation: a bad
+ * estimate costs one wasted call instead of breaking the feature.
+ */
+async function shrinkSummaryWindow(job: JobRow): Promise<boolean> {
+  const ids: string[] = Array.isArray(job.outline) ? job.outline : [];
+  if (ids.length <= 1 || !job.universe_id) return false;
+
+  const { rows: uni } = await pool!.query(
+    "SELECT summary, pinned_canon FROM story_universes WHERE universe_id = $1",
+    [job.universe_id],
+  );
+  if (!uni[0]) return false;
+
+  // Drop the OLDEST: the newest stories are the ones the next story most needs
+  // to stay consistent with, and the dropped one is still represented by the
+  // previous summary.
+  const keep = ids.slice(1);
+  const all = await loadUniverseStories(job.universe_id);
+  const byId = new Map(all.map((s) => [s.storyId, s]));
+  const stories = keep.map((id) => byId.get(id)).filter(Boolean) as typeof all;
+  if (stories.length === 0) return false;
+
+  const rebuilt = selectWindow({
+    // selectWindow takes newest-first and re-orders internally.
+    stories: [...stories].reverse(),
+    existingSummary: uni[0].summary,
+    canon: Array.isArray(uni[0].pinned_canon) ? uni[0].pinned_canon : [],
+    contextLimit: MODEL_CONTEXT_LIMIT,
+  });
+
+  const { rowCount } = await pool!.query(
+    `UPDATE story_jobs
+        SET brief = $1, outline = $2::jsonb, updated_at = now()
+      WHERE job_id = $3 AND worker_id = $4`,
+    [rebuilt.text, JSON.stringify(rebuilt.storyIds), job.job_id, WORKER_ID],
+  );
+  if ((rowCount ?? 0) === 0) return false;
+  console.warn(
+    `[worker] summary ${job.job_id} truncated; window narrowed from ${ids.length} to ${rebuilt.storyIds.length} stories and requeued.`,
+  );
+  return true;
+}
+
+async function runSummaryJob(job: JobRow, resolved: ResolvedModel): Promise<void> {
+  if (!job.universe_id) {
+    await finishFailed(job, "generation_failed", "Summary job has no universe.", false);
+    return;
+  }
+  if (!(await checkpoint(job.job_id, { step: "summarising" }))) return;
+
+  const client = createClient(resolved);
+  const debugData: any[] = [];
+  const generationId = newGenerationId();
+  const startedAt = Date.now();
+
+  try {
+    const parsed = await requestModelJson<{ summary: string; proposedCanon?: string[] }>({
+      step: "summariseUniverse",
+      model: resolved.model,
+      debugData,
+      maxTokens: TOKEN_BUDGET.json,
+      prompt: summaryUserPrompt(job.brief, job.target_word_count),
+      validate: (v: unknown) => {
+        const o = v as { summary?: unknown };
+        return typeof o?.summary === "string" && o.summary.trim().length > 0
+          ? (v as { summary: string; proposedCanon?: string[] })
+          : undefined;
+      },
+      call: async (maxTokens: number) => {
+        const response = await client.chat.completions.create({
+          model: resolved.model,
+          messages: [
+            { role: "system", content: summarySystemPrompt() },
+            { role: "user", content: summaryUserPrompt(job.brief, job.target_word_count) },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.3,
+          max_tokens: maxTokens,
+        });
+        return {
+          content: response.choices[0].message.content || "",
+          finishReason: response.choices[0].finish_reason,
+          usage: response.usage,
+        };
+      },
+    });
+
+    await recordGeneration({
+      generationId,
+      jobId: job.job_id,
+      kind: "summary",
+      userId: job.user_id,
+      resolved,
+      request: {},
+      targetWordCount: job.target_word_count,
+      startedAt,
+      debugData,
+      outcome: "succeeded",
+      actualWordCount: parsed.summary.split(/\s+/).filter(Boolean).length,
+    });
+
+    await finishSummarySucceeded(job, resolved, parsed.summary, parsed.proposedCanon ?? []);
+  } catch (error) {
+    const code = error instanceof StoryGenerationError ? error.code : "generation_failed";
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[worker] summary ${job.job_id} failed (${code}):`, message);
+    await recordGeneration({
+      generationId,
+      jobId: job.job_id,
+      kind: "summary",
+      userId: job.user_id,
+      resolved,
+      request: {},
+      targetWordCount: job.target_word_count,
+      startedAt,
+      debugData,
+      outcome: "failed",
+      failureCode: code,
+      failureMessage: message,
+    });
+    if (code === "model_output_truncated") {
+      // Requeueing the same window would truncate identically. Narrow it first,
+      // and only fall through to the normal failure if there is nothing to drop.
+      const narrowed = await shrinkSummaryWindow(job).catch((e) => {
+        console.error("[worker] could not narrow the summary window:", e);
+        return false;
+      });
+      if (narrowed) {
+        await finishFailed(job, code, message, true);
+        return;
+      }
+    }
+    const retryable = code === "model_output_invalid";
+    await finishFailed(job, code, message, retryable);
+  }
+}
+
+/**
+ * Finish a summary and write it to the universe, in one transaction.
+ *
+ * NO QUOTA. Not a flag someone can forget to set -- there is simply no
+ * user_usage write on this path, which is what makes "summaries never cost
+ * credits" structural rather than conventional.
+ */
+async function finishSummarySucceeded(
+  job: JobRow,
+  resolved: ResolvedModel,
+  summary: string,
+  proposedCanon: string[],
+): Promise<void> {
+  const client = await pool!.connect();
+  try {
+    await client.query("BEGIN");
+    const { rowCount } = await client.query(
+      `UPDATE story_jobs
+          SET status = 'succeeded', finished_at = now(), updated_at = now(),
+              worker_id = NULL, lease_expires_at = NULL, step = 'done'
+        WHERE job_id = $1 AND worker_id = $2 AND status = 'running'`,
+      [job.job_id, WORKER_ID],
+    );
+    if ((rowCount ?? 0) === 0) {
+      await client.query("ROLLBACK");
+      return;
+    }
+    // Proposals are stored inert. A 20B model does not get to write permanent
+    // world-facts; a human approves them in Parent Mode first.
+    const proposals = proposedCanon
+      .filter((t) => typeof t === "string" && t.trim())
+      .slice(0, 3)
+      .map((t) => ({
+        id: randomUUID(),
+        text: t.trim().slice(0, 200),
+        createdAt: new Date().toISOString(),
+        status: "proposed" as const,
+      }));
+
+    await client.query(
+      `UPDATE story_universes u
+          SET summary = $1,
+              summary_updated_at = now(),
+              summary_model = $2,
+              summary_covered_count = $3,
+              summary_dropped_count = $4,
+              pinned_canon = pinned_canon || $5::jsonb,
+              summary_inputs_hash = md5(
+                coalesce((SELECT string_agg(s.story_id, ',' ORDER BY s.story_id)
+                            FROM user_stories s WHERE s.universe_id = u.universe_id), '')
+                || '|' || (u.pinned_canon || $5::jsonb)::text
+              ),
+              updated_at = now()
+        WHERE u.universe_id = $6`,
+      [
+        summary,
+        resolved.model,
+        (job.outline ?? []).length,
+        0,
+        JSON.stringify(proposals),
+        job.universe_id,
+      ],
+    );
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 async function runJob(job: JobRow): Promise<void> {
   const hb = setInterval(() => {
     heartbeat(job.job_id).catch((e) =>
@@ -294,6 +534,11 @@ async function runJob(job: JobRow): Promise<void> {
         "No story model is available for your account any more. Add your own OpenAI API key in Settings.",
         false,
       );
+      return;
+    }
+
+    if (job.kind === "summary") {
+      await runSummaryJob(job, resolved);
       return;
     }
 

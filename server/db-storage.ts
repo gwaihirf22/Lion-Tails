@@ -206,7 +206,7 @@ export class DbStorage implements IStorage {
             return row.story_data;
           }
           // Handle the string format with proper error handling
-          return JSON.parse(row.story_data);
+          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (parseError) {
           console.error("Error parsing story data:", parseError);
           // Return a default story object to prevent app crashes
@@ -519,7 +519,7 @@ export class DbStorage implements IStorage {
             return row.story_data;
           }
           // Handle the string format with proper error handling
-          return JSON.parse(row.story_data);
+          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (parseError) {
           console.error("Error parsing story data:", parseError);
           // Return a default story object to prevent app crashes
@@ -574,10 +574,16 @@ export class DbStorage implements IStorage {
       try {
         // Handle the case where data might already be an object
         if (typeof rows[0].story_data === 'object' && rows[0].story_data !== null) {
-          return rows[0].story_data;
+          // The COLUMN wins over the blob. A new column is otherwise invisible
+          // to the client, because these mappers return story_data verbatim --
+          // which is exactly how hero_id ended up NULL on nearly every row while
+          // the code that set it looked correct. Deliberately NOT jsonb_set into
+          // the blob as well: updateStoryHeroId writes both and now has two
+          // sources of truth for one fact.
+          return { ...rows[0].story_data, universeId: rows[0].universe_id ?? undefined };
         }
         // Handle the string format with proper error handling
-        return JSON.parse(rows[0].story_data);
+        return { ...JSON.parse(rows[0].story_data), universeId: rows[0].universe_id ?? undefined };
       } catch (parseError) {
         console.error("Error parsing story data:", parseError);
         // Return a default story object to prevent app crashes
@@ -639,6 +645,10 @@ export class DbStorage implements IStorage {
       // story back verbatim, needs no change. Null for stories saved before
       // generation_records existed, and for any path that does not set it.
       const generationId = (story as { generationId?: string }).generationId ?? null;
+      // Read off the REQUEST, not an optional fourth parameter. The optional
+      // heroId parameter is exactly why hero_id is NULL on nearly every row:
+      // DbStorage.saveStory silently omits it and the caller cannot tell.
+      const universeId = (request as { universeId?: string }).universeId ?? null;
       const id = uuidv4();
       const now = new Date();
       
@@ -674,9 +684,9 @@ export class DbStorage implements IStorage {
       // that verifyOrmSchema correctly rejects -- so its best case was a no-op
       // and its worst case was a subtly wrong schema. migrations/ owns this.
       await pool!.query(
-        `INSERT INTO user_stories (story_id, user_id, story_data, created_at, is_favorite, expires_at, generation_id) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [id, userId, JSON.stringify(savedStory), now, false, expiryDate, generationId]
+        `INSERT INTO user_stories (story_id, user_id, story_data, created_at, is_favorite, expires_at, generation_id, universe_id) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [id, userId, JSON.stringify(savedStory), now, false, expiryDate, generationId, universeId]
       );
       
       return savedStory;
@@ -889,7 +899,7 @@ export class DbStorage implements IStorage {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
             return row.story_data;
           }
-          return JSON.parse(row.story_data);
+          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (error) {
           console.error("Error parsing story data:", error);
           return {
@@ -959,7 +969,7 @@ export class DbStorage implements IStorage {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
             return row.story_data;
           }
-          return JSON.parse(row.story_data);
+          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (error) {
           console.error("Error parsing story data:", error);
           return {
@@ -1029,7 +1039,7 @@ export class DbStorage implements IStorage {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
             return row.story_data;
           }
-          return JSON.parse(row.story_data);
+          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (error) {
           console.error("Error parsing story data:", error);
           return {
@@ -1099,7 +1109,7 @@ export class DbStorage implements IStorage {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
             return row.story_data;
           }
-          return JSON.parse(row.story_data);
+          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (error) {
           console.error("Error parsing story data:", error);
           return {
@@ -1176,7 +1186,7 @@ export class DbStorage implements IStorage {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
             return row.story_data;
           }
-          return JSON.parse(row.story_data);
+          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (error) {
           console.error("Error parsing story data:", error);
           return {
@@ -1246,7 +1256,7 @@ export class DbStorage implements IStorage {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
             return row.story_data;
           }
-          return JSON.parse(row.story_data);
+          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (error) {
           console.error("Error parsing story data:", error);
           return {
@@ -1732,7 +1742,7 @@ export class DbStorage implements IStorage {
             return row.story_data;
           }
           // Handle the string format with proper error handling
-          return JSON.parse(row.story_data);
+          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
         } catch (parseError) {
           console.error("Error parsing hero story data:", parseError);
           // Return a default hero story object to prevent app crashes

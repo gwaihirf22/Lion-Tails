@@ -55,3 +55,35 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   }
   next();
 }
+
+/**
+ * Parent Mode, enforced on the server.
+ *
+ * Until now Parent Mode existed only on the client: server/auth.ts sets
+ * req.session.parentModeExpiry and use-parent-mode.tsx hides UI behind it, but
+ * NO ROUTE EVER CHECKED IT. `useCustomPrompts` and `customSystemPrompt` are
+ * still trusted straight off the request body, so the persona-replacing prompt
+ * editor has never actually been gated -- anyone posting the field directly
+ * gets it.
+ *
+ * This guard is added because editing a universe summary or pinning permanent
+ * canon are the first operations where the gate has to be real: they change
+ * what every future story in that universe is written against, and a child
+ * clicking through the UI should not be able to do it.
+ *
+ * Applying it to the prompt-editor fields is a separate change with its own
+ * blast radius -- flagged in docs/decisions.md rather than folded in here.
+ */
+export function requireParentMode(req: Request, res: Response, next: NextFunction) {
+  if (!req.user || !req.isAuthenticated()) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
+  const expiry = (req.session as { parentModeExpiry?: number } | undefined)?.parentModeExpiry;
+  if (!expiry || Date.now() >= expiry) {
+    return res.status(403).json({
+      code: "parent_mode_required",
+      message: "Parent Mode is required for this. Unlock it in Settings and try again.",
+    });
+  }
+  next();
+}
