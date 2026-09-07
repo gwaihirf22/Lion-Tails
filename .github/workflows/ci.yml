@@ -141,11 +141,11 @@ jobs:
           node scripts/migrate.js
 
           # The migration is the only thing allowed to create tables, so the
-          # table set is an assertion in itself. 12 = 11 app tables + session.
+          # table set is an assertion in itself. 13 = 12 app tables + session.
           # Update this deliberately when a migration adds one: a bare count
           # cannot say WHICH table is missing, so the names are printed on
           # failure rather than leaving the next person to run \dt themselves.
-          EXPECTED_TABLES=12
+          EXPECTED_TABLES=13
           TABLES=$(psql "$DATABASE_URL" -tAc \
             "select count(*) from pg_tables where schemaname='public'")
           echo "tables in public: $TABLES"
@@ -172,6 +172,30 @@ jobs:
             exit 1
           fi
           echo "generation_records shape ok, no credential columns"
+
+          # verifyOrmSchema() detects missing COLUMNS only. It cannot see a
+          # missing index or a wrong ON DELETE, and two of those are
+          # load-bearing here, so they are asserted explicitly.
+
+          # This partial index IS the "one summary at a time per universe"
+          # guarantee. An application check would race two clicks past it.
+          psql "$DATABASE_URL" -tAc \
+            "select indexname from pg_indexes where tablename='story_jobs'" \
+            | grep -qx idx_story_jobs_one_active_summary || {
+              echo "FAIL: idx_story_jobs_one_active_summary is missing."; exit 1; }
+
+          # 'n' = SET NULL. A cascade here would delete the user's stories when
+          # a universe is deleted -- the one irreversible mistake in this design.
+          DEL=$(psql "$DATABASE_URL" -tAc \
+            "select confdeltype from pg_constraint
+              where conrelid='user_stories'::regclass
+                and confrelid='story_universes'::regclass and contype='f'")
+          if [ "$DEL" != "n" ]; then
+            echo "FAIL: user_stories.universe_id is ON DELETE '$DEL', expected 'n' (SET NULL)."
+            echo "Deleting a universe must leave its stories, not delete them."
+            exit 1
+          fi
+          echo "universe constraints ok: one-active-summary index present, universe_id is SET NULL"
 
           node dist/prod.js > /tmp/app-db.log 2>&1 &
           APP_PID=$!

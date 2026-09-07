@@ -16,6 +16,9 @@ import { useAuth } from "@/hooks/use-auth";
 
 export type StoryJob = {
   job_id: string;
+  /** "story" | "summary" -- a summary has no chapters, so progress reads differently. */
+  kind: string;
+  universe_id: string | null;
   status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
   step: string | null;
   created_at: string;
@@ -151,6 +154,15 @@ export function useStoryJobs(): StoryJobsContextType {
 
 /** Human-readable progress for a job, used by the header badge and the form. */
 export function describeJob(job: StoryJob): string {
+  // A summary has no chapters, so chapters_done/total are both 0 and the
+  // chapter branch below would report "Starting…" for the entire run.
+  if (job.kind === "summary") {
+    if (job.status === "queued") return "Waiting to summarise…";
+    if (job.status === "running") return "Reading the stories and writing the summary…";
+    if (job.status === "succeeded") return "Summary updated";
+    if (job.status === "cancelled") return "Cancelled";
+    return job.failure_message || "Summary failed";
+  }
   if (job.status === "queued") return "Waiting to start…";
   if (job.status === "running") {
     if (job.chapters_total > 0 && job.chapters_done > 0) {

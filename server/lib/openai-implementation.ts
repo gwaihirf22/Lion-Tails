@@ -129,7 +129,7 @@ function countWords(text: string): number {
  * duplicates of the same number are how this codebase has produced most of its
  * bugs.
  */
-const TOKEN_BUDGET = {
+export const TOKEN_BUDGET = {
   /** One-shot story, outline, or finalisation. Generous headroom for reasoning. */
   json: 8192,
   /** A single chapter of prose. */
@@ -161,7 +161,7 @@ const TOKEN_BUDGET = {
  * It was also never needed: across three benchmark runs the only call ever to
  * reach the ceiling was one outline retry at exactly 16384, and it succeeded.
  */
-const MODEL_CONTEXT_LIMIT = Number(process.env.MODEL_CONTEXT_LIMIT) || 16384;
+export const MODEL_CONTEXT_LIMIT = Number(process.env.MODEL_CONTEXT_LIMIT) || 16384;
 
 // Logged once at startup so a mismatch with Ollama's OLLAMA_CONTEXT_LENGTH is
 // visible in the container log rather than only as truncations under load.
@@ -243,7 +243,7 @@ function nextTokenBudget(current: number, promptTokens?: number): number | null 
  *
  * usage is recorded. Also previously unread at every call site.
  */
-async function requestModelJson<T>(opts: {
+export async function requestModelJson<T>(opts: {
   step: string;
   model: string;
   storyLength?: string;

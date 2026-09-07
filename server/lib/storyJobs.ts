@@ -23,12 +23,48 @@ export type EnqueueResult =
  */
 const RECENTLY_FINISHED_MS = 60 * 60 * 1000;
 
+/**
+ * Which kind is blocking which. The generic "a story is already being written"
+ * is wrong and confusing when the blocker is a summary -- the user did not
+ * start a story, and telling them they did sends them looking for one.
+ */
+function conflictCode(wanted: "story" | "summary", active: Array<{ kind: string }>): string {
+  const blocker = active[0]?.kind ?? "story";
+  if (blocker === "summary" && wanted === "story") return "summary_in_progress";
+  if (blocker === "story" && wanted === "summary") return "story_in_progress";
+  return "already_generating";
+}
+
+function conflictMessage(
+  wanted: "story" | "summary",
+  active: Array<{ kind: string }>,
+  limit: number,
+): string {
+  const blocker = active[0]?.kind ?? "story";
+  if (blocker === "summary" && wanted === "story") {
+    return "A universe summary is being written. Stories and summaries share the same model, so this will start as soon as it finishes.";
+  }
+  if (blocker === "story" && wanted === "summary") {
+    return "A story is being written. You can make the summary once it finishes.";
+  }
+  if (wanted === "summary") {
+    return "A summary is already being written for this universe.";
+  }
+  return limit === 1
+    ? "You already have a story being written. It will appear in your library when it is done."
+    : `You already have ${active.length} stories being written.`;
+}
+
 export async function enqueueStoryJob(opts: {
   userId: number;
   request: StoryRequest;
   brief: string;
   systemPrompt: string;
   targetWordCount: number;
+  kind?: "story" | "summary";
+  universeId?: string;
+  /** For a summary: the ordered story ids the window contains. */
+  outline?: string[];
 }): Promise<EnqueueResult> {
   if (!pool) {
     // Per Blake: no database means refuse. Degrading to in-memory would accept
@@ -63,7 +99,7 @@ export async function enqueueStoryJob(opts: {
     await client.query("SELECT pg_advisory_xact_lock($1)", [opts.userId]);
 
     const { rows: activeRows } = await client.query(
-      `SELECT job_id, status, step, created_at
+      `SELECT job_id, kind, universe_id, status, step, created_at
          FROM story_jobs
         WHERE user_id = $1 AND status IN ('queued','running')
         ORDER BY created_at`,
@@ -77,11 +113,8 @@ export async function enqueueStoryJob(opts: {
         // carries the in-flight job so the UI can say "you already have one
         // going, watch it" rather than presenting a dead end.
         status: 409,
-        code: "already_generating",
-        message:
-          limit === 1
-            ? "You already have a story being written. It will appear in your library when it is done."
-            : `You already have ${activeRows.length} stories being written.`,
+        code: conflictCode(opts.kind ?? "story", activeRows),
+        message: conflictMessage(opts.kind ?? "story", activeRows, limit),
         inFlight: activeRows,
       };
     }
@@ -89,8 +122,9 @@ export async function enqueueStoryJob(opts: {
     const jobId = randomUUID();
     await client.query(
       `INSERT INTO story_jobs
-         (job_id, user_id, status, request, brief, system_prompt, target_word_count, model, step)
-       VALUES ($1, $2, 'queued', $3, $4, $5, $6, $7, 'queued')`,
+         (job_id, user_id, kind, universe_id, status, request, brief, system_prompt,
+          target_word_count, model, step, outline)
+       VALUES ($1, $2, $8, $9, 'queued', $3, $4, $5, $6, $7, 'queued', $10::jsonb)`,
       [
         jobId,
         opts.userId,
@@ -103,6 +137,9 @@ export async function enqueueStoryJob(opts: {
         // together with the credentials. See the column comment in schema.ts.
         // Never store resolved.apiKey or resolved.baseURL.
         resolved.model,
+        opts.kind ?? "story",
+        opts.universeId ?? null,
+        opts.outline ? JSON.stringify(opts.outline) : null,
       ],
     );
     await client.query("COMMIT");
@@ -115,7 +152,7 @@ export async function enqueueStoryJob(opts: {
   }
 }
 
-const PUBLIC_FIELDS = `job_id, status, step, created_at, started_at, finished_at,
+const PUBLIC_FIELDS = `job_id, kind, universe_id, status, step, created_at, started_at, finished_at,
   story_id, failure_code, failure_message, attempt_count, error_count,
   target_word_count, model,
   COALESCE(jsonb_array_length(chapters), 0) AS chapters_done,
@@ -185,7 +222,7 @@ export async function countInFlight(userId: number): Promise<number> {
   if (!pool) return 0;
   const { rows } = await pool.query(
     `SELECT count(*)::int AS n FROM story_jobs
-      WHERE user_id = $1 AND status IN ('queued','running')`,
+      WHERE user_id = $1 AND kind = 'story' AND status IN ('queued','running')`,
     [userId],
   );
   return rows[0]?.n ?? 0;

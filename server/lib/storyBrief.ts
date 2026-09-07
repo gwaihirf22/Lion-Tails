@@ -157,11 +157,14 @@ export type StoryBrief = {
   craft: string[];
   /** Free-text steering from the user. Deliberately last and unqualified. */
   userInstructions?: string;
+  /** Universe continuity: what is already true. Never the plot of this story. */
+  continuity?: { canon: string[]; summary?: string };
 };
 
 export function buildStoryBrief(
   request: StoryRequest,
   character?: Character,
+  continuity?: { canon: string[]; summary?: string },
 ): StoryBrief {
   const details = character;
   const d = request.characterDetails;
@@ -231,6 +234,10 @@ export function buildStoryBrief(
     premise,
     craft,
     userInstructions: isSet(request.customPrompt) ? request.customPrompt : undefined,
+    continuity:
+      continuity && (continuity.canon.length > 0 || continuity.summary)
+        ? continuity
+        : undefined,
   };
 }
 
@@ -251,8 +258,15 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
   }
 
   if (purpose === "chapter") {
-    // Identity only. The outline already carries the premise into the plan.
-    return `The story is about ${brief.identity} Keep this consistent.`;
+    // Identity, plus canon only -- never the summary. The chapter prompt
+    // already carries storySoFar and is the second-tightest prompt in the
+    // system after finalizeStoryDetails, and the outline has already encoded
+    // the narrative history into the plan.
+    const facts = brief.continuity?.canon ?? [];
+    const canonLine = facts.length
+      ? ` These are already true and must not be contradicted: ${facts.join(" ")}`
+      : "";
+    return `The story is about ${brief.identity} Keep this consistent.${canonLine}`;
   }
 
   const out: string[] = [];
@@ -284,6 +298,28 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     "Give them a real problem with something at stake, and let their choices " +
       "change what happens. Avoid a tidy lesson stated by the narrator.",
   );
+
+  if (brief.continuity) {
+    out.push("");
+    out.push("ALREADY TRUE IN THIS WORLD");
+    if (brief.continuity.canon.length) {
+      out.push("Facts that must not be contradicted:");
+      brief.continuity.canon.forEach((c, i) => out.push(`  ${i + 1}. ${c}`));
+    }
+    if (brief.continuity.summary) {
+      out.push("What has happened so far:");
+      out.push(brief.continuity.summary);
+    }
+    // The single most important line in this block. A summary handed to a
+    // model without it becomes the plot of the next story -- and that failure
+    // looks like a perfectly valid HTTP 200 story, so nothing catches it but
+    // reading one.
+    out.push(
+      "This is BACKGROUND, not the plot. Do not retell any of it, and do not " +
+        "make it the subject of this story. Refer to it only where it naturally " +
+        "comes up. This story is a NEW episode in the same world.",
+    );
+  }
 
   if (brief.userInstructions) {
     out.push("");

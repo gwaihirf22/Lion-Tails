@@ -23,6 +23,11 @@ export default function GenerateStory() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [watchingJobId, setWatchingJobId] = useState<string | null>(null);
+  // "Continue this story" arrives as a query parameter rather than as state, so
+  // it survives a reload and can be shared as a link.
+  const continuesStoryId = new URLSearchParams(
+    typeof window === "undefined" ? "" : window.location.search,
+  ).get("continues");
   const { jobs, enqueue, cancel } = useStoryJobs();
 
   // The job we started this visit, if it is still in the provider list. Reading
@@ -122,7 +127,11 @@ export default function GenerateStory() {
     // "Story generated but not saved" no longer exists as a state -- and that
     // block is also what used to persist canned error stories to the library
     // with a success toast.
-    const outcome = await enqueue(data);
+    // Carried on the request, where the server resolves which universe this
+    // belongs to before freezing the brief.
+    const outcome = await enqueue(
+      continuesStoryId ? { ...data, continuesStoryId } : data,
+    );
     setGenerating(false);
 
     if (!outcome.ok) {
@@ -194,6 +203,16 @@ export default function GenerateStory() {
           </div>
         )}
       </div>
+
+      {continuesStoryId && (
+        <div className="mb-4 rounded-lg border-2 border-primary/30 bg-primary/5 p-4">
+          <p className="text-sm">
+            <strong>Continuing an earlier story.</strong> This one joins the same
+            universe, and is written against what has already happened there —
+            as a new episode, not a retelling.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-8">
         <div className="relative">

@@ -17,7 +17,27 @@ import {
 } from "./lib/storyBrief";
 import { getWordCountFromLength } from "./lib/openai-implementation";
 import { canEnqueueWithinQuota } from "./lib/openai";
-import { requireAuth } from "./lib/requireAuth";
+import { requireAuth, requireParentMode } from "./lib/requireAuth";
+import {
+  listUniverses,
+  getUniverse,
+  createUniverse,
+  renameUniverse,
+  deleteUniverse,
+  setStoryUniverse,
+  resolveUniverseForRequest,
+  addCanon,
+  removeCanon,
+  editSummary,
+} from "./lib/storyUniverses";
+import {
+  loadUniverseStories,
+  selectWindow,
+  summarySystemPrompt,
+  SUMMARY_TARGET_WORDS,
+} from "./lib/universeSummary";
+import { resolveModel } from "./lib/modelPolicy";
+import { MODEL_CONTEXT_LIMIT } from "./lib/openai-implementation";
 import {
   getModelStats,
   getFailureStats,
@@ -242,13 +262,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         validatedData.moralOutcome = shapes[Math.floor(Math.random() * shapes.length)];
       }
 
+      // Resolve the universe BEFORE the brief is built, so membership,
+      // continuity and the brief all freeze together. Continuing a story
+      // adopts its universe, creating one from the parent if it has none.
+      const universeId = await resolveUniverseForRequest(userId, {
+        universeId: validatedData.universeId,
+        continuesStoryId: validatedData.continuesStoryId,
+      });
+      validatedData.universeId = universeId;
+
+      let continuity: { canon: string[]; summary?: string } | undefined;
+      if (universeId) {
+        const universe = await getUniverse(userId, universeId);
+        if (universe) {
+          continuity = {
+            // Proposed canon is inert until a human approves it: a 20B model
+            // does not get to write permanent world-facts.
+            canon: universe.pinnedCanon.filter((c) => c.status === "active").map((c) => c.text),
+            summary: universe.summary ?? undefined,
+          };
+        }
+      }
+
       const character = await resolveStoryCharacter(validatedData, userId);
       const result = await enqueueStoryJob({
         userId,
         request: validatedData,
         // JSON, not prose: the worker renders a different projection per
         // prompt site, so freezing one rendering would lose the others.
-        brief: serialiseBrief(buildStoryBrief(validatedData, character)),
+        brief: serialiseBrief(buildStoryBrief(validatedData, character, continuity)),
         // Parent Mode is derived inside buildSystemPrompt from the request, so
         // there is no second argument here to forget. See storyBrief.ts.
         systemPrompt: buildSystemPrompt(validatedData),
@@ -270,6 +312,164 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error enqueueing story:", error);
       res.status(500).json({ message: "Failed to start story generation" });
     }
+  });
+
+  // ---------------------------------------------------------------------
+  // Universes
+  //
+  // Every route is user-scoped in the statement itself, not by a prior SELECT:
+  // request.universeId is client-supplied, and without that scoping a user
+  // could attach a story to someone else's universe and read its summary.
+  // ---------------------------------------------------------------------
+  app.get("/api/universes", requireAuth, async (req, res) => {
+    res.json(await listUniverses((req.user as any).id));
+  });
+
+  app.post("/api/universes", requireAuth, async (req, res) => {
+    const result = await createUniverse((req.user as any).id, String(req.body?.name ?? ""));
+    if ("error" in result) return res.status(400).json({ message: result.error });
+    res.status(201).json(result);
+  });
+
+  app.patch("/api/universes/:id", requireAuth, async (req, res) => {
+    const ok = await renameUniverse((req.user as any).id, req.params.id, String(req.body?.name ?? ""));
+    if (!ok) return res.status(404).json({ message: "No such universe" });
+    res.json({ renamed: true });
+  });
+
+  // The stories survive: universe_id is ON DELETE SET NULL, so they return to
+  // Unassigned rather than being deleted with the folder they were in.
+  app.delete("/api/universes/:id", requireAuth, async (req, res) => {
+    const ok = await deleteUniverse((req.user as any).id, req.params.id);
+    if (!ok) return res.status(404).json({ message: "No such universe" });
+    res.json({ deleted: true, storiesKept: true });
+  });
+
+  app.put("/api/stories/:id/universe", requireAuth, async (req, res) => {
+    const target = req.body?.universeId ?? null;
+    const ok = await setStoryUniverse((req.user as any).id, req.params.id, target);
+    if (!ok) return res.status(404).json({ message: "No such story or universe" });
+    res.json({ universeId: target });
+  });
+
+  /**
+   * Enqueue a summary.
+   *
+   * A job rather than a synchronous call: a summary reads several full stories
+   * and on gpt-oss that is minutes, which is the same request-length problem
+   * that made story generation asynchronous.
+   *
+   * canMakeSummary is computed server-side and enforced here as well as
+   * displayed -- the client must not hold a second definition of "current".
+   */
+  app.post("/api/universes/:id/summary", requireAuth, async (req, res) => {
+    const userId = (req.user as any).id;
+    const universe = await getUniverse(userId, req.params.id);
+    if (!universe) return res.status(404).json({ message: "No such universe" });
+
+    // Parent Mode may force a rebuild of a summary that is already current.
+    // Without it a bad summary is permanent until hand-rewritten, and these
+    // models produce a bad one often enough for that to matter.
+    const force = req.body?.force === true;
+    if (force) {
+      const expiry = (req.session as { parentModeExpiry?: number } | undefined)?.parentModeExpiry;
+      if (!expiry || Date.now() >= expiry) {
+        return res.status(403).json({
+          code: "parent_mode_required",
+          message: "Rebuilding a summary that is already current needs Parent Mode.",
+        });
+      }
+    }
+    if (universe.activeSummaryJobId) {
+      return res.status(409).json({
+        code: "summary_in_progress",
+        message: "A summary is already being written for this universe.",
+        jobId: universe.activeSummaryJobId,
+      });
+    }
+    if (universe.storyCount < 2) {
+      return res.status(400).json({
+        code: "not_enough_stories",
+        message: "A universe needs at least two stories before a summary is worth making.",
+      });
+    }
+    if (!universe.canMakeSummary && !force) {
+      return res.status(409).json({
+        code: "summary_current",
+        message: "This summary is already up to date. It unlocks again when a story is added.",
+      });
+    }
+
+    const resolved = await resolveModel(userId, "chat");
+    if (!resolved) {
+      return res.status(503).json({
+        code: "no_model_available",
+        message: "No model is available for your account.",
+      });
+    }
+
+    const stories = await loadUniverseStories(universe.universeId);
+    const window = selectWindow({
+      stories,
+      existingSummary: universe.summary,
+      canon: universe.pinnedCanon,
+      contextLimit: MODEL_CONTEXT_LIMIT,
+    });
+
+    const result = await enqueueStoryJob({
+      userId,
+      kind: "summary",
+      universeId: universe.universeId,
+      // Frozen at enqueue for the same reason a story brief is: a story added
+      // or deleted mid-run would otherwise change the input between a crash and
+      // the resume.
+      request: {} as any,
+      brief: window.text,
+      systemPrompt: summarySystemPrompt(),
+      targetWordCount: SUMMARY_TARGET_WORDS,
+      // The ids this window covers. Recorded so the covered count is real and so a
+      // truncated summary can rebuild a SMALLER window and retry.
+      outline: window.storyIds,
+    });
+    if (!result.ok) {
+      return res.status(result.status).json({
+        message: result.message,
+        code: result.code,
+        inFlight: result.inFlight,
+      });
+    }
+    res.status(202).json({
+      jobId: result.jobId,
+      status: "queued",
+      coveredCount: window.coveredCount,
+      droppedCount: window.droppedCount,
+    });
+  });
+
+  // Editing the summary and pinning canon change what EVERY future story in
+  // the universe is written against, so they are the first operations where
+  // Parent Mode is enforced on the server rather than only hidden in the UI.
+  app.put("/api/universes/:id/summary", requireParentMode, async (req, res) => {
+    const ok = await editSummary((req.user as any).id, req.params.id, String(req.body?.summary ?? ""));
+    if (!ok) return res.status(404).json({ message: "No such universe" });
+    res.json({ saved: true });
+  });
+
+  app.post("/api/universes/:id/canon", requireParentMode, async (req, res) => {
+    const result = await addCanon(
+      (req.user as any).id,
+      req.params.id,
+      String(req.body?.text ?? ""),
+      req.body?.sourceStoryId,
+    );
+    if (!result.ok) return res.status(400).json({ message: result.error });
+    res.status(201).json({ added: true });
+  });
+
+  app.delete("/api/universes/:id/canon/:canonId", requireParentMode, async (req, res) => {
+    const ok = await removeCanon((req.user as any).id, req.params.id, req.params.canonId);
+    if (!ok) return res.status(404).json({ message: "No such universe" });
+    res.json({ removed: true });
   });
 
   // Poll one job. 404 rather than 403 for someone else's job, so ids are not

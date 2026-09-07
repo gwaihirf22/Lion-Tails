@@ -73,6 +73,13 @@ export default function Story() {
       <div className="mb-6 flex justify-between items-center">
         <h2 className="text-3xl font-heading font-bold text-secondary">Your Bedtime Story</h2>
         <div className="space-x-3">
+          {/* Continuing is what creates a universe: the parent adopts one if it
+              has none, so the user never has to set one up first. */}
+          {storyId && (
+            <Button onClick={() => navigate(`/generate-story?continues=${storyId}`)}>
+              Continue this story
+            </Button>
+          )}
           <Button variant="outline" onClick={() => navigate("/")}>
             Create New Story
           </Button>
