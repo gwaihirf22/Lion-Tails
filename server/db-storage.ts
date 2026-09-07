@@ -649,6 +649,10 @@ export class DbStorage implements IStorage {
       // heroId parameter is exactly why hero_id is NULL on nearly every row:
       // DbStorage.saveStory silently omits it and the caller cannot tell.
       const universeId = (request as { universeId?: string }).universeId ?? null;
+      // Same reasoning, same source. Resolved at enqueue (or at save on the
+      // synchronous path) and carried on the request, so this method cannot
+      // silently lose it the way the optional fourth parameter did.
+      const heroId = (request as { heroId?: string }).heroId ?? null;
       const id = uuidv4();
       const now = new Date();
       
@@ -684,9 +688,9 @@ export class DbStorage implements IStorage {
       // that verifyOrmSchema correctly rejects -- so its best case was a no-op
       // and its worst case was a subtly wrong schema. migrations/ owns this.
       await pool!.query(
-        `INSERT INTO user_stories (story_id, user_id, story_data, created_at, is_favorite, expires_at, generation_id, universe_id) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [id, userId, JSON.stringify(savedStory), now, false, expiryDate, generationId, universeId]
+        `INSERT INTO user_stories (story_id, user_id, story_data, created_at, is_favorite, expires_at, generation_id, universe_id, hero_id) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [id, userId, JSON.stringify(savedStory), now, false, expiryDate, generationId, universeId, heroId]
       );
       
       return savedStory;

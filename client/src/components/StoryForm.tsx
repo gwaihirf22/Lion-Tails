@@ -102,6 +102,16 @@ export default function StoryForm({
     enabled: showHeroOfFaith
   });
   
+  // Which model will write this story. Needed only so the accuracy note below
+  // can be honest: the factual anchors ship with the app and help every model,
+  // but a free-typed passage has no anchor, and that gap is much wider on a 20B
+  // local model than on gpt-4o.
+  const { data: modelSetting } = useQuery<{ model: string; tier: string }>({
+    queryKey: ['/api/settings/openai-model'],
+    queryFn: getQueryFn<{ model: string; tier: string }>({ on401: "returnNull" }),
+  });
+  const usingLocalModel = modelSetting?.tier === "local";
+
   // Check localStorage for a pre-selected hero of faith
   const selectedHeroFromStorage = typeof window !== 'undefined' ? localStorage.getItem('selectedHeroOfFaith') : null;
   
@@ -561,6 +571,24 @@ export default function StoryForm({
             
             {/* Character selection has been moved to the top of the form */}
             
+            {formType === "historical" && (
+              <div className={`rounded-lg border p-3 text-xs ${usingLocalModel ? "border-amber-300 bg-amber-50 text-amber-900" : "border-secondary/20 bg-secondary/5 text-secondary/90"}`}>
+                <p className="font-medium mb-1">
+                  {usingLocalModel ? "Accuracy on the local model" : "About accuracy"}
+                </p>
+                <p>
+                  Lion Tails ships the actual account -- what happens, in order, with the real
+                  names, and a verbatim key verse -- for every <strong>Biblical Event</strong> and
+                  every <strong>Hero of the Faith</strong> in the lists below, so the AI is
+                  retelling rather than remembering.
+                </p>
+                <p className="mt-1">
+                  A <strong>Bible Passage</strong> you type yourself has no such anchor: the AI is
+                  working from memory{usingLocalModel ? ", and the local model's memory of Scripture is unreliable. For a passage that is not in the list, switch to a cloud model in Settings, or check the result before reading it aloud." : ". Check the result before reading it aloud."}
+                </p>
+              </div>
+            )}
+
             {showBiblicalEvent && formType === "historical" && (
               <FormField
                 control={form.control}

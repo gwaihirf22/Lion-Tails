@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
-import { isModelAllowedFor, listSelectableModels } from "./lib/modelPolicy";
+import { isModelAllowedFor, listSelectableModels , MODEL_CATALOG } from "./lib/modelPolicy";
 import { StoryGenerationError } from "./lib/storyErrors";
 import {
   enqueueStoryJob,
@@ -13,6 +13,7 @@ import {
   buildStoryBrief,
   buildSystemPrompt,
   resolveStoryCharacter,
+  resolveHeroOfFaith,
   serialiseBrief,
 } from "./lib/storyBrief";
 import { getWordCountFromLength } from "./lib/openai-implementation";
@@ -285,12 +286,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const character = await resolveStoryCharacter(validatedData, userId);
+      // Resolved HERE, with the character, so the hero's actual biography is
+      // frozen into the brief. The prompt used to receive the raw select value
+      // -- a uuid -- as the hero's name.
+      const hero = await resolveHeroOfFaith(validatedData);
+      // Frozen onto the request so the worker's saveStory finds it without a
+      // caller having to remember to pass it.
+      if (hero) validatedData.heroId = hero.id;
       const result = await enqueueStoryJob({
         userId,
         request: validatedData,
         // JSON, not prose: the worker renders a different projection per
         // prompt site, so freezing one rendering would lose the others.
-        brief: serialiseBrief(buildStoryBrief(validatedData, character, continuity)),
+        brief: serialiseBrief(buildStoryBrief(validatedData, character, continuity, hero)),
         // Parent Mode is derived inside buildSystemPrompt from the request, so
         // there is no second argument here to forget. See storyBrief.ts.
         systemPrompt: buildSystemPrompt(validatedData),
@@ -593,14 +601,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if the story is about a Hero of Faith and get the ID
       let heroId: string | undefined = undefined;
       
-      if (request.heroOfFaith && request.heroOfFaith !== "None") {
-        // Look up the hero by name to get the ID
-        const heroes = await storage.getAllHeroesOfFaith();
-        const hero = heroes.find(h => h.name === request.heroOfFaith);
-        if (hero) {
-          heroId = hero.id;
-          console.log(`Found Hero of Faith ID ${heroId} for ${request.heroOfFaith}`);
-        }
+      // The form's select value is hero.id, so matching on name alone never
+      // succeeded and heroId stayed undefined on every story ever saved.
+      // resolveHeroOfFaith accepts either shape.
+      const resolvedHero = await resolveHeroOfFaith(request);
+      if (resolvedHero) {
+        heroId = resolvedHero.id;
+        // Stamped on the request as well: the fourth argument below exists on
+        // IStorage but DbStorage does not accept it, so on Postgres it is
+        // silently dropped. The request is the path that actually persists.
+        request.heroId = resolvedHero.id;
+        console.log(`Found Hero of Faith ID ${heroId} for ${resolvedHero.name}`);
       }
       
       // Save the story with associated hero if applicable
@@ -1028,8 +1039,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = (req.user as any).id;
-      const model = await storage.getUserOpenAIModel(userId);
-      res.json({ model: model || 'gpt-4o-mini' });
+      const model = (await storage.getUserOpenAIModel(userId)) || 'gpt-4o-mini';
+      // The tier rides along so the story form can warn about local-model
+      // accuracy without a second round trip and without the client keeping its
+      // own copy of the catalogue -- there are already six model lists in this
+      // codebase and every one of them has drifted at least once.
+      res.json({ model, tier: MODEL_CATALOG[model]?.tier ?? 'economy' });
     } catch (error) {
       console.error("Error fetching OpenAI model:", error);
       res.status(500).json({ message: "Failed to fetch model setting" });
