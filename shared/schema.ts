@@ -527,6 +527,14 @@ export const storyRequestSchema = z.object({
   theme: z.string().default(""),
   biblicalEvent: z.string().default(""),
   heroOfFaith: z.string().default("").optional(),
+  // The RESOLVED hero id, written server-side at enqueue. heroOfFaith carries
+  // whatever the form's select produced (a uuid today, a name historically);
+  // this is the id that actually exists in the heroes table, or absent.
+  //
+  // It lives on the request rather than being a fourth argument to saveStory
+  // for the reason documented in db-storage.saveStory: the optional-parameter
+  // version is why hero_id is NULL on essentially every existing row.
+  heroId: z.string().optional(),
   useTimeTravel: z.boolean().default(false),
   characterId: z.string().optional(),
   storyType: z.enum(["regular", "poem", "moral"]).default("regular"),

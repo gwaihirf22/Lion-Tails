@@ -956,9 +956,14 @@ async function runGeneration(
         "\n\n**For Further Learning:**\n\n- **BibleGateway.com** - Read Bible stories.\n- **GotQuestions.org** - Find answers about faith.";
     }
 
-    const bibleVerse = getBibleVerseByTheme(
-      theme && theme !== "none" ? theme : "faith",
-    );
+    // A retelling gets ITS OWN verse -- the one the account turns on -- rather
+    // than a theme-matched one from the generic table. The event's verse is
+    // verbatim public-domain text (see server/data/biblicalEvents.ts); the
+    // theme table is paraphrase, so preferring the anchored one is a small
+    // accuracy win as well as a relevance one.
+    const bibleVerse =
+      ctx.brief.sourceMaterial?.keyVerse ??
+      getBibleVerseByTheme(theme && theme !== "none" ? theme : "faith");
 
     // Awaited rather than fired and forgotten: an unawaited rejection here
     // would be an unhandled promise rejection, and the write is a single
@@ -984,7 +989,13 @@ async function runGeneration(
       title: finalDetails.title,
       content: finalDetails.content,
       moralOutcome: moralOutcome,
-      bibleVerse: moralOutcome === "consequences" ? undefined : bibleVerse,
+      // "consequences" suppresses the verse so a story that ends on a hard
+      // note is not tidied up by a comforting one -- but a retelling's key
+      // verse belongs to the account, not to the ending, so it always stays.
+      bibleVerse:
+        moralOutcome === "consequences" && !ctx.brief.sourceMaterial
+          ? undefined
+          : bibleVerse,
       applicationQuestions: finalDetails.applicationQuestions,
       imagePrompt: finalDetails.imagePrompt,
       imageUrl: imageUrl,

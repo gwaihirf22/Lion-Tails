@@ -1,5 +1,6 @@
-import type { StoryRequest, Character } from "@shared/schema";
+import type { StoryRequest, Character, HeroOfFaith } from "@shared/schema";
 import { storage } from "../storage";
+import { getBiblicalEvent } from "../data/biblicalEvents";
 
 export type CustomPrompts = {
   systemPrompt?: string;
@@ -51,6 +52,47 @@ export async function resolveStoryCharacter(
 const NO_VALUE = new Set(["", "none", "n/a", "na", "null", "undefined"]);
 const isSet = (v: unknown): v is string =>
   typeof v === "string" && !NO_VALUE.has(v.trim().toLowerCase());
+
+/**
+ * Names the FORM invents to satisfy validation, which are not names.
+ *
+ * StoryForm sets childName to "Biblical Character" for the historical tab and
+ * "Character" for time travel, purely because childName has a .min(1) and the
+ * fields are hidden in those modes. Both went straight into the prompt, so a
+ * Noah story opened "WHO THIS IS ABOUT: Biblical Character, a boy." and the
+ * model, given a protagonist, wrote about him instead of about Noah.
+ */
+const PLACEHOLDER_NAMES = new Set(["biblical character", "character", "a child", "child"]);
+const isPlaceholderName = (v: string | undefined): boolean =>
+  typeof v === "string" && PLACEHOLDER_NAMES.has(v.trim().toLowerCase());
+
+/**
+ * Resolve the hero of faith a request refers to.
+ *
+ * Tolerant of id OR name on purpose. The form's SelectItem value is hero.id
+ * (a uuid), while routes.ts looked the hero up by `h.name === request.heroOfFaith`
+ * -- a comparison that can never be true, which is why hero_id is NULL on
+ * essentially every saved story. The brief was worse: it emitted the raw uuid
+ * into the prompt as "Feature this hero of faith: 7f3a9c12-...".
+ *
+ * Matching both shapes fixes it without a data migration and without depending
+ * on which end gets corrected first.
+ */
+export async function resolveHeroOfFaith(
+  request: StoryRequest,
+): Promise<HeroOfFaith | undefined> {
+  if (!isSet(request.heroOfFaith)) return undefined;
+  const wanted = request.heroOfFaith.trim().toLowerCase();
+  try {
+    const heroes = await storage.getAllHeroesOfFaith();
+    return heroes.find(
+      (h) => h.id.toLowerCase() === wanted || h.name.toLowerCase() === wanted,
+    );
+  } catch (error) {
+    console.error("Could not load hero of faith for story generation:", error);
+    return undefined;
+  }
+}
 
 /** Joins clauses into a sentence without stray commas when parts are missing. */
 function sentence(parts: Array<string | undefined>): string {
@@ -159,12 +201,30 @@ export type StoryBrief = {
   userInstructions?: string;
   /** Universe continuity: what is already true. Never the plot of this story. */
   continuity?: { canon: string[]; summary?: string };
+  /**
+   * A real account the story must be FAITHFUL to rather than invent around.
+   *
+   * The whole point of this field is that the model is not asked to remember
+   * anything. The brief used to say "Draw on this biblical event: noah." -- the
+   * slug, with no account attached -- and then, two sections later, "Invent the
+   * events yourself." Those are contradictory instructions and the model
+   * resolved them the only way it could.
+   */
+  sourceMaterial?: {
+    kind: "biblical-event" | "hero-of-faith";
+    label: string;
+    passage?: string;
+    account: string;
+    keyVerse?: { reference: string; text: string; translation?: string };
+    cautions: string[];
+  };
 };
 
 export function buildStoryBrief(
   request: StoryRequest,
   character?: Character,
   continuity?: { canon: string[]; summary?: string },
+  hero?: HeroOfFaith,
 ): StoryBrief {
   const details = character;
   const d = request.characterDetails;
@@ -182,11 +242,60 @@ export function buildStoryBrief(
   const animalRaw = request.useAnimal === false ? undefined : request.animal || favoriteAnimal;
   const animal = isSet(animalRaw) ? animalRaw : undefined;
 
+  // ---- The real account, if there is one ------------------------------------
+  // Built FIRST because it changes what the sections below are allowed to say.
+  const event = getBiblicalEvent(request.biblicalEvent);
+  let sourceMaterial: StoryBrief["sourceMaterial"];
+  if (event) {
+    sourceMaterial = {
+      kind: "biblical-event",
+      label: event.label,
+      passage: event.passage,
+      account: event.anchor,
+      keyVerse: { ...event.keyVerse, translation: "World English Bible" },
+      cautions: event.cautions,
+    };
+  } else if (hero) {
+    // A hero of faith is a real person, so the same rule applies: supply the
+    // biography rather than the name. heroesOfFaith.ts has carried timePeriod,
+    // contribution, keyEvents and a verse for every one of the fifteen heroes
+    // all along, and the prompt received none of it.
+    const events = (hero.keyEvents ?? [])
+      .map((e) => `${e.year}: ${e.description}`)
+      .join("; ");
+    sourceMaterial = {
+      kind: "hero-of-faith",
+      label: hero.name,
+      passage: hero.timePeriod || undefined,
+      account: [
+        hero.description,
+        hero.contribution,
+        events && `Key events -- ${events}`,
+        hero.famousQuote && `In their own words: "${hero.famousQuote}"`,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      keyVerse: hero.bibleVerse,  // no translation: see note in renderBrief
+      cautions: [
+        `${hero.name} was a real person who really lived. Do not invent events for them that did not happen, and do not move them to another century or country.`,
+        "Their faith is what the story is for. Do not reduce them to a list of achievements.",
+      ],
+    };
+  }
+
   // ---- WHO: identity, as a sentence rather than a checklist -----------------
+  // A retelling has its own cast. When the form supplied a placeholder name
+  // there is no child in this story, and saying there is one hands the model a
+  // protagonist to displace Noah with.
+  const anonymous = isPlaceholderName(name) && Boolean(sourceMaterial);
   const who = [name];
   if (age) who.push(`aged ${age}`);
   if (isSet(gender)) who.push(`a ${gender}`);
-  const identity = sentence([who.join(", ")]);
+  const identity = anonymous
+    ? sourceMaterial!.kind === "hero-of-faith"
+      ? `${sourceMaterial!.label}, and the people around them.`
+      : `the people in the account of ${sourceMaterial!.label}.`
+    : sentence([who.join(", ")]);
 
   // ---- Colour: usable if it fits, never required ---------------------------
   const traits: string[] = [];
@@ -207,18 +316,38 @@ export function buildStoryBrief(
       `${name} has ${article} ${animal} as a companion; give it a name and a personality.`,
     );
   }
-  const colour = colourParts.join(" ");
+  const colour = anonymous ? "" : colourParts.join(" ");
 
   // ---- WHAT: the thing to invent around ------------------------------------
   const premise: string[] = [];
-  premise.push(`Theme: ${request.theme || "faith and kindness"}.`);
-  if (isSet(request.biblicalEvent)) premise.push(`Draw on this biblical event: ${request.biblicalEvent}.`);
-  if (isSet(request.heroOfFaith)) premise.push(`Feature this hero of faith: ${request.heroOfFaith}.`);
+  // The theme defaulted to "faith and kindness" whether or not the user chose
+  // one, and then sat in the prompt as a peer of the account -- so a Noah story
+  // was told to be about the flood AND about faith and kindness, and the vaguer
+  // of the two is the easier to satisfy. With a real account in hand the
+  // account IS the subject; a theme only appears if the user actually picked one.
+  if (isSet(request.theme)) premise.push(`Theme: ${request.theme}.`);
+  else if (!sourceMaterial) premise.push("Theme: faith and kindness.");
+  // The unresolved slug/uuid lines that used to live here are gone: the event
+  // and the hero now arrive as sourceMaterial, with the account attached.
+  if (!event && isSet(request.biblicalEvent)) {
+    // An unrecognised slug. Say the words rather than the identifier.
+    premise.push(`Draw on this biblical event: ${request.biblicalEvent}.`);
+  }
+  if (!hero && isSet(request.heroOfFaith) && !/^[0-9a-f-]{16,}$/i.test(request.heroOfFaith)) {
+    premise.push(`Feature this hero of faith: ${request.heroOfFaith}.`);
+  }
   if (isSet(request.biblePassage)) premise.push(`Draw on this passage: ${request.biblePassage}.`);
-  if (request.useTimeTravel) {
+  if (request.useTimeTravel && !anonymous) {
     premise.push(`${name} travels back in time and witnesses this first-hand.`);
   }
-  const ending = moralOutcomeInstruction(request.moralOutcome);
+  // Suppressed for a retelling. moralOutcome is chosen at random when the user
+  // does not pick one, and "a poor choice should lead to a real consequence, do
+  // not soften it into a happy ending" is a direct instruction to change how the
+  // account of Noah ends. The account already has an ending; it is not ours to
+  // assign. This is the same class of conflict as "invent the events yourself".
+  const ending = sourceMaterial
+    ? undefined
+    : moralOutcomeInstruction(request.moralOutcome);
   if (ending) premise.push(ending);
 
   // ---- HOW ------------------------------------------------------------------
@@ -238,6 +367,7 @@ export function buildStoryBrief(
       continuity && (continuity.canon.length > 0 || continuity.summary)
         ? continuity
         : undefined,
+    sourceMaterial,
   };
 }
 
@@ -254,7 +384,9 @@ export type BriefPurpose = "single" | "outline" | "chapter" | "image";
 
 export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
   if (purpose === "image") {
-    return brief.identity;
+    return brief.sourceMaterial
+      ? `${brief.identity} -- a scene from ${brief.sourceMaterial.label}.`
+      : brief.identity;
   }
 
   if (purpose === "chapter") {
@@ -266,13 +398,32 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     const canonLine = facts.length
       ? ` These are already true and must not be contradicted: ${facts.join(" ")}`
       : "";
-    return `The story is about ${brief.identity} Keep this consistent.${canonLine}`;
+    // The cautions ride along into every chapter and the account does not.
+    // Deliberate: the account is already encoded in the outline, but factual
+    // drift is a per-chapter failure -- chapter 1 gets Noah right and chapter 5
+    // has him rounding up the animals himself. The cautions are the cheapest
+    // token-for-token thing in the brief and the only part that keeps working
+    // once the outline has been written.
+    const source = brief.sourceMaterial;
+    const sourceLine = source
+      ? ` This is a retelling of ${source.label}${source.passage ? ` (${source.passage})` : ""}; stay faithful to it and invent nothing that contradicts it.` +
+        (source.cautions.length ? ` Do not get these wrong: ${source.cautions.join(" ")}` : "")
+      : "";
+    return `The story is about ${brief.identity} Keep this consistent.${sourceLine}${canonLine}`;
   }
 
   const out: string[] = [];
 
   out.push("WHO THIS IS ABOUT");
   out.push(brief.identity);
+  if (brief.sourceMaterial && !brief.colour) {
+    // No invented protagonist was supplied, so say so explicitly. Left silent,
+    // a model asked for a children's story reaches for a child to put in it.
+    out.push(
+      "There is no invented child in this story. Do not add a modern character, " +
+        "a narrator-child, or a framing device where someone is told the story.",
+    );
+  }
   if (brief.colour) {
     out.push(brief.colour);
     // The single most important line in the brief. Without it these details are
@@ -285,9 +436,58 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
   }
 
   out.push("");
-  out.push("WHAT IT IS ABOUT");
-  out.push(...brief.premise);
-  out.push("Invent the events yourself. The section above is who they are, not what happens to them.");
+  if (brief.sourceMaterial) {
+    const src = brief.sourceMaterial;
+    const isBible = src.kind === "biblical-event";
+    out.push(`WHAT IT IS ABOUT -- this is a RETELLING of ${src.label}${src.passage ? ` (${src.passage})` : ""}`);
+    out.push(
+      isBible
+        ? "This really happened and is recorded in Scripture. Retell it. Do not invent a different version of it, and do not write a modern story that is merely inspired by it."
+        : "This is a real person who really lived. Retell what they actually did.",
+    );
+    out.push("");
+    out.push("THE ACCOUNT -- follow this. It is what happened:");
+    out.push(src.account);
+    if (src.keyVerse) {
+      out.push("");
+      // Quoted exactly, and labelled as quoted, so the model reproduces it
+      // rather than paraphrasing it into something that sounds like Scripture.
+      // Only the biblical-event verses were fetched verbatim from a known
+      // public-domain text, so only they carry a translation. The heroes' verses
+      // were hand-entered years ago with no translation recorded, and asserting
+      // one would be a false citation.
+      out.push(
+        src.keyVerse.translation
+          ? `Key verse, quoted exactly (${src.keyVerse.translation}, public domain) -- reproduce it word for word if you quote it, or leave it out entirely:`
+          : `Key verse -- quote it exactly as given here or leave it out entirely; do not paraphrase it:`,
+      );
+      out.push(`  "${src.keyVerse.text}" -- ${src.keyVerse.reference}`);
+    }
+    if (src.cautions.length) {
+      out.push("");
+      out.push("COMMON MISTAKES IN THIS STORY -- do not make them:");
+      src.cautions.forEach((c) => out.push(`  - ${c}`));
+    }
+    if (brief.premise.length) {
+      out.push("");
+      out.push("Also asked for:");
+      out.push(...brief.premise);
+    }
+    out.push("");
+    // Replaces "Invent the events yourself", which was the single most damaging
+    // line in the brief for these stories: it told the model to make something
+    // up in the same breath as naming a real account.
+    out.push(
+      "You may choose which moments to dwell on, what people say to each other, " +
+        "and how to make it vivid for a child -- but the events, the names, the " +
+        "order and the outcome are fixed. Where the account is silent you may " +
+        "imagine; where it speaks you may not contradict it.",
+    );
+  } else {
+    out.push("WHAT IT IS ABOUT");
+    out.push(...brief.premise);
+    out.push("Invent the events yourself. The section above is who they are, not what happens to them.");
+  }
 
   out.push("");
   out.push("HOW TO WRITE IT");
@@ -295,8 +495,11 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
   // Nothing in any prompt previously asked for conflict or consequence, which
   // is most of why stories read as a pleasant sequence of events.
   out.push(
-    "Give them a real problem with something at stake, and let their choices " +
-      "change what happens. Avoid a tidy lesson stated by the narrator.",
+    brief.sourceMaterial
+      ? "Let the danger and the cost in the account be felt rather than summarised -- " +
+          "but do not add peril that is not there. Avoid a tidy lesson stated by the narrator."
+      : "Give them a real problem with something at stake, and let their choices " +
+          "change what happens. Avoid a tidy lesson stated by the narrator.",
   );
 
   if (brief.continuity) {
@@ -368,13 +571,35 @@ export function buildSystemPrompt(request: StoryRequest): string {
     return request.customSystemPrompt;
   }
 
+  // Keyed on the DATA, not on a story type. Removing the biblical_narrative
+  // story type in Phase A also removed the only thing that had ever selected a
+  // retelling persona, which is why biblical stories got worse rather than
+  // better. Deriving it from "is there a biblical event on the request" means
+  // it cannot be lost again by a change to the storyType enum.
+  const retelling = isSet(request.biblicalEvent) || isSet(request.biblePassage);
+  // A hero of faith is a real person, so the same "do not invent" discipline
+  // applies -- but they are not Scripture, and a persona that says so would be
+  // wrong about Corrie ten Boom.
+  const trueStory = !retelling && isSet(request.heroOfFaith);
+  if (trueStory && !(request.useCustomPrompts && request.customSystemPrompt)) {
+    return request.storyType === "poem"
+      ? "You are a Christian children's poet who puts the lives of real Christians into verse. You are faithful to what they actually did -- you never invent events for a real person. You write in verse -- rhythmic, rhyming lines -- never in prose paragraphs."
+      : "You are a Christian children's storyteller who tells the true stories of real Christians for children. You are faithful to what actually happened -- the events, the dates, the places and the people. Where the record is silent you may imagine a scene; you never invent events for a real person.";
+  }
+
   switch (request.storyType) {
     case "poem":
-      return "You are a Christian children's poet. You write in verse -- rhythmic, rhyming lines -- never in prose paragraphs.";
+      return retelling
+        ? "You are a Christian children's poet who puts real Bible accounts into verse. You are faithful to what Scripture actually records -- you never invent events, and you never change how an account ends. You write in verse -- rhythmic, rhyming lines -- never in prose paragraphs."
+        : "You are a Christian children's poet. You write in verse -- rhythmic, rhyming lines -- never in prose paragraphs.";
     case "moral":
-      return "You are a Christian children's storyteller focused on a single clear moral lesson, illustrated through the character's choices.";
+      return retelling
+        ? "You are a Christian children's storyteller who retells real Bible accounts accurately for children. You are faithful to what Scripture records -- the events, the names, the order and the outcome. You let the lesson come out of what actually happened rather than adding one."
+        : "You are a Christian children's storyteller focused on a single clear moral lesson, illustrated through the character's choices.";
     default:
-      return "You are a Christian children's storyteller who writes warm, faith-based stories with a clear moral.";
+      return retelling
+        ? "You are a Christian children's storyteller who retells real Bible accounts accurately for children. You are faithful to what Scripture records -- the events, the names, the order and the outcome -- and you say so plainly rather than inventing a version that is easier to tell. Where Scripture is silent you may imagine; where it speaks you follow it."
+        : "You are a Christian children's storyteller who writes warm, faith-based stories with a clear moral.";
   }
 }
 
