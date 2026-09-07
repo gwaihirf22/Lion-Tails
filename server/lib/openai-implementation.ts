@@ -4,7 +4,12 @@ import {
   buildStoryBrief,
   buildSystemPrompt,
   buildUserInstruction,
+  deserialiseBrief,
+  renderBrief,
   resolveStoryCharacter,
+  storyFormFor,
+  WORDS_PER_VERSE_LINE,
+  type StoryBrief,
 } from "./storyBrief";
 
 /**
@@ -16,7 +21,7 @@ import {
  * apart until only four of the twenty-two request fields reached a prompt.
  */
 type StoryContext = {
-  brief: string;
+  brief: StoryBrief;
   systemPrompt: string;
   /** Resolved once per request; every chat call in this file uses it. */
   resolved: ResolvedModel;
@@ -28,6 +33,7 @@ import {
   modelOutputAdvice,
   modelTruncatedAdvice,
   storyTooShortAdvice,
+  poemNotVerseAdvice,
 } from "./storyErrors";
 import { resolveModel, createClient, type ResolvedModel } from "./modelPolicy";
 import { newGenerationId, recordGeneration } from "./generationRecords";
@@ -56,7 +62,31 @@ function getChapterCount(targetWordCount: number): number {
   return Math.max(3, Math.ceil(targetWordCount / 500));
 }
 
-export function getWordCountFromLength(length: string): number {
+/**
+ * The word target for a request.
+ *
+ * Poems have their own scale, and that is what routes them correctly: a poem is
+ * measured in lines, so its word target is small, and every poem therefore
+ * falls under the single-call threshold below. A poem used to be split into
+ * three to seven prose "chapters" at any length above very-short, which is a
+ * novella with a poet as its author.
+ *
+ * It also keeps the length check honest -- MINIMUM_LENGTH_RATIO measures a
+ * story against its target, and a 32-line poem judged against 1500 prose words
+ * would be rejected at 13% every single time.
+ */
+export function getWordCountFromLength(length: string, storyType?: string): number {
+  if (storyType === "poem") {
+    // 12/20/32/48/64 lines at the measured WORDS_PER_VERSE_LINE.
+    switch (length) {
+      case "very-short": return 12 * WORDS_PER_VERSE_LINE;
+      case "short": return 20 * WORDS_PER_VERSE_LINE;
+      case "medium": return 32 * WORDS_PER_VERSE_LINE;
+      case "long": return 48 * WORDS_PER_VERSE_LINE;
+      case "extended": return 64 * WORDS_PER_VERSE_LINE;
+      default: return 32 * WORDS_PER_VERSE_LINE;
+    }
+  }
   // Reading time is ~140 words per minute for children.
   switch (length) {
     case "very-short":
@@ -452,19 +482,19 @@ async function generateShortStorySingleCall(
   applicationQuestions: string[];
   imagePrompt: string;
 }> {
+  const form = storyFormFor(request.storyType);
   const systemPrompt = ctx.systemPrompt;
   const userPrompt = `
     ${buildUserInstruction(request)}
 
-    Details:
-    ${ctx.brief}
+    ${renderBrief(ctx.brief, "single")}
 
-    CRITICAL INSTRUCTION: The entire story's content MUST be approximately ${wordCount} words long.
+    CRITICAL INSTRUCTION: ${form.lengthPhrase(wordCount)}
 
     Respond with a single, valid JSON object with the following structure:
     {
-      "title": "A creative story title",
-      "content": "The full story text, approximately ${wordCount} words.",
+      "title": "A creative title",
+      "content": "The full ${form.noun} text.",
       "applicationQuestions": ["Question 1", "Question 2", "Question 3", "Question 4", "Question 5"],
       "imagePrompt": "A short description for an illustrator for a key scene."
     }
@@ -517,16 +547,16 @@ async function generateStoryOutline(
   numberOfChapters: number,
 ): Promise<string[]> {
 
-  const systemPrompt = `${ctx.systemPrompt} Your task is to create a detailed plan for a story.`;
+  const form = storyFormFor(request.storyType);
+  const systemPrompt = `${ctx.systemPrompt} Your task is to create a detailed plan for a ${form.noun}.`;
   const userPrompt = `
-    Please create a chapter-by-chapter outline for a Christian children's story.
-    The final story should be approximately ${wordCount} words long.
+    Plan a chapter-by-chapter outline for a Christian children's ${form.noun}.
+    ${form.lengthPhrase(wordCount)}
 
-    The story must be built around these details:
-    ${ctx.brief}
+    ${renderBrief(ctx.brief, "outline")}
 
     Instructions:
-    Create a detailed outline with EXACTLY ${numberOfChapters} parts. Each part must be a distinct scene or chapter that builds the story.
+    Create a detailed outline with EXACTLY ${numberOfChapters} parts. Each part must be a distinct scene that moves the problem forward -- something must change or be at risk in each one.
 
     Respond with ONLY a valid JSON object in the format: { "outline": ["Chapter 1...", "Chapter 2...", ...] }
   `;
@@ -583,8 +613,7 @@ async function generateStoryChapter(
 
   const systemPrompt = `${ctx.systemPrompt} Continue writing a story based on the context provided. Focus ONLY on writing the current part of the story. Do NOT summarize or add titles/questions.`;
   const userPrompt = `
-      The story's agreed details, which must stay consistent across chapters:
-      ${ctx.brief}
+      ${renderBrief(ctx.brief, "chapter")}
 
       Here is the story so far:
       ---
@@ -643,9 +672,8 @@ async function finalizeStoryDetails(
     ${fullStory}
     ---
 
-    The illustration must match the character as described here, so carry the
-    appearance details into the image prompt:
-    ${ctx.brief}
+    The illustration must match the character, so carry this into the image prompt:
+    ${renderBrief(ctx.brief, "image")}
 
     Respond with ONLY a valid JSON object: { "title": "...", "applicationQuestions": ["...", "...", "..."], "imagePrompt": "..." }
   `;
@@ -726,10 +754,14 @@ async function runGeneration(
   const { theme } = request;
   const resolved = ctx.resolved;
   const debugData: any[] = [debugHeader];
+  // Taken from the request, where the enqueue route froze it, so the label on
+  // the response describes a shape the model was actually asked for. Falls back
+  // to a draw for jobs enqueued before moralOutcome existed on the request.
   const moralOutcomes: Array<
     "positive" | "learning" | "consequences" | "creative"
   > = ["positive", "learning", "consequences", "creative"];
-  const moralOutcome = moralOutcomes[Math.floor(Math.random() * 4)];
+  const moralOutcome =
+    request.moralOutcome ?? moralOutcomes[Math.floor(Math.random() * 4)];
 
   console.log(`Starting story generation. Target: ${targetWordCount} words.`);
 
@@ -877,6 +909,27 @@ async function runGeneration(
         { debugData },
       );
     }
+    // A poem is defined by its line breaks. Prose that happens to be about
+    // the right length is not a poem, and the word count cannot tell the
+    // difference -- which is why this needs its own check rather than trusting
+    // the instruction. nemotron returned one paragraph when told twice not to.
+    if (request.storyType === "poem") {
+      const lines = (finalDetails.content || "")
+        .split("\n")
+        .map((l) => l.trim())
+        // The appended "For Further Learning" block is not verse.
+        .filter((l) => l.length > 0 && !l.startsWith("**") && !l.startsWith("-")).length;
+      const expectedLines = Math.max(4, Math.round(targetWordCount / WORDS_PER_VERSE_LINE));
+      debugData.push({ step: "verseCheck", lines, expectedLines });
+      if (lines < expectedLines * 0.5) {
+        throw new StoryGenerationError(
+          "poem_not_verse",
+          poemNotVerseAdvice(lines, expectedLines, ctx.resolved.model),
+          { debugData },
+        );
+      }
+    }
+
     if (lengthRatio > 1.5) {
       console.warn(
         `Story ran long: ${actualWordCount} words against a ${targetWordCount} target ` +
@@ -1000,7 +1053,8 @@ export async function generateStoryFromJob(opts: {
 }): Promise<(StoryResponse & { debugData?: any[]; generationId?: string }) | GenerationOutcome> {
   const generationId = newGenerationId();
   const ctx: StoryContext = {
-    brief: opts.brief,
+    // Frozen as JSON at enqueue; see serialiseBrief.
+    brief: deserialiseBrief(opts.brief),
     systemPrompt: opts.systemPrompt,
     resolved: opts.resolved,
   };

@@ -57,10 +57,6 @@ export default function CharacterCard({
             </div>
           </div>
 
-          <div>
-            <span className="font-medium">Special power:</span> {character.specialPower || "None"}
-          </div>
-
           <div className="flex items-center gap-1 mt-2">
             <BookOpenIcon className="h-4 w-4" />
             <span className="font-medium">Time travel experience:</span> {character.timeTravelExperience}/10

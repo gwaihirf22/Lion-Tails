@@ -60,8 +60,6 @@ export default function StoryForm({
   const [useTimeTravel, setUseTimeTravel] = useState(false);
   const [hasSelectedBiblicalEvent, setHasSelectedBiblicalEvent] = useState(false);
   const [hasSelectedHeroOfFaith, setHasSelectedHeroOfFaith] = useState(false);
-  const [isBiblicalNarrative, setIsBiblicalNarrative] = useState(false);
-  const [historicalAccuracy, setHistoricalAccuracy] = useState(true);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState<Character | undefined>();
   
@@ -117,12 +115,15 @@ export default function StoryForm({
       theme: "", // No default theme
       biblicalEvent: "", // No default biblical event
       heroOfFaith: selectedHeroFromStorage || "", // Use hero from localStorage if available
-      storyType: formType === "children" ? "regular" : "biblical_narrative", // Default based on form type
+      // Both tabs default to "regular". The historical tab is distinguished by
+      // the fields it shows -- Biblical Event, Hero of Faith, Bible Passage,
+      // Learning Focus -- not by a story type that told the model to be
+      // faithful to a text nobody supplied.
+      storyType: "regular" as const,
       useTimeTravel: false,
       characterId: undefined,
       customPrompt: "", // Empty custom prompt by default
       biblePassage: "", // New field for Bible passage study
-      historicalAccuracy: true, // Default to historically accurate
       learningFocus: "", // No default learning focus
       // New fields
       readingLevel: "early-elementary", // Default reading level
@@ -139,7 +140,6 @@ export default function StoryForm({
         favoriteColor: "",
         personality: "",
         hobby: "",
-        specialPower: "",
         favoriteAnimal: ""
       },
     },
@@ -172,33 +172,12 @@ export default function StoryForm({
       // Set default values for these fields that satisfy type constraints
       form.setValue("childName", "Biblical Character");
       form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
-      form.setValue("animal", "none");
-      form.setValue("storyType", "biblical_narrative");
+      form.setValue("animal", "");
       
       // Keep character selection even for historical mode
       // Character selection remains optional; don't clear it
       form.setValue("useTimeTravel", false);
       
-      // Set historical accuracy
-      form.setValue("historicalAccuracy", historicalAccuracy);
-    } 
-    else if (isBiblicalNarrative) {
-      // In biblical narrative mode, child's name, gender, and animal are not needed
-      form.clearErrors(['childName', 'gender', 'animal']);
-      
-      // Set default values for these fields that satisfy type constraints
-      form.setValue("childName", "Biblical Character");
-      form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
-      form.setValue("animal", "none");
-      
-      // Keep character selection even for biblical narrative
-      // Character selection remains optional; don't clear it
-      
-      // Make sure time travel is disabled for biblical narrative
-      if (useTimeTravel) {
-        setUseTimeTravel(false);
-        form.setValue("useTimeTravel", false);
-      }
     } 
     else if (useTimeTravel) {
       // In time travel mode, child's name, gender, and animal are not needed
@@ -208,7 +187,7 @@ export default function StoryForm({
       // Set default values for these fields so they don't get sent to the server
       form.setValue("childName", "Character");
       form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
-      form.setValue("animal", "none");
+      form.setValue("animal", "");
       
       // Set focus on character selection dropdown
       setTimeout(() => {
@@ -220,7 +199,7 @@ export default function StoryForm({
     } 
     // Keep character selection even when time travel is not enabled
     // This allows using the character in regular stories too
-  }, [useTimeTravel, isBiblicalNarrative, form, formType, historicalAccuracy]);
+  }, [useTimeTravel, form, formType]);
 
   // Character creation is now handled exclusively through the Character tab
 
@@ -253,7 +232,7 @@ export default function StoryForm({
                               // Set default values for these fields so they don't get in the way
                               form.setValue("childName", "Character"); 
                               form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
-                              form.setValue("animal", "none");
+                              form.setValue("animal", "");
                               form.clearErrors(['childName', 'gender', 'animal']);
                             }
                             field.onChange(value);
@@ -325,7 +304,7 @@ export default function StoryForm({
               />
             )}
 
-            {formType === "children" && showChildFields && !isBiblicalNarrative && !form.getValues("characterId") && (
+            {formType === "children" && showChildFields && !form.getValues("characterId") && (
               <>
                 <FormField
                   control={form.control}
@@ -480,6 +459,42 @@ export default function StoryForm({
                 )}
               />
             )}
+
+            {/* What actually happens in the story.
+                Deliberately prominent, and placed next to Theme because these
+                two together decide what the story is about. This field already
+                existed and was already un-gated -- it just sat two-thirds of the
+                way down a flat 900-line form, styled like every other optional
+                dropdown, labelled "Custom Story Request (Optional)", where
+                nobody found it.
+
+                It is NOT the Parent Mode prompt editor further down. That one
+                REPLACES the storyteller's persona and is correctly gated. This
+                one only adds to the brief. */}
+            <FormField
+              control={form.control}
+              name="customPrompt"
+              render={({ field }) => (
+                <FormItem className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4">
+                  <FormLabel className="text-base font-semibold text-secondary">
+                    What should happen in this story?
+                  </FormLabel>
+                  <FormDescription className="mb-2">
+                    The best way to get a story that feels like yours rather than
+                    a generic one. Describe a situation, a problem, or something
+                    that happened this week.
+                  </FormDescription>
+                  <FormControl>
+                    <Textarea
+                      placeholder="e.g. She was frightened of the thunderstorm last night and hid under the table. I'd like a story about being brave when you're scared."
+                      className="min-h-28 bg-white border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             
             {formType === "children" && (
               <FormField
@@ -496,10 +511,7 @@ export default function StoryForm({
                           </svg>
                         </span>
                         <Select
-                          onValueChange={(value) => {
-                            field.onChange(value);
-                            setIsBiblicalNarrative(value === "biblical_narrative");
-                          }}
+                          onValueChange={field.onChange}
                           defaultValue={field.value}
                         >
                           <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
@@ -509,7 +521,6 @@ export default function StoryForm({
                             <SelectItem value="regular">Regular Bedtime Story</SelectItem>
                             <SelectItem value="poem">Bedtime Poem</SelectItem>
                             <SelectItem value="moral">Moral Bedtime Story</SelectItem>
-                            <SelectItem value="biblical_narrative">Biblical Narrative</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -520,7 +531,7 @@ export default function StoryForm({
               />
             )}
             
-            {formType === "children" && showTimeTravel && !isBiblicalNarrative && (
+            {formType === "children" && showTimeTravel && (
               <FormField
                 control={form.control}
                 name="useTimeTravel"
@@ -550,7 +561,7 @@ export default function StoryForm({
             
             {/* Character selection has been moved to the top of the form */}
             
-            {showBiblicalEvent && (formType === "historical" || isBiblicalNarrative) && (
+            {showBiblicalEvent && formType === "historical" && (
               <FormField
                 control={form.control}
                 name="biblicalEvent"
@@ -689,33 +700,6 @@ export default function StoryForm({
               />
             )}
             
-            {showHistoricalAccuracyToggle && formType === "historical" && (
-              <FormField
-                control={form.control}
-                name="historicalAccuracy"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md p-4 border border-secondary/10">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={(checked) => {
-                          setHistoricalAccuracy(!!checked);
-                          field.onChange(checked);
-                        }}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel className="text-sm font-medium">
-                        Prioritize Historical Accuracy
-                      </FormLabel>
-                      <FormDescription>
-                        When enabled, stories will focus more on historical facts. When disabled, more creative elements may be included.
-                      </FormDescription>
-                    </div>
-                  </FormItem>
-                )}
-              />
-            )}
             
             {showLearningFocus && formType === "historical" && (
               <FormField
@@ -756,34 +740,6 @@ export default function StoryForm({
               />
             )}
             
-            {/* Custom Prompt Field */}
-            <FormField
-              control={form.control}
-              name="customPrompt"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">Custom Story Request (Optional)</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <span className="absolute top-3 left-3 text-secondary">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-magic-wand">
-                          <path d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5z" /><path d="m2 2 8 8" /><path d="M20.5 10.5 22 12l-7.5 7.5-6-6L10 12l1.5-1.5" /><path d="M10.5 13.5 14 17" /><path d="M15 4h5v5" /><path d="M19 10 9 20" />
-                        </svg>
-                      </span>
-                      <Textarea 
-                        placeholder="Add any custom elements you'd like in your story..." 
-                        className="pl-10 pr-4 py-2 min-h-24 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
-                        {...field} 
-                      />
-                    </div>
-                  </FormControl>
-                  <FormDescription>
-                    Optionally add specific details or elements you'd like included in your story.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             
             {/* Reading Level */}
             {showReadingLevel && (
@@ -904,8 +860,7 @@ export default function StoryForm({
                     </svg> 
                     {formType === "historical" ? "Create Historical Story" : 
                       form.watch("storyType") === "poem" ? "Create Bedtime Poem" : 
-                      form.watch("storyType") === "moral" ? "Create Moral Bedtime Story" : 
-                      form.watch("storyType") === "biblical_narrative" ? "Create Biblical Narrative" :
+                      form.watch("storyType") === "moral" ? "Create Moral Bedtime Story" :
                       "Create Bedtime Story"}
                   </>
                 )}
