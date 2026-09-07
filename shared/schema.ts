@@ -413,7 +413,6 @@ export const characterSchema = z.object({
   hair: z.string().default("brown"),
   eyes: z.string().default("brown"),
   favoriteColor: z.string().default("blue"),
-  specialPower: z.string().optional(),
   favoriteAnimal: z.string().optional(),
   hobby: z.string().optional(),
   timeTravelExperience: z.number().int().min(0).max(10).default(0),
@@ -438,10 +437,18 @@ export const storyRequestSchema = z.object({
   heroOfFaith: z.string().default("").optional(),
   useTimeTravel: z.boolean().default(false),
   characterId: z.string().optional(),
-  storyType: z.enum(["regular", "poem", "moral", "biblical_narrative"]).default("regular"),
+  storyType: z.enum(["regular", "poem", "moral"]).default("regular"),
   customPrompt: z.string().default("").optional(),
+  // The shape the story should end in. Previously chosen with Math.random()
+  // AFTER generation, never sent to the model, and used to decide whether a
+  // Bible verse was attached -- so a coin flip determined both the declared
+  // moral shape and whether Scripture appeared, with no relation to the text.
+  // It is on the request now so it is frozen with the brief and reaches the
+  // prompt. Optional: stories enqueued before this shipped have none.
+  moralOutcome: z
+    .enum(["positive", "learning", "consequences", "creative"])
+    .optional(),
   biblePassage: z.string().default("").optional(), // Bible passage to study
-  historicalAccuracy: z.boolean().default(true).optional(), // Toggle for historical accuracy
   learningFocus: z.string().default("").optional(), // Focus area for historical/educational stories
   // New fields for reading level and story length
   readingLevel: z.enum([
@@ -469,17 +476,11 @@ export const storyRequestSchema = z.object({
     hair: z.string().optional(),
     eyes: z.string().optional(),
     favoriteColor: z.string().optional(),
-    specialPower: z.string().optional(),
     hobby: z.string().optional(),
     personality: z.string().optional(),
     favoriteAnimal: z.string().optional(),
   }).optional(),
 }).refine((data) => {
-  // Biblical narrative doesn't require a child character
-  if (data.storyType === "biblical_narrative") {
-    return true;
-  }
-  
   // If time travel is enabled, characterId is required
   if (data.useTimeTravel) {
     return !!data.characterId;
@@ -495,10 +496,10 @@ export const storyRequestSchema = z.object({
     return true;
   }
   
-  // If characterId not provided, time travel is disabled, useCharacter is disabled, and it's not a biblical narrative, childName and gender are required
+  // Otherwise a name and gender are required.
   return !!data.childName && !!data.gender;
 }, {
-  message: "You can select a character for any story type. If no character is selected, the child's name and gender are required (except for Biblical narratives).",
+  message: "Select a character, or give the child's name and gender.",
   path: ["characterId"]
 });
 

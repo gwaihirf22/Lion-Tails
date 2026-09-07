@@ -40,22 +40,129 @@ export async function resolveStoryCharacter(
 }
 
 /**
- * Renders everything the user actually chose into a prompt fragment.
- * See docs/decisions.md §4.
+ * Sentinel values the form writes to mean "no animal".
  *
- * storyRequestSchema declares 22 fields and the form collects them, but the
- * generator previously destructured only childName, theme, readingLevel and
- * storyLength -- so a chosen character, hero of faith, biblical event, animal
- * companion, learning focus and custom instructions were all silently
- * discarded. That is why generated stories did not reflect the form.
- *
- * Built in one place and shared by every prompt site, so the set of fields
- * cannot drift between them the way the duplicated destructures did.
+ * StoryForm sets `animal` to the literal string "none" in four places, and
+ * "none" is truthy -- so `request.animal || favoriteAnimal` short-circuited and
+ * the brief emitted "Animal companion: none", telling the model the child's
+ * companion was an animal called None. storage.ts guarded against capital
+ * "None", which never matched what the form actually writes.
  */
+const NO_VALUE = new Set(["", "none", "n/a", "na", "null", "undefined"]);
+const isSet = (v: unknown): v is string =>
+  typeof v === "string" && !NO_VALUE.has(v.trim().toLowerCase());
+
+/** Joins clauses into a sentence without stray commas when parts are missing. */
+function sentence(parts: Array<string | undefined>): string {
+  const kept = parts.filter((p): p is string => Boolean(p && p.trim()));
+  if (kept.length === 0) return "";
+  return kept.join(" ") + (kept[kept.length - 1].endsWith(".") ? "" : ".");
+}
+
+/**
+ * What the story is, in the words the prompts should use.
+ *
+ * storyType previously reached only the one-line system persona; every user
+ * prompt hardcoded "story", "chapter" and a word count. The concrete
+ * instruction beats the persona, which is why asking for a poem produced a
+ * story. Derived here, once, so the three prompt sites cannot drift.
+ */
+/**
+ * Words per line of childrens verse. MEASURED, not assumed: across the poems
+ * generated during this change gpt-oss wrote 174 words over 20 lines and
+ * gpt-4o-mini 300 over 32 -- 8.7 and 9.4. The first draft used 7, which made
+ * every poem overshoot its word target by 30-90% while hitting the requested
+ * LINE count exactly. The line count was never wrong; the words-per-line
+ * constant behind the target was.
+ */
+export const WORDS_PER_VERSE_LINE = 9;
+
+export type StoryForm_ = {
+  /** "story" | "poem" -- the noun every prompt should use. */
+  noun: string;
+  /** How to describe the length requirement to the model. */
+  lengthPhrase: (targetWords: number) => string;
+  /** Form-specific craft instruction. */
+  craft: string;
+};
+
+export function storyFormFor(storyType: string | undefined): StoryForm_ {
+  if (storyType === "poem") {
+    return {
+      noun: "poem",
+      // Poems are measured in lines, not words. The word target still exists
+      // because the length check needs one, but the model is asked for verse.
+      lengthPhrase: (w) =>
+        `Write approximately ${Math.max(4, Math.round(w / WORDS_PER_VERSE_LINE))} lines of verse. ` +
+        `Use a consistent rhythm and a rhyme scheme you keep to throughout.`,
+      craft:
+        "Write it as verse, not prose. Line breaks and rhythm carry the story. " +
+        "Do not write paragraphs.",
+    };
+  }
+  if (storyType === "moral") {
+    return {
+      noun: "story",
+      lengthPhrase: (w) => `The story should be approximately ${w} words long.`,
+      craft:
+        "Build the whole story around one clear moral choice. The lesson must " +
+        "emerge from what the character decides and what follows, never from " +
+        "the narrator explaining it.",
+    };
+  }
+  return {
+    noun: "story",
+    lengthPhrase: (w) => `The story should be approximately ${w} words long.`,
+    craft: "",
+  };
+}
+
+/** How the story should end, sent to the model instead of labelled afterwards. */
+function moralOutcomeInstruction(outcome: string | undefined): string | undefined {
+  switch (outcome) {
+    case "positive":
+      return "End well: the character's good choice leads somewhere good.";
+    case "learning":
+      return "End with the character understanding something they did not understand at the start. The change in them is the ending.";
+    case "consequences":
+      return "A poor choice should lead to a real consequence the character has to face. Do not soften it into a happy ending, and do not moralise about it.";
+    case "creative":
+      return "Resolve it in a way the reader will not have predicted, without cheating the setup.";
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * The assembled brief, in sections rather than one flat list.
+ *
+ * The old brief emitted ~14 equally-weighted bullets under the instruction
+ * "The story must be built around these details:". A model handed a bullet list
+ * uses every bullet -- that is what a list is for -- so hair colour carried the
+ * same weight as the theme, and every story dutifully mentioned brown hair and
+ * the rabbit. That is the cookie-cutter mechanism.
+ *
+ * Sections let each part carry its own verb: WHO is portrayal guidance, WHAT is
+ * the thing to invent around, HOW is a constraint. Same information, different
+ * instructional weight.
+ */
+export type StoryBrief = {
+  /** Identity that must stay consistent across chapters. Always included. */
+  identity: string;
+  /** Appearance, hobbies, companions. Colour, not requirements. */
+  colour: string;
+  /** What the story is about -- the thing to actually invent around. */
+  premise: string[];
+  /** Constraints on how it is written. */
+  craft: string[];
+  /** Free-text steering from the user. Deliberately last and unqualified. */
+  userInstructions?: string;
+};
+
 export function buildStoryBrief(
   request: StoryRequest,
   character?: Character,
-): string {
+): StoryBrief {
   const details = character;
   const d = request.characterDetails;
 
@@ -65,56 +172,128 @@ export function buildStoryBrief(
   const hair = details?.hair || d?.hair;
   const eyes = details?.eyes || d?.eyes;
   const favoriteColor = details?.favoriteColor || d?.favoriteColor;
-  const specialPower = details?.specialPower || d?.specialPower;
   const hobby = details?.hobby || d?.hobby;
   const personality = details?.personality || d?.personality;
   const favoriteAnimal = details?.favoriteAnimal || d?.favoriteAnimal;
 
-  const animal =
-    request.useAnimal === false
-      ? undefined
-      : request.animal || favoriteAnimal;
+  const animalRaw = request.useAnimal === false ? undefined : request.animal || favoriteAnimal;
+  const animal = isSet(animalRaw) ? animalRaw : undefined;
 
-  const lines: string[] = [];
-  const add = (label: string, value: unknown) => {
-    if (value === undefined || value === null || value === "") return;
-    lines.push(`- ${label}: ${value}`);
-  };
+  // ---- WHO: identity, as a sentence rather than a checklist -----------------
+  const who = [name];
+  if (age) who.push(`aged ${age}`);
+  if (isSet(gender)) who.push(`a ${gender}`);
+  const identity = sentence([who.join(", ")]);
 
-  if (request.storyType !== "biblical_narrative") {
-    add("Main character", name);
-    add("Gender", gender);
-    add("Age", age);
-    add("Hair", hair);
-    add("Eyes", eyes);
-    add("Favourite colour", favoriteColor);
-    add("Special ability", specialPower);
-    add("Hobby", hobby);
-    add("Personality", personality);
-    add("Animal companion", animal);
-  }
-
-  add("Theme", request.theme || "Faith and kindness");
-  add("Biblical event", request.biblicalEvent);
-  add("Hero of faith to feature", request.heroOfFaith);
-  add("Bible passage to draw on", request.biblePassage);
-  add("Reading level", request.readingLevel || "early-elementary");
-  add("Learning focus", request.learningFocus);
-
-  if (request.useTimeTravel) {
-    add(
-      "Time travel",
-      "The character travels back in time to witness this event first-hand",
+  // ---- Colour: usable if it fits, never required ---------------------------
+  const traits: string[] = [];
+  if (isSet(hair)) traits.push(`${hair} hair`);
+  if (isSet(eyes)) traits.push(`${eyes} eyes`);
+  if (isSet(personality)) traits.push(`a ${personality} nature`);
+  const colourParts: string[] = [];
+  if (traits.length) colourParts.push(`${name} has ${traits.join(", ")}.`);
+  if (isSet(hobby)) colourParts.push(`${name} likes ${hobby}.`);
+  if (isSet(favoriteColor)) colourParts.push(`Favourite colour: ${favoriteColor}.`);
+  if (animal) {
+    // Article matters more than it looks. "There is rabbit in Mia's life" is
+    // ungrammatical, and a model handed ungrammatical input stopped naming the
+    // animal and repeated the bare noun instead -- the previous prompt produced
+    // a companion called Benny, this one produced "the rabbit" fifteen times.
+    const article = /^[aeiou]/i.test(animal) ? "an" : "a";
+    colourParts.push(
+      `${name} has ${article} ${animal} as a companion; give it a name and a personality.`,
     );
   }
-  if (request.storyType === "biblical_narrative" && request.historicalAccuracy !== false) {
-    add("Historical accuracy", "Keep the retelling faithful to the biblical account");
+  const colour = colourParts.join(" ");
+
+  // ---- WHAT: the thing to invent around ------------------------------------
+  const premise: string[] = [];
+  premise.push(`Theme: ${request.theme || "faith and kindness"}.`);
+  if (isSet(request.biblicalEvent)) premise.push(`Draw on this biblical event: ${request.biblicalEvent}.`);
+  if (isSet(request.heroOfFaith)) premise.push(`Feature this hero of faith: ${request.heroOfFaith}.`);
+  if (isSet(request.biblePassage)) premise.push(`Draw on this passage: ${request.biblePassage}.`);
+  if (request.useTimeTravel) {
+    premise.push(`${name} travels back in time and witnesses this first-hand.`);
   }
-  if (request.customPrompt) {
-    add("Extra instructions from the parent", request.customPrompt);
+  const ending = moralOutcomeInstruction(request.moralOutcome);
+  if (ending) premise.push(ending);
+
+  // ---- HOW ------------------------------------------------------------------
+  const craft: string[] = [];
+  craft.push(`Reading level: ${request.readingLevel || "early-elementary"}.`);
+  if (isSet(request.learningFocus)) craft.push(`Learning focus: ${request.learningFocus}.`);
+  const form = storyFormFor(request.storyType);
+  if (form.craft) craft.push(form.craft);
+
+  return {
+    identity,
+    colour,
+    premise,
+    craft,
+    userInstructions: isSet(request.customPrompt) ? request.customPrompt : undefined,
+  };
+}
+
+/**
+ * What each prompt site needs, which is not the same thing.
+ *
+ * A chapter needs identity so the character stays the same person; it does not
+ * need her hair colour an eighth time. The old code re-injected the entire
+ * brief into every chapter prompt as "details which must stay consistent", so
+ * on a seven-chapter story the model was told every attribute eight times, each
+ * time as a mandatory constant.
+ */
+export type BriefPurpose = "single" | "outline" | "chapter" | "image";
+
+export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
+  if (purpose === "image") {
+    return brief.identity;
   }
 
-  return lines.join("\n    ");
+  if (purpose === "chapter") {
+    // Identity only. The outline already carries the premise into the plan.
+    return `The story is about ${brief.identity} Keep this consistent.`;
+  }
+
+  const out: string[] = [];
+
+  out.push("WHO THIS IS ABOUT");
+  out.push(brief.identity);
+  if (brief.colour) {
+    out.push(brief.colour);
+    // The single most important line in the brief. Without it these details are
+    // read as requirements and the story becomes a tour of the character sheet.
+    out.push(
+      "Use these details only where a scene naturally calls for them. Do not " +
+        "introduce them as a list, and do not make appearance or companions the " +
+        "subject of what happens.",
+    );
+  }
+
+  out.push("");
+  out.push("WHAT IT IS ABOUT");
+  out.push(...brief.premise);
+  out.push("Invent the events yourself. The section above is who they are, not what happens to them.");
+
+  out.push("");
+  out.push("HOW TO WRITE IT");
+  out.push(...brief.craft);
+  // Nothing in any prompt previously asked for conflict or consequence, which
+  // is most of why stories read as a pleasant sequence of events.
+  out.push(
+    "Give them a real problem with something at stake, and let their choices " +
+      "change what happens. Avoid a tidy lesson stated by the narrator.",
+  );
+
+  if (brief.userInstructions) {
+    out.push("");
+    // Last and unqualified on purpose: this is what the user actually typed,
+    // and it should outrank the generated scaffolding above it.
+    out.push("WHAT THE USER ASKED FOR SPECIFICALLY -- follow this closely:");
+    out.push(brief.userInstructions);
+  }
+
+  return out.join("\n    ");
 }
 
 /**
@@ -128,7 +307,8 @@ export function buildUserInstruction(request: StoryRequest): string {
   if (request.useCustomPrompts && request.customUserPrompt) {
     return request.customUserPrompt;
   }
-  return "Please create a complete, faith-based children's story.";
+  const form = storyFormFor(request.storyType);
+  return `Please write a complete, faith-based children's ${form.noun}.`;
 }
 
 /**
@@ -153,13 +333,41 @@ export function buildSystemPrompt(request: StoryRequest): string {
   }
 
   switch (request.storyType) {
-    case "biblical_narrative":
-      return "You are a biblical storyteller who retells Bible stories with historical accuracy and age-appropriate language for children.";
     case "poem":
-      return "You are a Christian children's poet who writes rhythmic, rhyming verse with a clear moral.";
+      return "You are a Christian children's poet. You write in verse -- rhythmic, rhyming lines -- never in prose paragraphs.";
     case "moral":
       return "You are a Christian children's storyteller focused on a single clear moral lesson, illustrated through the character's choices.";
     default:
       return "You are a Christian children's storyteller who writes warm, faith-based stories with a clear moral.";
   }
+}
+
+/**
+ * The brief is FROZEN onto story_jobs.brief at enqueue, which is a text column.
+ *
+ * It is stored as JSON rather than as rendered prose because the worker needs
+ * the STRUCTURE: renderBrief() emits a different projection per prompt site,
+ * and a chapter prompt must be able to ask for identity alone. Freezing the
+ * rendered text would freeze one projection and lose the rest.
+ */
+export function serialiseBrief(brief: StoryBrief): string {
+  return JSON.stringify(brief);
+}
+
+/**
+ * Parse a frozen brief, tolerating the plain-text briefs written before the
+ * brief became structured. Those jobs are in flight across this deploy and
+ * would otherwise fail at JSON.parse -- so an unparseable brief is treated as
+ * legacy premise text rather than as an error.
+ */
+export function deserialiseBrief(raw: string): StoryBrief {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && "identity" in parsed) {
+      return parsed as StoryBrief;
+    }
+  } catch {
+    // fall through
+  }
+  return { identity: "the main character", colour: "", premise: [raw], craft: [] };
 }

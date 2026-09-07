@@ -309,9 +309,15 @@ export default function SavedStories() {
                               <Badge variant="outline" className="bg-primary/10">
                                 {savedStory.request.gender === 'boy' ? 'Boy' : 'Girl'}
                               </Badge>
-                              <Badge variant="outline" className="bg-primary/10">
-                                {savedStory.request.animal}
-                              </Badge>
+                              {/* Guarded: the form wrote the literal string
+                                  "none" to mean no animal, so this rendered a
+                                  badge reading "none" on most saved stories. */}
+                              {savedStory.request.animal &&
+                                !["none", "n/a"].includes(savedStory.request.animal.trim().toLowerCase()) && (
+                                  <Badge variant="outline" className="bg-primary/10">
+                                    {savedStory.request.animal}
+                                  </Badge>
+                                )}
                               <Badge variant="outline" className="bg-primary/10">
                                 {savedStory.request.theme}
                               </Badge>

@@ -13,6 +13,7 @@ import {
   buildStoryBrief,
   buildSystemPrompt,
   resolveStoryCharacter,
+  serialiseBrief,
 } from "./lib/storyBrief";
 import { getWordCountFromLength } from "./lib/openai-implementation";
 import { canEnqueueWithinQuota } from "./lib/openai";
@@ -233,15 +234,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // The brief is resolved and FROZEN here. resolveStoryCharacter reads the
       // database, so building it at generation time would let a character
       // deleted mid-story change the brief between chapter 4 and chapter 5.
+      // Chosen HERE, before the brief, so it is frozen with everything else and
+      // actually reaches the prompt. It used to be picked with Math.random()
+      // after generation and attached as a label the story had never seen.
+      if (!validatedData.moralOutcome) {
+        const shapes = ["positive", "learning", "consequences", "creative"] as const;
+        validatedData.moralOutcome = shapes[Math.floor(Math.random() * shapes.length)];
+      }
+
       const character = await resolveStoryCharacter(validatedData, userId);
       const result = await enqueueStoryJob({
         userId,
         request: validatedData,
-        brief: buildStoryBrief(validatedData, character),
+        // JSON, not prose: the worker renders a different projection per
+        // prompt site, so freezing one rendering would lose the others.
+        brief: serialiseBrief(buildStoryBrief(validatedData, character)),
         // Parent Mode is derived inside buildSystemPrompt from the request, so
         // there is no second argument here to forget. See storyBrief.ts.
         systemPrompt: buildSystemPrompt(validatedData),
-        targetWordCount: getWordCountFromLength(validatedData.storyLength || "medium"),
+        targetWordCount: getWordCountFromLength(validatedData.storyLength || "medium", validatedData.storyType),
       });
 
       if (!result.ok) {

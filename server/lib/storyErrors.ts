@@ -17,6 +17,7 @@ export type StoryFailureCode =
   | "model_output_invalid"
   | "model_output_truncated"
   | "story_too_short"
+  | "poem_not_verse"
   | "generation_failed";
 
 const STATUS: Record<StoryFailureCode, number> = {
@@ -26,6 +27,8 @@ const STATUS: Record<StoryFailureCode, number> = {
   model_output_invalid: 502,
   model_output_truncated: 502,
   story_too_short: 502,
+  // The request was fine; the model returned prose when asked for verse.
+  poem_not_verse: 502,
   generation_failed: 500,
 };
 
@@ -111,5 +114,28 @@ export function modelOutputAdvice(model: string, storyLength?: string): string {
     `The model (${model}) returned a reply that could not be read as a story${length}. ` +
     `This usually means the reply was cut off or malformed. ` +
     `Try a shorter story length, or switch to a stronger model in Settings.`
+  );
+}
+
+/**
+ * A poem that came back as prose.
+ *
+ * Measured, and the measurement is why this check exists rather than trusting
+ * the instruction. Asked for ~20 lines of verse with an explicit "do not write
+ * paragraphs", nemotron-3-nano:4b returned one unbroken prose paragraph on the
+ * first run and 23 proper lines on the second -- the identical request. It is
+ * not that small models cannot write verse; it is that they do not do it
+ * reliably, and nothing about the word count distinguishes the two outcomes.
+ *
+ * Returning it anyway would be the failure this codebase has removed
+ * everywhere else -- output that is visibly wrong but reported as success.
+ * The word count cannot catch it: prose of the right length passes.
+ */
+export function poemNotVerseAdvice(lines: number, expected: number, model: string): string {
+  const got = lines === 1 ? "a single paragraph" : `only ${lines} lines`;
+  return (
+    `The model (${model}) returned ${got} instead of about ${expected} lines of verse. ` +
+    `Smaller local models often cannot hold a poem's shape. Try generating it again, ` +
+    `or switch to a stronger model in Settings.`
   );
 }

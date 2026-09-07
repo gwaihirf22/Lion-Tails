@@ -107,12 +107,19 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
       if (storyRequest.childName) prompt += `Child's Name: ${storyRequest.childName}\n`;
       if (storyRequest.characterDetails?.age) prompt += `Child's Age: ${storyRequest.characterDetails.age}\n`;
       if (storyRequest.theme) prompt += `Theme/Lesson: ${storyRequest.theme}\n`;
-      if (storyRequest.animal && storyRequest.useAnimal) prompt += `Animal Friend: ${storyRequest.animal}\n`;
+      // "none" is what the form writes to mean no animal, and it is truthy --
+      // so this preview showed "Animal Friend: none".
+      const noAnimal = ["", "none", "n/a"].includes((storyRequest.animal ?? "").trim().toLowerCase());
+      if (!noAnimal && storyRequest.useAnimal) prompt += `Animal Friend: ${storyRequest.animal}\n`;
       if (storyRequest.heroOfFaith) prompt += `Hero of Faith: ${storyRequest.heroOfFaith}\n`;
       if (storyRequest.useTimeTravel) prompt += `Include Time Travel Elements: Yes\n`;
       if (storyRequest.biblePassage) prompt += `Bible Passage: ${storyRequest.biblePassage}\n`;
       if (storyRequest.biblicalEvent) prompt += `Biblical Event: ${storyRequest.biblicalEvent}\n`;
       
+      // customPrompt was absent from this preview entirely, so a Parent Mode
+      // user saw no trace of what they had typed into the story form.
+      if (storyRequest.customPrompt) prompt += `\nWhat the user asked for: ${storyRequest.customPrompt}\n`;
+
       prompt += `Reading Level: ${storyRequest.readingLevel}\n`;
       prompt += `Story Length: ${storyRequest.storyLength}\n`;
       prompt += `\nPlease create an engaging, faith-based story that incorporates these elements naturally and includes 5 application questions at the end.`;

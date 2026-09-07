@@ -78,12 +78,6 @@ const personalityTraits = [
   "brave", "kind", "curious", "shy", "energetic", "patient", 
   "creative", "thoughtful", "joyful", "determined", "gentle", "adventurous"
 ];
-const specialPowers = [
-  "healing touch", "understanding animals", "seeing angels", 
-  "dream interpreter", "finding lost things", "knowing when someone needs help",
-  "telling the perfect Bible story", "singing that makes plants grow", 
-  "remembering every Bible verse", "making rainbows appear"
-];
 
 // Random name generator
 const boyNames = [
@@ -116,9 +110,10 @@ export default function CharacterForm({
       hair: initialCharacter?.hair || "brown",
       eyes: initialCharacter?.eyes || "brown",
       favoriteColor: initialCharacter?.favoriteColor || "blue",
-      favoriteAnimal: initialCharacter?.favoriteAnimal || "lion",
+      // No default: a character has a favourite animal because the user chose
+      // one. Defaulting it put a lion in every story nobody asked for.
+      favoriteAnimal: initialCharacter?.favoriteAnimal || "",
       hobby: initialCharacter?.hobby || "reading",
-      specialPower: initialCharacter?.specialPower || "healing touch",
       timeTravelExperience: initialCharacter?.timeTravelExperience || 0,
       personality: initialCharacter?.personality || "kind",
     },
@@ -361,33 +356,6 @@ export default function CharacterForm({
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="specialPower"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Special Power</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select special power" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {specialPowers.map((power) => (
-                        <SelectItem key={power} value={power}>
-                          {power.charAt(0).toUpperCase() + power.slice(1)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    A special gift that helps your character during adventures
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}
