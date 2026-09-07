@@ -18,7 +18,7 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     # Grouping notes, from the Dependabot options reference:
     #
     #   "Any outdated dependencies that do not match a rule are updated in
@@ -110,6 +110,17 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@types/react-dom"
         update-types: ["version-update:semver-major"]
+      # Exact-pinned in package.json at 20.16.11, engines.node says ">=20" and
+      # CI runs node 20. Dependabot has an open PR proposing v26, which would
+      # type the codebase against a runtime nothing here has verified. The pin
+      # and the runtime move together, deliberately.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # Exact-pinned at 4.17.21 to match express 4, whose majors are already
+      # ignored below. Letting the types jump to Express 5 shapes while the
+      # runtime stays on 4 would be incoherent.
+      - dependency-name: "@types/express"
+        update-types: ["version-update:semver-major"]
       # Owns the schema. A bump must be rehearsed against a real Postgres --
       # verifyOrmSchema derives its expectation from drizzle's getTableColumns(),
       # so an internals change can silently disable the schema guard rather than
@@ -141,6 +152,13 @@ updates:
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
       - dependency-name: "tailwind-merge"
+        update-types: ["version-update:semver-major"]
+      # 73 releases in the last year, but only 2 majors -- the minors are
+      # already batched by production-minor, so this ignore is about the majors
+      # only, which fall through every tier by design. 4.x -> 7.x needed a code
+      # change here (ad7684e guarded an image response 7.x made optional), so an
+      # SDK major gets read, not merged on a Monday.
+      - dependency-name: "openai"
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
