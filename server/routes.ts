@@ -17,6 +17,13 @@ import {
 import { getWordCountFromLength } from "./lib/openai-implementation";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth } from "./lib/requireAuth";
+import {
+  getModelStats,
+  getFailureStats,
+  getStepCosts,
+  getRecentGenerations,
+  getJobHealth,
+} from "./lib/generationStats";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema } from "@shared/schema";
@@ -266,6 +273,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       story = await storage.getStoryById(job.story_id, userId).catch(() => undefined);
     }
     res.json({ ...job, story });
+  });
+
+  // Admin-only stats over generation_records. requireAdmin is the same guard
+  // the hero/song write routes use -- deliberately not a second notion of who
+  // is an admin. Authorisation is users.is_admin, never a username comparison.
+  app.get("/api/admin/generation-stats", requireAdmin, async (req, res) => {
+    // Clamped rather than trusted: this reaches a date_trunc interval.
+    const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+    try {
+      const [models, failures, steps, recent, jobs] = await Promise.all([
+        getModelStats({ days }),
+        getFailureStats({ days }),
+        getStepCosts({ days }),
+        getRecentGenerations(Number(req.query.limit) || 50),
+        getJobHealth({ days }),
+      ]);
+      res.json({ windowDays: days, models, failures, steps, recent, jobs });
+    } catch (error) {
+      console.error("Failed to build generation stats:", error);
+      res.status(500).json({ message: "Could not load generation stats" });
+    }
   });
 
   // In-flight jobs plus anything finished in the last hour. That window is how
