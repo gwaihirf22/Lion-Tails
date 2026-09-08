@@ -1,3 +1,8 @@
+/* Reader typefaces and the reading surface. Imported here rather than from a
+   component, because @import must come before @tailwind. */
+@import "./fonts.css";
+@import "./components/reader/reader.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

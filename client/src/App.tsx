@@ -20,6 +20,7 @@ import Footer from "@/components/Footer";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ParentModeProvider } from "@/hooks/use-parent-mode";
+import { ReadingPrefsProvider } from "@/hooks/use-reading-prefs";
 import { StoryJobsProvider } from "@/hooks/use-story-jobs";
 
 // Import the background image
@@ -71,6 +72,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <ReadingPrefsProvider>
         <ParentModeProvider>
           {/* Above Header and Router on purpose: the job must keep being
               watched after the user navigates away from the generate page,
@@ -89,6 +91,7 @@ function App() {
           <Toaster />
           </StoryJobsProvider>
         </ParentModeProvider>
+        </ReadingPrefsProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
