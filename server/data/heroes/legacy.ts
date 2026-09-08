@@ -215,22 +215,7 @@ export const legacy: RawHero[] = [
       reference: "1 Corinthians 13:12"
     },
   },
-  {
-    id: "john-wesley",
-    wikipedia: "John Wesley",
-    group: "awakening",
-    name: "John Wesley",
-    description: "An English cleric, theologian, and evangelist who founded the Methodist movement.",
-    timePeriod: "1703-1791",
-    contribution: "Traveled over 250,000 miles on horseback, preached over 40,000 sermons, and helped spark a revival in England that emphasized personal holiness and social justice.",
-    birthYear: "1703",
-    deathYear: "1791",
-    famousQuote: "Do all the good you can, by all the means you can, in all the ways you can, in all the places you can, at all the times you can, to all the people you can, as long as ever you can.",
-    bibleVerse: {
-      text: "And what does the Lord require of you? To act justly and to love mercy and to walk humbly with your God.",
-      reference: "Micah 6:8"
-    },
-  },
+
 
   {
     id: "elisabeth-elliot",
@@ -248,20 +233,5 @@ export const legacy: RawHero[] = [
       reference: "2 Corinthians 4:7"
     },
   },
-  {
-    id: "charles-spurgeon",
-    wikipedia: "Charles Spurgeon",
-    group: "awakening",
-    name: "Charles Spurgeon",
-    description: "English Baptist preacher known as the 'Prince of Preachers' who was a powerful orator and prolific author.",
-    timePeriod: "1834-1892",
-    contribution: "Built the Metropolitan Tabernacle which seated 5,000 people, founded a pastors' college, an orphanage, and published numerous sermons and books that continue to influence Christians today.",
-    birthYear: "1834",
-    deathYear: "1892",
-    famousQuote: "God loves with a great love the man whose heart is bursting with a passion for the impossible.",
-    bibleVerse: {
-      text: "But he said to me, 'My grace is sufficient for you, for my power is made perfect in weakness.' Therefore I will boast all the more gladly about my weaknesses, so that Christ's power may rest on me.",
-      reference: "2 Corinthians 12:9"
-    },
-  },
+
 ];

@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { Input } from "@/components/ui/input";
-import { HERO_GROUP_LABELS, HERO_GROUPS, type HeroGroup } from "@shared/schema";
+import { groupLabel, HERO_GROUPS, type HeroGroup } from "@shared/schema";
 
 export default function HeroesOfFaith() {
   const { toast } = useToast();
@@ -203,7 +203,7 @@ export default function HeroesOfFaith() {
               variant={group === g ? "default" : "outline"}
               onClick={() => setGroup(g)}
             >
-              {HERO_GROUP_LABELS[g]}
+              {groupLabel(g)}
             </Button>
           ))}
         </div>
@@ -233,7 +233,7 @@ export default function HeroesOfFaith() {
                     <CardTitle className="text-xl">{hero.name}</CardTitle>
                     <CardDescription>
                       {hero.timePeriod}
-                      {hero.group ? ` · ${HERO_GROUP_LABELS[hero.group]}` : ""}
+                      {hero.group ? ` · ${groupLabel(hero.group)}` : ""}
                     </CardDescription>
                   </div>
                 </div>
@@ -315,7 +315,7 @@ export default function HeroesOfFaith() {
                   <span className="font-semibold">Lived:</span>
                   <span>{selectedHero.birthYear || '?'} - {selectedHero.deathYear || '?'}</span>
                   {selectedHero.group && (
-                    <Badge variant="outline">{HERO_GROUP_LABELS[selectedHero.group]}</Badge>
+                    <Badge variant="outline">{groupLabel(selectedHero.group)}</Badge>
                   )}
                   {selectedHero.place && <Badge variant="outline">{selectedHero.place}</Badge>}
                 </div>
