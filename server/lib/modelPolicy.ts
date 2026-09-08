@@ -58,11 +58,14 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
     warning:
       "Runs on this server for free. Very small model — expect poor story quality; useful for testing.",
   },
+  // Kept selectable rather than removed. It is not deprecated, it is the
+  // cheapest option, and thousands of existing stories were written with it --
+  // a user_settings row still naming it must keep resolving.
   "gpt-4o-mini": {
     tier: "economy",
     provider: "openai",
     kinds: ["chat", "vision"],
-    label: "GPT-4o mini",
+    label: "GPT-4o mini — cheapest",
   },
   "gpt-4o": {
     tier: "premium",
@@ -72,13 +75,15 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
   },
   // Current generation. Premium, so they need an admin account or the user's
   // own key -- nobody spends the owner's money on a flagship by accident.
+  // The owner-funded tier. About twice gpt-4o-mini's output cost -- still
+  // under a third of a cent for a 1500-word story -- for a current-generation
+  // model. Vision confirmed against OpenAI's model page, not assumed, because
+  // image analysis resolves through the same catalogue.
   "gpt-5.6-luna": {
-    tier: "premium",
+    tier: "economy",
     provider: "openai",
     kinds: ["chat", "vision"],
     label: "GPT-5.6 Luna — fast and cheap",
-    warning:
-      "Newer than GPT-4o and far cheaper to run than the larger models. A good default if you have your own key.",
   },
   "gpt-5.6-terra": {
     tier: "premium",
@@ -108,9 +113,18 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
   },
 };
 
-const DEFAULTS: Record<ModelKind, string> = {
-  chat: "gpt-4o-mini",
-  vision: "gpt-4o-mini",
+/**
+ * The model used when a user has not chosen one.
+ *
+ * Exported so storage and the routes can stop naming models of their own.
+ * They each hardcoded 'gpt-4o' -- a PREMIUM model -- with the comment "Default
+ * to the newest model". resolveModel() downgrades at use, so nobody was billed
+ * for it, but the settings page showed "GPT-4o" selected for users who were
+ * actually generating on the economy tier.
+ */
+export const DEFAULTS: Record<ModelKind, string> = {
+  chat: "gpt-5.6-luna",
+  vision: "gpt-5.6-luna",
   image: "gpt-image-2",
 };
 

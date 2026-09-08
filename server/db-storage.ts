@@ -1509,7 +1509,8 @@ export class DbStorage implements IStorage {
   async getUserOpenAIModel(userId: number): Promise<string | null> {
     if (!isDatabaseAvailable()) {
       console.warn(`Database unavailable in getUserOpenAIModel(${userId}). Using default model.`);
-      return 'gpt-4o'; // Default to the newest model
+      // null means "never chosen"; modelPolicy owns the default.
+      return null;
     }
     
     try {
@@ -1518,10 +1519,10 @@ export class DbStorage implements IStorage {
         [userId]
       );
       
-      return rows.length && rows[0].openai_model ? rows[0].openai_model : 'gpt-4o'; // Default to the newest model
+      return rows.length && rows[0].openai_model ? rows[0].openai_model : null;
     } catch (error) {
       console.error(`Error getting OpenAI model for user ${userId}:`, error);
-      return 'gpt-4o'; // Default to the newest model on error
+      return null; // Never chosen, as far as we can tell; the policy decides.
     }
   }
   

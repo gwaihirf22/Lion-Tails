@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
-import { isModelAllowedFor, listSelectableModels , MODEL_CATALOG } from "./lib/modelPolicy";
+import { isModelAllowedFor, listSelectableModels, MODEL_CATALOG, DEFAULTS } from "./lib/modelPolicy";
 import { StoryGenerationError } from "./lib/storyErrors";
 import {
   enqueueStoryJob,
@@ -1039,7 +1039,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = (req.user as any).id;
-      const model = (await storage.getUserOpenAIModel(userId)) || 'gpt-4o-mini';
+      // The policy's default, not a literal of this route's own. Reporting
+      // a model the user is not entitled to would make the settings page and
+      // the story-form accuracy note both lie about what is generating.
+      const model = (await storage.getUserOpenAIModel(userId)) || DEFAULTS.chat;
       // The tier rides along so the story form can warn about local-model
       // accuracy without a second round trip and without the client keeping its
       // own copy of the catalogue -- there are already six model lists in this

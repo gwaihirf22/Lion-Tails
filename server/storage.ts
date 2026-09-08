@@ -807,7 +807,9 @@ export class MemStorage implements IStorage {
   }
 
   async getUserOpenAIModel(userId: number): Promise<string | null> {
-    return this.userOpenAIModels.get(userId) || 'gpt-4o'; // Default to the newest model
+    // null means "never chosen" -- resolveModel then applies the policy
+    // default. Returning a model name here made this a seventh model list.
+    return this.userOpenAIModels.get(userId) ?? null;
   }
 
   async setUserOpenAIModel(userId: number, model: string): Promise<void> {
