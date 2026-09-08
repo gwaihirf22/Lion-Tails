@@ -110,30 +110,6 @@ export default function HeroesOfFaith() {
       .substring(0, 2);
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2">Loading Heroes of Faith...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-4 text-center">
-        <p className="text-destructive">Failed to load Heroes of Faith. Please try again.</p>
-        <Button 
-          variant="outline" 
-          className="mt-4"
-          onClick={() => window.location.reload()}
-        >
-          Refresh
-        </Button>
-      </div>
-    );
-  }
-
   // Searching the whole profile, not just the name. Someone looking for
   // "martyr" or "translated the Bible" is asking a real question, and a filter
   // that only matches names cannot answer it. The list is small enough to hold
@@ -166,6 +142,30 @@ export default function HeroesOfFaith() {
     () => HERO_GROUPS.filter((g) => (heroes ?? []).some((h: HeroOfFaith) => h.group === g)),
     [heroes],
   );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2">Loading Heroes of Faith...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 text-center">
+        <p className="text-destructive">Failed to load Heroes of Faith. Please try again.</p>
+        <Button 
+          variant="outline" 
+          className="mt-4"
+          onClick={() => window.location.reload()}
+        >
+          Refresh
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-4">
