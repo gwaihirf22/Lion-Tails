@@ -67,6 +67,17 @@ export interface IStorage {
   getAllHeroesOfFaith(): Promise<HeroOfFaith[]>;
   getHeroOfFaithById(id: string): Promise<HeroOfFaith | undefined>;
   createHeroOfFaith(hero: Omit<HeroOfFaith, "id" | "createdAt">): Promise<HeroOfFaith>;
+  /**
+   * Write a hero AT ITS OWN ID, creating or replacing.
+   *
+   * createHeroOfFaith generates a uuid, which is why the seed could only ever
+   * run against an empty table: there was no stable identity to update. With
+   * slugs there is, so seeding becomes idempotent and adding a person to the
+   * data file actually reaches a database that already has rows.
+   */
+  upsertHeroOfFaith(hero: HeroOfFaith): Promise<HeroOfFaith>;
+  /** Hero ids that exist in storage but are not in the given set. */
+  findSupersededHeroes(keepIds: string[], names: string[]): Promise<string[]>;
   updateHeroOfFaith(id: string, hero: Partial<HeroOfFaith>): Promise<HeroOfFaith | undefined>;
   deleteHeroOfFaith(id: string): Promise<boolean>;
 
@@ -862,6 +873,19 @@ export class MemStorage implements IStorage {
 
   async getHeroOfFaithById(id: string): Promise<HeroOfFaith | undefined> {
     return this.heroesOfFaith.get(id);
+  }
+
+  async upsertHeroOfFaith(hero: HeroOfFaith): Promise<HeroOfFaith> {
+    this.heroesOfFaith.set(hero.id, hero);
+    return hero;
+  }
+
+  async findSupersededHeroes(keepIds: string[], names: string[]): Promise<string[]> {
+    const keep = new Set(keepIds);
+    const owned = new Set(names.map((n) => n.toLowerCase()));
+    return Array.from(this.heroesOfFaith.values())
+      .filter((h) => !keep.has(h.id) && owned.has(h.name.toLowerCase()))
+      .map((h) => h.id);
   }
 
   async createHeroOfFaith(heroData: Omit<HeroOfFaith, "id" | "createdAt">): Promise<HeroOfFaith> {

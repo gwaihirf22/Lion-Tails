@@ -1711,6 +1711,7 @@ export class DbStorage implements IStorage {
           famousQuote: "",
           sources: [],
           keyEvents: [],
+          tags: [],
           bibleVerse: {
             text: "The Lord is my helper; I will not fear.",
             reference: "Hebrews 13:6"
@@ -1723,6 +1724,35 @@ export class DbStorage implements IStorage {
       console.error(`Error fetching hero of faith by ID ${id}:`, error);
       return undefined;
     }
+  }
+
+  async upsertHeroOfFaith(hero: HeroOfFaith): Promise<HeroOfFaith> {
+    if (!isDatabaseAvailable()) return hero;
+    await pool!.query(
+      `INSERT INTO heroes_of_faith (hero_id, hero_data, created_at)
+       VALUES ($1, $2, now())
+       ON CONFLICT (hero_id) DO UPDATE SET hero_data = $2`,
+      [hero.id, JSON.stringify(hero)],
+    );
+    return hero;
+  }
+
+  /**
+   * Rows for people we now own under a different id.
+   *
+   * Matched by NAME, not by "anything not in the list": an admin can create a
+   * hero through the API, and a blanket delete would take theirs too. This
+   * only finds the old uuid-keyed rows for people the seed data now defines.
+   */
+  async findSupersededHeroes(keepIds: string[], names: string[]): Promise<string[]> {
+    if (!isDatabaseAvailable() || names.length === 0) return [];
+    const { rows } = await pool!.query(
+      `SELECT hero_id FROM heroes_of_faith
+       WHERE lower(hero_data->>'name') = ANY($1::text[])
+         AND NOT (hero_id = ANY($2::text[]))`,
+      [names.map((n) => n.toLowerCase()), keepIds],
+    );
+    return rows.map((r: { hero_id: string }) => r.hero_id);
   }
 
   async createHeroOfFaith(heroData: Omit<HeroOfFaith, "id" | "createdAt">): Promise<HeroOfFaith> {
