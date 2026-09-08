@@ -63,6 +63,56 @@ jobs:
           fi
           echo "OK: dist/prod.js has no Vite import."
 
+      # The reader's palette, font and typeset rules are attribute selectors on
+      # values that come from the DATABASE, so nothing in the source references
+      # them as literal class names. That is deliberate -- it is what makes them
+      # immune to the bug this check exists to catch.
+      #
+      # BookPage used to build its background class by interpolation:
+      #   `border-amber-800/60 ${getBgColorClass()}/95`  ->  "bg-[#fff8e6]/95"
+      # Tailwind's JIT scanner only sees string literals, so that class was
+      # never emitted and the entire colour picker did nothing for months. The
+      # swatches kept a second literal colour map, so they LOOKED right.
+      # Nothing failed. Nothing logged. Only a human clicking it would know.
+      #
+      # So: assert the rules are actually in the shipped stylesheet.
+      - name: Verify the reader's styles reached the CSS bundle
+        run: |
+          set -e
+          CSS=$(ls dist/public/assets/*.css | head -1)
+          test -n "$CSS"
+          check () { # description, pattern, minimum
+            n=$(grep -o "$2" "$CSS" | wc -l)
+            if [ "$n" -lt "$3" ]; then
+              echo "FAIL: $1 — found $n occurrences of '$2', expected at least $3."
+              echo "The rule is in the source but not in the built CSS."
+              exit 1
+            fi
+            echo "OK: $1 ($n)"
+          }
+          check "palette rules"      'data-palette='     4
+          check "font rules"         'data-font='        5
+          check "typeset rules"      'data-typeset='     2
+          check "the reading surface" '\.reader-surface' 1
+          check "web fonts swap"     'font-display:swap' 1
+          # The palette colours themselves, not just the selectors.
+          HEXES=$(grep -o 'fbfaf7\|f4ecd8\|16181c' "$CSS" | sort -u | wc -l)
+          if [ "$HEXES" -ne 3 ]; then
+            echo "FAIL: expected all 3 palette background colours in the CSS, found $HEXES."
+            exit 1
+          fi
+          echo "OK: all 3 palette backgrounds present."
+          # Per-family font budget. Only the latin cut is ever downloaded.
+          for FAM in literata eb-garamond lexend; do
+            KB=$(ls -l dist/public/assets/*"$FAM"*latin-* 2>/dev/null | grep -v latin-ext | awk '{s+=$5} END {print int(s/1024)}')
+            if [ -n "$KB" ] && [ "$KB" -gt 120 ]; then
+              echo "FAIL: $FAM is ${KB}KB, over the 120KB per-family budget."
+              echo "A non-latin subset has probably crept into client/src/fonts.css."
+              exit 1
+            fi
+            echo "OK: $FAM ${KB}KB"
+          done
+
       # Building the bundle is not enough. esbuild emits ESM with
       # --packages=external, so a named import from a CommonJS dependency
       # (e.g. `import { Pool } from "pg"`) compiles fine and only fails when

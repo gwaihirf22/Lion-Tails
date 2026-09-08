@@ -290,7 +290,12 @@ export default function GenerateStory() {
               </div>
             </div>
 
-            <StoryDisplay story={generatedStory} />
+            {/* This branch is currently unreachable -- setGeneratedStory is
+                only ever called with null since the job queue landed -- but the
+                prop is wired correctly so it works if that flow returns.
+                Deleting verified-unused code has bitten this repo before; see
+                docs/decisions.md 12. */}
+            <StoryDisplay story={generatedStory} storyType={storyRequest?.storyType} />
           </div>
         )}
       </div>

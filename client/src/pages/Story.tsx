@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import StoryDisplay from "@/components/StoryDisplay";
-import { StoryResponse } from "@shared/schema";
+import { StoryResponse, StoryRequest } from "@shared/schema";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 
 export default function Story() {
   const [location, navigate] = useLocation();
   const [storyData, setStoryData] = useState<StoryResponse | null>(null);
   const [storyId, setStoryId] = useState<string | null>(null);
+  const [storyType, setStoryType] = useState<StoryRequest["storyType"] | undefined>();
 
   useEffect(() => {
     // Scroll to the top of the page when component mounts
@@ -40,7 +41,13 @@ export default function Story() {
           const response = await apiRequestAllowingErrors("GET", `/api/stories/${idParam}`);
           if (response.ok) {
             const saved = await response.json();
-            setStoryData(saved.story ?? saved);
+            const s = saved.story ?? saved;
+            setStoryData(s);
+            // s.storyType is set on stories generated after this shipped;
+            // saved.request.storyType is present on every row that already
+            // exists, which is why no backfill is needed. The parser's own
+            // shape heuristic is the third fallback, for a ?data= link.
+            setStoryType(s.storyType ?? saved.request?.storyType);
             return;
           }
         } catch (error) {
@@ -69,9 +76,8 @@ export default function Story() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-3xl font-heading font-bold text-secondary">Your Bedtime Story</h2>
+    <div>
+      <div className="reader-chrome mx-auto mb-2 flex w-full max-w-3xl flex-wrap justify-end gap-2 px-3 pt-3">
         <div className="space-x-3">
           {/* Continuing is what creates a universe: the parent adopts one if it
               has none, so the user never has to set one up first. */}
@@ -89,7 +95,11 @@ export default function Story() {
         </div>
       </div>
       
-      <StoryDisplay story={storyData} storyId={storyId || undefined} />
+      <StoryDisplay
+        story={storyData}
+        storyId={storyId || undefined}
+        storyType={storyType}
+      />
     </div>
   );
 }

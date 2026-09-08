@@ -988,6 +988,11 @@ async function runGeneration(
     return {
       title: finalDetails.title,
       content: finalDetails.content,
+      // Carried on the STORY, not just the request, so the reader knows whether
+      // content is prose or verse without having to load the saved row's
+      // request alongside it. Rows written before this have none; the client
+      // falls back to request.storyType, which every existing row does have.
+      storyType: request.storyType,
       moralOutcome: moralOutcome,
       // "consequences" suppresses the verse so a story that ends on a hard
       // note is not tidied up by a comforting one -- but a retelling's key
