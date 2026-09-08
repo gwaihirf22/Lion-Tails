@@ -76,7 +76,9 @@ function App() {
               watched after the user navigates away from the generate page,
               which is the whole point of the change. */}
           <StoryJobsProvider>
-          <div className="min-h-screen flex flex-col bg-background text-foreground">
+          {/* Transparent on purpose: the BODY carries the background image and its
+              palette veil (see theme.css). An opaque colour here would hide both. */}
+          <div className="min-h-screen flex flex-col text-foreground">
             <Header />
             <main
               className={

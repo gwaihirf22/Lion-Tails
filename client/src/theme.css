@@ -26,6 +26,7 @@
 
 :root,
 [data-palette="paper"] {
+  --app-bg-veil: 0.86;
   --background: 45 33.3% 97.6%;
   --foreground: 60 1.9% 10.4%;
   --card: 43 22.6% 93.9%;
@@ -48,6 +49,7 @@
 }
 
 [data-palette="sepia"] {
+  --app-bg-veil: 0.87;
   --background: 43 56% 90.2%;
   --foreground: 35 32.6% 17.5%;
   --card: 42 50.7% 85.7%;
@@ -70,6 +72,7 @@
 }
 
 [data-palette="night"] {
+  --app-bg-veil: 0.94;
   --background: 220 12% 9.8%;
   --foreground: 217 8% 80.4%;
   --card: 220 13% 13.5%;
@@ -92,6 +95,7 @@
 }
 
 [data-palette="contrast"] {
+  --app-bg-veil: 1;
   --background: 0 0% 100%;
   --foreground: 0 0% 0%;
   --card: 0 0% 100%;
@@ -182,3 +186,51 @@ header h1 {
   --success-surface: 0 0% 100%;
 }
 
+
+/* ------------------------------------------------------------------------
+ * The Lion Tails background.
+ *
+ * It is back, but it can no longer fight the theme. The original was a remote
+ * photo painted at full strength with a fixed rgba(255,255,255,0.7) overlay
+ * to rescue text contrast -- which is the tell that the background and the
+ * content were working against each other.
+ *
+ * Now the image sits under a veil made from the palette's OWN background
+ * colour, so every theme keeps its character and the picture reads as texture
+ * rather than as a competing surface. The veil strength is per palette,
+ * because the coverage that leaves the image visible on Paper would leave
+ * Night grey: paper .86, sepia .87, night .94, and High contrast 1 -- no
+ * image at all, since "high contrast" and "decorative photograph" are not
+ * compatible requests.
+ *
+ * Not on the reader route. /story is where the palette has to be exact, and
+ * Blake's whole ask there was for everything else to get out of the way.
+ * --------------------------------------------------------------------- */
+
+body {
+  background-color: hsl(var(--background));
+  background-image: url("./assets/lion-tails-background.jpg");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-color: hsl(var(--background) / var(--app-bg-veil, 0.88));
+  /* Behind page content, in front of the body image. Content in normal flow
+     paints above a negative z-index pseudo-element. */
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* The reader owns its page: no photograph, no veil, just the palette. */
+body[data-reader-page] {
+  background-image: none;
+}
+body[data-reader-page]::before {
+  content: none;
+}
