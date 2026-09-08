@@ -26,6 +26,28 @@ interface DebugPanelProps {
   isVisible?: boolean;
 }
 
+/**
+ * A short, DISTINCT label for a step.
+ *
+ * The server names chapter steps "generateChapter: <first 30 chars of the
+ * outline>...", which is too long for a tab, so the client showed only the part
+ * before the colon -- and a five-chapter story then had five tabs all reading
+ * "generateChapter". Numbering them by their position among the chapter steps
+ * restores the distinction without needing the outline text or a server change.
+ */
+function stepLabel(
+  step: string,
+  index: number,
+  all: Array<{ step: string }>,
+): string {
+  const name = step.split(":")[0].trim();
+  if (!step.includes(":")) return name;
+  const sameKind = all.filter((s) => s.step.split(":")[0].trim() === name);
+  if (sameKind.length < 2) return name;
+  const ordinal = all.slice(0, index + 1).filter((s) => s.step.split(":")[0].trim() === name).length;
+  return `${name} ${ordinal}`;
+}
+
 export function DebugPanel({
   debugData = [],
   isVisible = false,
@@ -108,18 +130,28 @@ export function DebugPanel({
                 </div>
               </div>
 
-              {/* <<< CHANGED: Tabs now represent Steps, not Attempts >>> */}
+              {/* Tabs represent Steps, not Attempts.
+
+                  The row used to be a grid of N equal 1fr columns. Step names
+                  are far wider than 1/Nth of the panel -- "generateChapter"
+                  plus a word-count badge in a seventh of the width -- and a
+                  TabsTrigger does not clip its content, so every label spilled
+                  across its neighbours and the row became unreadable. Equal
+                  columns are the wrong model for labels of unequal length:
+                  size each trigger to its own content and let the row wrap. */}
               <Tabs defaultValue="0" className="w-full">
-                <TabsList
-                  className="grid w-full"
-                  style={{
-                    gridTemplateColumns: `repeat(${debugData.length}, minmax(0, 1fr))`,
-                  }}
-                >
+                {/* h-auto is load-bearing: TabsList's base class is a fixed
+                    h-10, so a wrapped second row would be clipped. Wrapping
+                    rather than scrolling because a debug panel should never
+                    hide a step behind a scroll position you cannot see. */}
+                <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
                   {debugData.map((step, index) => (
-                    <TabsTrigger key={index} value={index.toString()}>
-                      {step.step.split(":")[0]}{" "}
-                      {/* Show 'generateChapter' instead of the full outline */}
+                    <TabsTrigger
+                      key={index}
+                      value={index.toString()}
+                      className="shrink-0 whitespace-nowrap"
+                    >
+                      {stepLabel(step.step, index, debugData)}
                       <Badge variant="secondary" className="ml-2">
                         {step.wordCount || 0}w
                       </Badge>
