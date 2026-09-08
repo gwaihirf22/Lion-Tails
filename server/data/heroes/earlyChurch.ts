@@ -33,8 +33,16 @@ export const earlyChurch: RawHero[] = [
     },
     keyEvents: [
       { year: "c. 69", description: "Born, probably in Asia Minor" },
-      { year: "c. 110", description: "Receives a letter from Ignatius of Antioch on his way to martyrdom" },
-      { year: "c. 110-140", description: "Writes his Letter to the Philippians" },
+      {
+        year: "c. 110",
+        description: "Receives a letter from Ignatius of Antioch on his way to martyrdom",
+        dateNote: "Dated from Ignatius's own martyrdom, usually placed c. 108-110, rather than from anything in Polycarp's record.",
+      },
+      {
+        year: "c. 110-140",
+        description: "Writes his Letter to the Philippians",
+        dateNote: "Undated in itself. The range is what scholars infer from its reference to Ignatius; some argue it is two letters written years apart.",
+      },
       { year: "c. 155", description: "Travels to Rome and meets Bishop Anicetus; they disagree about Easter and part in peace" },
       { year: "c. 155", description: "Arrested, refuses to deny Christ, and is burned at Smyrna" },
     ],
@@ -65,7 +73,11 @@ export const earlyChurch: RawHero[] = [
       reference: "Ephesians 4:4",
     },
     keyEvents: [
-      { year: "c. 130", description: "Born in Smyrna; hears Polycarp preach as a boy" },
+      {
+        year: "c. 130",
+        description: "Born in Smyrna; hears Polycarp preach as a boy",
+        dateNote: "Inferred from his own statement that he heard Polycarp as a boy; no source gives a birth year.",
+      },
       { year: "c. 177", description: "Becomes bishop of Lyons after a persecution kills Bishop Pothinus" },
       { year: "c. 180", description: "Writes Against Heresies" },
       { year: "c. 190", description: "Urges Rome not to break fellowship over the date of Easter" },
@@ -232,7 +244,7 @@ export const earlyChurch: RawHero[] = [
     contribution:
       "Brought the gospel to Ireland as a former slave returning to his captors, and left two short writings in his own voice.",
     biography:
-      "Almost everything reliably known about Patrick comes from two documents he wrote himself: a short autobiography called the Confession, and a furious open letter to a British warlord named Coroticus whose soldiers had killed and enslaved Irish Christians.\n\nHe was born in Roman Britain to a deacon's family, and by his own admission was not a believer as a boy. At about sixteen he was seized by raiders and sold into slavery in Ireland, where he spent six years herding animals in the open. He says the isolation and the cold drove him to prayer — a hundred prayers a day, and as many at night. Then a voice in a dream told him a ship was ready. He walked two hundred miles to the coast, talked his way aboard, and eventually reached home.\n\nHis family understandably begged him never to leave again. But he dreamed of a man carrying letters from Ireland, headed \"The Voice of the Irish\", and heard them calling him to come back and walk among them once more.\n\nHe returned as a bishop and spent the rest of his life there, baptising, ordaining clergy, and negotiating constantly with local kings for the safety of his converts. He was acutely conscious of his poor Latin and said so repeatedly — his Confession opens by calling himself a sinner and a country bumpkin.\n\nThe snakes and the shamrock are much later legends. What he actually left is rarer: the voice of a man who forgave the people who enslaved him and gave them his life.",
+      "Almost everything reliably known about Patrick comes from two documents he wrote himself: a short autobiography called the Confession, and a furious open letter to a British warlord named Coroticus whose soldiers had killed and enslaved Irish Christians.\n\nHe was born in Roman Britain to a deacon's family, and by his own admission was not a believer as a boy. At about sixteen he was seized by raiders and sold into slavery in Ireland, where he spent six years herding animals in the open. He says the isolation and the cold drove him to prayer — a hundred prayers a day, and as many at night. Then a voice in a dream told him a ship was ready. He walked two hundred miles to the coast, talked his way aboard, and eventually reached home.\n\nHis family understandably begged him never to leave again. But he dreamed of a man carrying letters from Ireland, headed \"The Voice of the Irish\", and heard them calling him to come back and walk among them once more.\n\nHe returned as a bishop and spent the rest of his life there, baptising, ordaining clergy, and negotiating constantly with local kings for the safety of his converts. He was acutely conscious of his poor Latin and said so repeatedly — his Confession opens by calling himself a sinner and a country bumpkin.\n\nAlmost none of this can be dated confidently. His own writings give no years, and the traditional dates are reconstructions -- which is also why some historians have argued there were two Patricks whose stories were merged. The snakes and the shamrock are much later legends. What he actually left is rarer: the voice of a man who forgave the people who enslaved him and gave them his life.",
     famousQuote: "I am Patrick, a sinner, most unlearned, the least of all the faithful.",
     bibleVerse: {
       text: "Go therefore and make disciples of all nations.",
@@ -240,10 +252,14 @@ export const earlyChurch: RawHero[] = [
     },
     keyEvents: [
       { year: "c. 401", description: "Captured by raiders at about sixteen and enslaved in Ireland" },
-      { year: "c. 407", description: "Escapes after six years and returns to Britain" },
+      {
+        year: "c. 407",
+        description: "Escapes after six years and returns to Britain",
+        dateNote: "Arithmetic from his own Confession, which says he was taken at about sixteen and held six years. No source gives the year.",
+      },
       { year: "c. 432", description: "Returns to Ireland as a bishop" },
-      { year: "c. 450", description: "Writes his Letter to Coroticus condemning the slave trade" },
-      { year: "c. 460", description: "Writes the Confession" },
+      { year: "date unknown", description: "Writes his Letter to Coroticus, condemning a warlord who enslaved his converts" },
+      { year: "late in life", description: "Writes the Confession, the source of almost everything known about him" },
     ],
     tags: ["missionary", "ireland", "slavery", "bishop", "britain", "forgiveness"],
     sources: [

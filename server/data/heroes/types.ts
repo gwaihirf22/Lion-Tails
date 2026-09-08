@@ -33,7 +33,21 @@ export type RawHero = {
   complications?: string;
   famousQuote?: string;
   bibleVerse?: { text: string; reference: string };
-  keyEvents?: Array<{ year: string; description: string }>;
+  keyEvents?: Array<{
+    year: string;
+    description: string;
+    /**
+     * Why this date is not confirmable from the subject's own article.
+     *
+     * The verification script flags any event year missing from the Wikipedia
+     * text. Some of those are genuinely settled elsewhere -- a date fixed by
+     * another person's chronology, or arithmetic from the subject's own
+     * writing. Recording the reason here retires the warning AND tells a
+     * reader where the date comes from, which is better than a checker that
+     * cries wolf until people stop reading it.
+     */
+    dateNote?: string;
+  }>;
   tags?: string[];
   /**
    * The English Wikipedia ARTICLE TITLE, not a URL.

@@ -169,18 +169,33 @@ async function checkHero(hero: (typeof heroesOfFaithData)[number]): Promise<Chec
       : "";
 
     if (article.length > 500) {
+      const articleYears = new Set(
+        [...article.matchAll(/\b(\d{3,4})\b/g)].map((m) => parseInt(m[1], 10)),
+      );
       const unconfirmed = hero.keyEvents.filter((e) => {
-        const years = [...String(e.year).matchAll(/\b(\d{3,4})\b/g)].map((m) => m[1]);
+        // Already reviewed by hand, with the reason recorded in the data.
+        if ((e as { dateNote?: string }).dateNote) return false;
+        const years = [...String(e.year).matchAll(/\b(\d{3,4})\b/g)].map((m) => parseInt(m[1], 10));
         if (years.length === 0) return false;
-        // A range like "356-362" passes if EITHER endpoint is in the article.
-        return !years.some((y) => article.includes(y));
+        // An approximate year is approximate: "c. 401" against an article that
+        // says 402 is agreement, not a discrepancy. A range like "413-426"
+        // passes if EITHER endpoint is present.
+        const slack = /c\.|circa/i.test(String(e.year)) ? 2 : 0;
+        return !years.some((y) => {
+          for (let d = -slack; d <= slack; d++) if (articleYears.has(y + d)) return true;
+          return false;
+        });
       });
       if (unconfirmed.length > 0) {
         out.push({
           hero: hero.name,
           level: "warn",
+          // Deliberately "not confirmed BY THIS ARTICLE" rather than "wrong".
+          // A Wikipedia article is not exhaustive: Augustine's City of God is
+          // universally dated 413-426 and the article simply does not say so.
+          // These are a list to review by hand, not a list of errors.
           note:
-            `${unconfirmed.length}/${hero.keyEvents.length} event years not found in the article: ` +
+            `${unconfirmed.length}/${hero.keyEvents.length} event years not confirmed by the article (review): ` +
             unconfirmed.map((e) => e.year).join(", "),
         });
       }

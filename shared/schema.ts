@@ -879,7 +879,9 @@ export const heroOfFaithSchema = z.object({
   })).optional().default([]),
   keyEvents: z.array(z.object({
     year: z.string(),
-    description: z.string()
+    description: z.string(),
+    /** Where a date comes from, when the usual source does not state it. */
+    dateNote: z.string().optional(),
   })).optional().default([]),
   createdAt: z.date().or(z.string()).transform(val => 
     typeof val === 'string' ? new Date(val) : val
