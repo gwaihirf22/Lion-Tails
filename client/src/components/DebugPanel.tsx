@@ -75,17 +75,17 @@ export function DebugPanel({
   const modelUsed = debugData[0]?.model || "N/A";
 
   return (
-    <Card className="mt-4 border-orange-200 bg-orange-50">
+    <Card className="mt-4 border-warning bg-warning-surface">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg text-orange-800">
+          <CardTitle className="text-lg text-warning">
             OpenAI Debug Information
           </CardTitle>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setExpanded(!expanded)}
-            className="text-orange-600 hover:text-orange-800"
+            className="text-warning hover:text-warning"
           >
             {expanded ? (
               <ChevronUp className="mr-1" />
@@ -99,32 +99,32 @@ export function DebugPanel({
       {expanded && (
         <CardContent>
           {debugData.length === 0 ? (
-            <p className="text-orange-600">No debug data available.</p>
+            <p className="text-warning">No debug data available.</p>
           ) : (
             <>
               {/* <<< NEW: Overall Summary Section >>> */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 border rounded-lg bg-white">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 border rounded-lg bg-card">
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Total Words Generated</p>
-                  <p className="text-2xl font-bold text-orange-600">
+                  <p className="text-sm text-muted-foreground">Total Words Generated</p>
+                  <p className="text-2xl font-bold text-warning">
                     {totalWordsGenerated}
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Target Words</p>
-                  <p className="text-2xl font-bold text-gray-800">
+                  <p className="text-sm text-muted-foreground">Target Words</p>
+                  <p className="text-2xl font-bold text-foreground">
                     {finalTargetWords}
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Model</p>
-                  <p className="text-lg font-semibold text-blue-600">
+                  <p className="text-sm text-muted-foreground">Model</p>
+                  <p className="text-lg font-semibold text-foreground">
                     {modelUsed}
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Total Steps</p>
-                  <p className="text-lg font-semibold text-green-600">
+                  <p className="text-sm text-muted-foreground">Total Steps</p>
+                  <p className="text-lg font-semibold text-success">
                     {debugData.length}
                   </p>
                 </div>
@@ -210,14 +210,14 @@ function CodeBlock({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h4 className="font-semibold text-gray-800">{title}</h4>
+        <h4 className="font-semibold text-foreground">{title}</h4>
         <Button variant="outline" size="sm" onClick={onCopy}>
           <Copy className="w-4 h-4 mr-1" />
           Copy
         </Button>
       </div>
       <ScrollArea
-        className={`${heightClass} w-full border rounded p-2 bg-gray-50`}
+        className={`${heightClass} w-full border rounded p-2 bg-muted`}
       >
         <pre className="text-xs whitespace-pre-wrap">
           {content || "Not available for this step."}

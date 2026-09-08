@@ -228,7 +228,7 @@ export default function SavedStories() {
               className={
                 job.status === "failed"
                   ? "bg-destructive/5 border-destructive/30 rounded-xl"
-                  : "bg-white/90 rounded-xl"
+                  : "bg-card rounded-xl"
               }
             >
               <CardContent className="p-4 flex items-start justify-between gap-4">
@@ -273,18 +273,18 @@ export default function SavedStories() {
       )}
 
       {stories.length === 0 && visibleJobs.length === 0 ? (
-        <Card className="bg-white/90 rounded-2xl shadow-lg">
+        <Card className="bg-card rounded-2xl shadow-lg">
           <CardContent className="p-8 text-center">
-            <h3 className="text-2xl font-medium text-gray-700 mb-4">No Stories Yet</h3>
-            <p className="text-gray-500 mb-6">You haven't created any stories yet. Create your first personalized story now!</p>
+            <h3 className="text-2xl font-medium text-foreground mb-4">No Stories Yet</h3>
+            <p className="text-muted-foreground mb-6">You haven't created any stories yet. Create your first personalized story now!</p>
             <Button onClick={() => navigate("/")}>Create Your First Story</Button>
           </CardContent>
         </Card>
       ) : (
         <>
-          <Card className="mb-4 bg-white/90 rounded-lg">
+          <Card className="mb-4 bg-card rounded-lg">
             <CardContent className="p-4">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 <span className="font-semibold">Note:</span> Stories are automatically saved for one year. Favorite stories are kept indefinitely.
               </p>
             </CardContent>
@@ -351,13 +351,13 @@ export default function SavedStories() {
               <div className="grid gap-4">
                 {unassigned.length === 0 ? (
                   <Card className="p-6 text-center">
-                    <p className="text-gray-500">No stories in this category.</p>
+                    <p className="text-muted-foreground">No stories in this category.</p>
                   </Card>
                 ) : (
                   unassigned.map((savedStory) => (
                     <Card
                       key={savedStory.id}
-                      className="bg-white/95 overflow-hidden transition-all duration-200 hover:shadow-md cursor-pointer"
+                      className="bg-card overflow-hidden transition-all duration-200 hover:shadow-md cursor-pointer"
                       onClick={(e) => handleCardClick(e, savedStory)}
                     >
                       <CardContent className="p-5">
@@ -373,15 +373,15 @@ export default function SavedStories() {
                               </Link>
                             </h3>
                             <div className="flex items-center gap-2 mb-2">
-                              <span className="text-sm text-gray-500">
+                              <span className="text-sm text-muted-foreground">
                                 Created {formatDistanceToNow(new Date(savedStory.createdAt))} ago
                               </span>
                               {savedStory.isFavorite ? (
-                                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200">
+                                <Badge variant="secondary" className="bg-warning-surface text-warning hover:bg-warning-surface">
                                   Favorite
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="text-gray-500">
+                                <Badge variant="outline" className="text-muted-foreground">
                                   Temporary
                                 </Badge>
                               )}
@@ -392,7 +392,7 @@ export default function SavedStories() {
                             <Button 
                               size="sm" 
                               variant="ghost"
-                              className={savedStory.isFavorite ? "text-yellow-500 hover:text-yellow-600" : "text-gray-400 hover:text-yellow-500"}
+                              className={savedStory.isFavorite ? "text-warning hover:text-warning" : "text-muted-foreground hover:text-warning"}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleToggleFavorite(savedStory.id, !savedStory.isFavorite);
@@ -412,7 +412,7 @@ export default function SavedStories() {
                             <Button 
                               size="sm"
                               variant="ghost"
-                              className="text-red-500 hover:text-red-600"
+                              className="text-destructive hover:text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteStory(savedStory.id);
@@ -430,7 +430,7 @@ export default function SavedStories() {
                         
                         <div className="flex flex-col md:flex-row justify-between gap-3">
                           <div className="flex-1">
-                            <div className="text-sm text-gray-500 mb-1">Story details:</div>
+                            <div className="text-sm text-muted-foreground mb-1">Story details:</div>
                             <div className="flex flex-wrap gap-2">
                               <Badge variant="outline" className="bg-primary/10">
                                 {savedStory.request.childName}

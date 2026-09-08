@@ -65,7 +65,7 @@ export function FontPicker({
             onPointerEnter={() => preview(key)}
             onFocus={() => preview(key)}
             onClick={() => onChange(key)}
-            className="flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-black/5 focus:bg-black/5 focus:outline-none"
+            className="flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-muted focus:bg-muted focus:outline-none"
           >
             <Check
               className={`h-4 w-4 shrink-0 ${value === key ? "opacity-100" : "opacity-0"}`}

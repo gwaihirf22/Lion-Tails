@@ -18,11 +18,11 @@ export default function Home() {
           <div className="flex flex-col md:flex-row justify-center items-center gap-8">
             <div className="flex-1 p-4">
               <div className="animate-[float_6s_ease-in-out_infinite] w-64 h-64 md:w-80 md:h-80 mx-auto">
-                <img src={appIcon} alt="Lion Tails" className="w-full h-full object-cover rounded-full shadow-lg border-2 border-white" />
+                <img src={appIcon} alt="Lion Tails" className="w-full h-full object-cover rounded-full shadow-lg border-2 border-border" />
               </div>
             </div>
             <div className="flex-1 p-4">
-              <div className="bg-white/70 backdrop-blur-sm rounded-lg p-4 shadow-md">
+              <div className="bg-card backdrop-blur-sm rounded-lg p-4 shadow-md">
                 <h3 className="text-xl font-heading font-bold mb-4">Features:</h3>
                 <ul className="text-left space-y-3">
                   <li className="flex items-center">
@@ -52,7 +52,7 @@ export default function Home() {
           <div className="mt-8 flex flex-wrap justify-center gap-4">
             <Button 
               size="lg"
-              className="bg-primary text-white hover:bg-primary/90 border-none shadow-md font-bold"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 border-none shadow-md font-bold"
               onClick={() => navigate("/generate-story")}
             >
               <PenTool className="mr-2 h-5 w-5" />
@@ -62,7 +62,7 @@ export default function Home() {
               <Button 
                 variant="outline"
                 size="lg"
-                className="bg-white/50 backdrop-blur-sm hover:bg-white/70 shadow-md font-bold"
+                className="bg-card backdrop-blur-sm hover:bg-card shadow-md font-bold"
                 onClick={() => navigate("/auth")}
               >
                 <User className="mr-2 h-5 w-5" />
@@ -78,42 +78,42 @@ export default function Home() {
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl font-heading font-bold mb-6 text-center">Explore Lion Tails</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-6 text-center hover:shadow-xl transition-all transform hover:-translate-y-1">
-              <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
-                <PenTool className="h-8 w-8 text-blue-600" />
+            <div className="bg-card backdrop-blur-sm rounded-lg shadow-lg p-6 text-center hover:shadow-xl transition-all transform hover:-translate-y-1">
+              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                <PenTool className="h-8 w-8 text-foreground" />
               </div>
               <h3 className="text-xl font-heading font-bold mb-2">Create Stories</h3>
               <p className="mb-4">Generate personalized Christian bedtime stories with moral lessons and Scripture.</p>
               <Button 
-                className="bg-blue-500 hover:bg-blue-600 text-white border-none shadow-md"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground border-none shadow-md"
                 onClick={() => navigate("/generate-story")}
               >
                 Start Creating
               </Button>
             </div>
             
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-6 text-center hover:shadow-xl transition-all transform hover:-translate-y-1">
-              <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
-                <CalendarDays className="h-8 w-8 text-amber-600" />
+            <div className="bg-card backdrop-blur-sm rounded-lg shadow-lg p-6 text-center hover:shadow-xl transition-all transform hover:-translate-y-1">
+              <div className="w-16 h-16 rounded-full bg-warning-surface flex items-center justify-center mx-auto mb-4">
+                <CalendarDays className="h-8 w-8 text-warning" />
               </div>
               <h3 className="text-xl font-heading font-bold mb-2">Heroes of Faith</h3>
               <p className="mb-4">Discover inspiring historical figures who exemplified Christian values.</p>
               <Button 
-                className="bg-amber-500 hover:bg-amber-600 text-white border-none shadow-md"
+                className="bg-warning hover:bg-warning/90 text-warning-foreground border-none shadow-md"
                 onClick={() => navigate("/heroes-of-faith")}
               >
                 Meet Heroes
               </Button>
             </div>
             
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-6 text-center hover:shadow-xl transition-all transform hover:-translate-y-1">
-              <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
-                <Music className="h-8 w-8 text-purple-600" />
+            <div className="bg-card backdrop-blur-sm rounded-lg shadow-lg p-6 text-center hover:shadow-xl transition-all transform hover:-translate-y-1">
+              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                <Music className="h-8 w-8 text-foreground" />
               </div>
               <h3 className="text-xl font-heading font-bold mb-2">Christian Music</h3>
               <p className="mb-4">Browse lyrics and guitar chords for popular Christian children's songs.</p>
               <Button 
-                className="bg-purple-500 hover:bg-purple-600 text-white border-none shadow-md"
+                className="bg-secondary hover:bg-secondary/90 text-secondary-foreground border-none shadow-md"
                 onClick={() => navigate("/music")}
               >
                 Explore Music
@@ -130,7 +130,7 @@ export default function Home() {
             ✨ AI-Powered Stories
           </div>
           <h3 className="text-2xl font-heading font-bold mb-2">Your First 50 Stories Are Free!</h3>
-          <p className="text-gray-700 mb-2">
+          <p className="text-foreground mb-2">
             Enjoy 50 free AI-generated stories to start, plus 10 more each month. Want unlimited stories?
             Add your own OpenAI API key in the <a href="/settings" className="text-secondary hover:underline font-medium">Settings</a> page.
           </p>
@@ -143,7 +143,7 @@ export default function Home() {
         <p className="text-lg mb-6 max-w-2xl mx-auto">Start creating personalized faith-based stories that teach Biblical values in an engaging way.</p>
         <Button 
           size="lg"
-          className="bg-primary text-white hover:bg-primary/90 border-none shadow-md font-bold"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 border-none shadow-md font-bold"
           onClick={() => navigate("/generate-story")}
         >
           Create Your First Story

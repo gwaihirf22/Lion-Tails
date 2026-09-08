@@ -17,14 +17,14 @@ export default function StoryGeneratorTabs({ onSubmit, loading = false }: StoryG
         <TabsList className="grid grid-cols-2 mb-6 gap-1 p-1">
           <TabsTrigger 
             value="children" 
-            className="text-sm sm:text-base lg:text-lg py-2 sm:py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-100 data-[state=active]:to-purple-100 whitespace-normal h-auto"
+            className="text-sm sm:text-base lg:text-lg py-2 sm:py-3 data-[state=active]:bg-muted whitespace-normal h-auto"
           >
             <span className="block sm:hidden">Children's</span>
             <span className="hidden sm:block">Children's Stories</span>
           </TabsTrigger>
           <TabsTrigger 
             value="historical" 
-            className="text-sm sm:text-base lg:text-lg py-2 sm:py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-100 data-[state=active]:to-orange-100 whitespace-normal h-auto"
+            className="text-sm sm:text-base lg:text-lg py-2 sm:py-3 data-[state=active]:bg-warning-surface whitespace-normal h-auto"
           >
             <span className="block sm:hidden">Historical</span>
             <span className="hidden sm:block">Historical & Biblical</span>
@@ -41,11 +41,11 @@ export default function StoryGeneratorTabs({ onSubmit, loading = false }: StoryG
             position: 'relative',
           }}
         >
-          <div className="absolute inset-0 bg-gradient-to-b from-blue-50/80 to-purple-50/80 backdrop-blur-sm rounded-xl"></div>
+          <div className="absolute inset-0 bg-muted rounded-xl"></div>
           <div className="relative z-10">
             <div className="mb-4 text-center">
               <h3 className="text-xl font-heading font-bold text-secondary">Personalized Children's Stories</h3>
-              <p className="text-sm text-gray-600">Create fictional stories with your child as the main character</p>
+              <p className="text-sm text-muted-foreground">Create fictional stories with your child as the main character</p>
             </div>
             
             <StoryForm 
@@ -72,11 +72,11 @@ export default function StoryGeneratorTabs({ onSubmit, loading = false }: StoryG
             position: 'relative',
           }}
         >
-          <div className="absolute inset-0 bg-gradient-to-b from-amber-50/80 to-orange-50/80 backdrop-blur-sm rounded-xl"></div>
+          <div className="absolute inset-0 bg-warning-surface rounded-xl"></div>
           <div className="relative z-10">
             <div className="mb-4 text-center">
               <h3 className="text-xl font-heading font-bold text-secondary">Historical & Biblical Stories</h3>
-              <p className="text-sm text-gray-600">Explore educational stories based on Biblical events and historical figures</p>
+              <p className="text-sm text-muted-foreground">Explore educational stories based on Biblical events and historical figures</p>
             </div>
             
             <StoryForm 

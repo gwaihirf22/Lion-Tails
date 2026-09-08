@@ -235,7 +235,7 @@ export default function AuthPage() {
             </Tabs>
           </CardContent>
           <CardFooter className="flex justify-center">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               {activeTab === "login" ? (
                 "Don't have an account? "
               ) : (
@@ -262,19 +262,19 @@ export default function AuthPage() {
             Bedtime stories that engage, inspire, and instill a love for God's Word.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-white rounded-lg p-4 shadow-sm">
+            <div className="bg-card rounded-lg p-4 shadow-sm">
               <h3 className="font-semibold">Faith-Based Stories</h3>
               <p className="text-sm">Biblical adventures customized for your child</p>
             </div>
-            <div className="bg-white rounded-lg p-4 shadow-sm">
+            <div className="bg-card rounded-lg p-4 shadow-sm">
               <h3 className="font-semibold">Christian Songs</h3>
               <p className="text-sm">Learn and sing songs with guitar chords</p>
             </div>
-            <div className="bg-white rounded-lg p-4 shadow-sm">
+            <div className="bg-card rounded-lg p-4 shadow-sm">
               <h3 className="font-semibold">Bible Characters</h3>
               <p className="text-sm">Explore stories about heroes of faith</p>
             </div>
-            <div className="bg-white rounded-lg p-4 shadow-sm">
+            <div className="bg-card rounded-lg p-4 shadow-sm">
               <h3 className="font-semibold">Time Travel</h3>
               <p className="text-sm">Create characters who travel to biblical times</p>
             </div>

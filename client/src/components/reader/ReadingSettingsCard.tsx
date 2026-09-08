@@ -20,7 +20,7 @@ export function ReadingSettingsCard() {
     useReadingPrefs();
 
   return (
-    <Card className="bg-white/95 rounded-2xl shadow-xl">
+    <Card className="bg-card rounded-2xl shadow-xl">
       <CardHeader>
         <CardTitle className="text-xl font-heading">Reading</CardTitle>
         <CardDescription>
@@ -118,7 +118,7 @@ export function ReadingSettingsCard() {
         </div>
 
         {!isSynced && (
-          <p className="text-xs text-amber-700">
+          <p className="text-xs text-warning">
             Not saved to your account yet — these are being kept on this device only.
           </p>
         )}

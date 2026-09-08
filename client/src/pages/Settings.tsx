@@ -246,7 +246,7 @@ export default function Settings() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-heading font-bold mb-8 text-textDark">Settings</h1>
+      <h1 className="text-3xl font-heading font-bold mb-8 text-foreground">Settings</h1>
       
       <div className="grid gap-8 md:grid-cols-2">
         {/* Reading preferences. Same provider and same picker as the reader's
@@ -254,7 +254,7 @@ export default function Settings() {
         <ReadingSettingsCard />
 
         {/* Story Generation Stats */}
-        <Card className="bg-white/95 rounded-2xl shadow-xl">
+        <Card className="bg-card rounded-2xl shadow-xl">
           <CardHeader>
             <CardTitle className="text-xl font-heading">Story Generation Quota</CardTitle>
             <CardDescription>
@@ -292,7 +292,7 @@ export default function Settings() {
               <p className="text-center text-muted-foreground py-6">No usage statistics available</p>
             )}
           </CardContent>
-          <CardFooter className="border-t p-4 bg-gray-50 rounded-b-2xl">
+          <CardFooter className="border-t p-4 bg-muted rounded-b-2xl">
             <p className="text-sm text-muted-foreground">
               Want unlimited stories? Add your own OpenAI API key.
             </p>
@@ -300,7 +300,7 @@ export default function Settings() {
         </Card>
 
         {/* OpenAI API Key */}
-        <Card className="bg-white/95 rounded-2xl shadow-xl">
+        <Card className="bg-card rounded-2xl shadow-xl">
           <CardHeader>
             <CardTitle className="text-xl font-heading">OpenAI API Key</CardTitle>
             <CardDescription>
@@ -309,9 +309,9 @@ export default function Settings() {
           </CardHeader>
           <CardContent className="space-y-4">
             {hasStoredKey ? (
-              <Alert className="bg-green-50 border-green-200">
-                <AlertTitle className="font-medium text-green-800">API Key Stored</AlertTitle>
-                <AlertDescription className="text-green-700">
+              <Alert className="bg-success-surface border-success">
+                <AlertTitle className="font-medium text-success">API Key Stored</AlertTitle>
+                <AlertDescription className="text-success">
                   You have an OpenAI API key set up. You can generate unlimited stories with your key.
                 </AlertDescription>
               </Alert>
@@ -369,7 +369,7 @@ export default function Settings() {
               </Select>
 
               {selectedModelWarning && (
-                <p className="text-xs text-amber-700 mt-2">{selectedModelWarning}</p>
+                <p className="text-xs text-warning mt-2">{selectedModelWarning}</p>
               )}
 
               <p className="text-xs text-muted-foreground mt-2">
@@ -379,7 +379,7 @@ export default function Settings() {
               </p>
             </div>
           </CardContent>
-          <CardFooter className="flex justify-end space-x-4 border-t p-4 bg-gray-50 rounded-b-2xl">
+          <CardFooter className="flex justify-end space-x-4 border-t p-4 bg-muted rounded-b-2xl">
             {hasStoredKey ? (
               <Button 
                 variant="destructive" 

@@ -120,7 +120,7 @@ export default function AdminStats() {
 
   if (error) {
     return (
-      <Card className="max-w-2xl mx-auto bg-white/90">
+      <Card className="max-w-2xl mx-auto bg-card">
         <CardContent className="p-8 text-center">
           <h2 className="text-xl font-medium mb-2">Stats unavailable</h2>
           <p className="text-muted-foreground">{error}</p>
@@ -153,7 +153,7 @@ export default function AdminStats() {
       </div>
 
       {totalAttempts === 0 && (
-        <Card className="bg-white/90">
+        <Card className="bg-card">
           <CardContent className="p-6 text-muted-foreground">
             No generations recorded in the last {stats.windowDays} days. Records start
             from the deploy that added this table — anything generated before then
@@ -163,8 +163,8 @@ export default function AdminStats() {
       )}
 
       {totalAttempts > 0 && totalAttempts < MIN_MEANINGFUL && (
-        <Card className="bg-amber-50 border-amber-200">
-          <CardContent className="p-4 text-sm text-amber-900">
+        <Card className="bg-warning-surface border-warning">
+          <CardContent className="p-4 text-sm text-warning">
             Only {totalAttempts} generation{totalAttempts === 1 ? "" : "s"} in this
             window. These models vary enormously run to run — the same request has
             measured 57%, 81% and 82% of its target length — so treat everything
@@ -174,7 +174,7 @@ export default function AdminStats() {
       )}
 
       {stats.models.length > 0 && (
-        <Card className="bg-white/90">
+        <Card className="bg-card">
           <CardHeader>
             <CardTitle className="text-lg">By model</CardTitle>
           </CardHeader>
@@ -202,7 +202,7 @@ export default function AdminStats() {
                     <td className="py-2 pr-4">
                       {m.attempts}
                       {m.attempts < MIN_MEANINGFUL && (
-                        <span className="text-amber-600 ml-1" title="Too few runs to be meaningful">
+                        <span className="text-warning ml-1" title="Too few runs to be meaningful">
                           *
                         </span>
                       )}
@@ -213,7 +213,7 @@ export default function AdminStats() {
                     <td
                       className={
                         m.avgWordRatio !== null && (m.avgWordRatio < 0.8 || m.avgWordRatio > 1.3)
-                          ? "py-2 pr-4 text-amber-700 font-medium"
+                          ? "py-2 pr-4 text-warning font-medium"
                           : "py-2 pr-4"
                       }
                     >
@@ -231,7 +231,7 @@ export default function AdminStats() {
       )}
 
       {stats.steps.length > 0 && (
-        <Card className="bg-white/90">
+        <Card className="bg-card">
           <CardHeader>
             <CardTitle className="text-lg">Cost per step</CardTitle>
             <p className="text-sm text-muted-foreground">
@@ -268,7 +268,7 @@ export default function AdminStats() {
       )}
 
       {stats.failures.length > 0 && (
-        <Card className="bg-white/90">
+        <Card className="bg-card">
           <CardHeader>
             <CardTitle className="text-lg">Failures</CardTitle>
           </CardHeader>
@@ -289,7 +289,7 @@ export default function AdminStats() {
       )}
 
       {stats.jobs.length > 0 && (
-        <Card className="bg-white/90">
+        <Card className="bg-card">
           <CardHeader>
             <CardTitle className="text-lg">Jobs</CardTitle>
           </CardHeader>
@@ -320,7 +320,7 @@ export default function AdminStats() {
       )}
 
       {stats.recent.length > 0 && (
-        <Card className="bg-white/90">
+        <Card className="bg-card">
           <CardHeader>
             <CardTitle className="text-lg">Recent generations</CardTitle>
           </CardHeader>
@@ -347,7 +347,7 @@ export default function AdminStats() {
                     <td className="py-2 pr-4 text-muted-foreground">{r.storyLength ?? "—"}</td>
                     <td className="py-2 pr-4">
                       {r.outcome === "succeeded" ? (
-                        <span className="text-green-700">ok</span>
+                        <span className="text-success">ok</span>
                       ) : (
                         <span className="text-destructive font-mono text-xs">
                           {r.failureCode ?? "failed"}

@@ -88,8 +88,8 @@ export default function HeroesOfFaith() {
   // Function to generate a random color for hero avatars
   const getRandomColor = (heroName: string): string => {
     const colors = [
-      'bg-red-100', 'bg-blue-100', 'bg-green-100', 'bg-yellow-100', 
-      'bg-purple-100', 'bg-pink-100', 'bg-indigo-100', 'bg-orange-100'
+      'bg-destructive/10', 'bg-muted', 'bg-success-surface', 'bg-warning-surface', 
+      'bg-muted', 'bg-muted', 'bg-muted', 'bg-warning-surface'
     ];
     const index = Math.abs(heroName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % colors.length;
     return colors[index];
@@ -117,7 +117,7 @@ export default function HeroesOfFaith() {
   if (error) {
     return (
       <div className="p-4 text-center">
-        <p className="text-red-500">Failed to load Heroes of Faith. Please try again.</p>
+        <p className="text-destructive">Failed to load Heroes of Faith. Please try again.</p>
         <Button 
           variant="outline" 
           className="mt-4"
@@ -364,7 +364,7 @@ export default function HeroesOfFaith() {
                             <CardHeader className="py-3">
                               <div className="flex items-center justify-between">
                                 <CardTitle className="text-base flex items-center">
-                                  {story.isFeatured && <Star className="h-4 w-4 text-yellow-500 mr-2" />}
+                                  {story.isFeatured && <Star className="h-4 w-4 text-warning mr-2" />}
                                   {story.title}
                                 </CardTitle>
                                 <Badge variant={story.isHistoricallyAccurate ? "outline" : "secondary"}>

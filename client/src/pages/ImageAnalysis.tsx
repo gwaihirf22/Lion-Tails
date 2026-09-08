@@ -160,7 +160,7 @@ export default function ImageAnalysisPage() {
       <div className="flex flex-col space-y-8">
         <div className="text-center">
           <h1 className="text-3xl font-bold mb-2">Bible Story Image Analysis</h1>
-          <p className="text-gray-600 mb-8">
+          <p className="text-muted-foreground mb-8">
             Upload an image to analyze its biblical themes or generate a story based on the image.
           </p>
         </div>
@@ -176,10 +176,10 @@ export default function ImageAnalysisPage() {
               {imagePreview ? (
                 <div className="w-full flex flex-col items-center">
                   <img src={imagePreview} alt="Preview" className="max-h-64 mb-4 rounded-md shadow-md" />
-                  <p className="text-center text-gray-500">Click to change image</p>
+                  <p className="text-center text-muted-foreground">Click to change image</p>
                 </div>
               ) : (
-                <div className="flex flex-col items-center text-gray-500">
+                <div className="flex flex-col items-center text-muted-foreground">
                   <ImageIcon size={48} className="mb-2" />
                   <p>Click to select an image</p>
                 </div>

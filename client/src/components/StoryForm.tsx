@@ -215,7 +215,7 @@ export default function StoryForm({
 
   return (
     <>
-    <Card className={`content-container rounded-2xl shadow-lg ${formType === "historical" ? "border-amber-200" : "border-blue-200"}`}>
+    <Card className={`content-container rounded-2xl shadow-lg ${formType === "historical" ? "border-warning" : "border-border"}`}>
       <CardContent className="p-6">
         {/* Only show child fields when needed */}
         <Form {...form}>
@@ -497,7 +497,7 @@ export default function StoryForm({
                   <FormControl>
                     <Textarea
                       placeholder="e.g. She was frightened of the thunderstorm last night and hid under the table. I'd like a story about being brave when you're scared."
-                      className="min-h-28 bg-white border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                      className="min-h-28 bg-card border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                       {...field}
                     />
                   </FormControl>
@@ -572,7 +572,7 @@ export default function StoryForm({
             {/* Character selection has been moved to the top of the form */}
             
             {formType === "historical" && (
-              <div className={`rounded-lg border p-3 text-xs ${usingLocalModel ? "border-amber-300 bg-amber-50 text-amber-900" : "border-secondary/20 bg-secondary/5 text-secondary/90"}`}>
+              <div className={`rounded-lg border p-3 text-xs ${usingLocalModel ? "border-warning bg-warning-surface text-warning" : "border-secondary/20 bg-secondary/5 text-secondary/90"}`}>
                 <p className="font-medium mb-1">
                   {usingLocalModel ? "Accuracy on the local model" : "About accuracy"}
                 </p>
@@ -869,12 +869,12 @@ export default function StoryForm({
             <div className="rounded-xl overflow-hidden mt-6">
               <Button 
                 type="submit" 
-                className={`w-full py-4 px-4 ${formType === "historical" ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600" : "bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90"} text-white font-medium rounded-xl shadow-lg transition duration-200 flex items-center justify-center`}
+                className={`w-full py-4 px-4 ${formType === "historical" ? "bg-warning hover:bg-warning/90" : "bg-primary hover:bg-primary/90"} text-primary-foreground font-medium rounded-xl shadow-lg transition duration-200 flex items-center justify-center`}
                 disabled={loading}
               >
                 {loading ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
