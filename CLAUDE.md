@@ -142,7 +142,7 @@ does not exist. The token is returned in the response body only when
 
 ## Deployment
 
-Push to `main` runs `.github/workflows/deploy.yml` on a self-hosted Unraid
+Push to `main` runs `.github/workflows/ci.yml` on a self-hosted Unraid
 runner: build, push to Docker Hub, SSH, `docker compose pull && up -d`, wait for
 the healthcheck.
 

@@ -310,13 +310,25 @@ jobs:
           grep -q '"schema":"ok"' /tmp/health-db.json
 
           # Read the row count from SQL, NOT from /api/heroes. The in-memory
-          # fallback serves 15 heroes whether or not anything was persisted --
-          # that is precisely why the original seeding race went unnoticed, and
+          # fallback serves heroes whether or not anything was persisted -- that
+          # is precisely why the original seeding race went unnoticed, and
           # asserting via the endpoint would not have caught it.
+          #
+          # The expected number comes from the DATA FILE, not a literal. It was
+          # hardcoded to 15, which was correct until heroes were added and then
+          # broke the build for a reason that had nothing to do with seeding.
+          # The invariant worth asserting is "the database holds what the seed
+          # defines", and that survives every future addition.
+          EXPECTED_HEROES=$(npx tsx -e 'import { heroesOfFaithData } from "./server/data/heroes"; console.log(heroesOfFaithData.length)')
+          if [ -z "$EXPECTED_HEROES" ] || [ "$EXPECTED_HEROES" -lt 1 ]; then
+            echo "FAIL: could not read the hero list, or it is empty."
+            exit 1
+          fi
           HEROES=$(psql "$DATABASE_URL" -tAc "select count(*) from heroes_of_faith")
-          echo "heroes_of_faith rows: $HEROES"
-          if [ "$HEROES" -ne 15 ]; then
+          echo "heroes_of_faith rows: $HEROES (seed defines $EXPECTED_HEROES)"
+          if [ "$HEROES" -ne "$EXPECTED_HEROES" ]; then
             echo "FAIL: reference data was not persisted to the database."
+            echo "The seed defines $EXPECTED_HEROES heroes; the table holds $HEROES."
             exit 1
           fi
 
