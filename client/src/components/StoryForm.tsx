@@ -21,6 +21,7 @@ import { StoryRequest, storyRequestSchema, type Character } from "@shared/schema
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import AnimalAutocomplete from "./AnimalAutocomplete";
+import HeroPicker from "./HeroPicker";
 import CharacterForm from "./CharacterForm";
 import PromptEditor from "./PromptEditor";
 
@@ -93,14 +94,7 @@ export default function StoryForm({
     enabled: true,
   });
   
-  // Fetch heroes of faith for selection
-  const { data: heroesOfFaith = [], isLoading: heroesLoading } = useQuery({
-    queryKey: ['/api/heroes'],
-    queryFn: getQueryFn<any[]>({
-      on401: "returnNull"
-    }),
-    enabled: showHeroOfFaith
-  });
+  // The heroes query moved into HeroPicker, which owns the search over it.
   
   // Which model will write this story. Needed only so the accuracy note below
   // can be honest: the factual anchors ship with the app and help every model,
@@ -654,37 +648,28 @@ export default function StoryForm({
                   <FormItem>
                     <FormLabel className="text-sm font-medium">Heroes of the Faith</FormLabel>
                     <FormControl>
-                      <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-crown">
-                            <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
-                          </svg>
-                        </span>
-                        <Select
-                          onValueChange={(value) => {
-                            field.onChange(value);
-                            setHasSelectedHeroOfFaith(value !== "none" && value !== "");
-                            // Clear biblical event if hero is selected
-                            if (value !== "none" && value !== "" && formType === "historical") {
+                      <div>
+                        {/* Was a plain Select. At forty-one heroes -- and
+                            roughly double once the biblical characters land --
+                            an alphabetical scroll list is not a way to find
+                            anybody. This searches names, eras, places and the
+                            biography text, so a parent who wants a story about
+                            someone brave can type "martyr" instead of needing
+                            the name first. */}
+                        <HeroPicker
+                          value={field.value === "none" ? "" : field.value || ""}
+                          onChange={(heroId) => {
+                            field.onChange(heroId);
+                            setHasSelectedHeroOfFaith(Boolean(heroId));
+                            // Choosing a hero clears a biblical event: the form
+                            // allows one or the other, not both.
+                            if (heroId && formType === "historical") {
                               form.setValue("biblicalEvent", "");
                               setHasSelectedBiblicalEvent(false);
                             }
                           }}
-                          value={field.value}
-                          disabled={heroesLoading || (formType === "historical" && hasSelectedBiblicalEvent)}
-                        >
-                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                            <SelectValue placeholder={heroesLoading ? "Loading heroes..." : "Select a Hero of the Faith"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">None</SelectItem>
-                            {heroesOfFaith.map((hero) => (
-                              <SelectItem key={hero.id} value={hero.id}>
-                                {hero.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          disabled={formType === "historical" && hasSelectedBiblicalEvent}
+                        />
                       </div>
                     </FormControl>
                     <FormMessage />
