@@ -243,21 +243,10 @@ body[data-reader-page] {
 body[data-reader-page] header {
   position: static;
 }
-body[data-reader-page] header,
-body[data-reader-page] footer {
-  background: var(--reader-surface);
-  color: var(--reader-fg);
-  border-color: var(--reader-border);
-  backdrop-filter: none;
-}
-/* The header and footer are built with text-white on a coloured bar, which is
-   invisible on Paper. Blunt on purpose; if a chip or dropdown item looks wrong
-   in a palette, narrow THIS selector rather than adding a competing one. */
-body[data-reader-page] header :not(svg):not(path),
-body[data-reader-page] footer :not(svg):not(path) {
-  color: inherit;
-  border-color: var(--reader-border);
-}
+/* Header and footer colours are NOT set here any more. theme.css paints them
+   from the palette on every page, so a reader-only copy would be a second rule
+   doing one job -- and the two would drift. Only the position change below is
+   specific to the reader. */
 
 /* ----------------------------------------------------------- focus mode --
  * Fade, never collapse. Reserved space means nothing reflows, which is the

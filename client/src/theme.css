@@ -1,0 +1,140 @@
+/**
+ * Site theme: the whole app follows the reader's palette.
+ *
+ * The four palettes are defined once, for reading, in
+ * components/reader/reader.css. This file maps those same colours onto the
+ * shadcn tokens every other component already consumes, so choosing Sepia in
+ * the reader makes the app sepia -- one setting, not two colour systems to
+ * keep in step.
+ *
+ * WHY THIS FILE CAN EXIST AT ALL
+ * It could not, until now. main.tsx set these twenty variables as INLINE
+ * styles on <html>, and an inline style beats any :root rule from a
+ * stylesheet regardless of specificity or order. That single block is why
+ * theme.json did nothing, why the Replit shadcn-theme plugin's output was
+ * dead, why `darkMode: ["class"]` never worked, and why the app was
+ * permanently light. Those calls are gone; this is their replacement.
+ *
+ * The HSL triplets are GENERATED from the palette hexes rather than typed by
+ * hand, and every --primary was checked to carry white text at AA or better
+ * (paper 6.3:1, sepia 7.4:1, night 6.9:1, contrast 15.3:1).
+ *
+ * data-palette is set on <html> by ReadingPrefsProvider. Paper is also bound
+ * to bare :root so the app is correct before that runs, and for anyone logged
+ * out.
+ */
+
+:root,
+[data-palette="paper"] {
+  --background: 45 33.3% 97.6%;
+  --foreground: 60 1.9% 10.4%;
+  --card: 43 22.6% 93.9%;
+  --card-foreground: 60 1.9% 10.4%;
+  --popover: 43 22.6% 93.9%;
+  --popover-foreground: 60 1.9% 10.4%;
+  --muted: 43 22.6% 93.9%;
+  --muted-foreground: 60 1.7% 34.7%;
+  --border: 42 14.7% 86.7%;
+  --input: 42 14.7% 86.7%;
+  --primary: 216 56.3% 42.2%;
+  --secondary: 43 22.6% 93.9%;
+  --secondary-foreground: 60 1.9% 10.4%;
+  --accent: 43 22.6% 93.9%;
+  --accent-foreground: 60 1.9% 10.4%;
+  --ring: 224 76.3% 48%;
+  --primary-foreground: 0 0% 100%;
+  --destructive: 0 72% 45%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+[data-palette="sepia"] {
+  --background: 43 56% 90.2%;
+  --foreground: 35 32.6% 17.5%;
+  --card: 42 50.7% 85.7%;
+  --card-foreground: 35 32.6% 17.5%;
+  --popover: 42 50.7% 85.7%;
+  --popover-foreground: 35 32.6% 17.5%;
+  --muted: 42 50.7% 85.7%;
+  --muted-foreground: 34 22.3% 34.3%;
+  --border: 40 37.9% 79.8%;
+  --input: 40 37.9% 79.8%;
+  --primary: 28 57.4% 30.4%;
+  --secondary: 42 50.7% 85.7%;
+  --secondary-foreground: 35 32.6% 17.5%;
+  --accent: 42 50.7% 85.7%;
+  --accent-foreground: 35 32.6% 17.5%;
+  --ring: 28 55.2% 28%;
+  --primary-foreground: 0 0% 100%;
+  --destructive: 0 72% 45%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+[data-palette="night"] {
+  --background: 220 12% 9.8%;
+  --foreground: 217 8% 80.4%;
+  --card: 220 13% 13.5%;
+  --card-foreground: 217 8% 80.4%;
+  --popover: 220 13% 13.5%;
+  --popover-foreground: 217 8% 80.4%;
+  --muted: 220 13% 13.5%;
+  --muted-foreground: 215 5.7% 58.4%;
+  --border: 217 12.4% 20.6%;
+  --input: 217 12.4% 20.6%;
+  --primary: 214 38.9% 37.8%;
+  --secondary: 220 13% 13.5%;
+  --secondary-foreground: 217 8% 80.4%;
+  --accent: 220 13% 13.5%;
+  --accent-foreground: 217 8% 80.4%;
+  --ring: 217 88.7% 75.7%;
+  --primary-foreground: 0 0% 100%;
+  --destructive: 0 72% 45%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+[data-palette="contrast"] {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 0%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 0%;
+  --muted: 0 0% 100%;
+  --muted-foreground: 0 0% 12.2%;
+  --border: 0 0% 0%;
+  --input: 0 0% 0%;
+  --primary: 240 100% 27.3%;
+  --secondary: 0 0% 100%;
+  --secondary-foreground: 0 0% 0%;
+  --accent: 0 0% 100%;
+  --accent-foreground: 0 0% 0%;
+  --ring: 240 100% 40%;
+  --primary-foreground: 0 0% 100%;
+  --destructive: 0 72% 45%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+/* The radius the app has always used. It lived in main.tsx alongside the
+   colours, which meant theme.json's own radius setting never applied either. */
+:root {
+  --radius: 0.5rem;
+}
+
+/* Header and footer follow the palette everywhere, not only in the reader.
+   Both are built as `bg-primary/N ... text-white`, which is unreadable on a
+   light palette and wrong on a dark one. */
+header,
+footer {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+  backdrop-filter: none;
+}
+header :not(svg):not(path),
+footer :not(svg):not(path) {
+  color: inherit;
+}
+/* The site title keeps its drop shadow class from when it sat on a photo; on a
+   flat surface that reads as a smudge. */
+header h1 {
+  text-shadow: none;
+}

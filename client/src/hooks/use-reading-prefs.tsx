@@ -109,6 +109,13 @@ export function ReadingPrefsProvider({ children }: { children: ReactNode }) {
     setPrefs({ ...READING_PREFS_DEFAULTS, ...readMirror(userId) });
   }, [userId]);
 
+  // The palette drives the WHOLE app, not just the reader: theme.css maps
+  // these same four palettes onto the shadcn tokens every other component
+  // consumes. Set on <html> so it is in place before anything paints.
+  useEffect(() => {
+    document.documentElement.dataset.palette = prefs.palette;
+  }, [prefs.palette]);
+
   const save = useMutation({
     mutationFn: async (patch: Partial<ReadingPrefs>) => {
       const response = await apiRequest("POST", "/api/settings/reading", patch);

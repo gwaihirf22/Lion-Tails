@@ -24,7 +24,6 @@ import { ReadingPrefsProvider } from "@/hooks/use-reading-prefs";
 import { StoryJobsProvider } from "@/hooks/use-story-jobs";
 
 // Import the background image
-import lionTailsBackground from "@assets/Lion tails.jpg";
 
 function Router() {
   return (
@@ -62,26 +61,11 @@ function App() {
   const [location] = useLocation();
   const bareReader = location.startsWith("/story");
 
-  // Style for app background
-  const appBackgroundStyle = {
-    backgroundImage: `url(${lionTailsBackground})`,
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundAttachment: 'fixed',
-    backgroundRepeat: 'no-repeat',
-    position: 'relative' as const,
-  };
-
-  // Style for overlay to improve text readability
-  const overlayStyle = {
-    position: 'absolute' as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    zIndex: -1,
-  };
+  // The photo background and its rgba(255,255,255,0.7) readability overlay
+  // are gone. They existed to make text legible over a stock photograph of a
+  // party, which is not what a bedtime story app should open with -- and an
+  // overlay that exists to rescue contrast is a sign the background was
+  // fighting the content. The page is now the palette's own colour.
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -92,11 +76,7 @@ function App() {
               watched after the user navigates away from the generate page,
               which is the whole point of the change. */}
           <StoryJobsProvider>
-          <div
-            className="min-h-screen flex flex-col font-body text-textDark"
-            style={bareReader ? undefined : appBackgroundStyle}
-          >
-            {!bareReader && <div style={overlayStyle}></div>}
+          <div className="min-h-screen flex flex-col bg-background text-foreground">
             <Header />
             <main
               className={
@@ -109,7 +89,7 @@ function App() {
                 className={
                   bareReader
                     ? ""
-                    : "content-container rounded-2xl shadow-xl p-4 md:p-6 border border-primary/10 bg-white/80 backdrop-blur-sm"
+                    : "content-container rounded-2xl shadow-sm p-4 md:p-6 border border-border"
                 }
               >
                 <Router />
