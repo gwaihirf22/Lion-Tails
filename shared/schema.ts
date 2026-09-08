@@ -211,7 +211,48 @@ export const userSettings = pgTable("user_settings", {
     .references(() => users.id, { onDelete: "cascade" }),
   openaiKey: text("openai_key"),
   openaiModel: text("openai_model"),
+  // How this user likes to READ. Four discrete columns rather than one jsonb
+  // blob: verifyOrmSchema() checks columns and cannot see inside a blob, a
+  // typo'd key in a blob is invisible, and a named column is greppable. The
+  // cost -- a migration for a fifth preference -- is the right cost in a repo
+  // whose documented failure mode is parallel and opaque definitions.
+  //
+  // All nullable with NO SQL default. NULL means "never chosen" and the client
+  // applies the app default, which is what makes backfill a non-event.
+  readerPalette: text("reader_palette"),
+  readerFont: text("reader_font"),
+  readerTypeset: text("reader_typeset"),
+  readerFontStep: integer("reader_font_step"),
 });
+
+/**
+ * Reading preferences: four independent axes.
+ *
+ * The reader previously had ONE axis -- eight bundled "themes" -- doing four
+ * jobs badly, which is why "turn the classical feel off" was not expressible.
+ * Splitting them means palette is purely about eye strain, font is purely about
+ * face, and the classical ornaments are a single switch.
+ *
+ * Font is orthogonal to typeset ON PURPOSE: bundled, "I want the accessible
+ * font" would silently also mean "no drop cap", making an accessibility choice
+ * cost a feature the user liked.
+ */
+export const READER_PALETTES = ["paper", "sepia", "night", "contrast"] as const;
+export const READER_FONTS = ["literata", "ebgaramond", "atkinson", "lexend", "system"] as const;
+export const READER_TYPESETS = ["classic", "plain"] as const;
+
+/** Text size as an integer STEP, not a px value, so the scale below can be
+ *  retuned later without migrating a single stored row. */
+export const READER_FONT_STEPS = [16, 17, 18, 20, 22, 25, 28] as const;
+
+export const readingPrefsSchema = z.object({
+  palette: z.enum(READER_PALETTES).default("paper"),
+  font: z.enum(READER_FONTS).default("literata"),
+  typeset: z.enum(READER_TYPESETS).default("classic"),
+  fontStep: z.number().int().min(0).max(READER_FONT_STEPS.length - 1).default(2),
+});
+export type ReadingPrefs = z.infer<typeof readingPrefsSchema>;
+export const READING_PREFS_DEFAULTS: ReadingPrefs = readingPrefsSchema.parse({});
 
 // One row per generation REQUEST, which the client polls. Distinct from
 // generation_records (one row per attempt): a job may be claimed several times
@@ -616,6 +657,14 @@ export type StoryRequest = z.infer<typeof storyRequestSchema>;
 export const storyResponseSchema = z.object({
   title: z.string(),
   content: z.string(),
+  // What KIND of thing content is. OPTIONAL, because every story saved before
+  // this shipped has none -- and the reader must still parse those rows.
+  //
+  // The reader needs it because a poem's line breaks are single "\n" and prose
+  // paragraphs are "\n\n"; rendering one as the other destroys it. Story.tsx
+  // falls back to saved.request.storyType, which IS present on every existing
+  // row, so no backfill is needed.
+  storyType: z.enum(["regular", "poem", "moral"]).optional(),
   moralOutcome: z.enum(["positive", "learning", "consequences", "creative"]),
   bibleVerse: z.object({
     text: z.string(),

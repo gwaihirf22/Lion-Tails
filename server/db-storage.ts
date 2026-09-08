@@ -1,6 +1,6 @@
 
 import { db, pool } from './db';
-import { users, verificationTokens, type User, type InsertUser, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
+import { users, verificationTokens, readingPrefsSchema, type ReadingPrefs, type User, type InsertUser, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
 import { eq, and, desc, isNull, sql, or, like, ilike } from 'drizzle-orm';
@@ -20,6 +20,28 @@ function isDatabaseAvailable(): boolean {
 // Define tables for DbStorage if they don't exist in schema.ts
 // For now, we'll store JSON data for some of the more complex types
 // We'll create proper relational schemas later
+
+/**
+ * user_settings row -> ReadingPrefs, dropping anything that no longer validates.
+ *
+ * Columns are nullable and hold free text, so a value written by an older
+ * build (or by hand) can be a palette this version does not have. Parsing per
+ * field rather than casting means an unknown value falls back to the app
+ * default instead of reaching the DOM as a data-attribute nothing styles.
+ */
+function rowToPrefs(row: Record<string, unknown>): Partial<ReadingPrefs> {
+  const out: Partial<ReadingPrefs> = {};
+  const shape = readingPrefsSchema.shape;
+  const p = shape.palette.safeParse(row.reader_palette);
+  if (p.success) out.palette = p.data;
+  const f = shape.font.safeParse(row.reader_font);
+  if (f.success) out.font = f.data;
+  const t = shape.typeset.safeParse(row.reader_typeset);
+  if (t.success) out.typeset = t.data;
+  const n = shape.fontStep.safeParse(row.reader_font_step);
+  if (n.success) out.fontStep = n.data;
+  return out;
+}
 
 export class DbStorage implements IStorage {
   sessionStore: session.Store;
@@ -1465,15 +1487,13 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      // Create the table if it doesn't exist (helpful for deployment)
-      await pool!.query(`
-        CREATE TABLE IF NOT EXISTS user_settings (
-          user_id INTEGER PRIMARY KEY,
-          openai_key TEXT,
-          openai_model TEXT
-        )
-      `);
-    
+      // The CREATE TABLE IF NOT EXISTS that used to sit here has been removed,
+      // for the same reason the one in saveStory was: it is a second, stale
+      // definition of a table migrations already own. It declared THREE columns
+      // while user_settings now has seven, so on a database where it fired
+      // ahead of the migration it would create a table verifyOrmSchema()
+      // correctly rejects -- turning /api/health into a 503. Latent while the
+      // columns matched; live the moment the reading preferences landed.
       await pool!.query(
         `INSERT INTO user_settings (user_id, openai_key) 
          VALUES ($1, $2) 
@@ -1505,6 +1525,61 @@ export class DbStorage implements IStorage {
     }
   }
   
+  async getUserReadingPrefs(userId: number): Promise<Partial<ReadingPrefs>> {
+    if (!isDatabaseAvailable()) return {};
+    try {
+      const { rows } = await pool!.query(
+        `SELECT reader_palette, reader_font, reader_typeset, reader_font_step
+         FROM user_settings WHERE user_id = $1`,
+        [userId],
+      );
+      return rows.length ? rowToPrefs(rows[0]) : {};
+    } catch (error) {
+      console.error(`Error getting reading preferences for user ${userId}:`, error);
+      return {};
+    }
+  }
+
+  async setUserReadingPrefs(
+    userId: number,
+    prefs: Partial<ReadingPrefs>,
+  ): Promise<Partial<ReadingPrefs>> {
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in setUserReadingPrefs(${userId}). Not saved.`);
+      return {};
+    }
+    try {
+      // COALESCE on every column so a partial update never nulls a sibling:
+      // the bar sends one axis at a time, and without this, changing the
+      // palette would silently clear the font.
+      //
+      // RETURNING, and the caller hands that back to the client, because a
+      // 200 from this app does not prove a write landed -- storage falls back
+      // to memory when the database is away.
+      const { rows } = await pool!.query(
+        `INSERT INTO user_settings (user_id, reader_palette, reader_font, reader_typeset, reader_font_step)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (user_id) DO UPDATE SET
+           reader_palette   = COALESCE($2, user_settings.reader_palette),
+           reader_font      = COALESCE($3, user_settings.reader_font),
+           reader_typeset   = COALESCE($4, user_settings.reader_typeset),
+           reader_font_step = COALESCE($5, user_settings.reader_font_step)
+         RETURNING reader_palette, reader_font, reader_typeset, reader_font_step`,
+        [
+          userId,
+          prefs.palette ?? null,
+          prefs.font ?? null,
+          prefs.typeset ?? null,
+          prefs.fontStep ?? null,
+        ],
+      );
+      return rows.length ? rowToPrefs(rows[0]) : {};
+    } catch (error) {
+      console.error(`Error setting reading preferences for user ${userId}:`, error);
+      return {};
+    }
+  }
+
   async setUserOpenAIModel(userId: number, model: string): Promise<void> {
     if (!isDatabaseAvailable()) {
       console.warn(`Database unavailable in setUserOpenAIModel(${userId}). Cannot save model.`);
@@ -1512,15 +1587,7 @@ export class DbStorage implements IStorage {
     }
     
     try {
-      // Create the table if it doesn't exist (helpful for deployment)
-      await pool!.query(`
-        CREATE TABLE IF NOT EXISTS user_settings (
-          user_id INTEGER PRIMARY KEY,
-          openai_key TEXT,
-          openai_model TEXT
-        )
-      `);
-    
+      // See the note in setUserOpenAIKey: migrations own this table.
       await pool!.query(
         `INSERT INTO user_settings (user_id, openai_model) 
          VALUES ($1, $2) 

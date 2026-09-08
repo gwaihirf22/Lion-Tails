@@ -48,7 +48,7 @@ import {
 } from "./lib/generationStats";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema } from "@shared/schema";
+import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { ZodError } from "zod";
@@ -1109,6 +1109,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  /**
+   * Reading preferences.
+   *
+   * requireAuth in the SIGNATURE rather than an inline `if (!req.user)` --
+   * there are already 29 of those in this file, and that pattern is how eight
+   * unguarded write routes once shipped. A missing guard is visible here.
+   */
+  app.get("/api/settings/reading", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const stored = await storage.getUserReadingPrefs(userId);
+      // Defaults filled server-side so the client has one place to read from.
+      // NULL columns mean "never chosen", which is why there is no SQL default
+      // and nothing to backfill.
+      res.json({ ...READING_PREFS_DEFAULTS, ...stored });
+    } catch (error) {
+      console.error("Error fetching reading preferences:", error);
+      res.status(500).json({ message: "Failed to fetch reading preferences" });
+    }
+  });
+
+  app.post("/api/settings/reading", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      // .partial(): the reader bar sends ONE axis at a time.
+      const parsed = readingPrefsSchema.partial().safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          message: parsed.error.errors[0]?.message ?? "Invalid reading preferences",
+        });
+      }
+      const stored = await storage.setUserReadingPrefs(userId, parsed.data);
+      // What is ACTUALLY stored, read back -- not an echo of the request.
+      // Storage falls back to memory when the database is away, so a 200 here
+      // does not by itself mean anything was persisted.
+      res.json({ ...READING_PREFS_DEFAULTS, ...stored });
+    } catch (error) {
+      console.error("Error saving reading preferences:", error);
+      res.status(500).json({ message: "Failed to save reading preferences" });
+    }
+  });
+
   // API routes for Heroes of Faith
   
   // Heroes of Faith seeding lives in server/seed.ts and runs after the database
