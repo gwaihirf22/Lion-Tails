@@ -3,7 +3,7 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { useStoryJobs, describeJob } from "@/hooks/use-story-jobs";
 import { useUniverses } from "@/hooks/use-universes";
 import UniverseCard from "@/components/UniverseCard";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -124,6 +124,18 @@ export default function SavedStories() {
         variant: "destructive",
       });
     }
+  };
+
+  // Whole-card click. Modified clicks are left alone so the browser's own
+  // open-in-new-tab / new-window behaviour on the title link is not doubled up
+  // by a navigation here -- wouter's Link bails out before its onClick on those
+  // same modifiers, so nothing else stops the event reaching this handler.
+  const handleCardClick = (
+    e: React.MouseEvent,
+    story: SavedStory,
+  ) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.button !== 0) return;
+    handleViewStory(story);
   };
 
   // View a specific story
@@ -309,12 +321,12 @@ export default function SavedStories() {
                       )}
                       {inThis.map((st) => (
                         <div key={st.id} className="flex items-center justify-between gap-2 text-sm">
-                          <button
+                          <Link
+                            href={`/story?id=${st.id}`}
                             className="text-left flex-1 hover:underline"
-                            onClick={() => handleViewStory(st)}
                           >
                             {st.story.title}
-                          </button>
+                          </Link>
                           <Button
                             size="sm"
                             variant="ghost"
@@ -343,12 +355,22 @@ export default function SavedStories() {
                   </Card>
                 ) : (
                   unassigned.map((savedStory) => (
-                    <Card key={savedStory.id} className="bg-white/95 overflow-hidden transition-all duration-200 hover:shadow-md">
+                    <Card
+                      key={savedStory.id}
+                      className="bg-white/95 overflow-hidden transition-all duration-200 hover:shadow-md cursor-pointer"
+                      onClick={(e) => handleCardClick(e, savedStory)}
+                    >
                       <CardContent className="p-5">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <h3 className="text-xl font-bold text-primary mb-1 line-clamp-1">
-                              {savedStory.story.title}
+                              <Link
+                                href={`/story?id=${savedStory.id}`}
+                                className="hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {savedStory.story.title}
+                              </Link>
                             </h3>
                             <div className="flex items-center gap-2 mb-2">
                               <span className="text-sm text-gray-500">
@@ -371,7 +393,10 @@ export default function SavedStories() {
                               size="sm" 
                               variant="ghost"
                               className={savedStory.isFavorite ? "text-yellow-500 hover:text-yellow-600" : "text-gray-400 hover:text-yellow-500"}
-                              onClick={() => handleToggleFavorite(savedStory.id, !savedStory.isFavorite)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleFavorite(savedStory.id, !savedStory.isFavorite);
+                              }}
                               title={savedStory.isFavorite ? "Remove from favorites" : "Add to favorites"}
                             >
                               {savedStory.isFavorite ? (
@@ -388,7 +413,10 @@ export default function SavedStories() {
                               size="sm"
                               variant="ghost"
                               className="text-red-500 hover:text-red-600"
-                              onClick={() => handleDeleteStory(savedStory.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteStory(savedStory.id);
+                              }}
                               title="Delete story"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -425,7 +453,13 @@ export default function SavedStories() {
                             </div>
                           </div>
                           
-                          <Button size="sm" onClick={() => handleViewStory(savedStory)}>
+                          <Button
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewStory(savedStory);
+                            }}
+                          >
                             Read Story
                           </Button>
                         </div>
