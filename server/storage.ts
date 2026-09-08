@@ -46,6 +46,14 @@ export interface IStorage {
   toggleFavorite(id: string, isFavorite: boolean, userId: number): Promise<SavedStory | undefined>;
   deleteStory(id: string, userId: number): Promise<boolean>;
   updateStoryHeroId(storyId: string, heroId: string, userId: number): Promise<SavedStory | undefined>;
+  /**
+   * Attach an illustration to a story that was saved without one.
+   *
+   * imageUrl lives ONLY inside story_data -- there is no column for it -- so
+   * unlike hero_id there is no risk here of writing the same fact twice. See
+   * the note on updateStoryHeroId.
+   */
+  setStoryImageUrl(storyId: string, imageUrl: string, userId: number): Promise<SavedStory | undefined>;
   
   // Story search methods
   searchStories(query: string, userId?: number): Promise<SavedStory[]>;
@@ -59,6 +67,17 @@ export interface IStorage {
   getAllHeroesOfFaith(): Promise<HeroOfFaith[]>;
   getHeroOfFaithById(id: string): Promise<HeroOfFaith | undefined>;
   createHeroOfFaith(hero: Omit<HeroOfFaith, "id" | "createdAt">): Promise<HeroOfFaith>;
+  /**
+   * Write a hero AT ITS OWN ID, creating or replacing.
+   *
+   * createHeroOfFaith generates a uuid, which is why the seed could only ever
+   * run against an empty table: there was no stable identity to update. With
+   * slugs there is, so seeding becomes idempotent and adding a person to the
+   * data file actually reaches a database that already has rows.
+   */
+  upsertHeroOfFaith(hero: HeroOfFaith): Promise<HeroOfFaith>;
+  /** Hero ids that exist in storage but are not in the given set. */
+  findSupersededHeroes(keepIds: string[], names: string[]): Promise<string[]>;
   updateHeroOfFaith(id: string, hero: Partial<HeroOfFaith>): Promise<HeroOfFaith | undefined>;
   deleteHeroOfFaith(id: string): Promise<boolean>;
 
@@ -522,6 +541,20 @@ export class MemStorage implements IStorage {
     return this.stories.delete(id);
   }
   
+  async setStoryImageUrl(
+    storyId: string,
+    imageUrl: string,
+    userId: number,
+  ): Promise<SavedStory | undefined> {
+    // getStoryById already does the user-scoping check, so ownership is
+    // enforced in one place rather than re-derived here.
+    const story = await this.getStoryById(storyId, userId);
+    if (!story) return undefined;
+    const updated = { ...story, story: { ...story.story, imageUrl } };
+    this.stories.set(storyId, updated);
+    return updated;
+  }
+
   async updateStoryHeroId(storyId: string, heroId: string, userId: number): Promise<SavedStory | undefined> {
     // Check if story belongs to the user
     const userStories = this.userStories.get(userId);
@@ -840,6 +873,19 @@ export class MemStorage implements IStorage {
 
   async getHeroOfFaithById(id: string): Promise<HeroOfFaith | undefined> {
     return this.heroesOfFaith.get(id);
+  }
+
+  async upsertHeroOfFaith(hero: HeroOfFaith): Promise<HeroOfFaith> {
+    this.heroesOfFaith.set(hero.id, hero);
+    return hero;
+  }
+
+  async findSupersededHeroes(keepIds: string[], names: string[]): Promise<string[]> {
+    const keep = new Set(keepIds);
+    const owned = new Set(names.map((n) => n.toLowerCase()));
+    return Array.from(this.heroesOfFaith.values())
+      .filter((h) => !keep.has(h.id) && owned.has(h.name.toLowerCase()))
+      .map((h) => h.id);
   }
 
   async createHeroOfFaith(heroData: Omit<HeroOfFaith, "id" | "createdAt">): Promise<HeroOfFaith> {

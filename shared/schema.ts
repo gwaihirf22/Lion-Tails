@@ -803,12 +803,65 @@ export const songSchema = z.object({
 export type Song = z.infer<typeof songSchema>;
 
 // Schema for Heroes of Faith
+/**
+ * The eras the list is browsed by. Ordered chronologically, because that is
+ * how a reader thinks about them and how the page groups them.
+ */
+export const HERO_GROUPS = [
+  "early-church",
+  "medieval",
+  "reformers",
+  "puritans",
+  "awakening",
+  "missionaries",
+  "modern",
+] as const;
+export type HeroGroup = (typeof HERO_GROUPS)[number];
+
+export const HERO_GROUP_LABELS: Record<HeroGroup, string> = {
+  "early-church": "The Early Church",
+  medieval: "The Middle Ages",
+  reformers: "The Reformation",
+  puritans: "The Puritans",
+  awakening: "Awakening & Revival",
+  missionaries: "Missionaries",
+  modern: "The Modern Era",
+};
+
 export const heroOfFaithSchema = z.object({
+  /**
+   * A SLUG, not a uuid.
+   *
+   * These were uuidv4() generated at module load, which meant the identity of
+   * a hero depended on when the process started -- there was nothing stable to
+   * upsert against, so the seed could only ever run on an empty table and
+   * adding a hero to the data file did nothing to a database that already had
+   * rows. A slug is stable across environments, readable in a URL, and makes
+   * the seed idempotent.
+   */
   id: z.string(),
   name: z.string(),
   description: z.string(),
   timePeriod: z.string(),
   contribution: z.string(),
+  /** Which era this person is browsed under. */
+  group: z.enum(HERO_GROUPS).optional(),
+  /** Where they lived and worked, in a few words. "Colonial America". */
+  place: z.string().optional(),
+  /** 250-350 words. The thing a child can read without any AI involved. */
+  biography: z.string().optional(),
+  /**
+   * What they got wrong, where it matters.
+   *
+   * Optional and used sparingly, but present on purpose: several of these
+   * people held positions their own tradition later repudiated, and a
+   * children's history that leaves that out is not history.
+   */
+  complications: z.string().optional(),
+  /** Free-text terms for search -- "martyr", "translator", "hymn writer". */
+  tags: z.array(z.string()).optional().default([]),
+  /** English Wikipedia article title, for the "read more" link. */
+  wikipedia: z.string().optional(),
   imageUrl: z.string().optional(),
   birthYear: z.string().optional(),
   deathYear: z.string().optional(),
@@ -826,7 +879,9 @@ export const heroOfFaithSchema = z.object({
   })).optional().default([]),
   keyEvents: z.array(z.object({
     year: z.string(),
-    description: z.string()
+    description: z.string(),
+    /** Where a date comes from, when the usual source does not state it. */
+    dateNote: z.string().optional(),
   })).optional().default([]),
   createdAt: z.date().or(z.string()).transform(val => 
     typeof val === 'string' ? new Date(val) : val

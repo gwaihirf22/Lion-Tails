@@ -1,6 +1,6 @@
 import { databaseReady } from "./db";
 import { storage } from "./storage";
-import { heroesOfFaithData } from "./data/heroesOfFaith";
+import { heroesOfFaithData, heroesWithoutBiography } from "./data/heroes";
 import { log } from "./static";
 
 /**
@@ -33,21 +33,49 @@ export async function seedReferenceData(): Promise<void> {
   }
 
   try {
-    const existing = await storage.getAllHeroesOfFaith();
-    if (existing.length > 0) {
-      log(`Heroes of Faith already seeded (${existing.length} rows)`, "seed");
-      return;
-    }
+    // No "already seeded, skip" check any more. That guard is why adding a
+    // hero to the data file did nothing on a database that already had rows --
+    // production sat at the original fifteen and would have stayed there
+    // however many people were written. Seeding is an UPSERT against a stable
+    // slug now, so it is safe to run on every boot and it actually delivers
+    // changes.
+    const before = await storage.getAllHeroesOfFaith();
+    log(`Syncing ${heroesOfFaithData.length} Heroes of Faith (${before.length} present)...`, "seed");
 
-    log(`Seeding ${heroesOfFaithData.length} Heroes of Faith...`, "seed");
     let created = 0;
     for (const hero of heroesOfFaithData) {
       try {
-        await storage.createHeroOfFaith(hero);
+        await storage.upsertHeroOfFaith(hero);
         created++;
       } catch (err) {
-        console.error(`Failed to create hero: ${hero.name}`, err);
+        console.error(`Failed to write hero: ${hero.name}`, err);
       }
+    }
+
+    // Retire the old uuid-keyed rows for people the data file now owns under a
+    // slug. Matched by NAME rather than "anything unrecognised", because an
+    // admin can add a hero through the API and that one must survive.
+    try {
+      const superseded = await storage.findSupersededHeroes(
+        heroesOfFaithData.map((h) => h.id),
+        heroesOfFaithData.map((h) => h.name),
+      );
+      for (const id of superseded) {
+        await storage.deleteHeroOfFaith(id);
+      }
+      if (superseded.length > 0) {
+        log(`Removed ${superseded.length} superseded hero rows (old random ids)`, "seed");
+      }
+    } catch (err) {
+      console.error("Could not retire superseded hero rows:", err);
+    }
+
+    if (heroesWithoutBiography.length > 0) {
+      log(
+        `${heroesWithoutBiography.length} heroes still have no full profile: ` +
+          heroesWithoutBiography.join(", "),
+        "seed",
+      );
     }
 
     // Read back rather than trusting the writes: the whole point of this

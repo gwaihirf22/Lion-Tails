@@ -16,7 +16,7 @@ import {
   resolveHeroOfFaith,
   serialiseBrief,
 } from "./lib/storyBrief";
-import { getWordCountFromLength } from "./lib/openai-implementation";
+import { getWordCountFromLength , generateStoryImage } from "./lib/openai-implementation";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
 import {
@@ -840,6 +840,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // API endpoint to associate a story with a hero of faith
+  /**
+   * Add an illustration to a story that was saved without one.
+   *
+   * Stories generated on the free tier never get a picture: illustration is
+   * premium and has no cheap or local equivalent, so generation skips it
+   * rather than failing the whole story. This lets someone who later adds
+   * their own key illustrate a story they already have, instead of having to
+   * regenerate it and lose the text they liked.
+   */
+  app.post("/api/stories/:id/illustrate", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const saved = await storage.getStoryById(req.params.id, userId);
+      if (!saved) {
+        return res.status(404).json({ message: "Story not found" });
+      }
+      // Idempotent: a double-click, or two tabs, must not spend twice.
+      if (saved.story.imageUrl) {
+        return res.json({ imageUrl: saved.story.imageUrl, alreadyExisted: true });
+      }
+
+      // The prompt the model wrote for this story when it was generated. Older
+      // rows may not have one, so fall back to something derived from the
+      // story itself rather than refusing.
+      const prompt =
+        saved.story.imagePrompt ||
+        `An illustration for a children's story titled "${saved.story.title}"`;
+
+      const imageUrl = await generateStoryImage(prompt, userId);
+      if (!imageUrl) {
+        // generateStoryImage returns undefined for BOTH "not entitled" and
+        // "the image call failed", and the caller cannot tell them apart --
+        // so this says what to check rather than guessing which it was.
+        return res.status(503).json({
+          message:
+            "Could not create a picture. Illustration needs an admin account or your own OpenAI API key, which you can add in Settings.",
+          code: "no_model_available",
+        });
+      }
+
+      const updated = await storage.setStoryImageUrl(req.params.id, imageUrl, userId);
+      if (!updated) {
+        // The picture exists on disk but could not be attached. Say so rather
+        // than returning a URL the story does not actually carry.
+        return res.status(500).json({ message: "The picture was made but could not be saved to the story." });
+      }
+      res.json({ imageUrl, alreadyExisted: false });
+    } catch (error) {
+      console.error("Error illustrating story:", error);
+      res.status(500).json({ message: "Could not create a picture for this story." });
+    }
+  });
+
   app.post("/api/stories/:id/associate-hero", async (req, res) => {
     try {
       // Check if user is authenticated
@@ -1076,6 +1129,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         models: listSelectableModels({ isAdmin, hasOwnKey: Boolean(ownKey) }),
         hasOwnKey: Boolean(ownKey),
+        // Illustration is premium and has no cheap or local tier. Derived from
+        // the policy rather than re-stated as "admin or own key", so the UI
+        // cannot drift from what the server will actually allow.
+        canIllustrate: isModelAllowedFor(DEFAULTS.image, "image", {
+          isAdmin,
+          hasOwnKey: Boolean(ownKey),
+        }),
       });
     } catch (error) {
       console.error("Error listing models:", error);
