@@ -201,7 +201,9 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
         <CardContent className="pt-6">
           <div className="flex items-center justify-center space-x-2 text-muted-foreground">
             <Edit3 className="h-5 w-5" />
-            <span className="text-sm">Prompt editing requires Parent Mode</span>
+            <span className="text-sm">
+              Prompt editing requires Parent Mode — turn it on in Settings
+            </span>
           </div>
         </CardContent>
       </Card>

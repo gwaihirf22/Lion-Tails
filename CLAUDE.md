@@ -182,6 +182,10 @@ Rules that are easy to break without noticing:
 
 - ESM throughout (`"type": "module"`). `require()` is not available in the
   production bundle; a stray one throws `ReferenceError` at runtime only.
+- A design token is a surface colour OR a text colour, not both. --secondary
+  and --accent were each mapped one way and used the other, and both produced
+  text that was invisible in some palettes and fine in the one being looked at.
+  See docs/decisions.md 22.
 - Prefer fixing a duplicated pattern over fixing its instances. This repo has
   repeatedly produced bugs from parallel definitions: four schema sources, six
   model lists, four prompt sites, 29 inline auth checks.

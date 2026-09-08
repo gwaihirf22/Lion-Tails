@@ -251,7 +251,16 @@ body[data-reader-page] header {
 /* ----------------------------------------------------------- focus mode --
  * Fade, never collapse. Reserved space means nothing reflows, which is the
  * "nothing moves unless you ask it to" property this was chosen for.
- * pointer-events stay live so hovering the top strip brings the bar back. */
+ *
+ * pointer-events go dead while faded, and that is a change from the first
+ * version. The bar used to stay clickable so that hovering it would bring it
+ * back -- but the reveal is driven by pointer POSITION now (useFocusMode
+ * watches clientY against a top strip), so the element does not need to be
+ * hittable to do its job. Leaving it hittable meant an invisible toolbar
+ * swallowing taps at the top of the page, which on a phone is most of where a
+ * thumb lands. Keyboard focus is unaffected -- pointer-events does not apply
+ * to it -- and focusin reveals, so tabbing can never land on something
+ * invisible. */
 .reader-chrome {
   transition: opacity 260ms ease;
 }
@@ -259,6 +268,7 @@ body[data-reader-focus] .reader-chrome,
 body[data-reader-focus] header,
 body[data-reader-focus] footer {
   opacity: 0;
+  pointer-events: none;
 }
 body[data-reader-focus] header,
 body[data-reader-focus] footer {

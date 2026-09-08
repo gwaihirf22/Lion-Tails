@@ -90,6 +90,13 @@ Two interactions to **design rather than discover**:
 - An opening story must still hit its word target, so "leave it open" cannot
   become "stop early".
 
+### Focus mode on a hybrid device
+
+The mouse reveal is a top strip and the touch reveal is a scroll-up, chosen per
+event rather than per device, so a laptop with a touchscreen gets both. What is
+untested is a tablet with a trackpad case: pointer events there report as mouse,
+which is probably right, but nobody has actually tried it.
+
 ### Reading position memory
 
 The reader has no bookmark and no scroll restore. A child interrupted at
