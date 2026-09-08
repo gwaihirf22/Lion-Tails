@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { StoryGenerationError } from "./storyErrors";
 import { storage } from "../storage";
 
 /**
@@ -253,7 +254,17 @@ export async function resolveModel(
   // without their own key was downgraded above.
   const apiKey = ownKey || process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("OpenAI API key not found");
+    // Typed, so the route answers 503 with something the user can act on
+    // rather than a blanket 500 reading "Failed to start story generation".
+    // This is a SERVER configuration problem -- OPENAI_API_KEY is unset -- not
+    // anything the user did, and the remedy that always works is the local
+    // tier, which needs no key at all.
+    throw new StoryGenerationError(
+      "no_model_available",
+      `${model} needs an OpenAI API key, and this server has none configured. ` +
+        "Choose one of the local models in Settings -- they are free and need no key -- " +
+        "or add your own OpenAI API key there.",
+    );
   }
 
   return {

@@ -317,6 +317,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof ZodError) {
         return res.status(400).json({ message: fromZodError(error).message });
       }
+      // A typed generation failure already knows its status and carries a
+      // message written for the person reading it. Flattening it to a 500
+      // "Failed to start story generation" is what made a missing server API
+      // key indistinguishable from a bug.
+      if (error instanceof StoryGenerationError) {
+        console.error(`Enqueue rejected (${error.code}):`, error.message);
+        return res.status(error.statusCode).json({ message: error.message, code: error.code });
+      }
       console.error("Error enqueueing story:", error);
       res.status(500).json({ message: "Failed to start story generation" });
     }
