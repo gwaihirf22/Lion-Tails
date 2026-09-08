@@ -483,6 +483,18 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
         "order and the outcome are fixed. Where the account is silent you may " +
         "imagine; where it speaks you may not contradict it.",
     );
+    // Found by generating a real Noah story on gpt-oss and checking the facts:
+    // it produced "Noah's wife, Miriam" and "Shem, a young man of twenty".
+    // Scripture names neither. Inventing a name or an age for a real person
+    // reads exactly like a fact to a child, which makes it the most damaging
+    // kind of invention this prompt can produce -- and none of the per-event
+    // cautions covered it, because it is not specific to any one event.
+    out.push(
+      "Do NOT invent a name, an age or a number for anyone the account leaves " +
+        "unnamed or unspecified. Refer to them by their relationship instead -- " +
+        "\"Noah's wife\", \"his eldest son\" -- and say nothing about how old " +
+        "they were.",
+    );
   } else {
     out.push("WHAT IT IS ABOUT");
     out.push(...brief.premise);

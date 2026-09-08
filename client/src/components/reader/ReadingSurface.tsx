@@ -12,18 +12,7 @@ import type { StoryDoc } from "@/lib/storyContent";
  * Scoping the reader's tokens to its own element makes it structurally immune
  * to that, and to whatever else ends up on <html> later.
  */
-export function ReadingSurface({
-  title,
-  content,
-  verse,
-  onParsed,
-}: {
-  title: string;
-  content: string;
-  /** True for a poem: single newlines are lines, not soft wraps. */
-  verse?: boolean;
-  onParsed?: (doc: StoryDoc) => void;
-}) {
+export function ReadingSurface({ title, doc }: { title: string; doc: StoryDoc }) {
   const { prefs, fontSizePx } = useReadingPrefs();
 
   return (
@@ -42,7 +31,7 @@ export function ReadingSurface({
       }
     >
       <h1 className="reader-title">{title}</h1>
-      <StoryContent content={content} verse={verse} onParsed={onParsed} />
+      <StoryContent doc={doc} />
     </article>
   );
 }

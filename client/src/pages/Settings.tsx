@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import ReadingSettingsCard from "@/components/reader/ReadingSettingsCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -248,6 +249,10 @@ export default function Settings() {
       <h1 className="text-3xl font-heading font-bold mb-8 text-textDark">Settings</h1>
       
       <div className="grid gap-8 md:grid-cols-2">
+        {/* Reading preferences. Same provider and same picker as the reader's
+            own bar -- no duplicated state, no second list of palettes. */}
+        <ReadingSettingsCard />
+
         {/* Story Generation Stats */}
         <Card className="bg-white/95 rounded-2xl shadow-xl">
           <CardHeader>

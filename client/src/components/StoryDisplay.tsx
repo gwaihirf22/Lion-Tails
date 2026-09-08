@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Star, Printer, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useReadingPrefs } from "@/hooks/use-reading-prefs";
 import type { StoryRequest, StoryResponse } from "@shared/schema";
-import { storyToPrintHtml, type StoryDoc } from "@/lib/storyContent";
+import { parseStoryContent, storyToPrintHtml } from "@/lib/storyContent";
 import ReaderBar from "@/components/reader/ReaderBar";
 import ReadingSurface from "@/components/reader/ReadingSurface";
 import StoryExtras from "@/components/reader/StoryExtras";
@@ -27,7 +27,6 @@ export default function StoryDisplay({ story, storyId, storyType }: StoryDisplay
   const [isFavorite, setIsFavorite] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showExpiryAlert, setShowExpiryAlert] = useState(true);
-  const [doc, setDoc] = useState<StoryDoc | null>(null);
   const { toast } = useToast();
   const focus = useFocusMode();
   const { prefs } = useReadingPrefs();
@@ -45,6 +44,14 @@ export default function StoryDisplay({ story, storyId, storyType }: StoryDisplay
 
   const isVerse = storyType === "poem" || story.storyType === "poem";
 
+  // Parsed once here and shared by the surface, the extras and the print path.
+  // Passing `verse` explicitly when we know it; the parser falls back to its
+  // own shape heuristic when we do not, which is the case for a ?data= link.
+  const doc = useMemo(
+    () => parseStoryContent(story.content, isVerse ? { verse: true } : undefined),
+    [story.content, isVerse],
+  );
+
   const handlePrint = useCallback(() => {
     const w = window.open("", "_blank");
     if (!w) return;
@@ -52,7 +59,7 @@ export default function StoryDisplay({ story, storyId, storyType }: StoryDisplay
     // replaces two separate `story.content.replace(/\n/g, '<br>')` calls that
     // wrote raw model output into the DOM -- one of them into a document that
     // was then handed to the printer.
-    const body = doc ? storyToPrintHtml(doc, story.title, story.bibleVerse) : "";
+    const body = storyToPrintHtml(doc, story.title, story.bibleVerse);
     w.document.write(
       `<!DOCTYPE html><html><head><title></title><style>` +
         `body{font-family:Georgia,serif;line-height:1.6;color:#222;max-width:34em;margin:0 auto;padding:2rem}` +
@@ -155,12 +162,7 @@ export default function StoryDisplay({ story, storyId, storyType }: StoryDisplay
         </Alert>
       )}
 
-      <ReadingSurface
-        title={story.title}
-        content={story.content}
-        verse={isVerse}
-        onParsed={setDoc}
-      />
+      <ReadingSurface title={story.title} doc={doc} />
 
       <StoryExtras story={story} storyId={storyId} doc={doc} focusHidden={focus.hidden} />
     </div>

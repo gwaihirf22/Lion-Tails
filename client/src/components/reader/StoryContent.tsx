@@ -1,5 +1,5 @@
-import { Fragment, useMemo } from "react";
-import { parseStoryContent, type Block, type Inline, type StoryDoc } from "@/lib/storyContent";
+import { Fragment } from "react";
+import type { Block, Inline, StoryDoc } from "@/lib/storyContent";
 
 /**
  * The story text itself, and nothing else.
@@ -81,22 +81,12 @@ function BlockView({ block, isOpener }: { block: Block; isOpener: boolean }) {
   }
 }
 
-export function StoryContent({
-  content,
-  verse,
-  onParsed,
-}: {
-  content: string;
-  /** True for a poem, so single newlines are kept as lines. */
-  verse?: boolean;
-  /** The parsed doc, so the print path and the extras can reuse it. */
-  onParsed?: (doc: StoryDoc) => void;
-}) {
-  const doc = useMemo(() => parseStoryContent(content, { verse }), [content, verse]);
-
-  // Reported during render rather than in an effect: the parent only stores it,
-  // and an effect would render the extras one frame late.
-  if (onParsed) onParsed(doc);
+export function StoryContent({ doc }: { doc: StoryDoc }) {
+  // The doc is parsed ONCE by StoryDisplay and passed down. The first version
+  // parsed here and reported the result upward with a callback during render,
+  // which is a setState on a different component mid-render -- React warns,
+  // and it can loop. Parsing where the result is needed by three components
+  // removes the problem rather than working around it.
 
   // The first PARAGRAPH, not the first block -- a story that opens with a
   // heading or a scene break should still drop-cap its first real paragraph.
