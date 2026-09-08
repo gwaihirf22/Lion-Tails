@@ -35,7 +35,7 @@ import {
   storyTooShortAdvice,
   poemNotVerseAdvice,
 } from "./storyErrors";
-import { resolveModel, createClient, type ResolvedModel } from "./modelPolicy";
+import { resolveModel, createClient, type ResolvedModel , tokenLimitFor, temperatureFor } from "./modelPolicy";
 import { newGenerationId, recordGeneration } from "./generationRecords";
 import * as fs from "fs";
 import * as path from "path";
@@ -520,8 +520,8 @@ async function generateShortStorySingleCall(
           { role: "user", content: userPrompt },
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
-        max_tokens: maxTokens,
+        ...temperatureFor(ctx.resolved.model, 0.7),
+        ...tokenLimitFor(ctx.resolved.model, maxTokens),
       });
       return {
         content: response.choices[0].message.content || "",
@@ -576,8 +576,8 @@ async function generateStoryOutline(
           { role: "user", content: userPrompt },
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
-        max_tokens: maxTokens,
+        ...temperatureFor(ctx.resolved.model, 0.7),
+        ...tokenLimitFor(ctx.resolved.model, maxTokens),
       });
       return {
         content: response.choices[0].message.content || "",
@@ -642,8 +642,8 @@ async function generateStoryChapter(
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        temperature: 0.7,
-        max_tokens: maxTokens,
+        ...temperatureFor(ctx.resolved.model, 0.7),
+        ...tokenLimitFor(ctx.resolved.model, maxTokens),
       });
       return {
         content: response.choices[0].message.content || "",
@@ -698,8 +698,8 @@ async function finalizeStoryDetails(
           { role: "user", content: userPrompt },
         ],
         response_format: { type: "json_object" },
-        temperature: 0.6,
-        max_tokens: maxTokens,
+        ...temperatureFor(ctx.resolved.model, 0.6),
+        ...tokenLimitFor(ctx.resolved.model, maxTokens),
       });
       return {
         content: response.choices[0].message.content || "",
@@ -1234,7 +1234,7 @@ export async function analyzeImageWithOpenAI(
           ],
         },
       ],
-      max_tokens: 1000,
+      ...tokenLimitFor(resolved.model, 1000),
     });
     return (
       response.choices[0].message.content || "Could not analyze the image."

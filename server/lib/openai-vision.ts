@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { promisify } from "util";
 import { storage } from "../storage";
-import { resolveModel, createClient } from "./modelPolicy";
+import { resolveModel, createClient, tokenLimitFor } from "./modelPolicy";
 
 // Promisify fs functions
 const readFile = promisify(fs.readFile);
@@ -69,7 +69,7 @@ export async function analyzeImage(base64Image: string, userId: number): Promise
           ],
         },
       ],
-      max_tokens: 1000,
+      ...tokenLimitFor(model, 1000),
     });
 
     return response.choices[0].message.content || "No analysis could be generated for this image.";
@@ -117,7 +117,7 @@ export async function generateStoryFromImage(
         }
       ],
       response_format: { type: "json_object" },
-      max_tokens: 4000,
+      ...tokenLimitFor(model, 4000),
     });
 
     // message.content is string | null. Parsing null would throw a confusing
@@ -157,7 +157,7 @@ export async function generateIllustrationPrompt(storyContent: string, userId: n
           content: `Given this children's story excerpt, create a prompt for DALL-E to generate an appropriate, child-friendly illustration. Focus on the most visually interesting scene:\n\n${storyContent}`
         }
       ],
-      max_tokens: 500,
+      ...tokenLimitFor(model, 500),
     });
 
     return response.choices[0].message.content || "A Christian children's story illustration, colorful, gentle style";

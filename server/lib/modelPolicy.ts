@@ -40,6 +40,28 @@ type ModelSpec = {
   label: string;
   /** Shown in the UI. Local models are for exercising the pipeline, not quality. */
   warning?: string;
+  /**
+   * Which parameter this model accepts for the output ceiling.
+   *
+   * OpenAI's newer models REJECT max_tokens outright:
+   *   400 Unsupported parameter: 'max_tokens' is not supported with this
+   *       model. Use 'max_completion_tokens' instead.
+   * gpt-4o and gpt-4o-mini still take max_tokens, and Ollama's OpenAI-
+   * compatible endpoint takes max_tokens only. So this cannot be a global
+   * switch -- it is a property of the model, which is what the catalogue is
+   * for. Defaults to max_tokens; new OpenAI models must say otherwise.
+   */
+  tokenParam?: "max_tokens" | "max_completion_tokens";
+  /**
+   * Whether this model accepts a temperature other than the default.
+   *
+   * The GPT-5 generation rejects one:
+   *   400 Unsupported value: 'temperature' does not support 0.7 with this
+   *       model. Only the default (1) value is supported.
+   * Sampling is fixed on those models, so the right move is to omit the
+   * parameter rather than send a value that will be refused. Defaults to true.
+   */
+  fixedTemperature?: boolean;
 };
 
 export const MODEL_CATALOG: Record<string, ModelSpec> = {
@@ -85,6 +107,8 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
     provider: "openai",
     kinds: ["chat", "vision"],
     label: "GPT-5.6 Luna — fast and cheap",
+    tokenParam: "max_completion_tokens",
+    fixedTemperature: true,
   },
   "gpt-5.6-terra": {
     tier: "premium",
@@ -92,6 +116,8 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
     kinds: ["chat", "vision"],
     label: "GPT-5.6 Terra — balanced",
     warning: "Stronger reasoning than Luna at roughly ten times the cost per story.",
+    tokenParam: "max_completion_tokens",
+    fixedTemperature: true,
   },
   "gpt-6-astra": {
     tier: "premium",
@@ -100,6 +126,8 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
     label: "GPT-6 Astra — best quality",
     warning:
       "The most capable model available, and by far the most expensive: around fifty times Luna's price per story.",
+    tokenParam: "max_completion_tokens",
+    fixedTemperature: true,
   },
   // dall-e-3 was SHUT DOWN on 2026-05-12, not merely deprecated. It sat here as
   // the image default for four months afterwards, so every illustration attempt
@@ -176,6 +204,28 @@ export function isModelAllowedFor(
   if (!spec.kinds.includes(kind)) return false;
   if (spec.tier === "premium") return opts.isAdmin || opts.hasOwnKey;
   return true;
+}
+
+/**
+ * The output-ceiling parameter for a model, spread into a chat request.
+ *
+ * One helper rather than eight call sites each remembering which name to use.
+ * An unknown model falls back to max_tokens, which is what every model this
+ * app has ever called accepted before the GPT-5 generation.
+ */
+export function tokenLimitFor(model: string, limit: number): Record<string, number> {
+  const param = MODEL_CATALOG[model]?.tokenParam ?? "max_tokens";
+  return { [param]: limit };
+}
+
+/**
+ * The temperature parameter for a model, spread into a chat request.
+ *
+ * Returns nothing at all for a model with fixed sampling -- sending the
+ * default explicitly is still an error on those, so it has to be absent.
+ */
+export function temperatureFor(model: string, temperature: number): Record<string, number> {
+  return MODEL_CATALOG[model]?.fixedTemperature ? {} : { temperature };
 }
 
 /** Models a given user may select, for the settings UI. */
