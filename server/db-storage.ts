@@ -793,6 +793,36 @@ export class DbStorage implements IStorage {
     }
   }
   
+  async setStoryImageUrl(
+    storyId: string,
+    imageUrl: string,
+    userId: number,
+  ): Promise<SavedStory | undefined> {
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in setStoryImageUrl(${storyId}).`);
+      return undefined;
+    }
+    try {
+      // Scoped to the user in the STATEMENT, not by a prior SELECT: storyId is
+      // client-supplied, and without this a user could illustrate -- and so
+      // modify -- somebody else's story.
+      const { rowCount } = await pool!.query(
+        `UPDATE user_stories
+         SET story_data = jsonb_set(story_data, '{story,imageUrl}', to_jsonb($1::text), true)
+         WHERE story_id = $2 AND user_id = $3`,
+        [imageUrl, storyId, userId],
+      );
+      if (!rowCount) {
+        console.warn(`Story not found for illustration: ${storyId} (user ${userId})`);
+        return undefined;
+      }
+      return await this.getStoryById(storyId, userId);
+    } catch (error) {
+      console.error(`Error saving illustration for story ${storyId}:`, error);
+      return undefined;
+    }
+  }
+
   async updateStoryHeroId(storyId: string, heroId: string, userId: number): Promise<SavedStory | undefined> {
     if (!isDatabaseAvailable()) {
       console.warn(`Database unavailable in updateStoryHeroId(${storyId}). Cannot associate story with hero.`);

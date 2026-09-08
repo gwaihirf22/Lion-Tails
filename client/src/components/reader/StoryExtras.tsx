@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { ImagePlus, Loader2 } from "lucide-react";
 import { DebugPanel } from "@/components/DebugPanel";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -73,6 +75,38 @@ export function StoryExtras({
     },
   });
 
+  // Whether this account may illustrate at all. Derived server-side from the
+  // same policy call the generation path uses, so the button is never offered
+  // for something the server will refuse.
+  const { data: modelInfo } = useQuery<{ canIllustrate?: boolean }>({
+    queryKey: ["/api/settings/models"],
+    enabled: Boolean(storyId),
+  });
+
+  // The picture the story was saved with, or the one we just made for it.
+  const [imageUrl, setImageUrl] = useState<string | undefined>(story.imageUrl);
+  useEffect(() => setImageUrl(story.imageUrl), [story.imageUrl]);
+
+  const illustrate = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/stories/${storyId}/illustrate`, {});
+      return (await response.json()) as { imageUrl: string };
+    },
+    onSuccess: (data) => {
+      setImageUrl(data.imageUrl);
+      queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+      toast({ title: "Picture added", description: "It is saved with the story." });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not make a picture",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const questions = story.applicationQuestions ?? [];
   const further = doc?.furtherLearning ?? [];
 
@@ -82,6 +116,19 @@ export function StoryExtras({
       className="reader-chrome mx-auto w-full max-w-3xl px-4 pb-16"
       style={{ color: "var(--reader-fg)" }}
     >
+      {/* A picture made FOR this story is part of it, so it is shown rather
+          than filed away: no accordion, nothing to expand. */}
+      {imageUrl && (
+        <figure className="my-8">
+          <img
+            src={imageUrl}
+            alt={story.imagePrompt || `An illustration for ${story.title}`}
+            className="mx-auto max-h-[70vh] w-auto rounded-lg"
+            style={{ border: "1px solid var(--reader-border)" }}
+          />
+        </figure>
+      )}
+
       {story.bibleVerse && (
         <blockquote
           className="my-8 border-y py-6 text-center italic"
@@ -113,33 +160,52 @@ export function StoryExtras({
           </AccordionItem>
         )}
 
-        <AccordionItem value="picture" style={{ borderColor: "var(--reader-border)" }}>
-          <AccordionTrigger className="text-base">
-            Picture{!story.imageUrl && " (stock)"}
-          </AccordionTrigger>
-          <AccordionContent>
-            <img
-              src={story.imageUrl || lionTailsImage}
-              alt={
-                story.imageUrl
-                  ? story.imagePrompt || `An illustration for ${story.title}`
-                  : "The Lion Tails lion, shown when a story has no illustration of its own"
-              }
-              className="mx-auto max-h-[60vh] w-auto rounded-lg"
-              loading="lazy"
-            />
-            {/* Illustration is DALL-E 3, which modelPolicy classes as premium:
-                admins, or a user with their own OpenAI key. Everyone else gets
-                the stock lion and, until now, no way to know that is what they
-                were looking at. */}
-            {!story.imageUrl && (
+        {/* A story with no picture keeps the stock lion tucked away in the
+            accordion -- it is a placeholder, not part of the story, and it
+            should not be the first thing you meet at the end of the text. */}
+        {!imageUrl && (
+          <AccordionItem value="picture" style={{ borderColor: "var(--reader-border)" }}>
+            <AccordionTrigger className="text-base">Picture (stock)</AccordionTrigger>
+            <AccordionContent>
+              <img
+                src={lionTailsImage}
+                alt="The Lion Tails lion, shown when a story has no illustration of its own"
+                className="mx-auto max-h-[50vh] w-auto rounded-lg"
+                loading="lazy"
+              />
               <p className="mt-3 text-center text-sm" style={{ color: "var(--reader-muted)" }}>
-                This is the standard Lion Tails picture. Stories are illustrated
-                individually only when you add your own OpenAI key in Settings.
+                This is the standard Lion Tails picture — this story does not have
+                one of its own.
               </p>
-            )}
-          </AccordionContent>
-        </AccordionItem>
+              {modelInfo?.canIllustrate ? (
+                <div className="mt-4 flex justify-center">
+                  <Button
+                    size="sm"
+                    onClick={() => illustrate.mutate()}
+                    disabled={illustrate.isPending || !storyId}
+                  >
+                    {illustrate.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Painting…
+                      </>
+                    ) : (
+                      <>
+                        <ImagePlus className="mr-2 h-4 w-4" />
+                        Make a picture for this story
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <p className="mt-3 text-center text-sm" style={{ color: "var(--reader-muted)" }}>
+                  Pictures are made individually when you add your own OpenAI key
+                  in Settings.
+                </p>
+              )}
+            </AccordionContent>
+          </AccordionItem>
+        )}
 
         {further.length > 0 && (
           <AccordionItem value="further" style={{ borderColor: "var(--reader-border)" }}>
