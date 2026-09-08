@@ -4,7 +4,7 @@ Personalized Christian bedtime stories for children, with a Christian song/chord
 library, "Heroes of Faith" content, character management, and image analysis.
 
 Stories are generated with an OpenAI or self-hosted model depending on the
-user's tier (see [Model tiers](#model-tiers)); illustrations with `dall-e-3`.
+user's tier (see [Model tiers](#model-tiers)); illustrations with `gpt-image-2`.
 
 ## Stack
 
@@ -48,6 +48,10 @@ npm run db:migrate        # applies migrations to create the tables
 | `npm run check` | TypeScript typecheck |
 | `npm run db:generate` | Generate a migration from `shared/schema.ts` (dev only; needs drizzle-kit) |
 | `npm run db:migrate` | Apply pending migrations |
+| `npm test` | Unit tests (vitest, no network — see [Tests](#tests)) |
+| `npm run test:watch` | The same, in watch mode |
+| `npm run lint` | ESLint — React Rules of Hooks only, deliberately narrow |
+| `npx tsx scripts/verify-heroes.ts [name]` | Check the Heroes of Faith against Wikipedia, Wikidata and bible-api.com. **Needs network**, so it is run by hand, not in CI |
 
 ### Why there are two server entrypoints
 
@@ -77,7 +81,7 @@ See `.env.example`. Summary:
 
 ## Schema and migrations
 
-`shared/schema.ts` is the single source of truth for all ten tables, including
+`shared/schema.ts` is the single source of truth for all thirteen tables, including
 `session` (owned by connect-pg-simple, which is configured with
 `createTableIfMissing: false` so migrations own it instead).
 
@@ -100,11 +104,29 @@ gate is about **who pays** rather than about roles:
 | Tier | Models | Available to |
 |---|---|---|
 | local | `gpt-oss:20b`, `nemotron-3-nano:4b` | everyone — free, runs on the self-hosted Ollama, needs no key |
-| economy | `gpt-4o-mini` | everyone — billed to the server owner's key |
-| premium | `gpt-4o`, `dall-e-3` | admins, or **any user who has supplied their own API key** |
+| economy | `gpt-5.6-luna` (default), `gpt-4o-mini` | everyone — billed to the server owner's key |
+| premium | `gpt-5.6-terra`, `gpt-6-astra`, `gpt-4o`, `gpt-image-2` | admins, or **any user who has supplied their own API key** |
 
 That last rule needs no role check: you may use expensive models if you are
 paying for them.
+
+`gpt-4o-mini` and `gpt-4o` are kept selectable rather than removed: thousands
+of existing stories were written on them and a `user_settings` row still naming
+one has to keep resolving.
+
+**The GPT-5.6 generation takes a different request shape**, and this is not
+cosmetic — it is per-model, so it belongs in the catalogue rather than at the
+call site. Those models reject `max_tokens` (they want
+`max_completion_tokens`) and reject any `temperature` other than the default,
+including the default sent explicitly. `tokenLimitFor()` and
+`temperatureFor()` return the right fragment to spread into a request; there
+are nine call sites and none of them should decide this for itself.
+
+`dall-e-3` **was shut down on 2026-05-12**, not merely deprecated. It remained
+the image default for four months afterwards, so every illustration attempt by
+an entitled user failed — silently, because `generateStoryImage` catches the
+error and returns undefined so a story is never lost over a missing picture.
+The reader simply showed the stock lion. Nothing logged; nothing alerted.
 
 Authorisation is resolved **at use, not only at selection**. The stored
 preference is a request, never a permission — a user who selects a premium
@@ -119,6 +141,142 @@ its own hardcoded list, four entries of which are rejected with a 403 — see
 Vision and image generation have separate allowlists, so a chat-only model
 cannot leak into an image call. Illustration is skipped with a logged reason,
 rather than failing the story, when the user is not entitled to it.
+
+## Heroes of Faith
+
+Eighty hand-written profiles in `server/data/heroes/`, split into **two
+collections** that the page shows as two tabs:
+
+| Collection | Count | Grouped by |
+|---|---|---|
+| `historical` | 41 | era — early church, medieval, reformers, puritans, awakening, missionaries, modern |
+| `biblical` | 39 | where they sit in the story — beginnings, patriarchs, exodus, judges & kings, prophets, exile, gospels, first Christians |
+
+They are two collections rather than one list on purpose. What is known about
+Moses comes from a text the reader treats as revelation; what is known about
+Calvin comes from letters and council minutes. Those are not the same kind of
+claim, and one list would quietly suggest they were.
+
+Each entry carries a 250–350 word biography, key events, a quote, tags, an
+English Wikipedia **article title** (not a URL — the UI builds the link, and
+the name alone is ambiguous: "Jonathan Edwards" is a triple jumper before he is
+a theologian), and `complications` where a figure did something significant
+enough to state plainly. **The page works with the AI switched off**; that is
+the point of writing them out rather than generating them.
+
+Two rules specific to the biblical collection:
+
+- **Events are located by chapter and verse, never by year.** Dating Abraham is
+  an unsettled scholarly argument, and "c. 2000 BC" on a children's page states
+  as fact something that is not one.
+- **Life dates are estimates and are written as estimates**, carrying `c.` or
+  `fl.`, with the page saying so under the dates. A handful genuinely are fixed
+  by evidence outside Scripture — Josiah's death at Megiddo in 609 BC is tied to
+  the Babylonian Chronicle — and those are listed by name in
+  `tests/heroes.test.ts` with the reason. Adding a precise date means adding it
+  there. Adam, Eve and Noah have no dates at all, and the page says
+  "Not datable" rather than inventing a range.
+
+`server/seed.ts` upserts every hero on every boot, keyed on the slug, and
+retires superseded rows. Ids are **slugs, not uuids**: they were `uuidv4()` at
+module load, so hero identity changed with every process start and the seed had
+nothing stable to upsert against.
+
+### Verifying them
+
+```bash
+npx tsx scripts/verify-heroes.ts              # everything (slow — it is polite to two free APIs)
+npx tsx scripts/verify-heroes.ts bible-ruth   # one, by id or name
+```
+
+For church-history figures it confirms the article exists, then compares birth
+and death years against **both** Wikidata and Wikipedia's own one-line
+description, and checks every key-event year against the article text. For
+biblical figures it checks that every scripture reference resolves against
+bible-api.com — "Genesis 55:3" reads exactly like a real reference, and is the
+sort of error a children's Bible resource must not ship.
+
+It has caught real content errors: Polycarp meeting Bishop Anicetus three years
+before Anicetus was bishop, an invented date for Patrick's *Letter to
+Coroticus*, Jan Hus's birth year, and Judson credited with a dictionary he only
+half-finished before he died.
+
+It is **not** in CI, deliberately: it depends on two free APIs that throttle,
+and a gate that fails for reasons unrelated to the change is a gate people
+learn to ignore. Two sources are required to convict — Wikidata and Wikipedia
+genuinely disagree (Jim Elliot is born 1927 on one and 1926 on the other), so a
+single dissenting source is reported as a warning, not a failure.
+
+## Tests
+
+```bash
+npm test
+```
+
+Vitest, Node environment, **no network and no database**. Coverage is
+deliberately narrow: the pure functions with a history of shipping bugs.
+
+| File | What it guards |
+|---|---|
+| `tests/storyContent.test.ts` | The story parser. The path it replaced split on whitespace and re-joined with spaces, annihilating every newline — which turned prose into one wall of text and destroyed poems outright. Also that print HTML escapes every text node, replacing two `content.replace(/\n/g, "<br>")` injection sites. |
+| `tests/modelPolicy.test.ts` | Per-model request shape and entitlement. `gpt-5.6-luna` is the economy default, so the `max_tokens` and `temperature` rejections broke generation for **every user without their own key**. |
+| `tests/heroes.test.ts` | Eighty hand-written profiles: duplicate slugs (which make the seed silently drop a person), groups from the wrong collection's list, a Wikipedia URL where an article title belongs, a biblical date written as settled fact. |
+
+`vitest.config.ts` is separate from `vite.config.ts` on purpose —
+`vite.config.ts` sets `root: client/`, which would hide every test under
+`server/` and `shared/` from the runner.
+
+What is **not** covered, and why: there is no component, route or database
+test, and no headless browser in the deployment container. The reader's visual
+behaviour is checked by the CSS-bundle greps in CI and by a short manual
+matrix; the schema is checked at startup by `verifyOrmSchema()` and in CI
+against a real Postgres; hero content is checked by `verify-heroes.ts` against
+live sources.
+
+## The story reader
+
+`/story` is an e-reader, and the reader owns the whole viewport there —
+`App.tsx` drops the app background, the overlay and the content card on that
+route rather than fighting inline styles with `!important`.
+
+Four **independent** axes, stored per account in `user_settings` and mirrored
+to `localStorage` so the first paint is already correct:
+
+| Axis | Values | Controls |
+|---|---|---|
+| Palette | `paper` `sepia` `night` `contrast` | colour only |
+| Font | `literata` `ebgaramond` `atkinson` `lexend` `system` | family only |
+| Typeset | `classic` `plain` | drop cap, indent vs spacing, scene-break ornament |
+| Size | step 0–6 | one variable |
+
+Independent because the old system had one axis — eight bundled "themes" —
+doing four jobs badly. Splitting them is what makes "turn the classical feel
+off" a single switch instead of a colour change nobody asked for. Composition
+costs 4 + 5 + 2 = 11 CSS rules, not a cross product.
+
+Body text clears WCAG **AAA (7:1)** in all four palettes. Night uses `#C9CCD1`
+rather than white, because pure white on near-black causes halation — the exact
+complaint the palette exists to fix.
+
+Two things in `client/src/components/reader/reader.css` are load-bearing and
+easy to "tidy" into breakage:
+
+- **It is plain CSS, not Tailwind utilities.** `::first-letter`, `p + p`,
+  `::before` ornaments and verse hanging indents are awkward-to-impossible as
+  utilities — and the bug that caused this rewrite was a Tailwind class built
+  by string interpolation, which the JIT scanner never sees. CI greps the built
+  stylesheet to prove the rules shipped.
+- **`font-size` and `max-width: 66ch` sit on the same element.** `ch` resolves
+  against that element's own computed font-size, so characters per line stays
+  constant across all seven size steps *and* self-corrects across the five
+  fonts with no per-font tuning.
+
+Fonts are self-hosted via `@fontsource-variable/*` and fetched lazily by the
+browser's own rules: an `@font-face` rule that no rendered element matches is
+not downloaded, which is specified behaviour rather than an optimisation to
+hope for. So all five are declared and exactly one is fetched. They are not
+loaded from the Google CDN — hotlinking sends every reader's IP to Google, and
+the app is self-hosted specifically so a household on a flaky link still works.
 
 ## Email
 
@@ -153,8 +311,9 @@ Cloudflare (orange cloud, SSL Full-Strict)
               └── lion-tails-postgres :5432  (not published to the host)
 ```
 
-Pushing to `main` triggers `.github/workflows/deploy.yml`, which runs on the
-self-hosted Unraid runner and:
+Pushing to `main` triggers `.github/workflows/ci.yml` — there is no separate
+`deploy.yml`; the deploy is the last job of the CI workflow and runs only when
+every gate before it passed. On the self-hosted Unraid runner it:
 
 1. builds the image for `linux/amd64` and pushes
    `flyingoat03/lion-tails:latest` and `:<sha>` to Docker Hub;
@@ -181,8 +340,34 @@ applies pending migrations (`scripts/migrate.js`). A database failure is logged
 loudly but does not stop the container, because the app has an in-memory
 fallback — enforcement is the `/api/health` 503, not a refusal to boot.
 
-`.github/workflows/ci.yml` runs on every PR: typecheck, build, the
-no-Vite-in-the-bundle assertion, a Docker build, a Trivy scan, and `npm audit`.
+`.github/workflows/ci.yml` is the whole pipeline — build, gates, and the deploy
+as its last job. On every PR it runs:
+
+| Gate | Catches |
+|---|---|
+| `npm run check` | type errors |
+| `npm run build` | build failure |
+| no Vite in `dist/prod.js` | the dev/prod entrypoint split regressing, which would crash the runtime image at startup |
+| `npm test` | the parser, model request shape and hero data (see [Tests](#tests)) |
+| `npm run lint` | React Rules of Hooks — a runtime ordering rule `tsc` and the build are both blind to, which once rendered a page blank |
+| no hardcoded colours | a component silently opting out of theming: right in Paper, wrong in Sepia, unreadable in Night |
+| reader CSS reached the bundle | the Tailwind-JIT bug that made the original colour picker do nothing for months |
+| production-bundle smoke test | a bundle that builds and will not boot |
+| real-database smoke test | migrations, the table count, and that the seed actually persisted |
+| schema check fails when the schema is wrong | the check being unable to fail — see `docs/decisions.md` |
+| Docker build, Trivy scan, `npm audit` | vulnerable images and dependencies |
+
+The hero-count assertion in the database smoke test derives its expectation
+from the data file:
+
+```bash
+EXPECTED_HEROES=$(npx tsx -e 'import { heroesOfFaithData } from "./server/data/heroes"; console.log(heroesOfFaithData.length)')
+```
+
+It was hardcoded to `15`, which was correct on the day it was written and broke
+the deploy the moment anyone added a hero. Reading it from the source keeps the
+invariant that is actually worth asserting — *the database holds what the seed
+defines* — rather than a number that has to be maintained in two places.
 
 ### Required GitHub secrets
 
@@ -238,6 +423,7 @@ this app has any business reaching it.
 
 - `docs/decisions.md` — non-obvious constraints and the reasoning behind them.
   Read it before "tidying" anything in this repo.
+- `docs/roadmap.md` — what is outstanding and why, including the known-but-unfixed list.
 - `CLAUDE.md` — orientation for AI agents working in this codebase.
 
 ## Known gaps
@@ -249,4 +435,12 @@ this app has any business reaching it.
 
 - `characters` and `stories` tables may still exist on databases created before
   the migration cutover. They were never read by anything and are safe to drop.
-- There is no test suite.
+- Test coverage is deliberately narrow — pure functions only. There is no
+  component, route or database test. See [Tests](#tests).
+- `searchMetadata` is always five empty arrays in production: the extraction
+  logic exists only in `MemStorage`, so the Postgres path stores nothing.
+- `/api/auth/me` returns `resetPasswordToken` and `verificationToken` to the
+  browser.
+- Every story route uses an inline auth check rather than `requireAuth` in the
+  signature, which is how eight unguarded write routes once shipped.
+- The zod 3 → 4 migration blocks two Dependabot PRs.

@@ -522,6 +522,111 @@ CI now greps the built stylesheet for the reader's rules
 bundle"). That gate was confirmed to **fail** when the reader stylesheet import
 is removed — per the section below, a check that cannot fail is not a check.
 
+
+---
+
+## 19. A gate that asserts a value breaks; a gate that asserts an invariant holds
+
+The CI database smoke test read:
+
+```bash
+if [ "$HEROES" -ne 15 ]; then
+  echo "FAIL: reference data was not persisted to the database."
+```
+
+Fifteen was correct on the day it was written. It broke the deploy the moment
+anyone added a hero — and it broke it in the most confusing way available,
+because the step lives inside the job **named** "Typecheck and build", so the
+failure was reported as a typecheck error. Typecheck was passing. Several
+minutes went into a clean `npm ci` + `tsc` on `main`, which exited 0, before
+looking at which *step* had actually failed.
+
+The fix derives the expectation from the data:
+
+```bash
+EXPECTED_HEROES=$(npx tsx -e 'import { heroesOfFaithData } from "./server/data/heroes"; console.log(heroesOfFaithData.length)')
+```
+
+Note what was **not** done: bumping 15 to 41. That would have deferred the same
+breakage to the next batch of heroes. The property worth asserting is *the
+database holds what the seed defines*, and that survives every future addition.
+
+Two generalisations:
+
+1. **Before asserting a number, ask what makes it true.** If the answer is "it
+   is what the code happens to do today", the assertion has a maintenance
+   burden and no meaning. If it is "these two things must agree", assert the
+   agreement.
+2. **A job name is not a step name.** When CI reports a failure, read which step
+   failed before believing the job's label. Ours cost time in exactly the
+   direction the label pointed.
+
+The empty-guard is still needed, and is still there: `EXPECTED_HEROES` is a
+command substitution, and a failed `npx tsx` would make it empty, which `-ne`
+would treat as 0 and pass against an empty table. It is checked for being empty
+or less than 1 before use.
+
+## 20. Facts in content get verified against sources, not recalled
+
+Eighty hero profiles and sixteen scripture anchors are written from knowledge,
+and knowledge is the thing this project has repeatedly caught being confidently
+wrong. A generated Noah story invented "Noah's wife, Miriam" and "Shem, a young
+man of twenty" — neither is in Genesis. A model recited scripture that read
+correctly and was not.
+
+So: **every verse is fetched from bible-api.com, and every date is checked
+against Wikidata and Wikipedia** (`scripts/verify-heroes.ts`). This has caught
+real errors that read perfectly well: Polycarp meeting Bishop Anicetus in
+c. 154 when Anicetus was not bishop until c. 157; an invented c. 450 date for
+Patrick's *Letter to Coroticus*; Jan Hus born c. 1372 rather than 1369; Adoniram
+Judson credited with a dictionary he only half-finished before dying.
+
+Three design rules the verifier arrived at the hard way, each after a false
+report:
+
+- **Two sources are required to convict.** Wikidata and Wikipedia genuinely
+  disagree — Jim Elliot is born 1926 in one and 1927 in the other. A single
+  dissenting source is a warning, not a failure.
+- **A throttle is not a 404.** The first run reported fifteen missing articles
+  including Martin Luther. They were all 429s: the fetch treated any non-OK
+  response as "no such article". A check that reports failures it cannot
+  distinguish is not a check — and it will be believed, because "Martin Luther
+  has no Wikipedia article" is absurd enough to look like a code bug rather
+  than a data one, which is where the time goes. The same bug recurred in the
+  scripture-reference path with a weaker backoff than the article path, and
+  produced a dozen "could not check" lines against references that were all
+  fine.
+- **A Wikipedia short description is not a life span.** "Pope of Alexandria
+  from 328 to 373" is a term of office. Reading the first two four-digit
+  numbers out of it made the verifier report Athanasius as born in 328 and
+  Anselm in 1093. Life dates are now taken only from a parenthesised range.
+
+**It is deliberately not in CI.** It depends on two free APIs that throttle;
+running it on every PR would produce failures unrelated to the change, and a
+gate that cries wolf is a gate people learn to skip. It is run by hand before
+committing content, and `tests/heroes.test.ts` covers the structural half —
+duplicate slugs, wrong-collection groups, a URL where an article title belongs
+— with no network at all.
+
+## 21. Biblical dates are estimates, and are written as estimates
+
+Biblical figures are located in Scripture **by chapter and verse, not by year**.
+Dating Abraham is an unsettled scholarly argument; "c. 2000 BC" printed flat on
+a children's page states as fact something that is not one.
+
+Life dates exist because a profile page with "Lived: ? - ?" on every single
+biblical figure is worse than useless — but they carry `c.` or `fl.`, and the
+page says underneath that they are estimates. `tests/heroes.test.ts` enforces
+the prefix and carries a named exception list for the handful genuinely fixed
+by evidence outside Scripture: Josiah died at Megiddo in 609 BC, the year the
+Babylonian Chronicle independently dates Neco's march to Carchemish. Adding a
+precise date means adding it to that list with the reason, which is the point —
+the cost of asserting certainty should be having to write down what grounds it.
+
+Adam, Eve and Noah have no dates at all. The page renders "Not datable" rather
+than a range, because there is no scholarly estimate to give and inventing a
+plausible-looking one is the exact failure this section exists to prevent.
+
 ---
 
 ## Recurring failure shape

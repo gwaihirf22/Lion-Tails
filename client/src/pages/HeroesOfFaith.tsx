@@ -29,6 +29,7 @@ import { Link } from 'wouter';
 import { Input } from "@/components/ui/input";
 import {
   groupLabel,
+  livedLabel,
   HERO_GROUPS,
   BIBLE_GROUPS,
   HERO_COLLECTIONS,
@@ -286,7 +287,9 @@ export default function HeroesOfFaith() {
             </CardHeader>
             <CardContent>
               <p className="text-sm line-clamp-3 mb-2">{hero.description}</p>
-              <Badge variant="outline" className="text-xs">{hero.birthYear || ''} - {hero.deathYear || ''}</Badge>
+              {livedLabel(hero) && (
+                <Badge variant="outline" className="text-xs">{livedLabel(hero)}</Badge>
+              )}
             </CardContent>
             <CardFooter className="pt-1 flex gap-2">
               <Button variant="outline" size="sm" onClick={() => openHeroDetails(hero)}>
@@ -358,12 +361,22 @@ export default function HeroesOfFaith() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Calendar className="h-5 w-5 text-primary" />
                   <span className="font-semibold">Lived:</span>
-                  <span>{selectedHero.birthYear || '?'} - {selectedHero.deathYear || '?'}</span>
+                  <span>{livedLabel(selectedHero) || "Not datable"}</span>
                   {selectedHero.group && (
                     <Badge variant="outline">{groupLabel(selectedHero.group)}</Badge>
                   )}
                   {selectedHero.place && <Badge variant="outline">{selectedHero.place}</Badge>}
                 </div>
+
+                {/* Nobody knows when Abraham was born, and a bare "c. 2000 BC"
+                    on a children's page reads as a fact. Say once, plainly,
+                    that these are estimates -- and only where they are. */}
+                {selectedHero.collection === "biblical" && livedLabel(selectedHero) && (
+                  <p className="text-xs text-muted-foreground">
+                    Dates for people in Scripture are scholarly estimates, not settled facts. The
+                    events below are located by chapter and verse instead.
+                  </p>
+                )}
 
                 {selectedHero.wikipedia && (
                   <a

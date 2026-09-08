@@ -92,34 +92,25 @@ async function checkReferences(hero: (typeof heroesOfFaithData)[number]): Promis
   ].filter((r): r is string => Boolean(r));
 
   for (const ref of refs) {
-    let ok = false;
-    for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
-      try {
-        const res = await fetch(
-          `https://bible-api.com/${encodeURIComponent(ref)}`,
-          { headers: { "user-agent": "LionTails-hero-verification/1.0" } },
-        );
-        if (res.status === 404) {
-          out.push({ hero: hero.name, level: "fail", note: `reference does not resolve: ${ref}` });
-          ok = true;
-        } else if (res.ok) {
-          const body = await res.json();
-          if (body?.text) ok = true;
-          else {
-            out.push({ hero: hero.name, level: "fail", note: `reference returned no text: ${ref}` });
-            ok = true;
-          }
-        } else {
-          await new Promise((r) => setTimeout(r, attempt * 1200));
-        }
-      } catch {
-        await new Promise((r) => setTimeout(r, attempt * 1200));
-      }
+    // Reuses the SAME backoff as the Wikipedia calls. It had its own weaker
+    // one -- three tries, up to about seven seconds -- and bible-api.com
+    // throttles harder than that, so a run of twenty heroes reported a dozen
+    // references as "could not check (offline)" when every one of them was
+    // fine. An unverifiable reference and a rate limit are not the same
+    // finding, and a checker that conflates them trains you to skim its output.
+    const res = await getJson(`https://bible-api.com/${encodeURIComponent(ref)}`);
+    if (!res.ok) {
+      out.push({
+        hero: hero.name,
+        level: res.missing ? "fail" : "warn",
+        note: res.missing
+          ? `reference does not resolve: ${ref}`
+          : `could not check reference after 5 attempts (throttled or offline): ${ref}`,
+      });
+    } else if (!res.body?.text) {
+      out.push({ hero: hero.name, level: "fail", note: `reference returned no text: ${ref}` });
     }
-    if (!ok) {
-      out.push({ hero: hero.name, level: "warn", note: `could not check reference (offline): ${ref}` });
-    }
-    await new Promise((r) => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, 900));
   }
   return out;
 }

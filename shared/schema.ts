@@ -886,6 +886,29 @@ export function groupLabel(group: string | undefined): string {
   );
 }
 
+/**
+ * The "Lived:" line, from whatever dates a hero actually has.
+ *
+ * Three call sites were rendering `{birthYear || ""} - {deathYear || ""}`,
+ * which gave a bare " - " badge and a "? - ?" for every biblical figure,
+ * because none of them had dates at all. Returning "" lets the caller hide the
+ * row instead of displaying punctuation.
+ *
+ * A "fl." value stands alone: a floruit IS the estimate, so "fl. c. AD 50 - ?"
+ * would be claiming ignorance of something already stated.
+ */
+export function livedLabel(hero: {
+  birthYear?: string | null;
+  deathYear?: string | null;
+}): string {
+  const born = hero.birthYear?.trim();
+  const died = hero.deathYear?.trim();
+  if (born && died) return `${born} – ${died}`;
+  if (born) return /^fl\./i.test(born) ? born : `${born} – ?`;
+  if (died) return `? – ${died}`;
+  return "";
+}
+
 export const heroOfFaithSchema = z.object({
   /**
    * A SLUG, not a uuid.
