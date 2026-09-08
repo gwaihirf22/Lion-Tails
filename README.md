@@ -221,6 +221,8 @@ deliberately narrow: the pure functions with a history of shipping bugs.
 | `tests/storyContent.test.ts` | The story parser. The path it replaced split on whitespace and re-joined with spaces, annihilating every newline — which turned prose into one wall of text and destroyed poems outright. Also that print HTML escapes every text node, replacing two `content.replace(/\n/g, "<br>")` injection sites. |
 | `tests/modelPolicy.test.ts` | Per-model request shape and entitlement. `gpt-5.6-luna` is the economy default, so the `max_tokens` and `temperature` rejections broke generation for **every user without their own key**. |
 | `tests/heroes.test.ts` | Eighty hand-written profiles: duplicate slugs (which make the seed silently drop a person), groups from the wrong collection's list, a Wikipedia URL where an article title belongs, a biblical date written as settled fact. |
+| `tests/theme.test.ts` | Contrast, computed from `theme.css` itself, for every token pair in all four palettes — plus that every element painting `bg-accent` also sets `text-accent-foreground`. Both failures it guards were invisible in Paper and unreadable in Night. |
+| `tests/focusMode.test.ts` | What may interrupt the reader's focus mode. Mouse movement across the page and taps must not; reaching the top strip and scrolling up must. |
 
 `vitest.config.ts` is separate from `vite.config.ts` on purpose —
 `vite.config.ts` sets `root: client/`, which would hide every test under
@@ -270,6 +272,34 @@ easy to "tidy" into breakage:
   against that element's own computed font-size, so characters per line stays
   constant across all seven size steps *and* self-corrects across the five
   fonts with no per-font tuning.
+
+### Focus mode
+
+Fades everything but the story — header, footer, toolbar and the extras block —
+to `opacity: 0` without collapsing them, so nothing reflows.
+
+**Almost nothing is allowed to bring the chrome back**, and that is the whole
+design. Revealing on any pointer movement and any tap, which is what it did
+first, means a hand resting on a trackpad or a finger near the screen keeps
+undoing the feature. There are two gestures, one per input type:
+
+| Input | Gesture |
+|---|---|
+| Mouse | move into the top 80px, where the (sticky) toolbar already is |
+| Touch | scroll **up** — 40px accumulated, reset by any downward movement |
+
+Scrolling down never reveals, because scrolling down is reading. A tap never
+reveals, because a tap is how you turn a page. Escape leaves focus mode
+entirely, and `focusin` always reveals, because keyboard focus must never land
+on something invisible.
+
+Faded chrome is `pointer-events: none` — an invisible toolbar must not swallow
+taps at the top of a phone screen. That is safe only because the reveal is
+driven by pointer *position* rather than by hovering the element itself.
+
+The decision rules are pure functions (`pointerReveals`, `foldScroll`) and are
+tested, since they are a specific behavioural contract rather than something to
+re-derive from event handlers later.
 
 Fonts are self-hosted via `@fontsource-variable/*` and fetched lazily by the
 browser's own rules: an `@font-face` rule that no rendered element matches is

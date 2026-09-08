@@ -16,6 +16,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useParentMode } from "@/hooks/use-parent-mode";
 import { Lock, Unlock, Clock, AlertTriangle } from "lucide-react";
 
+/**
+ * Parent Mode: password-gated prompt editing, expiring after 30 minutes.
+ *
+ * Lives in Settings. It was previously a full-width warning-coloured card
+ * pinned under the Create Story form, which meant every visit to the page it
+ * did not apply to began with a large yellow box about a feature most people
+ * never turn on. It is an account setting and it sits with the others.
+ */
 export default function ParentModeToggle() {
   const { isActive, expiresAt, verifyPassword, disable } = useParentMode();
   const [password, setPassword] = useState("");
@@ -56,7 +64,7 @@ export default function ParentModeToggle() {
   const timeRemaining = getTimeRemaining();
 
   return (
-    <Card className="mb-6 border-warning bg-warning-surface">
+    <Card className="border-warning bg-warning-surface">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">

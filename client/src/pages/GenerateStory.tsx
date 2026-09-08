@@ -6,7 +6,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import StoryGeneratorTabs from "@/components/StoryGeneratorTabs";
 import StoryDisplay from "@/components/StoryDisplay";
-import ParentModeToggle from "@/components/ParentModeToggle";
 import { Button } from "@/components/ui/button";
 import { Loader2, Save, Star, StarOff } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
@@ -306,8 +305,6 @@ export default function GenerateStory() {
           </div>
         )}
       </div>
-
-      <ParentModeToggle />
     </div>
   );
 }

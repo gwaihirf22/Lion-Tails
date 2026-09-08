@@ -627,6 +627,68 @@ Adam, Eve and Noah have no dates at all. The page renders "Not datable" rather
 than a range, because there is no scholarly estimate to give and inventing a
 plausible-looking one is the exact failure this section exists to prevent.
 
+
+---
+
+## 22. One token cannot be both a surface and a text colour
+
+`--accent` is shadcn's hover/highlight **surface**: every one of the twenty
+`bg-accent` usages under `components/ui/` is a hover, focus or open state. It
+was mapped here to a saturated brand colour — crimson in Paper, green in Sepia,
+peach in Night — and `Footer` also used it as `hover:text-accent`, a link text
+colour. One token, two jobs.
+
+The measured result, for text that landed on an accent background without
+switching to `--accent-foreground`:
+
+| | ratio |
+|---|---|
+| Paper | 2.67 |
+| Sepia | 1.84 |
+| Night | **1.19** |
+| Contrast | 2.10 |
+
+1.19:1 is invisible. This is the **third** time this exact shape has bitten:
+`--secondary` was mapped as a surface tint while the app used `text-secondary`
+29 times as a text colour, which made headings disappear. When a token is used
+both ways, both directions have to be checked, and it is usually better to stop
+using it both ways.
+
+`--popover` had a quieter version of the same problem: it was set to exactly
+`--card` in all four palettes, so a dropdown opening over a card had a contrast
+ratio of **1.00** against it — no separation whatsoever, only a faint border
+and a shadow doing all the work.
+
+`tests/theme.test.ts` now parses `theme.css` and checks every pair, in both
+directions, in all four palettes.
+
+### The grep that could not fire
+
+The first guard for the pairing rule was a CI grep: lines containing
+`bg-accent` and not containing `text-accent-foreground`. Reintroducing the bug
+on purpose to check it — per the section below — it **did not fire**.
+
+The offending line carried *two* accent backgrounds and one foreground:
+
+```
+focus:bg-accent data-[state=open]:bg-accent data-[state=open]:text-accent-foreground
+```
+
+The line contains `text-accent-foreground`, so the line-based exemption matched
+and the check passed the exact bug it was written for. It is now a test that
+scans **per variant prefix**, and the first thing that test asserts is that it
+fires on that string.
+
+Two more instances turned up the moment the check became precise. A weaker
+check does not find a smaller number of problems — it finds a different set,
+and lets you believe you looked.
+
+The related trap in the same area: `bg-accent/50` is a translucent tint over
+whatever is behind it, and pairing *that* with `text-accent-foreground` would
+be actively wrong — white text on a half-strength tint over a white page is
+invisible. So the pairing rule applies only to opaque backgrounds, and the
+tint case is checked by compositing the colours and measuring instead.
+
 ---
 
 ## Recurring failure shape

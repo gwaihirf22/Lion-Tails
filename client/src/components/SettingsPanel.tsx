@@ -12,6 +12,7 @@ import React, { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import ReadingSettingsCard from "@/components/reader/ReadingSettingsCard";
+import ParentModeToggle from "@/components/ParentModeToggle";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -259,6 +260,14 @@ export function SettingsPanel() {
         {/* Reading preferences. Same provider and same picker as the reader's
             own bar -- no duplicated state, no second list of palettes. */}
         <ReadingSettingsCard />
+
+        {/* Parent Mode. It used to sit on the Create Story page, where it was a
+            large warning-coloured card above the form that everyone saw every
+            time whether or not they had any use for it. It is an account
+            setting -- password-gated, expires on a timer -- so it belongs with
+            the other account settings. PromptEditor still says what is needed
+            and now says where to find it. */}
+        <ParentModeToggle />
 
         {/* Story Generation Stats */}
         <Card className="bg-card rounded-2xl shadow-xl">

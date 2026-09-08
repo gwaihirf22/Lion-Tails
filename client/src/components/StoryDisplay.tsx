@@ -124,7 +124,8 @@ export default function StoryDisplay({ story, storyId, storyType }: StoryDisplay
 
       {focus.armed && (
         <span className="sr-only" aria-live="polite">
-          Focus mode on. Press Escape to exit.
+          Focus mode on. Move the pointer to the top of the screen, or scroll up, to
+          show the toolbar. Press Escape to exit.
         </span>
       )}
 

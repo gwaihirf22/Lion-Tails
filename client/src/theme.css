@@ -24,6 +24,34 @@
  * out.
  */
 
+/*
+ * WHY --accent IS A SURFACE TINT AND NOT A BRAND COLOUR
+ *
+ * shadcn uses --accent as the hover/highlight surface for menu items: there
+ * are twenty bg-accent usages under components/ui and every one of them is a
+ * hover or open state. It was mapped here to a saturated brand colour
+ * (crimson, green, peach), so every dropdown item lit up in a loud block, and
+ * anything that put default text on it was unreadable -- popover-foreground on
+ * accent measured 2.67 in Paper and 1.19 in Night, which is invisible.
+ *
+ * This is the same mistake --secondary had: one token doing a surface job and
+ * a text job at once. Footer's hover:text-accent links moved to
+ * hover:text-primary in the same change.
+ *
+ * The exception is Contrast, where the highlight is deliberately an inverted
+ * block -- dark blue with white text -- because that palette exists to be
+ * unmistakable rather than gentle. That only works if every element painting
+ * bg-accent also sets text-accent-foreground, which CI now enforces.
+ *
+ * WHY --popover IS NO LONGER THE SAME AS --card
+ *
+ * They were identical in all four palettes, so a menu opening over a card had
+ * a contrast ratio of exactly 1.00 against it: no separation at all, only a
+ * faint border and a shadow. The menu now sits on the lightest surface in the
+ * light palettes and a lifted one in Night.
+ *
+ * Every ratio here is checked by tests/theme.test.ts, which parses this file.
+ */
 :root,
 [data-palette="paper"] {
   --app-bg-veil: 0.86;
@@ -31,7 +59,7 @@
   --foreground: 60 1.9% 10.4%;
   --card: 43 22.6% 93.9%;
   --card-foreground: 60 1.9% 10.4%;
-  --popover: 43 22.6% 93.9%;
+  --popover: 45 40% 99%;
   --popover-foreground: 60 1.9% 10.4%;
   --muted: 43 22.6% 93.9%;
   --muted-foreground: 60 1.7% 34.7%;
@@ -41,8 +69,8 @@
   --primary-foreground: 0 0% 100%;
   --secondary: 267 43.5% 43.7%;
   --secondary-foreground: 0 0% 100%;
-  --accent: 341 46.8% 42.7%;
-  --accent-foreground: 0 0% 100%;
+  --accent: 43 32% 89%;
+  --accent-foreground: 60 1.9% 10.4%;
   --ring: 216 56.3% 42.2%;
   --destructive: 0 72% 42%;
   --destructive-foreground: 0 0% 100%;
@@ -54,7 +82,7 @@
   --foreground: 35 32.6% 17.5%;
   --card: 42 50.7% 85.7%;
   --card-foreground: 35 32.6% 17.5%;
-  --popover: 42 50.7% 85.7%;
+  --popover: 44 60% 95.5%;
   --popover-foreground: 35 32.6% 17.5%;
   --muted: 42 50.7% 85.7%;
   --muted-foreground: 34 22.3% 34.3%;
@@ -64,8 +92,8 @@
   --primary-foreground: 0 0% 100%;
   --secondary: 329 34.8% 35.5%;
   --secondary-foreground: 0 0% 100%;
-  --accent: 116 20.8% 31.2%;
-  --accent-foreground: 0 0% 100%;
+  --accent: 40 48% 85%;
+  --accent-foreground: 35 32.6% 17.5%;
   --ring: 28 57.4% 30.4%;
   --destructive: 0 72% 42%;
   --destructive-foreground: 0 0% 100%;
@@ -77,18 +105,18 @@
   --foreground: 217 8% 80.4%;
   --card: 220 13% 13.5%;
   --card-foreground: 217 8% 80.4%;
-  --popover: 220 13% 13.5%;
+  --popover: 220 13% 18.5%;
   --popover-foreground: 217 8% 80.4%;
   --muted: 220 13% 13.5%;
-  --muted-foreground: 215 5.7% 58.4%;
+  --muted-foreground: 215 8% 66%;
   --border: 217 12.4% 20.6%;
   --input: 217 12.4% 20.6%;
   --primary: 217 88.7% 75.7%;
   --primary-foreground: 220 12% 9.8%;
   --secondary: 271 58.6% 78.2%;
   --secondary-foreground: 220 12% 9.8%;
-  --accent: 24 67.1% 72.5%;
-  --accent-foreground: 220 12% 9.8%;
+  --accent: 220 12% 23%;
+  --accent-foreground: 217 8% 80.4%;
   --ring: 217 88.7% 75.7%;
   --destructive: 0 70% 62%;
   --destructive-foreground: 0 0% 8%;
@@ -110,7 +138,7 @@
   --primary-foreground: 0 0% 100%;
   --secondary: 300 100% 20.8%;
   --secondary-foreground: 0 0% 100%;
-  --accent: 0 100% 27.3%;
+  --accent: 240 100% 27.3%;
   --accent-foreground: 0 0% 100%;
   --ring: 240 100% 27.3%;
   --destructive: 0 72% 42%;
