@@ -22,9 +22,12 @@ import {
   Star,
   History,
   ListTodo,
-  BookOpen
+  BookOpen,
+  Search,
 } from 'lucide-react';
 import { Link } from 'wouter';
+import { Input } from "@/components/ui/input";
+import { HERO_GROUP_LABELS, HERO_GROUPS, type HeroGroup } from "@shared/schema";
 
 export default function HeroesOfFaith() {
   const { toast } = useToast();
@@ -33,6 +36,8 @@ export default function HeroesOfFaith() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
   }, []);
+  const [query, setQuery] = useState("");
+  const [group, setGroup] = useState<HeroGroup | "all">("all");
   const [selectedHero, setSelectedHero] = useState<HeroOfFaith | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
 
@@ -129,6 +134,39 @@ export default function HeroesOfFaith() {
     );
   }
 
+  // Searching the whole profile, not just the name. Someone looking for
+  // "martyr" or "translated the Bible" is asking a real question, and a filter
+  // that only matches names cannot answer it. The list is small enough to hold
+  // in memory, so this is instant and needs no round trip.
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (heroes ?? []).filter((h: HeroOfFaith) => {
+      if (group !== "all" && h.group !== group) return false;
+      if (!q) return true;
+      const haystack = [
+        h.name,
+        h.description,
+        h.contribution,
+        h.biography ?? "",
+        h.place ?? "",
+        h.timePeriod,
+        h.famousQuote ?? "",
+        ...(h.tags ?? []),
+        ...(h.keyEvents ?? []).map((e) => `${e.year} ${e.description}`),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [heroes, query, group]);
+
+  // Only offer an era chip if somebody in that era actually exists, so the
+  // filter never returns an empty list for a group nobody has written yet.
+  const availableGroups = useMemo(
+    () => HERO_GROUPS.filter((g) => (heroes ?? []).some((h: HeroOfFaith) => h.group === g)),
+    [heroes],
+  );
+
   return (
     <div className="container mx-auto p-4">
       <div className="text-center mb-8">
@@ -139,8 +177,50 @@ export default function HeroesOfFaith() {
         </p>
       </div>
 
+      <div className="mx-auto mb-6 max-w-3xl space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name, place, era, or anything in their story"
+            className="pl-9"
+            aria-label="Search Heroes of Faith"
+          />
+        </div>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button
+            size="sm"
+            variant={group === "all" ? "default" : "outline"}
+            onClick={() => setGroup("all")}
+          >
+            All
+          </Button>
+          {availableGroups.map((g) => (
+            <Button
+              key={g}
+              size="sm"
+              variant={group === g ? "default" : "outline"}
+              onClick={() => setGroup(g)}
+            >
+              {HERO_GROUP_LABELS[g]}
+            </Button>
+          ))}
+        </div>
+        <p className="text-center text-sm text-muted-foreground">
+          {filtered.length} of {heroes?.length ?? 0}
+          {query && ` matching "${query}"`}
+        </p>
+      </div>
+
+      {filtered.length === 0 && (
+        <p className="py-12 text-center text-muted-foreground">
+          Nobody matches that yet. Try a different word, or clear the filters.
+        </p>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {heroes?.map(hero => (
+        {filtered.map(hero => (
           <Card key={hero.id} className="overflow-hidden hover:shadow-lg transition-shadow">
             <CardHeader className="pb-2">
               <div className="flex justify-between items-start">
@@ -151,7 +231,10 @@ export default function HeroesOfFaith() {
                   </Avatar>
                   <div>
                     <CardTitle className="text-xl">{hero.name}</CardTitle>
-                    <CardDescription>{hero.timePeriod}</CardDescription>
+                    <CardDescription>
+                      {hero.timePeriod}
+                      {hero.group ? ` · ${HERO_GROUP_LABELS[hero.group]}` : ""}
+                    </CardDescription>
                   </div>
                 </div>
               </div>
@@ -227,21 +310,64 @@ export default function HeroesOfFaith() {
                   )}
                 </div>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Calendar className="h-5 w-5 text-primary" />
-                  <span className="font-semibold">Lived:</span> 
+                  <span className="font-semibold">Lived:</span>
                   <span>{selectedHero.birthYear || '?'} - {selectedHero.deathYear || '?'}</span>
+                  {selectedHero.group && (
+                    <Badge variant="outline">{HERO_GROUP_LABELS[selectedHero.group]}</Badge>
+                  )}
+                  {selectedHero.place && <Badge variant="outline">{selectedHero.place}</Badge>}
                 </div>
+
+                {selectedHero.wikipedia && (
+                  <a
+                    href={`https://en.wikipedia.org/wiki/${encodeURIComponent(
+                      selectedHero.wikipedia.replace(/ /g, "_"),
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-primary underline"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Read more on Wikipedia
+                  </a>
+                )}
                 
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
-                    <Info className="h-5 w-5 text-primary mt-1" />
-                    <div>
-                      <p className="font-semibold">Biography</p>
-                      <p>{selectedHero.description}</p>
+                    <Info className="h-5 w-5 text-primary mt-1 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-semibold mb-2">Biography</p>
+                      {/* The biography is written with blank lines between
+                          paragraphs. Rendered as one block it becomes a wall
+                          of text, which is the thing this content exists to
+                          avoid. Falls back to the one-line description for the
+                          heroes whose full profile is not written yet. */}
+                      {(selectedHero.biography ?? selectedHero.description)
+                        .split(/\n\n+/)
+                        .map((para, i) => (
+                          <p key={i} className="mb-3 leading-relaxed">
+                            {para}
+                          </p>
+                        ))}
                     </div>
                   </div>
                 </div>
+
+                {selectedHero.complications && (
+                  <div
+                    className="rounded-lg border p-4"
+                    style={{ borderColor: "hsl(var(--warning))" }}
+                  >
+                    <p className="font-semibold mb-1 text-warning">Worth knowing</p>
+                    {/* Not hidden behind a tab. Several of these people held
+                        positions their own tradition later repudiated, and a
+                        history that files that away where nobody looks is not
+                        being honest, it is being tidy. */}
+                    <p className="text-sm leading-relaxed">{selectedHero.complications}</p>
+                  </div>
+                )}
 
                 {selectedHero.keyEvents && selectedHero.keyEvents.length > 0 && (
                   <div className="mt-4">
@@ -249,8 +375,13 @@ export default function HeroesOfFaith() {
                     <div className="space-y-2">
                       {selectedHero.keyEvents.map((event, index) => (
                         <div key={index} className="flex items-start gap-2">
-                          <Badge className="mt-0.5">{event.year}</Badge>
-                          <p>{event.description}</p>
+                          <Badge className="mt-0.5 shrink-0">{event.year}</Badge>
+                          <div className="min-w-0">
+                            <p>{event.description}</p>
+                            {event.dateNote && (
+                              <p className="text-xs text-muted-foreground mt-0.5">{event.dateNote}</p>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
