@@ -1,6 +1,14 @@
 import { Link, useLocation } from "wouter";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { SettingsPanel } from "@/components/SettingsPanel";
 import { useEffect, useState, useRef } from "react";
-import { Menu, X, LogOut, User, ChevronDown, MoreHorizontal, Loader2 } from "lucide-react";
+import { Menu, X, LogOut, User, ChevronDown, MoreHorizontal, Loader2, Settings as SettingsIcon } from "lucide-react";
 import appIcon from "@/assets/app-icon.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/use-auth";
@@ -18,6 +26,10 @@ export default function Header() {
   const isMobile = useIsMobile();
   const { active: activeJobs } = useStoryJobs();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Settings opens OVER the page instead of navigating to one. Changing a
+  // model or a text size should not cost you your place -- especially when the
+  // thing you are adjusting is how the page you are looking at reads.
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [visibleItems, setVisibleItems] = useState(4); 
   const navContainerRef = useRef<HTMLUListElement>(null);
   const logoContainerRef = useRef<HTMLDivElement>(null);
@@ -31,7 +43,6 @@ export default function Header() {
     { href: "/characters", text: "Characters" },
     { href: "/heroes-of-faith", text: "Heroes" },
     { href: "/image-analysis", text: "Image Analysis" },
-    { href: "/settings", text: "Settings" },
     // Hiding the link is convenience, not security: requireAdmin on
     // /api/admin/generation-stats is what actually protects the data, and the
     // page renders the server 403 for anyone who navigates here directly.
@@ -128,6 +139,18 @@ export default function Header() {
 
           {isMobile ? (
             <div className="flex items-center space-x-2">
+              {/* Without this, removing Settings from navItems would have left
+                  a phone with no way to reach it at all. */}
+              {user && (
+                <button
+                  onClick={() => setSettingsOpen(true)}
+                  title="Settings"
+                  aria-label="Settings"
+                  className="p-2 focus:outline-none"
+                >
+                  <SettingsIcon className="h-5 w-5" />
+                </button>
+              )}
               {user && (
                 <Button 
                   variant="ghost" 
@@ -196,13 +219,24 @@ export default function Header() {
                   </span>
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
+                    onClick={() => setSettingsOpen(true)}
+                    title="Settings"
+                    aria-label="Settings"
+                    className="h-9 w-9 text-foreground border-border hover:bg-muted hover:text-primary"
+                  >
+                    <SettingsIcon className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
                     onClick={() => logoutMutation.mutate()}
                     disabled={logoutMutation.isPending}
-                    className="text-foreground border-border hover:bg-muted hover:text-primary font-bold shadow-md" 
+                    title="Log out"
+                    aria-label="Log out"
+                    className="h-9 w-9 text-foreground border-border hover:bg-muted hover:text-primary"
                   >
-                    <LogOut className="mr-1 h-4 w-4" />
-                    <span>Logout</span>
+                    <LogOut className="h-4 w-4" />
                   </Button>
                 </div>
               ) : (
@@ -220,6 +254,18 @@ export default function Header() {
             </div>
           )}
         </div>
+        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+          {/* Settings is long, so the DIALOG scrolls rather than the page
+              behind it, and max-h keeps it inside a laptop viewport. */}
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-heading">Settings</DialogTitle>
+              <DialogDescription>Changes save as you make them.</DialogDescription>
+            </DialogHeader>
+            <SettingsPanel />
+          </DialogContent>
+        </Dialog>
+
       </header>
 
       {isMobile && menuOpen && (

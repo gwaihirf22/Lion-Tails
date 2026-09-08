@@ -17,14 +17,14 @@ export default function StoryGeneratorTabs({ onSubmit, loading = false }: StoryG
         <TabsList className="grid grid-cols-2 mb-6 gap-1 p-1">
           <TabsTrigger 
             value="children" 
-            className="text-sm sm:text-base lg:text-lg py-2 sm:py-3 data-[state=active]:bg-muted whitespace-normal h-auto"
+            className="text-sm sm:text-base lg:text-lg py-2 sm:py-3 whitespace-normal h-auto data-[state=active]:shadow-sm data-[state=active]:font-semibold data-[state=active]:ring-1 transition-colors data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-primary/30"
           >
             <span className="block sm:hidden">Children's</span>
             <span className="hidden sm:block">Children's Stories</span>
           </TabsTrigger>
           <TabsTrigger 
             value="historical" 
-            className="text-sm sm:text-base lg:text-lg py-2 sm:py-3 data-[state=active]:bg-warning-surface whitespace-normal h-auto"
+            className="text-sm sm:text-base lg:text-lg py-2 sm:py-3 whitespace-normal h-auto data-[state=active]:shadow-sm data-[state=active]:font-semibold data-[state=active]:ring-1 transition-colors data-[state=active]:bg-warning-surface data-[state=active]:text-warning data-[state=active]:ring-warning/40"
           >
             <span className="block sm:hidden">Historical</span>
             <span className="hidden sm:block">Historical & Biblical</span>
@@ -41,7 +41,7 @@ export default function StoryGeneratorTabs({ onSubmit, loading = false }: StoryG
             position: 'relative',
           }}
         >
-          <div className="absolute inset-0 bg-muted rounded-xl"></div>
+          <div className="absolute inset-0 bg-primary/5 rounded-xl"></div>
           <div className="relative z-10">
             <div className="mb-4 text-center">
               <h3 className="text-xl font-heading font-bold text-secondary">Personalized Children's Stories</h3>

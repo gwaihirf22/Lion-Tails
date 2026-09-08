@@ -1,4 +1,4 @@
-import { useLocation } from "wouter";
+import { useLocation , Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import appIcon from "@/assets/app-icon.jpg";
 import { useAuth } from "@/hooks/use-auth";
@@ -132,7 +132,7 @@ export default function Home() {
           <h3 className="text-2xl font-heading font-bold mb-2">Your First 50 Stories Are Free!</h3>
           <p className="text-foreground mb-2">
             Enjoy 50 free AI-generated stories to start, plus 10 more each month. Want unlimited stories?
-            Add your own OpenAI API key in the <a href="/settings" className="text-secondary hover:underline font-medium">Settings</a> page.
+            Add your own OpenAI API key in the <Link href="/settings" className="text-secondary hover:underline font-medium">Settings</Link> page.
           </p>
         </div>
       </div>
