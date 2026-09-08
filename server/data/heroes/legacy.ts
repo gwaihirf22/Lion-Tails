@@ -11,6 +11,7 @@ import type { RawHero } from "./types";
 export const legacy: RawHero[] = [
   {
     id: "william-wilberforce",
+    wikipedia: "William Wilberforce",
     group: "modern",
     name: "William Wilberforce",
     description: "A British politician who led the movement to abolish the slave trade and slavery itself in the British Empire.",
@@ -43,6 +44,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "jim-elliot",
+    wikipedia: "Jim Elliot",
     group: "missionaries",
     name: "Jim Elliot",
     description: "An American missionary who was killed while attempting to evangelize the Huaorani people of Ecuador.",
@@ -71,6 +73,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "amy-carmichael",
+    wikipedia: "Amy Carmichael",
     group: "missionaries",
     name: "Amy Carmichael",
     description: "An Irish missionary who served in India for 55 years without furlough and founded the Dohnavur Fellowship.",
@@ -86,6 +89,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "dietrich-bonhoeffer",
+    wikipedia: "Dietrich Bonhoeffer",
     group: "modern",
     name: "Dietrich Bonhoeffer",
     description: "A German pastor and theologian known for his resistance against Nazi Germany and Hitler's regime.",
@@ -101,6 +105,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "george-mueller",
+    wikipedia: "George Müller",
     group: "missionaries",
     name: "George Müller",
     description: "A Christian evangelist who built and operated orphanages for thousands of children in Bristol, England.",
@@ -116,6 +121,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "corrie-ten-boom",
+    wikipedia: "Corrie ten Boom",
     group: "modern",
     name: "Corrie ten Boom",
     description: "A Dutch watchmaker who helped many Jews escape the Holocaust during World War II.",
@@ -131,6 +137,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "hudson-taylor",
+    wikipedia: "Hudson Taylor",
     group: "missionaries",
     name: "Hudson Taylor",
     description: "A British missionary to China and founder of the China Inland Mission.",
@@ -146,6 +153,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "eric-liddell",
+    wikipedia: "Eric Liddell",
     group: "missionaries",
     name: "Eric Liddell",
     description: "A Scottish Olympic gold medalist and missionary to China, whose story was portrayed in the film 'Chariots of Fire'.",
@@ -161,6 +169,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "mother-teresa",
+    wikipedia: "Mother Teresa",
     group: "modern",
     name: "Mother Teresa",
     description: "An Albanian-Indian Roman Catholic nun who founded the Missionaries of Charity, serving the poorest of the poor.",
@@ -176,6 +185,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "billy-graham",
+    wikipedia: "Billy Graham",
     group: "modern",
     name: "Billy Graham",
     description: "An American evangelist who preached to live audiences of nearly 215 million people in more than 185 countries.",
@@ -191,6 +201,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "c-s-lewis",
+    wikipedia: "C. S. Lewis",
     group: "modern",
     name: "C.S. Lewis",
     description: "A British writer and lay theologian known for his works of fiction and Christian apologetics.",
@@ -206,6 +217,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "john-wesley",
+    wikipedia: "John Wesley",
     group: "awakening",
     name: "John Wesley",
     description: "An English cleric, theologian, and evangelist who founded the Methodist movement.",
@@ -221,6 +233,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "martin-luther",
+    wikipedia: "Martin Luther",
     group: "reformers",
     name: "Martin Luther",
     description: "A German professor of theology, priest, and seminal figure in the Protestant Reformation.",
@@ -236,6 +249,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "elisabeth-elliot",
+    wikipedia: "Elisabeth Elliot",
     group: "missionaries",
     name: "Elisabeth Elliot",
     description: "Christian author and speaker who, after her husband Jim Elliot was killed, worked as a missionary to the very tribe that murdered him.",
@@ -251,6 +265,7 @@ export const legacy: RawHero[] = [
   },
   {
     id: "charles-spurgeon",
+    wikipedia: "Charles Spurgeon",
     group: "awakening",
     name: "Charles Spurgeon",
     description: "English Baptist preacher known as the 'Prince of Preachers' who was a powerful orator and prolific author.",

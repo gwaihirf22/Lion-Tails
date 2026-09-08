@@ -8,9 +8,14 @@ import type { RawHero } from "./types";
 export const earlyChurch: RawHero[] = [
   {
     id: "polycarp",
+    wikipedia: "Polycarp",
     name: "Polycarp of Smyrna",
     group: "early-church",
     timePeriod: "c. 69 - c. 155",
+    // His death is dated either c. 155 or c. 167, and the difference matters:
+    // he met Bishop Anicetus of Rome, whose episcopate began around 157. The
+    // earlier date makes that meeting impossible. Sources genuinely disagree,
+    // so the profile says so rather than picking one and sounding certain.
     birthYear: "c. 69",
     deathYear: "c. 155",
     place: "Smyrna, Asia Minor",
@@ -19,7 +24,7 @@ export const earlyChurch: RawHero[] = [
     contribution:
       "A living link between the apostles and the second-century church, and the author of the earliest Christian martyrdom account we possess outside the New Testament.",
     biography:
-      "Polycarp was taught by the apostle John. That single fact is why the early church listened to him so carefully: when a dispute arose about what the apostles had actually taught, he was one of the few men alive who could say from memory. Irenaeus, who heard him preach as a boy, remembered him describing conversations with people who had seen Jesus.\n\nHe led the church at Smyrna for decades, wrote a letter to the Philippians that still survives, and travelled to Rome as an old man to argue — unsuccessfully but peaceably — about the date of Easter.\n\nHe was arrested during a local persecution when he was in his eighties. Friends hid him on a farm outside the city; when the soldiers came, he refused to run again, fed them a meal, and asked for an hour to pray. The proconsul, who plainly did not want to kill an old man, offered him an easy way out: swear by Caesar's fortune and curse Christ. Polycarp's answer was remembered word for word: \"Eighty-six years I have served him, and he has done me no wrong. How can I blaspheme my King who saved me?\"\n\nHe was burned in the stadium at Smyrna. The church there wrote down what happened and sent the account to another congregation, and that letter — the Martyrdom of Polycarp — became the model for how Christians told these stories afterwards: sober, specific, and refusing to make the martyr more than a man.",
+      "Polycarp was taught by the apostle John. That single fact is why the early church listened to him so carefully: when a dispute arose about what the apostles had actually taught, he was one of the few men alive who could say from memory. Irenaeus, who heard him preach as a boy, remembered him describing conversations with people who had seen Jesus.\n\nHe led the church at Smyrna for decades, wrote a letter to the Philippians that still survives, and travelled to Rome as an old man to argue — unsuccessfully but peaceably — about the date of Easter.\n\nHe was arrested during a local persecution when he was in his eighties. Friends hid him on a farm outside the city; when the soldiers came, he refused to run again, fed them a meal, and asked for an hour to pray. The proconsul, who plainly did not want to kill an old man, offered him an easy way out: swear by Caesar's fortune and curse Christ. Polycarp's answer was remembered word for word: \"Eighty-six years I have served him, and he has done me no wrong. How can I blaspheme my King who saved me?\"\n\nHe was burned in the stadium at Smyrna. (Ancient sources put this in either 155 or 167, and historians still argue about it — the later date fits better with his visit to Rome.) The church there wrote down what happened and sent the account to another congregation, and that letter — the Martyrdom of Polycarp — became the model for how Christians told these stories afterwards: sober, specific, and refusing to make the martyr more than a man.",
     famousQuote:
       "Eighty-six years I have served him, and he has done me no wrong. How can I blaspheme my King who saved me?",
     bibleVerse: {
@@ -30,7 +35,7 @@ export const earlyChurch: RawHero[] = [
       { year: "c. 69", description: "Born, probably in Asia Minor" },
       { year: "c. 110", description: "Receives a letter from Ignatius of Antioch on his way to martyrdom" },
       { year: "c. 110-140", description: "Writes his Letter to the Philippians" },
-      { year: "c. 154", description: "Travels to Rome to discuss the date of Easter with Bishop Anicetus" },
+      { year: "c. 155", description: "Travels to Rome and meets Bishop Anicetus; they disagree about Easter and part in peace" },
       { year: "c. 155", description: "Arrested, refuses to deny Christ, and is burned at Smyrna" },
     ],
     tags: ["martyr", "bishop", "apostolic father", "persecution", "smyrna"],
@@ -41,6 +46,7 @@ export const earlyChurch: RawHero[] = [
   },
   {
     id: "irenaeus",
+    wikipedia: "Irenaeus",
     name: "Irenaeus of Lyons",
     group: "early-church",
     timePeriod: "c. 130 - c. 202",
@@ -72,6 +78,7 @@ export const earlyChurch: RawHero[] = [
   },
   {
     id: "perpetua",
+    wikipedia: "Perpetua and Felicity",
     name: "Perpetua",
     group: "early-church",
     timePeriod: "c. 182 - 203",
@@ -103,6 +110,7 @@ export const earlyChurch: RawHero[] = [
   },
   {
     id: "athanasius",
+    wikipedia: "Athanasius of Alexandria",
     name: "Athanasius of Alexandria",
     group: "early-church",
     timePeriod: "c. 296 - 373",
@@ -136,6 +144,7 @@ export const earlyChurch: RawHero[] = [
   },
   {
     id: "john-chrysostom",
+    wikipedia: "John Chrysostom",
     name: "John Chrysostom",
     group: "early-church",
     timePeriod: "c. 347 - 407",
@@ -171,6 +180,7 @@ export const earlyChurch: RawHero[] = [
   },
   {
     id: "augustine",
+    wikipedia: "Augustine of Hippo",
     name: "Augustine of Hippo",
     group: "early-church",
     timePeriod: "354 - 430",
@@ -210,6 +220,7 @@ export const earlyChurch: RawHero[] = [
   },
   {
     id: "patrick",
+    wikipedia: "Saint Patrick",
     name: "Patrick of Ireland",
     group: "early-church",
     timePeriod: "c. 385 - c. 461",

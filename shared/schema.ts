@@ -860,6 +860,8 @@ export const heroOfFaithSchema = z.object({
   complications: z.string().optional(),
   /** Free-text terms for search -- "martyr", "translator", "hymn writer". */
   tags: z.array(z.string()).optional().default([]),
+  /** English Wikipedia article title, for the "read more" link. */
+  wikipedia: z.string().optional(),
   imageUrl: z.string().optional(),
   birthYear: z.string().optional(),
   deathYear: z.string().optional(),

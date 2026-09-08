@@ -35,6 +35,15 @@ export type RawHero = {
   bibleVerse?: { text: string; reference: string };
   keyEvents?: Array<{ year: string; description: string }>;
   tags?: string[];
+  /**
+   * The English Wikipedia ARTICLE TITLE, not a URL.
+   *
+   * A title because the name alone is ambiguous -- "Jonathan Edwards" is a
+   * triple jumper before he is a theologian -- so disambiguation is chosen
+   * here rather than guessed at fetch time. The verification script uses it to
+   * check every date against Wikidata, and the UI builds the link from it.
+   */
+  wikipedia?: string;
   sources?: Array<{
     title: string;
     author?: string;
@@ -68,6 +77,7 @@ export function toHero(raw: RawHero): HeroOfFaith {
     bibleVerse: raw.bibleVerse,
     keyEvents: raw.keyEvents ?? [],
     tags: raw.tags ?? [],
+    wikipedia: raw.wikipedia,
     sources: (raw.sources ?? []).map((s) => ({
       ...s,
       type: (s.type ?? "book") as "book" | "article" | "website" | "documentary" | "other",
