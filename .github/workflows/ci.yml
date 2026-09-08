@@ -81,6 +81,13 @@ jobs:
       # and wrong in Sepia, and unreadable in Night. There were 247 of them
       # before this gate existed. Two deliberate exceptions are allowed by
       # name -- scrims, which are meant to be black in every palette.
+      # The Rules of Hooks are a runtime rule about the ORDER of calls, so
+      # tsc and the build are both blind to them. Two useMemo calls placed
+      # below an "if (isLoading) return" guard once rendered the Heroes of
+      # Faith page as a blank screen while every other check passed.
+      - name: React hooks rules
+        run: npm run lint
+
       - name: No hardcoded colours outside the design tokens
         run: |
           set -e

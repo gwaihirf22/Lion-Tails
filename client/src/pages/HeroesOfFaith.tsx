@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { Input } from "@/components/ui/input";
-import { HERO_GROUP_LABELS, HERO_GROUPS, type HeroGroup } from "@shared/schema";
+import { groupLabel, HERO_GROUPS, type HeroGroup } from "@shared/schema";
 
 export default function HeroesOfFaith() {
   const { toast } = useToast();
@@ -110,30 +110,6 @@ export default function HeroesOfFaith() {
       .substring(0, 2);
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2">Loading Heroes of Faith...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-4 text-center">
-        <p className="text-destructive">Failed to load Heroes of Faith. Please try again.</p>
-        <Button 
-          variant="outline" 
-          className="mt-4"
-          onClick={() => window.location.reload()}
-        >
-          Refresh
-        </Button>
-      </div>
-    );
-  }
-
   // Searching the whole profile, not just the name. Someone looking for
   // "martyr" or "translated the Bible" is asking a real question, and a filter
   // that only matches names cannot answer it. The list is small enough to hold
@@ -166,6 +142,30 @@ export default function HeroesOfFaith() {
     () => HERO_GROUPS.filter((g) => (heroes ?? []).some((h: HeroOfFaith) => h.group === g)),
     [heroes],
   );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2">Loading Heroes of Faith...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 text-center">
+        <p className="text-destructive">Failed to load Heroes of Faith. Please try again.</p>
+        <Button 
+          variant="outline" 
+          className="mt-4"
+          onClick={() => window.location.reload()}
+        >
+          Refresh
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-4">
@@ -203,7 +203,7 @@ export default function HeroesOfFaith() {
               variant={group === g ? "default" : "outline"}
               onClick={() => setGroup(g)}
             >
-              {HERO_GROUP_LABELS[g]}
+              {groupLabel(g)}
             </Button>
           ))}
         </div>
@@ -233,7 +233,7 @@ export default function HeroesOfFaith() {
                     <CardTitle className="text-xl">{hero.name}</CardTitle>
                     <CardDescription>
                       {hero.timePeriod}
-                      {hero.group ? ` · ${HERO_GROUP_LABELS[hero.group]}` : ""}
+                      {hero.group ? ` · ${groupLabel(hero.group)}` : ""}
                     </CardDescription>
                   </div>
                 </div>
@@ -315,7 +315,7 @@ export default function HeroesOfFaith() {
                   <span className="font-semibold">Lived:</span>
                   <span>{selectedHero.birthYear || '?'} - {selectedHero.deathYear || '?'}</span>
                   {selectedHero.group && (
-                    <Badge variant="outline">{HERO_GROUP_LABELS[selectedHero.group]}</Badge>
+                    <Badge variant="outline">{groupLabel(selectedHero.group)}</Badge>
                   )}
                   {selectedHero.place && <Badge variant="outline">{selectedHero.place}</Badge>}
                 </div>

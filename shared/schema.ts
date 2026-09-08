@@ -804,8 +804,25 @@ export type Song = z.infer<typeof songSchema>;
 
 // Schema for Heroes of Faith
 /**
- * The eras the list is browsed by. Ordered chronologically, because that is
- * how a reader thinks about them and how the page groups them.
+ * Two separate lists, not one.
+ *
+ * People in Scripture and people from church history are not the same kind of
+ * subject: what is known about Moses comes from a text the reader treats as
+ * revelation, and what is known about Calvin comes from letters and council
+ * records. Mixing them on one page would quietly suggest they are the same
+ * sort of claim. They get their own tab.
+ */
+export const HERO_COLLECTIONS = ["historical", "biblical"] as const;
+export type HeroCollection = (typeof HERO_COLLECTIONS)[number];
+
+export const HERO_COLLECTION_LABELS: Record<HeroCollection, string> = {
+  historical: "Through History",
+  biblical: "In the Bible",
+};
+
+/**
+ * The eras of church history, browsed chronologically -- which is how a reader
+ * thinks about them and how the page groups them.
  */
 export const HERO_GROUPS = [
   "early-church",
@@ -818,6 +835,37 @@ export const HERO_GROUPS = [
 ] as const;
 export type HeroGroup = (typeof HERO_GROUPS)[number];
 
+/**
+ * Where a biblical figure sits in the story of Scripture.
+ *
+ * Deliberately not years. Dating Abraham is a scholarly argument with no
+ * agreed answer, and putting "c. 2000 BC" on a children's page states as fact
+ * something that is not one. Where they appear in the narrative is both more
+ * useful and more honest.
+ */
+export const BIBLE_GROUPS = [
+  "beginnings",
+  "patriarchs",
+  "exodus",
+  "judges-and-kings",
+  "prophets",
+  "exile",
+  "gospels",
+  "early-church",
+] as const;
+export type BibleGroup = (typeof BIBLE_GROUPS)[number];
+
+export const BIBLE_GROUP_LABELS: Record<BibleGroup, string> = {
+  beginnings: "In the Beginning",
+  patriarchs: "The Patriarchs",
+  exodus: "The Exodus",
+  "judges-and-kings": "Judges & Kings",
+  prophets: "The Prophets",
+  exile: "Exile & Return",
+  gospels: "The Gospels",
+  "early-church": "The First Christians",
+};
+
 export const HERO_GROUP_LABELS: Record<HeroGroup, string> = {
   "early-church": "The Early Church",
   medieval: "The Middle Ages",
@@ -827,6 +875,16 @@ export const HERO_GROUP_LABELS: Record<HeroGroup, string> = {
   missionaries: "Missionaries",
   modern: "The Modern Era",
 };
+
+/** The display name for an era, from whichever collection it belongs to. */
+export function groupLabel(group: string | undefined): string {
+  if (!group) return "";
+  return (
+    (HERO_GROUP_LABELS as Record<string, string>)[group] ??
+    (BIBLE_GROUP_LABELS as Record<string, string>)[group] ??
+    group
+  );
+}
 
 export const heroOfFaithSchema = z.object({
   /**
@@ -844,8 +902,13 @@ export const heroOfFaithSchema = z.object({
   description: z.string(),
   timePeriod: z.string(),
   contribution: z.string(),
-  /** Which era this person is browsed under. */
-  group: z.enum(HERO_GROUPS).optional(),
+  /** Which list this person belongs to. Absent means church history. */
+  collection: z.enum(HERO_COLLECTIONS).optional(),
+  /**
+   * Which era this person is browsed under: a church-history era for the
+   * historical collection, a period of Scripture for the biblical one.
+   */
+  group: z.string().optional(),
   /** Where they lived and worked, in a few words. "Colonial America". */
   place: z.string().optional(),
   /** 250-350 words. The thing a child can read without any AI involved. */
@@ -878,10 +941,12 @@ export const heroOfFaithSchema = z.object({
     type: z.enum(["book", "article", "website", "documentary", "other"]).default("other"),
   })).optional().default([]),
   keyEvents: z.array(z.object({
-    year: z.string(),
+    year: z.string().optional(),
     description: z.string(),
     /** Where a date comes from, when the usual source does not state it. */
     dateNote: z.string().optional(),
+    /** Chapter and verse, for events located in Scripture rather than in time. */
+    reference: z.string().optional(),
   })).optional().default([]),
   createdAt: z.date().or(z.string()).transform(val => 
     typeof val === 'string' ? new Date(val) : val

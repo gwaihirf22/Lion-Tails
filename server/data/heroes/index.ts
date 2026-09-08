@@ -1,10 +1,13 @@
 import type { HeroOfFaith } from "@shared/schema";
-import { HERO_GROUPS } from "@shared/schema";
+import { HERO_GROUPS, BIBLE_GROUPS } from "@shared/schema";
 import { toHero, type RawHero } from "./types";
 import { earlyChurch } from "./earlyChurch";
+import { medieval } from "./medieval";
 import { reformers } from "./reformers";
 import { puritans } from "./puritans";
-import { legacy } from "./legacy";
+import { awakening } from "./awakening";
+import { missionaries } from "./missionaries";
+import { modern } from "./modern";
 
 /**
  * Everyone, in one list.
@@ -13,7 +16,7 @@ import { legacy } from "./legacy";
  * unreadable and unmergeable. The order here is chronological, and the page
  * groups by era rather than relying on it.
  */
-const ALL: RawHero[] = [...earlyChurch, ...reformers, ...puritans, ...legacy];
+const ALL: RawHero[] = [...earlyChurch, ...medieval, ...reformers, ...puritans, ...awakening, ...missionaries, ...modern];
 
 /**
  * Duplicate slugs would make the seed's upsert silently drop a person, so this
@@ -23,7 +26,11 @@ const seen = new Set<string>();
 for (const h of ALL) {
   if (seen.has(h.id)) throw new Error(`Duplicate hero id: ${h.id}`);
   seen.add(h.id);
-  if (!HERO_GROUPS.includes(h.group)) throw new Error(`Unknown group for ${h.id}: ${h.group}`);
+  const valid: readonly string[] =
+    h.collection === "biblical" ? BIBLE_GROUPS : HERO_GROUPS;
+  if (!valid.includes(h.group)) {
+    throw new Error(`Unknown group for ${h.id}: ${h.group} (collection: ${h.collection ?? "historical"})`);
+  }
 }
 
 const order = new Map(HERO_GROUPS.map((g, i) => [g, i]));

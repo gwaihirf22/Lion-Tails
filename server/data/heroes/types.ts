@@ -1,4 +1,4 @@
-import type { HeroOfFaith, HeroGroup } from "@shared/schema";
+import type { HeroOfFaith, HeroGroup, BibleGroup, HeroCollection } from "@shared/schema";
 
 /**
  * A hero as WRITTEN, before normalisation.
@@ -11,7 +11,9 @@ export type RawHero = {
   /** Slug. Stable, readable, and what the seed upserts against. */
   id: string;
   name: string;
-  group: HeroGroup;
+  /** Omitted means church history, which is the larger list. */
+  collection?: HeroCollection;
+  group: HeroGroup | BibleGroup;
   /** One sentence, used on the card. */
   description: string;
   /** "1703-1758" or "c. 354-430". Displayed as written. */
@@ -34,8 +36,11 @@ export type RawHero = {
   famousQuote?: string;
   bibleVerse?: { text: string; reference: string };
   keyEvents?: Array<{
-    year: string;
+    /** A year for history; for Scripture, leave it and use reference. */
+    year?: string;
     description: string;
+    /** Chapter and verse, where the event is located in a text not a date. */
+    reference?: string;
     /**
      * Why this date is not confirmable from the subject's own article.
      *
@@ -82,6 +87,7 @@ export function toHero(raw: RawHero): HeroOfFaith {
     timePeriod: raw.timePeriod,
     contribution: raw.contribution,
     group: raw.group,
+    collection: raw.collection ?? "historical",
     place: raw.place,
     biography: raw.biography,
     complications: raw.complications,
