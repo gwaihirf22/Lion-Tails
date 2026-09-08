@@ -231,22 +231,7 @@ export const legacy: RawHero[] = [
       reference: "Micah 6:8"
     },
   },
-  {
-    id: "martin-luther",
-    wikipedia: "Martin Luther",
-    group: "reformers",
-    name: "Martin Luther",
-    description: "A German professor of theology, priest, and seminal figure in the Protestant Reformation.",
-    timePeriod: "1483-1546",
-    contribution: "Posted his Ninety-five Theses in 1517, challenging the Catholic Church's practices and doctrines, which sparked the Protestant Reformation and emphasized salvation by faith alone.",
-    birthYear: "1483",
-    deathYear: "1546",
-    famousQuote: "Here I stand. I can do no other. God help me.",
-    bibleVerse: {
-      text: "For it is by grace you have been saved, through faith—and this is not from yourselves, it is the gift of God—not by works, so that no one can boast.",
-      reference: "Ephesians 2:8-9"
-    },
-  },
+
   {
     id: "elisabeth-elliot",
     wikipedia: "Elisabeth Elliot",

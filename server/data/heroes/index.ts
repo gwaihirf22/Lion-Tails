@@ -2,6 +2,7 @@ import type { HeroOfFaith } from "@shared/schema";
 import { HERO_GROUPS } from "@shared/schema";
 import { toHero, type RawHero } from "./types";
 import { earlyChurch } from "./earlyChurch";
+import { reformers } from "./reformers";
 import { puritans } from "./puritans";
 import { legacy } from "./legacy";
 
@@ -12,7 +13,7 @@ import { legacy } from "./legacy";
  * unreadable and unmergeable. The order here is chronological, and the page
  * groups by era rather than relying on it.
  */
-const ALL: RawHero[] = [...earlyChurch, ...puritans, ...legacy];
+const ALL: RawHero[] = [...earlyChurch, ...reformers, ...puritans, ...legacy];
 
 /**
  * Duplicate slugs would make the seed's upsert silently drop a person, so this

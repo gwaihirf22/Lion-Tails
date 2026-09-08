@@ -220,7 +220,11 @@ export const earlyChurch: RawHero[] = [
       { year: "386", description: "Converted in a garden after reading Romans 13" },
       { year: "391", description: "Ordained at Hippo; made bishop four years later" },
       { year: "397-400", description: "Writes the Confessions" },
-      { year: "413-426", description: "Writes the City of God after the sack of Rome" },
+      {
+        year: "413-426",
+        description: "Writes the City of God after the sack of Rome",
+        dateNote: "The standard dating of its composition: begun after Rome fell in 410 and finished in 426. The article does not give the range.",
+      },
       { year: "430", description: "Dies as the Vandals besiege Hippo" },
     ],
     tags: ["theologian", "bishop", "conversion", "grace", "north africa", "confessions", "philosophy"],

@@ -34,7 +34,11 @@ export const puritans: RawHero[] = [
       { year: "1734", description: "A revival begins in Northampton" },
       { year: "1741", description: "Preaches \"Sinners in the Hands of an Angry God\" at Enfield" },
       { year: "1746", description: "Publishes A Treatise Concerning Religious Affections" },
-      { year: "1750", description: "Dismissed by his Northampton congregation" },
+      {
+        year: "1750",
+        description: "Dismissed by his Northampton congregation",
+        dateNote: "The congregation voted him out in June 1750, after a dispute over who could receive communion.",
+      },
       { year: "1751", description: "Becomes a missionary at Stockbridge" },
       { year: "1754", description: "Publishes Freedom of the Will" },
       { year: "1758", description: "Made president of the College of New Jersey; dies weeks later" },
@@ -70,7 +74,11 @@ export const puritans: RawHero[] = [
       { year: "1739", description: "Converted at twenty-one" },
       { year: "1742", description: "Expelled from Yale for a remark about a tutor" },
       { year: "1743", description: "Begins missionary work among Native Americans" },
-      { year: "1745", description: "An unexpected awakening at Crossweeksung, New Jersey" },
+      {
+        year: "1745",
+        description: "An unexpected awakening at Crossweeksung, New Jersey",
+        dateNote: "Dated from Brainerd's own journal, which records it beginning in August 1745. His Wikipedia article is short and omits it.",
+      },
       { year: "1747", description: "Dies of tuberculosis at Jonathan Edwards's house, aged 29" },
       { year: "1749", description: "Edwards publishes his diary as An Account of the Life of David Brainerd" },
     ],
@@ -172,7 +180,11 @@ export const puritans: RawHero[] = [
     },
     keyEvents: [
       { year: "1647", description: "Publishes The Death of Death in the Death of Christ" },
-      { year: "1649", description: "Preaches before Parliament the day after the king's execution" },
+      {
+        year: "1649",
+        description: "Preaches before Parliament the day after the king's execution",
+        dateNote: "Charles I was executed on 30 January 1649; Owen preached to Parliament the following day.",
+      },
       { year: "1651", description: "Made Dean of Christ Church, Oxford" },
       { year: "1652", description: "Becomes Vice-Chancellor of Oxford University" },
       { year: "1656", description: "Publishes Of the Mortification of Sin in Believers" },
@@ -244,7 +256,11 @@ export const puritans: RawHero[] = [
     keyEvents: [
       { year: "1656", description: "Becomes a minister at Dartmouth" },
       { year: "1662", description: "Ejected under the Act of Uniformity" },
-      { year: "1665", description: "Continues preaching illegally after the Five Mile Act" },
+      {
+        year: "1665",
+        description: "Continues preaching illegally after the Five Mile Act",
+        dateNote: "1665 is the date of the Act itself, which barred ejected ministers from coming within five miles of their former parishes.",
+      },
       { year: "1678", description: "Publishes The Mystery of Providence" },
       { year: "1687", description: "Allowed to preach openly again under the Declaration of Indulgence" },
     ],
