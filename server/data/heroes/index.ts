@@ -8,6 +8,7 @@ import { puritans } from "./puritans";
 import { awakening } from "./awakening";
 import { missionaries } from "./missionaries";
 import { modern } from "./modern";
+import { bible } from "./bible";
 
 /**
  * Everyone, in one list.
@@ -16,7 +17,7 @@ import { modern } from "./modern";
  * unreadable and unmergeable. The order here is chronological, and the page
  * groups by era rather than relying on it.
  */
-const ALL: RawHero[] = [...earlyChurch, ...medieval, ...reformers, ...puritans, ...awakening, ...missionaries, ...modern];
+const ALL: RawHero[] = [...earlyChurch, ...medieval, ...reformers, ...puritans, ...awakening, ...missionaries, ...modern, ...bible];
 
 /**
  * Duplicate slugs would make the seed's upsert silently drop a person, so this
