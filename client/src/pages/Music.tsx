@@ -67,7 +67,7 @@ export default function Music() {
           <MusicSection />
         </TabsContent>
         
-        <TabsContent value="search" className="content-container rounded-lg p-6 bg-white/90 backdrop-blur-sm">
+        <TabsContent value="search" className="content-container rounded-lg p-6 bg-card backdrop-blur-sm">
           <div className="mb-4">
             <h3 className="text-2xl font-heading font-bold mb-2">Find Christian Songs</h3>
             <p className="text-muted-foreground">

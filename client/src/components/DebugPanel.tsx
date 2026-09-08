@@ -26,6 +26,28 @@ interface DebugPanelProps {
   isVisible?: boolean;
 }
 
+/**
+ * A short, DISTINCT label for a step.
+ *
+ * The server names chapter steps "generateChapter: <first 30 chars of the
+ * outline>...", which is too long for a tab, so the client showed only the part
+ * before the colon -- and a five-chapter story then had five tabs all reading
+ * "generateChapter". Numbering them by their position among the chapter steps
+ * restores the distinction without needing the outline text or a server change.
+ */
+function stepLabel(
+  step: string,
+  index: number,
+  all: Array<{ step: string }>,
+): string {
+  const name = step.split(":")[0].trim();
+  if (!step.includes(":")) return name;
+  const sameKind = all.filter((s) => s.step.split(":")[0].trim() === name);
+  if (sameKind.length < 2) return name;
+  const ordinal = all.slice(0, index + 1).filter((s) => s.step.split(":")[0].trim() === name).length;
+  return `${name} ${ordinal}`;
+}
+
 export function DebugPanel({
   debugData = [],
   isVisible = false,
@@ -53,17 +75,17 @@ export function DebugPanel({
   const modelUsed = debugData[0]?.model || "N/A";
 
   return (
-    <Card className="mt-4 border-orange-200 bg-orange-50">
+    <Card className="mt-4 border-warning bg-warning-surface">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg text-orange-800">
+          <CardTitle className="text-lg text-warning">
             OpenAI Debug Information
           </CardTitle>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setExpanded(!expanded)}
-            className="text-orange-600 hover:text-orange-800"
+            className="text-warning hover:text-warning"
           >
             {expanded ? (
               <ChevronUp className="mr-1" />
@@ -77,49 +99,59 @@ export function DebugPanel({
       {expanded && (
         <CardContent>
           {debugData.length === 0 ? (
-            <p className="text-orange-600">No debug data available.</p>
+            <p className="text-warning">No debug data available.</p>
           ) : (
             <>
               {/* <<< NEW: Overall Summary Section >>> */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 border rounded-lg bg-white">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 border rounded-lg bg-card">
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Total Words Generated</p>
-                  <p className="text-2xl font-bold text-orange-600">
+                  <p className="text-sm text-muted-foreground">Total Words Generated</p>
+                  <p className="text-2xl font-bold text-warning">
                     {totalWordsGenerated}
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Target Words</p>
-                  <p className="text-2xl font-bold text-gray-800">
+                  <p className="text-sm text-muted-foreground">Target Words</p>
+                  <p className="text-2xl font-bold text-foreground">
                     {finalTargetWords}
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Model</p>
-                  <p className="text-lg font-semibold text-blue-600">
+                  <p className="text-sm text-muted-foreground">Model</p>
+                  <p className="text-lg font-semibold text-foreground">
                     {modelUsed}
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Total Steps</p>
-                  <p className="text-lg font-semibold text-green-600">
+                  <p className="text-sm text-muted-foreground">Total Steps</p>
+                  <p className="text-lg font-semibold text-success">
                     {debugData.length}
                   </p>
                 </div>
               </div>
 
-              {/* <<< CHANGED: Tabs now represent Steps, not Attempts >>> */}
+              {/* Tabs represent Steps, not Attempts.
+
+                  The row used to be a grid of N equal 1fr columns. Step names
+                  are far wider than 1/Nth of the panel -- "generateChapter"
+                  plus a word-count badge in a seventh of the width -- and a
+                  TabsTrigger does not clip its content, so every label spilled
+                  across its neighbours and the row became unreadable. Equal
+                  columns are the wrong model for labels of unequal length:
+                  size each trigger to its own content and let the row wrap. */}
               <Tabs defaultValue="0" className="w-full">
-                <TabsList
-                  className="grid w-full"
-                  style={{
-                    gridTemplateColumns: `repeat(${debugData.length}, minmax(0, 1fr))`,
-                  }}
-                >
+                {/* h-auto is load-bearing: TabsList's base class is a fixed
+                    h-10, so a wrapped second row would be clipped. Wrapping
+                    rather than scrolling because a debug panel should never
+                    hide a step behind a scroll position you cannot see. */}
+                <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
                   {debugData.map((step, index) => (
-                    <TabsTrigger key={index} value={index.toString()}>
-                      {step.step.split(":")[0]}{" "}
-                      {/* Show 'generateChapter' instead of the full outline */}
+                    <TabsTrigger
+                      key={index}
+                      value={index.toString()}
+                      className="shrink-0 whitespace-nowrap"
+                    >
+                      {stepLabel(step.step, index, debugData)}
                       <Badge variant="secondary" className="ml-2">
                         {step.wordCount || 0}w
                       </Badge>
@@ -178,14 +210,14 @@ function CodeBlock({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h4 className="font-semibold text-gray-800">{title}</h4>
+        <h4 className="font-semibold text-foreground">{title}</h4>
         <Button variant="outline" size="sm" onClick={onCopy}>
           <Copy className="w-4 h-4 mr-1" />
           Copy
         </Button>
       </div>
       <ScrollArea
-        className={`${heightClass} w-full border rounded p-2 bg-gray-50`}
+        className={`${heightClass} w-full border rounded p-2 bg-muted`}
       >
         <pre className="text-xs whitespace-pre-wrap">
           {content || "Not available for this step."}

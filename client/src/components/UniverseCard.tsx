@@ -62,7 +62,7 @@ export default function UniverseCard({
   };
 
   return (
-    <Card className="bg-white/90 rounded-2xl shadow mb-4">
+    <Card className="bg-card rounded-2xl shadow mb-4">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <button
@@ -83,7 +83,7 @@ export default function UniverseCard({
               </Badge>
             )}
             {!busy && universe.isStale && (
-              <Badge variant="outline" className="bg-amber-50 border-amber-300 text-amber-800">
+              <Badge variant="outline" className="bg-warning-surface border-warning text-warning">
                 summary out of date
               </Badge>
             )}
@@ -134,7 +134,7 @@ export default function UniverseCard({
                   <Textarea
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
-                    className="min-h-40 bg-white"
+                    className="min-h-40 bg-card"
                   />
                   <div className="flex gap-2">
                     <Button size="sm" onClick={save}>Save</Button>

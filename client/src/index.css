@@ -1,3 +1,9 @@
+/* Reader typefaces and the reading surface. Imported here rather than from a
+   component, because @import must come before @tailwind. */
+@import "./fonts.css";
+@import "./theme.css";
+@import "./components/reader/reader.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -33,7 +39,7 @@
 
   body {
     @apply font-sans antialiased text-foreground;
-    background-image: url('./assets/lion-tails-background.jpg');
+    /* background image removed: the palette owns the page colour now */
     background-size: cover;
     background-attachment: fixed;
     background-position: center;
@@ -43,7 +49,8 @@
 
 @layer utilities {
   .content-container {
-    @apply bg-white/85 backdrop-blur-md;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  }
+  /* Was bg-white/85 with a backdrop blur, to lift it off a photograph. With
+     the photo gone it is a plain surface in the current palette. */
+  background: hsl(var(--card));
+}
 }

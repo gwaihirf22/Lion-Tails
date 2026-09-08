@@ -3,7 +3,7 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { useStoryJobs, describeJob } from "@/hooks/use-story-jobs";
 import { useUniverses } from "@/hooks/use-universes";
 import UniverseCard from "@/components/UniverseCard";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -126,6 +126,18 @@ export default function SavedStories() {
     }
   };
 
+  // Whole-card click. Modified clicks are left alone so the browser's own
+  // open-in-new-tab / new-window behaviour on the title link is not doubled up
+  // by a navigation here -- wouter's Link bails out before its onClick on those
+  // same modifiers, so nothing else stops the event reaching this handler.
+  const handleCardClick = (
+    e: React.MouseEvent,
+    story: SavedStory,
+  ) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.button !== 0) return;
+    handleViewStory(story);
+  };
+
   // View a specific story
   const handleViewStory = (story: SavedStory) => {
     // Id only. This used to serialise the whole story -- prompts and raw
@@ -216,7 +228,7 @@ export default function SavedStories() {
               className={
                 job.status === "failed"
                   ? "bg-destructive/5 border-destructive/30 rounded-xl"
-                  : "bg-white/90 rounded-xl"
+                  : "bg-card rounded-xl"
               }
             >
               <CardContent className="p-4 flex items-start justify-between gap-4">
@@ -261,18 +273,18 @@ export default function SavedStories() {
       )}
 
       {stories.length === 0 && visibleJobs.length === 0 ? (
-        <Card className="bg-white/90 rounded-2xl shadow-lg">
+        <Card className="bg-card rounded-2xl shadow-lg">
           <CardContent className="p-8 text-center">
-            <h3 className="text-2xl font-medium text-gray-700 mb-4">No Stories Yet</h3>
-            <p className="text-gray-500 mb-6">You haven't created any stories yet. Create your first personalized story now!</p>
+            <h3 className="text-2xl font-medium text-foreground mb-4">No Stories Yet</h3>
+            <p className="text-muted-foreground mb-6">You haven't created any stories yet. Create your first personalized story now!</p>
             <Button onClick={() => navigate("/")}>Create Your First Story</Button>
           </CardContent>
         </Card>
       ) : (
         <>
-          <Card className="mb-4 bg-white/90 rounded-lg">
+          <Card className="mb-4 bg-card rounded-lg">
             <CardContent className="p-4">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 <span className="font-semibold">Note:</span> Stories are automatically saved for one year. Favorite stories are kept indefinitely.
               </p>
             </CardContent>
@@ -309,12 +321,12 @@ export default function SavedStories() {
                       )}
                       {inThis.map((st) => (
                         <div key={st.id} className="flex items-center justify-between gap-2 text-sm">
-                          <button
+                          <Link
+                            href={`/story?id=${st.id}`}
                             className="text-left flex-1 hover:underline"
-                            onClick={() => handleViewStory(st)}
                           >
                             {st.story.title}
-                          </button>
+                          </Link>
                           <Button
                             size="sm"
                             variant="ghost"
@@ -339,27 +351,37 @@ export default function SavedStories() {
               <div className="grid gap-4">
                 {unassigned.length === 0 ? (
                   <Card className="p-6 text-center">
-                    <p className="text-gray-500">No stories in this category.</p>
+                    <p className="text-muted-foreground">No stories in this category.</p>
                   </Card>
                 ) : (
                   unassigned.map((savedStory) => (
-                    <Card key={savedStory.id} className="bg-white/95 overflow-hidden transition-all duration-200 hover:shadow-md">
+                    <Card
+                      key={savedStory.id}
+                      className="bg-card overflow-hidden transition-all duration-200 hover:shadow-md cursor-pointer"
+                      onClick={(e) => handleCardClick(e, savedStory)}
+                    >
                       <CardContent className="p-5">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <h3 className="text-xl font-bold text-primary mb-1 line-clamp-1">
-                              {savedStory.story.title}
+                              <Link
+                                href={`/story?id=${savedStory.id}`}
+                                className="hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {savedStory.story.title}
+                              </Link>
                             </h3>
                             <div className="flex items-center gap-2 mb-2">
-                              <span className="text-sm text-gray-500">
+                              <span className="text-sm text-muted-foreground">
                                 Created {formatDistanceToNow(new Date(savedStory.createdAt))} ago
                               </span>
                               {savedStory.isFavorite ? (
-                                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200">
+                                <Badge variant="secondary" className="bg-warning-surface text-warning hover:bg-warning-surface">
                                   Favorite
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="text-gray-500">
+                                <Badge variant="outline" className="text-muted-foreground">
                                   Temporary
                                 </Badge>
                               )}
@@ -370,8 +392,11 @@ export default function SavedStories() {
                             <Button 
                               size="sm" 
                               variant="ghost"
-                              className={savedStory.isFavorite ? "text-yellow-500 hover:text-yellow-600" : "text-gray-400 hover:text-yellow-500"}
-                              onClick={() => handleToggleFavorite(savedStory.id, !savedStory.isFavorite)}
+                              className={savedStory.isFavorite ? "text-warning hover:text-warning" : "text-muted-foreground hover:text-warning"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleFavorite(savedStory.id, !savedStory.isFavorite);
+                              }}
                               title={savedStory.isFavorite ? "Remove from favorites" : "Add to favorites"}
                             >
                               {savedStory.isFavorite ? (
@@ -387,8 +412,11 @@ export default function SavedStories() {
                             <Button 
                               size="sm"
                               variant="ghost"
-                              className="text-red-500 hover:text-red-600"
-                              onClick={() => handleDeleteStory(savedStory.id)}
+                              className="text-destructive hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteStory(savedStory.id);
+                              }}
                               title="Delete story"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -402,7 +430,7 @@ export default function SavedStories() {
                         
                         <div className="flex flex-col md:flex-row justify-between gap-3">
                           <div className="flex-1">
-                            <div className="text-sm text-gray-500 mb-1">Story details:</div>
+                            <div className="text-sm text-muted-foreground mb-1">Story details:</div>
                             <div className="flex flex-wrap gap-2">
                               <Badge variant="outline" className="bg-primary/10">
                                 {savedStory.request.childName}
@@ -425,7 +453,13 @@ export default function SavedStories() {
                             </div>
                           </div>
                           
-                          <Button size="sm" onClick={() => handleViewStory(savedStory)}>
+                          <Button
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewStory(savedStory);
+                            }}
+                          >
                             Read Story
                           </Button>
                         </div>

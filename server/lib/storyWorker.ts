@@ -21,7 +21,7 @@
  */
 import { randomUUID } from "crypto";
 import { pool, databaseReady } from "../db";
-import { resolveModel, createClient } from "./modelPolicy";
+import { resolveModel, createClient, tokenLimitFor, temperatureFor } from "./modelPolicy";
 import { StoryGenerationError } from "./storyErrors";
 import {
   generateStoryFromJob,
@@ -373,8 +373,8 @@ async function runSummaryJob(job: JobRow, resolved: ResolvedModel): Promise<void
             { role: "user", content: summaryUserPrompt(job.brief, job.target_word_count) },
           ],
           response_format: { type: "json_object" },
-          temperature: 0.3,
-          max_tokens: maxTokens,
+          ...temperatureFor(resolved.model, 0.3),
+          ...tokenLimitFor(resolved.model, maxTokens),
         });
         return {
           content: response.choices[0].message.content || "",

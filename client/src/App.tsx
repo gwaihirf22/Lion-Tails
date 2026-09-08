@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -20,10 +20,10 @@ import Footer from "@/components/Footer";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ParentModeProvider } from "@/hooks/use-parent-mode";
+import { ReadingPrefsProvider } from "@/hooks/use-reading-prefs";
 import { StoryJobsProvider } from "@/hooks/use-story-jobs";
 
 // Import the background image
-import lionTailsBackground from "@assets/Lion tails.jpg";
 
 function Router() {
   return (
@@ -47,40 +47,51 @@ function Router() {
 }
 
 function App() {
-  // Style for app background
-  const appBackgroundStyle = {
-    backgroundImage: `url(${lionTailsBackground})`,
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundAttachment: 'fixed',
-    backgroundRepeat: 'no-repeat',
-    position: 'relative' as const,
-  };
+  /**
+   * On the reader route the app shell steps aside so the chosen palette fills
+   * the viewport -- otherwise Night is a dark rectangle floating on a bright
+   * photograph, which is worse than no dark mode at all.
+   *
+   * Done here, in JS, rather than with CSS. The photo background and the white
+   * overlay below are INLINE styles, and an inline style cannot be overridden
+   * from a stylesheet without !important -- which would then break silently
+   * the first time someone edits the object it is fighting. Not rendering them
+   * is honest; out-shouting them is not.
+   */
+  const [location] = useLocation();
+  const bareReader = location.startsWith("/story");
 
-  // Style for overlay to improve text readability
-  const overlayStyle = {
-    position: 'absolute' as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    zIndex: -1,
-  };
+  // The photo background and its rgba(255,255,255,0.7) readability overlay
+  // are gone. They existed to make text legible over a stock photograph of a
+  // party, which is not what a bedtime story app should open with -- and an
+  // overlay that exists to rescue contrast is a sign the background was
+  // fighting the content. The page is now the palette's own colour.
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <ReadingPrefsProvider>
         <ParentModeProvider>
           {/* Above Header and Router on purpose: the job must keep being
               watched after the user navigates away from the generate page,
               which is the whole point of the change. */}
           <StoryJobsProvider>
-          <div className="min-h-screen flex flex-col font-body text-textDark" style={appBackgroundStyle}>
-            <div style={overlayStyle}></div>
+          <div className="min-h-screen flex flex-col bg-background text-foreground">
             <Header />
-            <main className="flex-grow container mx-auto p-4 md:px-8 md:py-6 relative z-10">
-              <div className="content-container rounded-2xl shadow-xl p-4 md:p-6 border border-primary/10 bg-white/80 backdrop-blur-sm">
+            <main
+              className={
+                bareReader
+                  ? "flex-grow relative z-10"
+                  : "flex-grow container mx-auto p-4 md:px-8 md:py-6 relative z-10"
+              }
+            >
+              <div
+                className={
+                  bareReader
+                    ? ""
+                    : "content-container rounded-2xl shadow-sm p-4 md:p-6 border border-border"
+                }
+              >
                 <Router />
               </div>
             </main>
@@ -89,6 +100,7 @@ function App() {
           <Toaster />
           </StoryJobsProvider>
         </ParentModeProvider>
+        </ReadingPrefsProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

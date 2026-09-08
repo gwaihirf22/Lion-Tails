@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -155,8 +156,14 @@ export default function GenerateStory() {
     setWatchingJobId(outcome.jobId);
     toast({
       title: "Writing your story",
-      description:
-        "You can leave this page. It will appear in your library when it is done.",
+      description: "You can leave this page. It will appear in My Stories when it is done.",
+      // Actionable, because telling someone where a thing will appear and then
+      // making them find it is most of the way to not telling them.
+      action: (
+        <ToastAction altText="Go to My Stories" onClick={() => setLocation("/saved-stories")}>
+          My Stories
+        </ToastAction>
+      ),
     });
   };
 
@@ -232,7 +239,7 @@ export default function GenerateStory() {
               <br />
               <span className="text-sm text-muted-foreground">
                 You can leave this page — it keeps writing, and the story will
-                be in your library when it is done.
+                be in My Stories when it is done.
               </span>
             </p>
             <Button
@@ -290,7 +297,12 @@ export default function GenerateStory() {
               </div>
             </div>
 
-            <StoryDisplay story={generatedStory} />
+            {/* This branch is currently unreachable -- setGeneratedStory is
+                only ever called with null since the job queue landed -- but the
+                prop is wired correctly so it works if that flow returns.
+                Deleting verified-unused code has bitten this repo before; see
+                docs/decisions.md 12. */}
+            <StoryDisplay story={generatedStory} storyType={storyRequest?.storyType} />
           </div>
         )}
       </div>

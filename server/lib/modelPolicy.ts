@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { StoryGenerationError } from "./storyErrors";
 import { storage } from "../storage";
 
 /**
@@ -39,6 +40,28 @@ type ModelSpec = {
   label: string;
   /** Shown in the UI. Local models are for exercising the pipeline, not quality. */
   warning?: string;
+  /**
+   * Which parameter this model accepts for the output ceiling.
+   *
+   * OpenAI's newer models REJECT max_tokens outright:
+   *   400 Unsupported parameter: 'max_tokens' is not supported with this
+   *       model. Use 'max_completion_tokens' instead.
+   * gpt-4o and gpt-4o-mini still take max_tokens, and Ollama's OpenAI-
+   * compatible endpoint takes max_tokens only. So this cannot be a global
+   * switch -- it is a property of the model, which is what the catalogue is
+   * for. Defaults to max_tokens; new OpenAI models must say otherwise.
+   */
+  tokenParam?: "max_tokens" | "max_completion_tokens";
+  /**
+   * Whether this model accepts a temperature other than the default.
+   *
+   * The GPT-5 generation rejects one:
+   *   400 Unsupported value: 'temperature' does not support 0.7 with this
+   *       model. Only the default (1) value is supported.
+   * Sampling is fixed on those models, so the right move is to omit the
+   * parameter rather than send a value that will be refused. Defaults to true.
+   */
+  fixedTemperature?: boolean;
 };
 
 export const MODEL_CATALOG: Record<string, ModelSpec> = {
@@ -58,11 +81,14 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
     warning:
       "Runs on this server for free. Very small model — expect poor story quality; useful for testing.",
   },
+  // Kept selectable rather than removed. It is not deprecated, it is the
+  // cheapest option, and thousands of existing stories were written with it --
+  // a user_settings row still naming it must keep resolving.
   "gpt-4o-mini": {
     tier: "economy",
     provider: "openai",
     kinds: ["chat", "vision"],
-    label: "GPT-4o mini",
+    label: "GPT-4o mini — cheapest",
   },
   "gpt-4o": {
     tier: "premium",
@@ -70,18 +96,65 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
     kinds: ["chat", "vision"],
     label: "GPT-4o",
   },
-  "dall-e-3": {
+  // Current generation. Premium, so they need an admin account or the user's
+  // own key -- nobody spends the owner's money on a flagship by accident.
+  // The owner-funded tier. About twice gpt-4o-mini's output cost -- still
+  // under a third of a cent for a 1500-word story -- for a current-generation
+  // model. Vision confirmed against OpenAI's model page, not assumed, because
+  // image analysis resolves through the same catalogue.
+  "gpt-5.6-luna": {
+    tier: "economy",
+    provider: "openai",
+    kinds: ["chat", "vision"],
+    label: "GPT-5.6 Luna — fast and cheap",
+    tokenParam: "max_completion_tokens",
+    fixedTemperature: true,
+  },
+  "gpt-5.6-terra": {
+    tier: "premium",
+    provider: "openai",
+    kinds: ["chat", "vision"],
+    label: "GPT-5.6 Terra — balanced",
+    warning: "Stronger reasoning than Luna at roughly ten times the cost per story.",
+    tokenParam: "max_completion_tokens",
+    fixedTemperature: true,
+  },
+  "gpt-6-astra": {
+    tier: "premium",
+    provider: "openai",
+    kinds: ["chat", "vision"],
+    label: "GPT-6 Astra — best quality",
+    warning:
+      "The most capable model available, and by far the most expensive: around fifty times Luna's price per story.",
+    tokenParam: "max_completion_tokens",
+    fixedTemperature: true,
+  },
+  // dall-e-3 was SHUT DOWN on 2026-05-12, not merely deprecated. It sat here as
+  // the image default for four months afterwards, so every illustration attempt
+  // by an entitled user failed -- silently, because generateStoryImage catches
+  // and returns undefined so a story is never lost over a missing picture.
+  // Nothing surfaced it: the reader simply showed the stock lion.
+  "gpt-image-2": {
     tier: "premium",
     provider: "openai",
     kinds: ["image"],
-    label: "DALL-E 3",
+    label: "GPT Image 2",
   },
 };
 
-const DEFAULTS: Record<ModelKind, string> = {
-  chat: "gpt-4o-mini",
-  vision: "gpt-4o-mini",
-  image: "dall-e-3",
+/**
+ * The model used when a user has not chosen one.
+ *
+ * Exported so storage and the routes can stop naming models of their own.
+ * They each hardcoded 'gpt-4o' -- a PREMIUM model -- with the comment "Default
+ * to the newest model". resolveModel() downgrades at use, so nobody was billed
+ * for it, but the settings page showed "GPT-4o" selected for users who were
+ * actually generating on the economy tier.
+ */
+export const DEFAULTS: Record<ModelKind, string> = {
+  chat: "gpt-5.6-luna",
+  vision: "gpt-5.6-luna",
+  image: "gpt-image-2",
 };
 
 /** Container name, not an IP: the Ollama container's address is not stable. */
@@ -131,6 +204,28 @@ export function isModelAllowedFor(
   if (!spec.kinds.includes(kind)) return false;
   if (spec.tier === "premium") return opts.isAdmin || opts.hasOwnKey;
   return true;
+}
+
+/**
+ * The output-ceiling parameter for a model, spread into a chat request.
+ *
+ * One helper rather than eight call sites each remembering which name to use.
+ * An unknown model falls back to max_tokens, which is what every model this
+ * app has ever called accepted before the GPT-5 generation.
+ */
+export function tokenLimitFor(model: string, limit: number): Record<string, number> {
+  const param = MODEL_CATALOG[model]?.tokenParam ?? "max_tokens";
+  return { [param]: limit };
+}
+
+/**
+ * The temperature parameter for a model, spread into a chat request.
+ *
+ * Returns nothing at all for a model with fixed sampling -- sending the
+ * default explicitly is still an error on those, so it has to be absent.
+ */
+export function temperatureFor(model: string, temperature: number): Record<string, number> {
+  return MODEL_CATALOG[model]?.fixedTemperature ? {} : { temperature };
 }
 
 /** Models a given user may select, for the settings UI. */
@@ -209,7 +304,17 @@ export async function resolveModel(
   // without their own key was downgraded above.
   const apiKey = ownKey || process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("OpenAI API key not found");
+    // Typed, so the route answers 503 with something the user can act on
+    // rather than a blanket 500 reading "Failed to start story generation".
+    // This is a SERVER configuration problem -- OPENAI_API_KEY is unset -- not
+    // anything the user did, and the remedy that always works is the local
+    // tier, which needs no key at all.
+    throw new StoryGenerationError(
+      "no_model_available",
+      `${model} needs an OpenAI API key, and this server has none configured. ` +
+        "Choose one of the local models in Settings -- they are free and need no key -- " +
+        "or add your own OpenAI API key there.",
+    );
   }
 
   return {

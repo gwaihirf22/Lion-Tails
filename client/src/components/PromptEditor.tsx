@@ -197,9 +197,9 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
 
   if (!isActive) {
     return (
-      <Card className={`border-gray-200 bg-gray-50 ${className}`}>
+      <Card className={`border-border bg-muted ${className}`}>
         <CardContent className="pt-6">
-          <div className="flex items-center justify-center space-x-2 text-gray-500">
+          <div className="flex items-center justify-center space-x-2 text-muted-foreground">
             <Edit3 className="h-5 w-5" />
             <span className="text-sm">Prompt editing requires Parent Mode</span>
           </div>
@@ -209,19 +209,19 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
   }
 
   return (
-    <Card className={`border-amber-200 bg-amber-50 ${className}`}>
+    <Card className={`border-warning bg-warning-surface ${className}`}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Code2 className="h-5 w-5 text-amber-600" />
-            <CardTitle className="text-lg text-amber-800">AI Prompt Editor</CardTitle>
-            <Badge variant="secondary" className="bg-green-100 text-green-700">
+            <Code2 className="h-5 w-5 text-warning" />
+            <CardTitle className="text-lg text-warning">AI Prompt Editor</CardTitle>
+            <Badge variant="secondary" className="bg-success-surface text-success">
               Parent Mode Active
             </Badge>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" className="bg-amber-600 hover:bg-amber-700">
+              <Button size="sm" className="bg-warning hover:bg-warning">
                 <Edit3 className="h-4 w-4 mr-2" />
                 Edit Prompts
               </Button>
@@ -229,7 +229,7 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
             <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="flex items-center space-x-2">
-                  <Code2 className="h-5 w-5 text-amber-600" />
+                  <Code2 className="h-5 w-5 text-warning" />
                   <span>Advanced Prompt Editor</span>
                 </DialogTitle>
                 <DialogDescription>
@@ -242,15 +242,15 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
                 {(!validation.isValid || validation.suggestions.length > 0) && (
                   <div className="space-y-2">
                     {validation.warnings.map((warning, index) => (
-                      <Alert key={index} className="bg-yellow-50 border-yellow-200">
-                        <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                        <AlertDescription className="text-yellow-700">{warning}</AlertDescription>
+                      <Alert key={index} className="bg-warning-surface border-warning">
+                        <AlertTriangle className="h-4 w-4 text-warning" />
+                        <AlertDescription className="text-warning">{warning}</AlertDescription>
                       </Alert>
                     ))}
                     {validation.suggestions.map((suggestion, index) => (
-                      <Alert key={index} className="bg-blue-50 border-blue-200">
-                        <Info className="h-4 w-4 text-blue-600" />
-                        <AlertDescription className="text-blue-700">{suggestion}</AlertDescription>
+                      <Alert key={index} className="bg-muted border-border">
+                        <Info className="h-4 w-4 text-foreground" />
+                        <AlertDescription className="text-foreground">{suggestion}</AlertDescription>
                       </Alert>
                     ))}
                   </div>
@@ -329,7 +329,7 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
                     </Button>
                     <Button
                       onClick={handleSavePrompts}
-                      className="bg-green-600 hover:bg-green-700"
+                      className="bg-success hover:bg-success/90"
                     >
                       <CheckCircle className="h-4 w-4 mr-2" />
                       Save Changes
@@ -346,38 +346,38 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
-              <Label className="text-sm font-medium text-amber-700">System Prompt</Label>
-              <Eye className="h-4 w-4 text-amber-600" />
+              <Label className="text-sm font-medium text-warning">System Prompt</Label>
+              <Eye className="h-4 w-4 text-warning" />
               {systemPromptManuallyEdited && (
-                <Badge variant="secondary" className="bg-blue-100 text-blue-700 text-xs">
+                <Badge variant="secondary" className="bg-muted text-foreground text-xs">
                   Custom
                 </Badge>
               )}
             </div>
-            <div className="bg-white p-3 rounded border border-amber-200 text-xs">
-              <code className="text-gray-700">{getPromptPreview(systemPrompt)}</code>
+            <div className="bg-card p-3 rounded border border-warning text-xs">
+              <code className="text-foreground">{getPromptPreview(systemPrompt)}</code>
             </div>
           </div>
           
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
-              <Label className="text-sm font-medium text-amber-700">User Prompt</Label>
-              <Eye className="h-4 w-4 text-amber-600" />
+              <Label className="text-sm font-medium text-warning">User Prompt</Label>
+              <Eye className="h-4 w-4 text-warning" />
               {userPromptManuallyEdited && (
-                <Badge variant="secondary" className="bg-blue-100 text-blue-700 text-xs">
+                <Badge variant="secondary" className="bg-muted text-foreground text-xs">
                   Custom
                 </Badge>
               )}
             </div>
-            <div className="bg-white p-3 rounded border border-amber-200 text-xs">
-              <code className="text-gray-700">{getPromptPreview(userPrompt)}</code>
+            <div className="bg-card p-3 rounded border border-warning text-xs">
+              <code className="text-foreground">{getPromptPreview(userPrompt)}</code>
             </div>
           </div>
         </div>
 
-        <Alert className="bg-amber-50 border-amber-200">
-          <Info className="h-4 w-4 text-amber-600" />
-          <AlertDescription className="text-amber-700 text-sm">
+        <Alert className="bg-warning-surface border-warning">
+          <Info className="h-4 w-4 text-warning" />
+          <AlertDescription className="text-warning text-sm">
             Prompts automatically update when you change form fields. Once you manually edit a prompt, 
             it becomes "Custom" and stops auto-updating. Use "Reset to Default" to restore live updates.
           </AlertDescription>

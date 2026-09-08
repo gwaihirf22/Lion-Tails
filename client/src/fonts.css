@@ -1,0 +1,150 @@
+/**
+ * Reader typefaces. Self-hosted, declared explicitly, fetched lazily.
+ *
+ * THE LOADING STRATEGY IS THESE RULES AND NOTHING ELSE.
+ * An @font-face rule that no rendered element matches is not downloaded --
+ * specified behaviour, not an optimisation to hope for. All four families are
+ * declared here and the browser fetches exactly the one the reader's
+ * --reader-family currently resolves to. No dynamic <link> injection, no
+ * font-loading state machine, no race between the preference query resolving
+ * and a stylesheet arriving. A user who never changes font downloads ONE
+ * family, once, then it is cached behind a content hash forever.
+ *
+ * WHY THESE ARE HAND-WRITTEN RATHER THAN `@import "@fontsource-variable/x"`
+ * The package entry points declare every subset -- cyrillic, cyrillic-ext,
+ * greek, greek-ext, vietnamese, latin-ext, latin. Those extra faces are never
+ * DOWNLOADED (unicode-range gates them), but Vite emits every referenced file
+ * into dist/public/assets, which put 1.0 MB of woff2 into the build artifact
+ * and the Docker image. An English-language children's app cannot use the
+ * Cyrillic or Greek cuts. Naming the files directly drops that to ~600 KB
+ * without changing what any reader downloads.
+ *
+ * latin-ext is kept. It costs nothing at read time -- unicode-range means it is
+ * only fetched if a character in that range appears -- and dropping it would
+ * make a rare accented name fall back to a system font mid-word, which looks
+ * like a bug. Note that Latin-1 (so the ü in "George Müller") is in the base
+ * latin subset, not latin-ext.
+ *
+ * WHY SELF-HOSTED RATHER THAN THE GOOGLE CDN
+ * Hotlinking Google Fonts sends every reader's IP and referer to Google on
+ * every visit -- for a children's bedtime app, and a live legal question in the
+ * EU since LG Muenchen I, 3 O 17493/20. It is also self-defeating here: this
+ * app runs on Blake's own server behind SWAG, so a household reading on the LAN
+ * with a flaky WAN link would get no fonts at all, and font-display: swap would
+ * make the setting look silently broken. Cross-site cache partitioning killed
+ * the shared-cache argument in 2020. And this codebase already carries exactly
+ * this mistake once, at main.tsx:28 -- a remote Unsplash hotlink. Not twice.
+ *
+ * WHY THE wght AXIS AND NOT opsz
+ * MEASURED, not assumed. Literata publishes an optical-size variant, and opsz
+ * is genuinely attractive next to a live font-size control -- the letterforms
+ * would adapt as the reader changes size. It costs 107.5 KB roman + 110.5 KB
+ * italic = 218 KB, against 51.3 + 52.5 = 104 KB for the weight-only file.
+ * Twice the bytes for an effect almost nobody would name. Rejected.
+ *
+ * Per-family latin download, measured:
+ *   Literata     roman + italic   104 KB     EB Garamond  roman + italic  90 KB
+ *   Lexend       roman             39 KB     Atkinson     400 + 700       34 KB
+ *
+ * Italic is declared for the SERIFS only. Verse and *emphasis* want a true
+ * italic and a synthetic oblique looks wrong in a book face; in a sans it does
+ * not, and Lexend ships no true italic at all. That alone avoids ~70 KB.
+ *
+ * font-display: swap on every face. Not `block` -- a flash of invisible text at
+ * bedtime is exactly wrong. Not `optional` -- on a slow first load it would
+ * silently keep the fallback forever, making the setting appear not to work.
+ */
+
+/* latin: Latin-1 plus the common punctuation and currency. */
+@font-face {
+  font-family: "Literata Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url("@fontsource-variable/literata/files/literata-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: "Literata Variable";
+  font-style: italic;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url("@fontsource-variable/literata/files/literata-latin-wght-italic.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+/* latin-ext: only fetched if a character in this range is actually rendered. */
+@font-face {
+  font-family: "Literata Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url("@fontsource-variable/literata/files/literata-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: "Literata Variable";
+  font-style: italic;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url("@fontsource-variable/literata/files/literata-latin-ext-wght-italic.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "EB Garamond Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 800;
+  src: url("@fontsource-variable/eb-garamond/files/eb-garamond-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: "EB Garamond Variable";
+  font-style: italic;
+  font-display: swap;
+  font-weight: 400 800;
+  src: url("@fontsource-variable/eb-garamond/files/eb-garamond-latin-wght-italic.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: "EB Garamond Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 800;
+  src: url("@fontsource-variable/eb-garamond/files/eb-garamond-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("@fontsource/atkinson-hyperlegible/files/atkinson-hyperlegible-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("@fontsource/atkinson-hyperlegible/files/atkinson-hyperlegible-latin-700-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: "Lexend Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/lexend/files/lexend-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: "Lexend Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/lexend/files/lexend-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}

@@ -88,6 +88,7 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
       "There are eight people aboard, and they have names. Do not leave the family anonymous.",
       "The rainbow comes AFTER the flood, as the sign of a promise. It is not in the sky during the rain.",
       "No animals are left behind for a joke, and no animal speaks.",
+      "Scripture does not name Noah's wife or his sons' wives, and does not give the sons' ages. Call them \"Noah's wife\" and so on. Do not invent names or ages for them.",
     ],
   },
 

@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
-import { isModelAllowedFor, listSelectableModels , MODEL_CATALOG } from "./lib/modelPolicy";
+import { isModelAllowedFor, listSelectableModels, MODEL_CATALOG, DEFAULTS } from "./lib/modelPolicy";
 import { StoryGenerationError } from "./lib/storyErrors";
 import {
   enqueueStoryJob,
@@ -48,7 +48,7 @@ import {
 } from "./lib/generationStats";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema } from "@shared/schema";
+import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { ZodError } from "zod";
@@ -316,6 +316,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       if (error instanceof ZodError) {
         return res.status(400).json({ message: fromZodError(error).message });
+      }
+      // A typed generation failure already knows its status and carries a
+      // message written for the person reading it. Flattening it to a 500
+      // "Failed to start story generation" is what made a missing server API
+      // key indistinguishable from a bug.
+      if (error instanceof StoryGenerationError) {
+        console.error(`Enqueue rejected (${error.code}):`, error.message);
+        return res.status(error.statusCode).json({ message: error.message, code: error.code });
       }
       console.error("Error enqueueing story:", error);
       res.status(500).json({ message: "Failed to start story generation" });
@@ -1039,7 +1047,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userId = (req.user as any).id;
-      const model = (await storage.getUserOpenAIModel(userId)) || 'gpt-4o-mini';
+      // The policy's default, not a literal of this route's own. Reporting
+      // a model the user is not entitled to would make the settings page and
+      // the story-form accuracy note both lie about what is generating.
+      const model = (await storage.getUserOpenAIModel(userId)) || DEFAULTS.chat;
       // The tier rides along so the story form can warn about local-model
       // accuracy without a second round trip and without the client keeping its
       // own copy of the catalogue -- there are already six model lists in this
@@ -1109,6 +1120,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  /**
+   * Reading preferences.
+   *
+   * requireAuth in the SIGNATURE rather than an inline `if (!req.user)` --
+   * there are already 29 of those in this file, and that pattern is how eight
+   * unguarded write routes once shipped. A missing guard is visible here.
+   */
+  app.get("/api/settings/reading", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const stored = await storage.getUserReadingPrefs(userId);
+      // Defaults filled server-side so the client has one place to read from.
+      // NULL columns mean "never chosen", which is why there is no SQL default
+      // and nothing to backfill.
+      res.json({ ...READING_PREFS_DEFAULTS, ...stored });
+    } catch (error) {
+      console.error("Error fetching reading preferences:", error);
+      res.status(500).json({ message: "Failed to fetch reading preferences" });
+    }
+  });
+
+  app.post("/api/settings/reading", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      // .partial(): the reader bar sends ONE axis at a time.
+      const parsed = readingPrefsSchema.partial().safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          message: parsed.error.errors[0]?.message ?? "Invalid reading preferences",
+        });
+      }
+      const stored = await storage.setUserReadingPrefs(userId, parsed.data);
+      // What is ACTUALLY stored, read back -- not an echo of the request.
+      // Storage falls back to memory when the database is away, so a 200 here
+      // does not by itself mean anything was persisted.
+      res.json({ ...READING_PREFS_DEFAULTS, ...stored });
+    } catch (error) {
+      console.error("Error saving reading preferences:", error);
+      res.status(500).json({ message: "Failed to save reading preferences" });
+    }
+  });
+
   // API routes for Heroes of Faith
   
   // Heroes of Faith seeding lives in server/seed.ts and runs after the database

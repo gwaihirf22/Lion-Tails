@@ -486,6 +486,44 @@ document it at the definition and provide the variant, not to remember harder.
 
 ---
 
+## 18. A Tailwind class built from a variable does not exist
+
+`BookPage.tsx` composed its background class at runtime:
+
+```ts
+borderClass: `border-amber-800/60 ${getBgColorClass()}/95`,   // -> "bg-[#fff8e6]/95"
+```
+
+Tailwind's JIT scanner reads **source text**. It never executes the file, so a
+class name that only exists after a template literal is evaluated is never
+emitted. `grep 'bg-\[#fff8e6\]/95' dist/public/assets/*.css` returned **0**.
+
+The colour picker therefore did nothing at all, for months, and this is the part
+worth remembering: **it looked like it worked.** The eight swatch buttons kept
+their own literal colour map, so each swatch painted itself the right colour.
+Clicking one visibly selected it. Nothing threw, nothing logged, and `npm run
+build` was perfectly happy. The only way to find it was to click a swatch and
+notice the page had not changed — or to grep the built CSS, which nobody did.
+
+Two rules follow:
+
+1. **Never interpolate a Tailwind class name.** If a value comes from state or a
+   database, drive it with a CSS custom property and an attribute selector
+   (`[data-palette="night"] { --reader-bg: ... }`) — the class names stay
+   literal and only the *values* vary. That is why `client/src/components/reader/reader.css`
+   is plain CSS rather than utilities.
+2. **A control and the thing it controls must read from one source.** The
+   swatches disagreeing with the page was not a second bug; it was what hid the
+   first. `.reader-swatch { background: var(--reader-bg) }` makes that
+   disagreement impossible to express.
+
+CI now greps the built stylesheet for the reader's rules
+(`.github/workflows/ci.yml`, "Verify the reader's styles reached the CSS
+bundle"). That gate was confirmed to **fail** when the reader stylesheet import
+is removed — per the section below, a check that cannot fail is not a check.
+
+---
+
 ## Recurring failure shape
 
 Most incidents here have had the same form: **a check that reported success

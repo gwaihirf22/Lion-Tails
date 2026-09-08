@@ -35,7 +35,7 @@ import {
   storyTooShortAdvice,
   poemNotVerseAdvice,
 } from "./storyErrors";
-import { resolveModel, createClient, type ResolvedModel } from "./modelPolicy";
+import { resolveModel, createClient, type ResolvedModel , tokenLimitFor, temperatureFor } from "./modelPolicy";
 import { newGenerationId, recordGeneration } from "./generationRecords";
 import * as fs from "fs";
 import * as path from "path";
@@ -520,8 +520,8 @@ async function generateShortStorySingleCall(
           { role: "user", content: userPrompt },
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
-        max_tokens: maxTokens,
+        ...temperatureFor(ctx.resolved.model, 0.7),
+        ...tokenLimitFor(ctx.resolved.model, maxTokens),
       });
       return {
         content: response.choices[0].message.content || "",
@@ -576,8 +576,8 @@ async function generateStoryOutline(
           { role: "user", content: userPrompt },
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
-        max_tokens: maxTokens,
+        ...temperatureFor(ctx.resolved.model, 0.7),
+        ...tokenLimitFor(ctx.resolved.model, maxTokens),
       });
       return {
         content: response.choices[0].message.content || "",
@@ -642,8 +642,8 @@ async function generateStoryChapter(
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        temperature: 0.7,
-        max_tokens: maxTokens,
+        ...temperatureFor(ctx.resolved.model, 0.7),
+        ...tokenLimitFor(ctx.resolved.model, maxTokens),
       });
       return {
         content: response.choices[0].message.content || "",
@@ -698,8 +698,8 @@ async function finalizeStoryDetails(
           { role: "user", content: userPrompt },
         ],
         response_format: { type: "json_object" },
-        temperature: 0.6,
-        max_tokens: maxTokens,
+        ...temperatureFor(ctx.resolved.model, 0.6),
+        ...tokenLimitFor(ctx.resolved.model, maxTokens),
       });
       return {
         content: response.choices[0].message.content || "",
@@ -988,6 +988,11 @@ async function runGeneration(
     return {
       title: finalDetails.title,
       content: finalDetails.content,
+      // Carried on the STORY, not just the request, so the reader knows whether
+      // content is prose or verse without having to load the saved row's
+      // request alongside it. Rows written before this have none; the client
+      // falls back to request.storyType, which every existing row does have.
+      storyType: request.storyType,
       moralOutcome: moralOutcome,
       // "consequences" suppresses the verse so a story that ends on a hard
       // note is not tidied up by a comforting one -- but a retelling's key
@@ -1144,14 +1149,31 @@ export async function generateStoryImage(
     // openai 7.x made ImagesResponse.data optional (`data?: Array<Image>`), so
     // indexing it directly throws at runtime on a response that carries none --
     // this is a real guard, not a cast to satisfy the compiler.
-    const imageUrl = response.data?.[0]?.url;
-    if (imageUrl) {
-      await downloadImage(imageUrl, filepath);
+    const image = response.data?.[0];
+
+    // The GPT image models ALWAYS return base64 and never a URL, and they do
+    // not accept response_format at all. Swapping dall-e-3 for gpt-image-2
+    // without this would have kept the bug alive in a new shape: data[0].url
+    // is simply undefined, so the function would return undefined and the
+    // reader would go on showing the stock lion with nothing logged.
+    if (image?.b64_json) {
+      await fs.promises.writeFile(filepath, Buffer.from(image.b64_json, "base64"));
       return `/public/images/stories/${filename}`;
     }
+    // Kept for any model that does return a URL. Those links expire in about an
+    // hour, which is why the file is downloaded rather than stored as a link.
+    if (image?.url) {
+      await downloadImage(image.url, filepath);
+      return `/public/images/stories/${filename}`;
+    }
+
+    console.error(
+      `Image generation returned no image data (model ${resolved.model}). ` +
+        "Nothing to save; the story keeps the stock picture.",
+    );
     return undefined;
   } catch (error) {
-    console.error("Error generating image with DALL-E:", error);
+    console.error("Error generating story illustration:", error);
     return undefined;
   }
 }
@@ -1212,7 +1234,7 @@ export async function analyzeImageWithOpenAI(
           ],
         },
       ],
-      max_tokens: 1000,
+      ...tokenLimitFor(resolved.model, 1000),
     });
     return (
       response.choices[0].message.content || "Could not analyze the image."

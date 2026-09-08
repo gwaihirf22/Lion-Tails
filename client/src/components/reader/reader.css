@@ -1,0 +1,275 @@
+/**
+ * The reading surface.
+ *
+ * WHY THIS IS PLAIN CSS AND NOT TAILWIND
+ * The bug that started this rewrite was a Tailwind class built by string
+ * interpolation -- BookPage built `bg-[#fff8e6]/95` at runtime, the JIT scanner
+ * only ever sees string literals, so the class was never emitted and the whole
+ * colour picker did nothing for months. On top of that, ::first-letter, p + p
+ * indents, ::before ornaments and verse hanging indents are awkward-to-
+ * impossible as utilities. Tailwind still owns the bar and the extras chrome.
+ *
+ * THE MODEL: four INDEPENDENT axes, composed by attribute selectors.
+ *   [data-palette]  colour only          4 rules
+ *   [data-font]     family only          5 rules
+ *   [data-typeset]  ornament only        2 rules
+ *   --reader-font-size                   one variable
+ * Eleven rules, no cross product. The old system had ONE axis -- eight bundled
+ * "themes" -- doing all four jobs, which is why "turn the classical feel off"
+ * was not expressible without also changing colour.
+ *
+ * Reviewable by grep: there must be no hex inside a [data-font] or
+ * [data-typeset] block, and no font-family inside a [data-palette] block.
+ */
+
+/* ---------------------------------------------------------------- palette --
+ * Colour only. Body text clears WCAG AAA (7:1) in all four; every secondary
+ * token clears AA (4.5:1). Measured, not eyeballed:
+ *   paper 16.7 / 6.7 / 6.5   sepia 11.1 / 5.6 / 7.0
+ *   night 11.0 / 5.8 / 8.4   contrast 21.0 / 17.4 / 11.2   (fg / muted / accent)
+ *
+ * Night is #C9CCD1 rather than white on purpose: pure white on near-black
+ * causes halation, which is the exact complaint the palette exists to fix.
+ */
+[data-palette="paper"] {
+  --reader-bg: #fbfaf7;
+  --reader-fg: #1b1b1a;
+  --reader-muted: #5a5a57;
+  --reader-accent: #1d4ed8;
+  --reader-border: #e2dfd8;
+  --reader-surface: #f3f1ec;
+}
+[data-palette="sepia"] {
+  --reader-bg: #f4ecd8;
+  --reader-fg: #3b2f1e;
+  --reader-muted: #6b5a44;
+  --reader-accent: #6f4520;
+  --reader-border: #dfd2b8;
+  --reader-surface: #ede2c8;
+}
+[data-palette="night"] {
+  --reader-bg: #16181c;
+  --reader-fg: #c9ccd1;
+  --reader-muted: #8f949b;
+  --reader-accent: #8ab4f8;
+  --reader-border: #2e333b;
+  --reader-surface: #1e2127;
+}
+[data-palette="contrast"] {
+  --reader-bg: #ffffff;
+  --reader-fg: #000000;
+  --reader-muted: #1f1f1f;
+  --reader-accent: #0000cc;
+  /* A real black rule, not a tint: at this setting the verse rule and the
+     accordion edges must be lines you can actually see. */
+  --reader-border: #000000;
+  --reader-surface: #ffffff;
+}
+
+/* ------------------------------------------------------------------- font --
+ * Family only. Every stack ends in a real system fallback so the font-display:
+ * swap window, and the offline case, look deliberate rather than broken.
+ *
+ * --reader-font-scale is load-bearing, not a flourish. Five faces at the same
+ * pixel size look wildly different -- EB Garamond's small x-height reads
+ * noticeably smaller, Lexend runs wide and large. Without compensation,
+ * changing FONT feels like changing SIZE, the user re-tunes the size control
+ * every time, and both settings end up feeling broken.
+ */
+[data-font="literata"] {
+  --reader-family: "Literata Variable", Literata, "Iowan Old Style", Charter, Georgia, "Noto Serif", ui-serif, serif;
+  --reader-font-scale: 1;
+}
+[data-font="ebgaramond"] {
+  --reader-family: "EB Garamond Variable", "EB Garamond", "Palatino Linotype", Palatino, Georgia, ui-serif, serif;
+  --reader-font-scale: 1.12;
+}
+[data-font="atkinson"] {
+  --reader-family: "Atkinson Hyperlegible", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  --reader-font-scale: 1;
+}
+[data-font="lexend"] {
+  --reader-family: "Lexend Variable", Lexend, ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  --reader-font-scale: 0.96;
+}
+[data-font="system"] {
+  --reader-family: "Iowan Old Style", "Palatino Linotype", Palatino, Charter, Georgia, "Noto Serif", ui-serif, serif;
+  --reader-font-scale: 1;
+}
+
+/* ---------------------------------------------------------------- typeset --
+ * Ornament and rhythm only. Note what is NOT here: no --reader-family.
+ * Classic no longer implies serif, which is the entire point of the split --
+ * "I want the accessible font" must not silently also mean "no drop cap".
+ */
+[data-typeset="classic"] {
+  --reader-line-height: 1.62;
+  --reader-para-indent: 1.5em;
+  --reader-para-space: 0em;
+}
+[data-typeset="plain"] {
+  --reader-line-height: 1.7;
+  --reader-para-indent: 0em;
+  --reader-para-space: 0.9em;
+}
+
+/* --------------------------------------------------------------- surface -- */
+.reader-surface {
+  font-size: calc(var(--reader-font-size, 18px) * var(--reader-font-scale, 1));
+  font-family: var(--reader-family, ui-serif, serif);
+  line-height: var(--reader-line-height, 1.62);
+  color: var(--reader-fg, #1b1b1a);
+  background: var(--reader-bg, #fbfaf7);
+  /* The measure. `ch` resolves against the element's OWN computed font-size,
+     so putting font-size and max-width on the same element keeps
+     characters-per-line constant across every size step -- and because ch is
+     measured against the SELECTED font, it self-corrects across families with
+     no per-font tuning. 66 rather than 68 because ch is the advance width of
+     "0", narrower than average lowercase in a serif, so 68ch renders as ~72-75
+     real characters. The old code set `prose max-w-none`, explicitly throwing
+     away @tailwindcss/typography's measure, and landed near 110. */
+  max-width: var(--reader-measure, 66ch);
+  width: 100%;
+  margin-inline: auto;
+  padding: 1.5rem 1.25rem 3rem;
+  /* Left, never justified: justification without a hyphenation dictionary
+     produces rivers, and it is measurably worse for dyslexic readers -- which
+     would undercut the point of shipping Atkinson at all. */
+  text-align: left;
+  hyphens: auto;
+}
+
+/* Every child sizes in em, so one variable moves the whole document. */
+.reader-surface .reader-title {
+  font-size: 1.75em;
+  line-height: 1.2;
+  font-weight: 700;
+  margin: 0 0 1.25em;
+  text-wrap: balance;
+}
+.reader-surface .reader-body > p {
+  margin: 0 0 var(--reader-para-space, 0.9em);
+}
+[data-typeset="classic"] .reader-body > p + p {
+  text-indent: var(--reader-para-indent);
+}
+
+/* Drop cap. Suppressed below 24rem, where a 3.2em capital on a narrow phone
+   eats an entire line of the paragraph it is supposed to open. */
+@media (min-width: 24rem) {
+  [data-typeset="classic"] .reader-body > p.reader-opener::first-letter {
+    float: left;
+    font-size: 3.2em;
+    line-height: 0.85;
+    padding-right: 0.08em;
+    padding-top: 0.06em;
+    font-weight: 600;
+  }
+}
+/* EB Garamond has a small x-height; at the two smallest steps a drop cap on it
+   reads as a mistake rather than an ornament. Expressed in CSS as a rendering
+   constraint, deliberately NOT as a rule in the preference model. */
+[data-font="ebgaramond"][data-font-step="0"] .reader-body > p.reader-opener::first-letter,
+[data-font="ebgaramond"][data-font-step="1"] .reader-body > p.reader-opener::first-letter {
+  font-size: 1em;
+  float: none;
+  padding: 0;
+}
+
+.reader-surface .reader-scene-break {
+  text-align: center;
+  color: var(--reader-muted);
+  margin: 1.5em 0;
+}
+[data-typeset="classic"] .reader-scene-break::before {
+  content: "\2766";
+  opacity: 0.55;
+}
+[data-typeset="plain"] .reader-scene-break::before {
+  content: "";
+  display: block;
+  height: 1.5em;
+}
+
+/* Verse. One span per line, with a hanging indent, so a long line that WRAPS
+   hangs visibly rather than masquerading as a new line of the poem. */
+.reader-surface .reader-verse {
+  margin: 0 0 1.2em;
+}
+.reader-surface .reader-verse-line {
+  display: block;
+  padding-left: 1.5em;
+  text-indent: -1.5em;
+}
+.reader-surface .reader-verse-line:empty::before {
+  content: "\00a0";
+}
+
+.reader-surface .reader-heading {
+  font-size: 1.15em;
+  font-weight: 700;
+  margin: 1.5em 0 0.5em;
+}
+.reader-surface .reader-list {
+  margin: 0 0 1em 1.25em;
+  list-style: disc;
+}
+.reader-surface em { font-style: italic; }
+.reader-surface strong { font-weight: 700; }
+
+/* ---------------------------------------------------------------- swatch --
+ * A palette button paints itself from the SAME tokens as the page it selects.
+ * This is exactly where the old picker went wrong: BookPage kept a second,
+ * literal colour map for the swatches, so they showed their colours correctly
+ * while the page they selected changed nothing. A swatch must not be able to
+ * disagree with its own palette. */
+.reader-swatch {
+  background: var(--reader-bg);
+  border: 2px solid var(--reader-fg);
+}
+
+/* ------------------------------------------------------- page takeover ----
+ * Set by Story.tsx on <body> for the life of the reader route. App.tsx drops
+ * the photo background and the frosted card on this route -- those are inline
+ * styles that CSS cannot beat without !important -- and this handles the rest. */
+body[data-reader-page] {
+  background-image: none;
+  background-color: var(--reader-bg);
+  color: var(--reader-fg);
+}
+/* The header is already `sticky top-0 z-30` and the reader bar wants that same
+   slot; two stickies at top-0 overlap. Un-sticking it here is also the right
+   reading behaviour -- the bar owns the top edge. */
+body[data-reader-page] header {
+  position: static;
+}
+/* Header and footer colours are NOT set here any more. theme.css paints them
+   from the palette on every page, so a reader-only copy would be a second rule
+   doing one job -- and the two would drift. Only the position change below is
+   specific to the reader. */
+
+/* ----------------------------------------------------------- focus mode --
+ * Fade, never collapse. Reserved space means nothing reflows, which is the
+ * "nothing moves unless you ask it to" property this was chosen for.
+ * pointer-events stay live so hovering the top strip brings the bar back. */
+.reader-chrome {
+  transition: opacity 260ms ease;
+}
+body[data-reader-focus] .reader-chrome,
+body[data-reader-focus] header,
+body[data-reader-focus] footer {
+  opacity: 0;
+}
+body[data-reader-focus] header,
+body[data-reader-focus] footer {
+  transition: opacity 260ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reader-chrome,
+  body[data-reader-focus] header,
+  body[data-reader-focus] footer {
+    /* The visibility change stays -- that is the feature, not motion. Only the
+       animation goes. */
+    transition-duration: 0ms;
+  }
+}

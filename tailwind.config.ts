@@ -37,6 +37,30 @@ export default {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
+        // Semantic colours the app actually uses. Without these, "warning" and
+
+        // "success" had no token and forty-odd amber/green literals stood in for
+
+        // them -- none of which could follow a palette.
+
+        warning: {
+
+          DEFAULT: "hsl(var(--warning))",
+
+          foreground: "hsl(var(--warning-foreground))",
+
+          surface: "hsl(var(--warning-surface))",
+
+        },
+
+        success: {
+
+          DEFAULT: "hsl(var(--success))",
+
+          surface: "hsl(var(--success-surface))",
+
+        },
+
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",

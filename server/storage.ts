@@ -1,4 +1,6 @@
-import { users, type User, type InsertUser, type Song, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory } from "@shared/schema";
+import { users, type User, type InsertUser, type Song, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory ,
+  type ReadingPrefs,
+} from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
 import createMemoryStore from 'memorystore';
@@ -81,6 +83,16 @@ export interface IStorage {
   setUserOpenAIKey(userId: number, key: string): Promise<void>;
   getUserOpenAIModel(userId: number): Promise<string | null>;
   setUserOpenAIModel(userId: number, model: string): Promise<void>;
+  /**
+   * How this user likes to read. One pair for all four axes, not four pairs.
+   *
+   * The SETTER returns the persisted row read back rather than void, on
+   * purpose: this app keeps serving from MemStorage when the database is
+   * unavailable, so a successful call proves nothing about what was stored.
+   * Returning what is actually there lets the client render truth.
+   */
+  getUserReadingPrefs(userId: number): Promise<Partial<ReadingPrefs>>;
+  setUserReadingPrefs(userId: number, prefs: Partial<ReadingPrefs>): Promise<Partial<ReadingPrefs>>;
 }
 
 export class MemStorage implements IStorage {
@@ -95,6 +107,7 @@ export class MemStorage implements IStorage {
   private userLastResetDates: Map<number, Date>;
   private userOpenAIKeys: Map<number, string>;
   private userOpenAIModels: Map<number, string>;
+  private userReadingPrefs: Map<number, Partial<ReadingPrefs>>;
   private userCharacters: Map<number, Set<string>>;
   private userStories: Map<number, Set<string>>;
   sessionStore: session.Store;
@@ -116,6 +129,7 @@ export class MemStorage implements IStorage {
     this.userLastResetDates = new Map();
     this.userOpenAIKeys = new Map();
     this.userOpenAIModels = new Map();
+    this.userReadingPrefs = new Map();
     this.userCharacters = new Map();
     this.userStories = new Map();
     this.currentId = 1;
@@ -793,11 +807,27 @@ export class MemStorage implements IStorage {
   }
 
   async getUserOpenAIModel(userId: number): Promise<string | null> {
-    return this.userOpenAIModels.get(userId) || 'gpt-4o'; // Default to the newest model
+    // null means "never chosen" -- resolveModel then applies the policy
+    // default. Returning a model name here made this a seventh model list.
+    return this.userOpenAIModels.get(userId) ?? null;
   }
 
   async setUserOpenAIModel(userId: number, model: string): Promise<void> {
     this.userOpenAIModels.set(userId, model);
+  }
+
+  async getUserReadingPrefs(userId: number): Promise<Partial<ReadingPrefs>> {
+    return this.userReadingPrefs.get(userId) ?? {};
+  }
+
+  async setUserReadingPrefs(
+    userId: number,
+    prefs: Partial<ReadingPrefs>,
+  ): Promise<Partial<ReadingPrefs>> {
+    // Merged, not replaced -- a partial update must never clear a sibling.
+    const merged = { ...(this.userReadingPrefs.get(userId) ?? {}), ...prefs };
+    this.userReadingPrefs.set(userId, merged);
+    return merged;
   }
 
   // Heroes of Faith methods

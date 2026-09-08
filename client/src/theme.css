@@ -1,0 +1,184 @@
+/**
+ * Site theme: the whole app follows the reader's palette.
+ *
+ * The four palettes are defined once, for reading, in
+ * components/reader/reader.css. This file maps those same colours onto the
+ * shadcn tokens every other component already consumes, so choosing Sepia in
+ * the reader makes the app sepia -- one setting, not two colour systems to
+ * keep in step.
+ *
+ * WHY THIS FILE CAN EXIST AT ALL
+ * It could not, until now. main.tsx set these twenty variables as INLINE
+ * styles on <html>, and an inline style beats any :root rule from a
+ * stylesheet regardless of specificity or order. That single block is why
+ * theme.json did nothing, why the Replit shadcn-theme plugin's output was
+ * dead, why `darkMode: ["class"]` never worked, and why the app was
+ * permanently light. Those calls are gone; this is their replacement.
+ *
+ * The HSL triplets are GENERATED from the palette hexes rather than typed by
+ * hand, and every --primary was checked to carry white text at AA or better
+ * (paper 6.3:1, sepia 7.4:1, night 6.9:1, contrast 15.3:1).
+ *
+ * data-palette is set on <html> by ReadingPrefsProvider. Paper is also bound
+ * to bare :root so the app is correct before that runs, and for anyone logged
+ * out.
+ */
+
+:root,
+[data-palette="paper"] {
+  --background: 45 33.3% 97.6%;
+  --foreground: 60 1.9% 10.4%;
+  --card: 43 22.6% 93.9%;
+  --card-foreground: 60 1.9% 10.4%;
+  --popover: 43 22.6% 93.9%;
+  --popover-foreground: 60 1.9% 10.4%;
+  --muted: 43 22.6% 93.9%;
+  --muted-foreground: 60 1.7% 34.7%;
+  --border: 42 14.7% 86.7%;
+  --input: 42 14.7% 86.7%;
+  --primary: 216 56.3% 42.2%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 267 43.5% 43.7%;
+  --secondary-foreground: 0 0% 100%;
+  --accent: 341 46.8% 42.7%;
+  --accent-foreground: 0 0% 100%;
+  --ring: 216 56.3% 42.2%;
+  --destructive: 0 72% 42%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+[data-palette="sepia"] {
+  --background: 43 56% 90.2%;
+  --foreground: 35 32.6% 17.5%;
+  --card: 42 50.7% 85.7%;
+  --card-foreground: 35 32.6% 17.5%;
+  --popover: 42 50.7% 85.7%;
+  --popover-foreground: 35 32.6% 17.5%;
+  --muted: 42 50.7% 85.7%;
+  --muted-foreground: 34 22.3% 34.3%;
+  --border: 40 37.9% 79.8%;
+  --input: 40 37.9% 79.8%;
+  --primary: 28 57.4% 30.4%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 329 34.8% 35.5%;
+  --secondary-foreground: 0 0% 100%;
+  --accent: 116 20.8% 31.2%;
+  --accent-foreground: 0 0% 100%;
+  --ring: 28 57.4% 30.4%;
+  --destructive: 0 72% 42%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+[data-palette="night"] {
+  --background: 220 12% 9.8%;
+  --foreground: 217 8% 80.4%;
+  --card: 220 13% 13.5%;
+  --card-foreground: 217 8% 80.4%;
+  --popover: 220 13% 13.5%;
+  --popover-foreground: 217 8% 80.4%;
+  --muted: 220 13% 13.5%;
+  --muted-foreground: 215 5.7% 58.4%;
+  --border: 217 12.4% 20.6%;
+  --input: 217 12.4% 20.6%;
+  --primary: 217 88.7% 75.7%;
+  --primary-foreground: 220 12% 9.8%;
+  --secondary: 271 58.6% 78.2%;
+  --secondary-foreground: 220 12% 9.8%;
+  --accent: 24 67.1% 72.5%;
+  --accent-foreground: 220 12% 9.8%;
+  --ring: 217 88.7% 75.7%;
+  --destructive: 0 70% 62%;
+  --destructive-foreground: 0 0% 8%;
+}
+
+[data-palette="contrast"] {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 0%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 0%;
+  --muted: 0 0% 100%;
+  --muted-foreground: 0 0% 12.2%;
+  --border: 0 0% 0%;
+  --input: 0 0% 0%;
+  --primary: 240 100% 27.3%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 300 100% 20.8%;
+  --secondary-foreground: 0 0% 100%;
+  --accent: 0 100% 27.3%;
+  --accent-foreground: 0 0% 100%;
+  --ring: 240 100% 27.3%;
+  --destructive: 0 72% 42%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+/* The radius the app has always used. It lived in main.tsx alongside the
+   colours, which meant theme.json own radius setting never applied either. */
+:root {
+  --radius: 0.5rem;
+}
+
+/* Header and footer follow the palette everywhere, not only in the reader.
+   Both are built as `bg-primary/N ... text-white`, which is unreadable on a
+   light palette and wrong on a dark one. */
+header,
+footer {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+  backdrop-filter: none;
+}
+header :not(svg):not(path),
+footer :not(svg):not(path) {
+  color: inherit;
+}
+/* The site title keeps its drop shadow class from when it sat on a photo; on a
+   flat surface that reads as a smudge. */
+header h1 {
+  text-shadow: none;
+}
+
+/* ------------------------------------------------------------------------
+ * Semantic colours.
+ *
+ * Warning and success had no token at all, so amber and green were hardcoded
+ * forty-odd times across the app. They MEAN something -- a stale summary, a
+ * quota running out, a saved change -- so unlike the decorative blues they are
+ * not folded into the neutral surfaces. Each palette gets its own pair,
+ * checked to clear AA as text on that palette page.
+ * --------------------------------------------------------------------- */
+
+:root,
+[data-palette="paper"] {
+  --warning: 39 100% 27.1%;
+  --warning-foreground: 0 0% 100%;
+  --warning-surface: 42 77.1% 93.1%;
+  --success: 141 55.1% 27.1%;
+  --success-surface: 135 37.5% 93.7%;
+}
+
+[data-palette="sepia"] {
+  --warning: 33 100% 27.1%;
+  --warning-foreground: 0 0% 100%;
+  --warning-surface: 41 59.5% 85.5%;
+  --success: 128 33.8% 27.8%;
+  --success-surface: 93 34.6% 89.8%;
+}
+
+[data-palette="night"] {
+  --warning: 42 77.3% 60.2%;
+  --warning-foreground: 220 12% 10%;
+  --warning-surface: 39 25.4% 13.1%;
+  --success: 135 41.6% 63.7%;
+  --success-surface: 143 23.5% 13.3%;
+}
+
+[data-palette="contrast"] {
+  --warning: 29 100% 23.9%;
+  --warning-foreground: 0 0% 100%;
+  --warning-surface: 0 0% 100%;
+  --success: 143 80% 19.6%;
+  --success-surface: 0 0% 100%;
+}
+
