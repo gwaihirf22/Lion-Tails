@@ -47,8 +47,13 @@ export function FontPicker({
     [loaded],
   );
 
+  // data-font on the container so --reader-family resolves HERE. Without it
+  // the sample below renders in whatever font the surrounding page uses: Radix
+  // portals the popover outside the <article> that carries the reader's tokens,
+  // and on the Settings page there is no article at all. A font sample shown in
+  // the wrong font is worse than no sample.
   return (
-    <div role="radiogroup" aria-label="Reading font" className="w-64 p-1">
+    <div role="radiogroup" aria-label="Reading font" className="w-64 p-1" data-font={value}>
       {READER_FONT_KEYS.map((key) => {
         const meta = READER_FONT_META[key];
         const showReal = loaded.has(key);
@@ -83,7 +88,10 @@ export function FontPicker({
 
       {/* Always-on sample in the CURRENT family. Free: that font is loaded by
           definition, because it is the one rendering the story behind this. */}
-      <p className="mt-1 border-t px-2 pt-2 text-sm opacity-75">
+      <p
+        className="mt-1 border-t px-2 pt-2 text-sm opacity-75"
+        style={{ fontFamily: "var(--reader-family)" }}
+      >
         The lion shook his mane and the little one laughed.
       </p>
     </div>
