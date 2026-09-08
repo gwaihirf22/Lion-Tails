@@ -27,7 +27,15 @@ import {
 } from 'lucide-react';
 import { Link } from 'wouter';
 import { Input } from "@/components/ui/input";
-import { groupLabel, HERO_GROUPS, type HeroGroup } from "@shared/schema";
+import {
+  groupLabel,
+  HERO_GROUPS,
+  BIBLE_GROUPS,
+  HERO_COLLECTIONS,
+  HERO_COLLECTION_LABELS,
+
+  type HeroCollection,
+} from "@shared/schema";
 
 export default function HeroesOfFaith() {
   const { toast } = useToast();
@@ -36,8 +44,11 @@ export default function HeroesOfFaith() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
   }, []);
+  const [collection, setCollection] = useState<HeroCollection>("historical");
   const [query, setQuery] = useState("");
-  const [group, setGroup] = useState<HeroGroup | "all">("all");
+  // A plain string: the value comes from whichever collection is in view,
+  // so it cannot be typed as one collection's era union.
+  const [group, setGroup] = useState<string>("all");
   const [selectedHero, setSelectedHero] = useState<HeroOfFaith | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
 
@@ -117,6 +128,7 @@ export default function HeroesOfFaith() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return (heroes ?? []).filter((h: HeroOfFaith) => {
+      if ((h.collection ?? "historical") !== collection) return false;
       if (group !== "all" && h.group !== group) return false;
       if (!q) return true;
       const haystack = [
@@ -134,14 +146,21 @@ export default function HeroesOfFaith() {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [heroes, query, group]);
+  }, [heroes, query, group, collection]);
 
   // Only offer an era chip if somebody in that era actually exists, so the
   // filter never returns an empty list for a group nobody has written yet.
-  const availableGroups = useMemo(
-    () => HERO_GROUPS.filter((g) => (heroes ?? []).some((h: HeroOfFaith) => h.group === g)),
-    [heroes],
-  );
+  const availableGroups = useMemo(() => {
+    const order: readonly string[] = collection === "biblical" ? BIBLE_GROUPS : HERO_GROUPS;
+    return order.filter((g) =>
+      (heroes ?? []).some(
+        (h: HeroOfFaith) => (h.collection ?? "historical") === collection && h.group === g,
+      ),
+    );
+  }, [heroes, collection]);
+
+  const countIn = (c: HeroCollection) =>
+    (heroes ?? []).filter((h: HeroOfFaith) => (h.collection ?? "historical") === c).length;
 
   if (isLoading) {
     return (
@@ -178,6 +197,32 @@ export default function HeroesOfFaith() {
       </div>
 
       <div className="mx-auto mb-6 max-w-3xl space-y-3">
+        {/* Two lists, not one. People in Scripture and people from church
+            history are different kinds of subject, and putting them in a
+            single alphabetical run would quietly suggest otherwise. */}
+        <div className="grid grid-cols-2 gap-1 rounded-lg border p-1">
+          {HERO_COLLECTIONS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => {
+                setCollection(c);
+                // An era from the other collection would match nothing.
+                setGroup("all");
+              }}
+              aria-pressed={collection === c}
+              className={`rounded-md px-3 py-2 text-sm transition ${
+                collection === c
+                  ? "bg-primary text-primary-foreground font-semibold"
+                  : "hover:bg-muted"
+              }`}
+            >
+              {HERO_COLLECTION_LABELS[c]}
+              <span className="ml-2 opacity-70">{countIn(c)}</span>
+            </button>
+          ))}
+        </div>
+
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -208,7 +253,7 @@ export default function HeroesOfFaith() {
           ))}
         </div>
         <p className="text-center text-sm text-muted-foreground">
-          {filtered.length} of {heroes?.length ?? 0}
+          {filtered.length} of {countIn(collection)}
           {query && ` matching "${query}"`}
         </p>
       </div>

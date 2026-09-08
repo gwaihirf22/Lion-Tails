@@ -74,6 +74,56 @@ async function getJson(url: string): Promise<{ ok: true; body: any } | { ok: fal
   return { ok: false, missing: false };
 }
 
+/**
+ * Every scripture reference on a biblical figure must actually resolve.
+ *
+ * Wikidata birth dates are meaningless for Moses, so the date check that
+ * guards the church-history entries has nothing to say about these. The
+ * equivalent risk is a citation to a chapter and verse that does not exist --
+ * "Genesis 55:3" reads exactly like a real reference and is the sort of error
+ * a children's Bible resource must not ship. bible-api.com serves the public
+ * domain World English Bible and answers whether a reference resolves.
+ */
+async function checkReferences(hero: (typeof heroesOfFaithData)[number]): Promise<Check[]> {
+  const out: Check[] = [];
+  const refs = [
+    hero.bibleVerse?.reference,
+    ...(hero.keyEvents ?? []).map((e) => (e as { reference?: string }).reference),
+  ].filter((r): r is string => Boolean(r));
+
+  for (const ref of refs) {
+    let ok = false;
+    for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
+      try {
+        const res = await fetch(
+          `https://bible-api.com/${encodeURIComponent(ref)}`,
+          { headers: { "user-agent": "LionTails-hero-verification/1.0" } },
+        );
+        if (res.status === 404) {
+          out.push({ hero: hero.name, level: "fail", note: `reference does not resolve: ${ref}` });
+          ok = true;
+        } else if (res.ok) {
+          const body = await res.json();
+          if (body?.text) ok = true;
+          else {
+            out.push({ hero: hero.name, level: "fail", note: `reference returned no text: ${ref}` });
+            ok = true;
+          }
+        } else {
+          await new Promise((r) => setTimeout(r, attempt * 1200));
+        }
+      } catch {
+        await new Promise((r) => setTimeout(r, attempt * 1200));
+      }
+    }
+    if (!ok) {
+      out.push({ hero: hero.name, level: "warn", note: `could not check reference (offline): ${ref}` });
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  return out;
+}
+
 async function checkHero(hero: (typeof heroesOfFaithData)[number]): Promise<Check[]> {
   const out: Check[] = [];
   const title = (hero as { wikipedia?: string }).wikipedia;
@@ -82,6 +132,8 @@ async function checkHero(hero: (typeof heroesOfFaithData)[number]): Promise<Chec
     out.push({ hero: hero.name, level: "warn", note: "no wikipedia title set" });
     return out;
   }
+
+  const isBiblical = (hero as { collection?: string }).collection === "biblical";
 
   const summaryRes = await getJson(WIKI_SUMMARY + encodeURIComponent(title));
   if (!summaryRes.ok) {
@@ -99,6 +151,24 @@ async function checkHero(hero: (typeof heroesOfFaithData)[number]): Promise<Chec
   if (summary.type?.includes("disambiguation")) {
     out.push({ hero: hero.name, level: "fail", note: `"${title}" is a disambiguation page` });
     return out;
+  }
+
+  if (isBiblical) {
+    // No date comparison: "when was Abraham born" is an unsettled scholarly
+    // argument, not a fact to check a profile against. What CAN be checked is
+    // that every passage cited actually exists.
+    const refIssues = await checkReferences(hero);
+    if (refIssues.length > 0) return refIssues;
+    const refCount =
+      (hero.bibleVerse ? 1 : 0) +
+      (hero.keyEvents ?? []).filter((e) => (e as { reference?: string }).reference).length;
+    return [
+      {
+        hero: hero.name,
+        level: "ok",
+        note: `${refCount} scripture reference${refCount === 1 ? "" : "s"} resolve · ${summary.description ?? ""}`.trim(),
+      },
+    ];
   }
 
   const dataRes = await getJson(WIKIDATA + encodeURIComponent(title));
