@@ -112,7 +112,7 @@ export default function Header() {
                 is sticky and always mounted, so this is visible from every
                 page while a story is being written. */}
             {activeJobs.length > 0 && (
-              <Link href="/library">
+              <Link href="/saved-stories">
                 <span
                   className="hidden sm:flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-xs text-white cursor-pointer hover:bg-white/30 transition"
                   title={describeJob(activeJobs[0])}

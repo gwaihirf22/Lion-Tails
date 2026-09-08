@@ -114,14 +114,30 @@ export function StoryExtras({
         )}
 
         <AccordionItem value="picture" style={{ borderColor: "var(--reader-border)" }}>
-          <AccordionTrigger className="text-base">Picture</AccordionTrigger>
+          <AccordionTrigger className="text-base">
+            Picture{!story.imageUrl && " (stock)"}
+          </AccordionTrigger>
           <AccordionContent>
             <img
               src={story.imageUrl || lionTailsImage}
-              alt={story.imagePrompt || `An illustration for ${story.title}`}
+              alt={
+                story.imageUrl
+                  ? story.imagePrompt || `An illustration for ${story.title}`
+                  : "The Lion Tails lion, shown when a story has no illustration of its own"
+              }
               className="mx-auto max-h-[60vh] w-auto rounded-lg"
               loading="lazy"
             />
+            {/* Illustration is DALL-E 3, which modelPolicy classes as premium:
+                admins, or a user with their own OpenAI key. Everyone else gets
+                the stock lion and, until now, no way to know that is what they
+                were looking at. */}
+            {!story.imageUrl && (
+              <p className="mt-3 text-center text-sm" style={{ color: "var(--reader-muted)" }}>
+                This is the standard Lion Tails picture. Stories are illustrated
+                individually only when you add your own OpenAI key in Settings.
+              </p>
+            )}
           </AccordionContent>
         </AccordionItem>
 
