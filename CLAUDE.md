@@ -6,6 +6,9 @@ Guidance for Claude Code when working in this repository.
 improvable.** This codebase encodes a lot of hard-won rationale in comments;
 several "obvious cleanups" here have caused production outages.
 
+`docs/roadmap.md` lists what is outstanding and why, including the
+known-but-unfixed items — check it before reporting something as a new find.
+
 ## Project Overview
 
 Lion Tails generates personalised Christian bedtime stories for children, with a
@@ -28,26 +31,44 @@ npm run db:generate    # generate a migration from shared/schema.ts (needs drizz
 npm run db:migrate     # apply pending migrations
 ```
 
-There is **no test suite**. `npm run check` and the CI smoke test are the only
-automated gates.
+```bash
+npm test               # vitest, no network, no database
+npm run lint           # React Rules of Hooks only
+npx tsx scripts/verify-heroes.ts [name]   # hero facts vs Wikipedia/Wikidata/bible-api. NEEDS NETWORK
+```
+
+Tests cover **pure functions only** — the story parser, per-model request shape
+and entitlement, and the hero data. There is no component, route or database
+test, and no headless browser here. `verify-heroes.ts` is deliberately not in
+CI: it depends on two free APIs that throttle, and a gate that fails for
+reasons unrelated to the change is a gate people learn to ignore.
 
 ## Architecture
 
 ```
 client/        React SPA (Wouter, TanStack Query, Tailwind + Radix/shadcn)
+  src/components/reader/  the /story e-reader; reader.css is PLAIN CSS on purpose
+  src/lib/storyContent.ts purpose-built story parser — no markdown dependency
+  src/theme.css           the four palettes mapped onto the shadcn tokens
 server/        Express API + SPA serving
   index.ts     createApp() / startServer() — shared setup
   dev.ts       dev entrypoint: imports Vite
   prod.ts      prod entrypoint: MUST NOT import Vite (see below)
   static.ts    Vite-free static serving
   db.ts        pool, drizzle client, schema verification
-  seed.ts      reference data, seeded after the DB is ready
+  seed.ts      reference data, upserted on every boot
   routes.ts    the bulk of the API
   storage.ts   in-memory storage + IStorage interface
   db-storage.ts Postgres implementation
   lib/         modelPolicy, storyBrief, requireAuth, openai*, songGenerator
-shared/schema.ts  single source of truth for all 10 tables + Zod schemas
+  data/heroes/ 80 hand-written profiles, one file per era
+  data/biblicalEvents.ts  scripture anchors for story generation (NOT the same
+               job as data/heroes/bible.ts — one anchors a retelling, the other
+               describes a person; overlapping figures are deliberate)
+shared/schema.ts  single source of truth for all 13 tables + Zod schemas
 migrations/    generated SQL, applied at container start
+tests/         vitest — pure functions only, no network, no database
+scripts/verify-heroes.ts  hero facts vs Wikipedia/Wikidata/bible-api (network)
 docs/decisions.md  non-obvious constraints — read this
 ```
 
@@ -103,8 +124,18 @@ anyone who registers that name.
 
 `server/lib/modelPolicy.ts` is the only place the model, provider base URL and
 API key are decided. Tiers: local (Ollama, free, anyone), economy
-(`gpt-4o-mini`, anyone, owner's key), premium (`gpt-4o`/`dall-e-3`, admins or
-users with their own key).
+(`gpt-5.6-luna` default, anyone, owner's key), premium (`gpt-5.6-terra`,
+`gpt-6-astra`, `gpt-image-2`, admins or users with their own key).
+
+**Request shape is per-model and lives in the catalogue, not at the call site.**
+The GPT-5.6 generation rejects `max_tokens` (wants `max_completion_tokens`)
+and rejects any `temperature` at all, including the default sent explicitly.
+Use `tokenLimitFor(model, n)` and `temperatureFor(model, t)` and spread the
+result; there are nine call sites. `gpt-5.6-luna` is the economy default, so
+getting this wrong breaks generation for every user without their own key.
+
+`dall-e-3` was **shut down** on 2026-05-12 and is gone from the catalogue. Do
+not add it back.
 
 Authorisation is resolved at **use**, not at selection. `grep
 process.env.OPENAI_API_KEY server/` should return nothing outside
@@ -125,6 +156,28 @@ email`), so the endpoints answer 200 and look functional while the delivery half
 does not exist. The token is returned in the response body only when
 `NODE_ENV=development`.
 
+## Heroes of Faith data
+
+Eighty hand-written profiles in `server/data/heroes/`, one file per era, two
+collections (`historical` 41, `biblical` 39). `index.ts` assembles them and
+throws at import on a duplicate slug or a group from the wrong collection's
+list — loudly, at boot, rather than silently dropping a person from the seed.
+
+Rules that are easy to break without noticing:
+
+- **Ids are slugs and are the upsert key.** They were `uuidv4()` at module
+  load, so identity changed every process start and the seed could only ever
+  run on an empty table.
+- **`wikipedia` holds an article TITLE, not a URL**, because the name alone is
+  ambiguous and disambiguation should be chosen here rather than guessed at
+  fetch time.
+- **Biblical key events carry `reference`, never `year`.**
+- **Biblical life dates carry `c.` or `fl.`**, or are omitted entirely.
+  `tests/heroes.test.ts` enforces this, with a named exception list for the
+  few dates fixed by evidence outside Scripture.
+- Verses are **fetched from bible-api.com, never recalled.** A model reciting
+  scripture produces text that reads correctly and is not.
+
 ## Conventions
 
 - ESM throughout (`"type": "module"`). `require()` is not available in the
@@ -143,8 +196,15 @@ does not exist. The token is returned in the response body only when
 ## Deployment
 
 Push to `main` runs `.github/workflows/ci.yml` on a self-hosted Unraid
-runner: build, push to Docker Hub, SSH, `docker compose pull && up -d`, wait for
-the healthcheck.
+runner: typecheck, build, tests, lint, the theming and reader-CSS greps, two
+smoke tests, then push to Docker Hub, SSH, `docker compose pull && up -d`, wait
+for the healthcheck. There is no separate `deploy.yml` — the deploy is the last
+job of this one workflow, so it cannot run unless every gate passed.
+
+**A gate that hardcodes a number will break the deploy for an unrelated
+reason.** The hero-count assertion was `-ne 15`, correct when written and wrong
+the moment anyone added a hero; it now derives the expectation from
+`server/data/heroes`. Assert the invariant, not the current value.
 
 The compose file in this repo is a **reference copy**. The authoritative one is
 at `/mnt/user/appdata/lion-tails/docker-compose.yml` on the server and CI

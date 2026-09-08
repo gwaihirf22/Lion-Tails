@@ -63,24 +63,15 @@ jobs:
           fi
           echo "OK: dist/prod.js has no Vite import."
 
-      # The reader's palette, font and typeset rules are attribute selectors on
-      # values that come from the DATABASE, so nothing in the source references
-      # them as literal class names. That is deliberate -- it is what makes them
-      # immune to the bug this check exists to catch.
-      #
-      # BookPage used to build its background class by interpolation:
-      #   `border-amber-800/60 ${getBgColorClass()}/95`  ->  "bg-[#fff8e6]/95"
-      # Tailwind's JIT scanner only sees string literals, so that class was
-      # never emitted and the entire colour picker did nothing for months. The
-      # swatches kept a second literal colour map, so they LOOKED right.
-      # Nothing failed. Nothing logged. Only a human clicking it would know.
-      #
-      # So: assert the rules are actually in the shipped stylesheet.
-      # The app is themed by CSS custom properties now, so a hardcoded Tailwind
-      # colour is a component that silently opts out: it looks right in Paper
-      # and wrong in Sepia, and unreadable in Night. There were 247 of them
-      # before this gate existed. Two deliberate exceptions are allowed by
-      # name -- scrims, which are meant to be black in every palette.
+      # The pure functions with a history of shipping bugs: the story parser
+      # that once annihilated every newline in a poem, the per-model request
+      # shape that returned 400 on every free-tier generation, and eighty
+      # hand-written hero profiles where a duplicate slug silently drops a
+      # person from the seed. No network -- scripts/verify-heroes.ts is the
+      # thing that talks to Wikipedia and bible-api.com, and it is run by hand.
+      - name: Unit tests
+        run: npm test
+
       # The Rules of Hooks are a runtime rule about the ORDER of calls, so
       # tsc and the build are both blind to them. Two useMemo calls placed
       # below an "if (isLoading) return" guard once rendered the Heroes of
@@ -88,6 +79,11 @@ jobs:
       - name: React hooks rules
         run: npm run lint
 
+      # The app is themed by CSS custom properties now, so a hardcoded Tailwind
+      # colour is a component that silently opts out: it looks right in Paper
+      # and wrong in Sepia, and unreadable in Night. There were 247 of them
+      # before this gate existed. Two deliberate exceptions are allowed by
+      # name -- scrims, which are meant to be black in every palette.
       - name: No hardcoded colours outside the design tokens
         run: |
           set -e
@@ -107,6 +103,19 @@ jobs:
           fi
           echo "OK: every colour outside the shadcn primitives comes from a token."
 
+      # The reader's palette, font and typeset rules are attribute selectors on
+      # values that come from the DATABASE, so nothing in the source references
+      # them as literal class names. That is deliberate -- it is what makes them
+      # immune to the bug this check exists to catch.
+      #
+      # BookPage used to build its background class by interpolation:
+      #   `border-amber-800/60 ${getBgColorClass()}/95`  ->  "bg-[#fff8e6]/95"
+      # Tailwind's JIT scanner only sees string literals, so that class was
+      # never emitted and the entire colour picker did nothing for months. The
+      # swatches kept a second literal colour map, so they LOOKED right.
+      # Nothing failed. Nothing logged. Only a human clicking it would know.
+      #
+      # So: assert the rules are actually in the shipped stylesheet.
       - name: Verify the reader's styles reached the CSS bundle
         run: |
           set -e
