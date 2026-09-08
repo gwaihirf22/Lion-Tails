@@ -1149,14 +1149,31 @@ export async function generateStoryImage(
     // openai 7.x made ImagesResponse.data optional (`data?: Array<Image>`), so
     // indexing it directly throws at runtime on a response that carries none --
     // this is a real guard, not a cast to satisfy the compiler.
-    const imageUrl = response.data?.[0]?.url;
-    if (imageUrl) {
-      await downloadImage(imageUrl, filepath);
+    const image = response.data?.[0];
+
+    // The GPT image models ALWAYS return base64 and never a URL, and they do
+    // not accept response_format at all. Swapping dall-e-3 for gpt-image-2
+    // without this would have kept the bug alive in a new shape: data[0].url
+    // is simply undefined, so the function would return undefined and the
+    // reader would go on showing the stock lion with nothing logged.
+    if (image?.b64_json) {
+      await fs.promises.writeFile(filepath, Buffer.from(image.b64_json, "base64"));
       return `/public/images/stories/${filename}`;
     }
+    // Kept for any model that does return a URL. Those links expire in about an
+    // hour, which is why the file is downloaded rather than stored as a link.
+    if (image?.url) {
+      await downloadImage(image.url, filepath);
+      return `/public/images/stories/${filename}`;
+    }
+
+    console.error(
+      `Image generation returned no image data (model ${resolved.model}). ` +
+        "Nothing to save; the story keeps the stock picture.",
+    );
     return undefined;
   } catch (error) {
-    console.error("Error generating image with DALL-E:", error);
+    console.error("Error generating story illustration:", error);
     return undefined;
   }
 }

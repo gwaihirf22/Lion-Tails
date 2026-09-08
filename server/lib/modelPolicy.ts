@@ -70,18 +70,48 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
     kinds: ["chat", "vision"],
     label: "GPT-4o",
   },
-  "dall-e-3": {
+  // Current generation. Premium, so they need an admin account or the user's
+  // own key -- nobody spends the owner's money on a flagship by accident.
+  "gpt-5.6-luna": {
+    tier: "premium",
+    provider: "openai",
+    kinds: ["chat", "vision"],
+    label: "GPT-5.6 Luna — fast and cheap",
+    warning:
+      "Newer than GPT-4o and far cheaper to run than the larger models. A good default if you have your own key.",
+  },
+  "gpt-5.6-terra": {
+    tier: "premium",
+    provider: "openai",
+    kinds: ["chat", "vision"],
+    label: "GPT-5.6 Terra — balanced",
+    warning: "Stronger reasoning than Luna at roughly ten times the cost per story.",
+  },
+  "gpt-6-astra": {
+    tier: "premium",
+    provider: "openai",
+    kinds: ["chat", "vision"],
+    label: "GPT-6 Astra — best quality",
+    warning:
+      "The most capable model available, and by far the most expensive: around fifty times Luna's price per story.",
+  },
+  // dall-e-3 was SHUT DOWN on 2026-05-12, not merely deprecated. It sat here as
+  // the image default for four months afterwards, so every illustration attempt
+  // by an entitled user failed -- silently, because generateStoryImage catches
+  // and returns undefined so a story is never lost over a missing picture.
+  // Nothing surfaced it: the reader simply showed the stock lion.
+  "gpt-image-2": {
     tier: "premium",
     provider: "openai",
     kinds: ["image"],
-    label: "DALL-E 3",
+    label: "GPT Image 2",
   },
 };
 
 const DEFAULTS: Record<ModelKind, string> = {
   chat: "gpt-4o-mini",
   vision: "gpt-4o-mini",
-  image: "dall-e-3",
+  image: "gpt-image-2",
 };
 
 /** Container name, not an IP: the Ollama container's address is not stable. */
