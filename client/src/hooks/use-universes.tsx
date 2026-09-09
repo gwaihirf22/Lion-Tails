@@ -29,6 +29,8 @@ export type Universe = {
   summaryCoveredCount: number | null;
   summaryDroppedCount: number | null;
   pinnedCanon: CanonItem[];
+  /** What the stories established, refreshed by each one. See server/lib/worldState.ts. */
+  worldState: Array<{ id: string; kind: "character" | "fact" | "thread"; text: string; status: "current" | "closed" }>;
   isStale: boolean;
   canMakeSummary: boolean;
   activeSummaryJobId: string | null;

@@ -56,6 +56,16 @@ export type WorldPatch = {
   add?: Array<{ kind: WorldEntryKind; text: string }>;
   /** Revisions to entries the model was shown, by id. */
   update?: Array<{ id: string; text?: string; status?: "current" | "closed" }>;
+  /**
+   * A refreshed prose summary of the world, for a person to read.
+   *
+   * Produced by the SAME call as the entries, which is what retires the
+   * separate summarise-this-universe job: that one re-read up to eight whole
+   * stories to say what this one says from the newest story plus the entries it
+   * was already shown. One call, and it can never be stale because it is
+   * rewritten every time the world changes.
+   */
+  summary?: string;
 };
 
 const clean = (s: unknown): string =>
@@ -194,8 +204,13 @@ Prefer specifics -- names, places, objects -- over summary language like "they
 learned about courage". Nothing about how good the story is, and no morals.
 Each entry under ${MAX_ENTRY_LENGTH} characters.
 
+Also write "summary": a short paragraph, about 120 words, telling someone who
+has not read these stories what this world is and what has happened in it so
+far. Prose, for a person to read. Not a list, and not a review.
+
 Respond with ONLY a valid JSON object:
-{ "add": [{ "kind": "character" | "fact" | "thread", "text": "..." }]${
+{ "add": [{ "kind": "character" | "fact" | "thread", "text": "..." }],
+  "summary": "..."${
     known ? `,\n  "update": [{ "id": "...", "text": "...", "status": "current" | "closed" }]` : ""
   } }
 `.trim();
@@ -218,8 +233,12 @@ export function parseWorldPatch(value: unknown): WorldPatch | undefined {
         status: u.status === "closed" || u.status === "current" ? u.status : undefined,
       }))
     : [];
+  const summary =
+    typeof (value as { summary?: unknown }).summary === "string"
+      ? (value as { summary: string }).summary.trim().slice(0, 2000)
+      : undefined;
   // An extraction that found nothing at all is a failed extraction, not an
   // empty world -- every story introduces someone or establishes something.
   if (add.length === 0 && update.length === 0) return undefined;
-  return { add, update };
+  return { add, update, summary };
 }

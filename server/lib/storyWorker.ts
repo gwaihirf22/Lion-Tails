@@ -442,9 +442,28 @@ async function runExtractJob(job: JobRow, resolved: ResolvedModel): Promise<void
       [job.job_id, WORKER_ID],
     );
     if ((rowCount ?? 0) === 0) return; // evicted; the other worker owns this
+    // The summary rides on the SAME call and the same write. It can never be
+    // stale, because the only thing that changes a world is a story, and every
+    // story in a series rewrites it. That is what retires the separate
+    // summarise job, its 8-story window and its staleness fingerprint.
+    //
+    // summary_inputs_hash is set to the current fingerprint so the OLD
+    // staleness rule reports "current" rather than permanently "out of date"
+    // for universes maintained this way.
     await pool!.query(
-      "UPDATE story_universes SET world_state = $1::jsonb, updated_at = now() WHERE universe_id = $2",
-      [JSON.stringify(merged), job.universe_id],
+      `UPDATE story_universes u
+          SET world_state = $1::jsonb,
+              summary = COALESCE($2, u.summary),
+              summary_updated_at = CASE WHEN $2 IS NULL THEN u.summary_updated_at ELSE now() END,
+              summary_model = CASE WHEN $2 IS NULL THEN u.summary_model ELSE $3 END,
+              summary_inputs_hash = md5(
+                coalesce((SELECT string_agg(s.story_id, ',' ORDER BY s.story_id)
+                            FROM user_stories s WHERE s.universe_id = u.universe_id), '')
+                || '|' || u.pinned_canon::text
+              ),
+              updated_at = now()
+        WHERE u.universe_id = $4`,
+      [JSON.stringify(merged), patch.summary ?? null, resolved.model, job.universe_id],
     );
     console.log(
       `[worker] extracted ${patch.add?.length ?? 0} new and ${patch.update?.length ?? 0} revised for universe ${job.universe_id}`,

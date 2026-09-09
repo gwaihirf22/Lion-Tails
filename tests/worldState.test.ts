@@ -179,3 +179,22 @@ describe("the extraction prompt", () => {
     expect(p).not.toContain("Z [fact]");
   });
 });
+
+describe("the summary rides on the same call", () => {
+  it("is read off the reply when present", () => {
+    // One call returns the entries AND the prose, which is what retires the
+    // separate summarise job that re-read up to eight whole stories.
+    const p = parseWorldPatch({ add: [{ kind: "fact", text: "A" }], summary: "  A world.  " });
+    expect(p?.summary).toBe("A world.");
+  });
+
+  it("is optional -- entries without prose are still a good extraction", () => {
+    expect(parseWorldPatch({ add: [{ kind: "fact", text: "A" }] })?.summary).toBeUndefined();
+  });
+
+  it("does not rescue a reply that found nothing", () => {
+    // Prose alone is not continuity. Returning undefined makes requestModelJson
+    // retry rather than storing a summary with an empty world behind it.
+    expect(parseWorldPatch({ add: [], summary: "Lovely prose." })).toBeUndefined();
+  });
+});
