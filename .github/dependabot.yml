@@ -82,8 +82,9 @@ updates:
       # through the tiers, but batching them would defeat the point: a major is
       # the one update that most needs looking at on its own. date-fns 3->4 and
       # lucide-react 0->1 turned out to be clean; zod-validation-error 3->5
-      # needs a zod 4 migration first. Reviewing those as one PR would have
-      # meant either blocking two safe updates or merging a broken one.
+      # needed one import specifier changed, NOT the zod 4 migration it was
+      # assumed to need. Reviewing those as one PR would have meant either
+      # blocking two safe updates or merging a broken one.
       indirect-dependencies:
         patterns:
           - "*"
@@ -129,6 +130,20 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "drizzle-kit"
         update-types: ["version-update:semver-major"]
+      # drizzle-zod is 0.x, so a MINOR is a breaking change by convention, and
+      # 0.7 -> 0.8 is exactly that: it generates schemas against zod 4's type
+      # system. Under zod 3's classic API the generated insert type comes out
+      # with `verificationToken: unknown`, which fails the typecheck in four
+      # places across auth-page, db-storage, storage and shared/schema.
+      #
+      # Measured, not assumed: pinning drizzle-zod back to 0.7 makes the other
+      # 53 updates in the production-minor group typecheck cleanly, and raising
+      # zod to 3.25 does NOT help -- unlike zod-validation-error, this one
+      # genuinely needs the v4 API. It moves with the zod 4 migration.
+      - dependency-name: "drizzle-zod"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
       # Tailwind 4 is a config-format rewrite, and tailwind-scrollbar 4 requires
       # it -- the two move together or not at all.
       - dependency-name: "tailwindcss"
