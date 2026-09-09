@@ -8,7 +8,7 @@ import connectPg from 'connect-pg-simple';
 // Static import: `require` is not defined in the ESM production bundle, so the
 // previous inline require() threw a ReferenceError on the fallback path.
 import createMemoryStore from 'memorystore';
-import { IStorage } from './storage';
+import { IStorage, type StoryToSave } from './storage';
 
 const PostgresStore = connectPg(session);
 
@@ -655,7 +655,7 @@ export class DbStorage implements IStorage {
     }
   }
   
-  async saveStory(story: StoryResponse, request: StoryRequest, userId: number): Promise<SavedStory> {
+  async saveStory(story: StoryToSave, request: StoryRequest, userId: number): Promise<SavedStory> {
     if (!isDatabaseAvailable()) {
       console.error("Database unavailable in saveStory. Cannot save story for user:", userId);
       throw new Error("Database connection is required to save stories");
@@ -666,7 +666,7 @@ export class DbStorage implements IStorage {
       // rather than passed separately so the existing client, which posts the
       // story back verbatim, needs no change. Null for stories saved before
       // generation_records existed, and for any path that does not set it.
-      const generationId = (story as { generationId?: string }).generationId ?? null;
+      const generationId = story.generationId ?? null;
       // Read off the REQUEST, not an optional fourth parameter. The optional
       // heroId parameter is exactly why hero_id is NULL on nearly every row:
       // DbStorage.saveStory silently omits it and the caller cannot tell.
@@ -675,6 +675,11 @@ export class DbStorage implements IStorage {
       // synchronous path) and carried on the request, so this method cannot
       // silently lose it the way the optional fourth parameter did.
       const heroId = (request as { heroId?: string }).heroId ?? null;
+      // Same pattern again: carried on the story object like generationId, not
+      // as another optional parameter that this method could silently drop.
+      // Absent for a single-call generation -- very-short prose and every poem
+      // -- which is why it is optional rather than defaulted to [].
+      const outline = story.outline;
       const id = uuidv4();
       const now = new Date();
       
@@ -689,6 +694,7 @@ export class DbStorage implements IStorage {
         createdAt: now.toISOString(),
         isFavorite: false,
         expiresAt: expiryDate.toISOString(),
+        ...(outline ? { outline } : {}),
         // savedStorySchema declares searchMetadata with .default(), so the
         // parsed type requires it even though the input does not. Writing it
         // explicitly also means updateStoryHeroId's jsonb_set has a parent key
