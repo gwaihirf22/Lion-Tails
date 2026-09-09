@@ -30,7 +30,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import AnimalAutocomplete from "./AnimalAutocomplete";
 import HeroPicker from "./HeroPicker";
 import type { HeroOfFaith } from "@shared/schema";
-import CharacterForm from "./CharacterForm";
+import CharacterForm, { type CharacterFormValues } from "./CharacterForm";
+import { saveCharacter } from "@/lib/saveCharacter";
+import { useToast } from "@/hooks/use-toast";
 import PromptEditor from "./PromptEditor";
 
 interface StoryFormProps {
@@ -83,6 +85,7 @@ export default function StoryForm({
   parentStoryTitle,
   isContinuation = false,
 }: StoryFormProps) {
+  const { toast } = useToast();
   const [useTimeTravel, setUseTimeTravel] = useState(false);
   const [hasSelectedBiblicalEvent, setHasSelectedBiblicalEvent] = useState(false);
   const [hasSelectedHeroOfFaith, setHasSelectedHeroOfFaith] = useState(false);
@@ -93,12 +96,28 @@ export default function StoryForm({
   // to work out which of the one selected characters to edit; with a cast the
   // chip knows which one it is and passes it, so there is nothing left to look up.
 
-  // Function to handle character update completion
-  const handleCharacterUpdated = (updatedCharacterData: any) => {
-    setEditDialogOpen(false);
-    setSelectedCharacter(undefined);
-    // Refresh characters list to show updated character
-    queryClient.invalidateQueries({ queryKey: ['/api/characters'] });
+  /**
+   * Save an edit made from the story form.
+   *
+   * This used to take the edited values, ignore them, close the dialog and
+   * invalidate the query -- so the list refetched, showed the unchanged
+   * character, and the edit was gone with no error anywhere. It looked exactly
+   * like a save that had worked.
+   */
+  const handleCharacterUpdated = async (values: CharacterFormValues, custom: boolean) => {
+    if (!selectedCharacter) return;
+    try {
+      await saveCharacter(values, custom, selectedCharacter.id);
+      setEditDialogOpen(false);
+      setSelectedCharacter(undefined);
+      queryClient.invalidateQueries({ queryKey: ['/api/characters'] });
+    } catch (error) {
+      toast({
+        title: "Could not save that character",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive",
+      });
+    }
   };
   
   // Fetch characters for selection - always fetch them as they can be used in any story type

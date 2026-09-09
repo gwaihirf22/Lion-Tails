@@ -162,6 +162,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /**
+   * Creating a character a parent typed rather than picked.
+   *
+   * The same gate as the custom PUT below, and it exists so that making a space
+   * whale is one step. Without it a parent has to create something the
+   * catalogue allows and then immediately customise it, and the character they
+   * asked for never exists on its own.
+   */
+  app.post("/api/characters/custom", requireAuth, requireParentMode, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const parsed = characterSchema
+        .omit({ id: true, createdAt: true, customFields: true })
+        .parse(req.body);
+
+      const customFields = Object.keys(parsed).filter((k) => k !== "category");
+      const character = await storage.createCharacter({ ...parsed, customFields }, userId);
+      res.status(201).json(character);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: fromZodError(error).message });
+      }
+      console.error("Error creating custom character:", error);
+      res.status(500).json({ message: "Failed to create character" });
+    }
+  });
+
   app.put("/api/characters/:id", requireAuth, async (req, res) => {
     try {
       const userId = (req.user as any).id;
