@@ -5,8 +5,27 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { User as SelectUser } from "@shared/schema";
+import { insertUserSchema, User as SelectUser } from "@shared/schema";
 import { requiredSecret } from "./config";
+
+// Registration is unauthenticated, so its body is attacker-controlled.
+//
+// insertUserSchema still carries isAdmin, isVerified and verificationToken --
+// those are legitimate for an internal caller to set, and it is the shared
+// insert type. What made them dangerous is that the handler used to spread
+// ...req.body straight into storage.createUser(), and drizzle's .values()
+// copies whichever keys the object happens to have rather than the table's
+// columns (node_modules/drizzle-orm/pg-core/query-builders/insert.js -- it
+// iterates Object.keys(entry)). So a request could name any column.
+//
+// Omitting the three privilege fields here is the fix. Zod strips unknown keys
+// by default, so anything else a client invents is dropped too. createUser has
+// exactly one caller -- this handler -- so nothing legitimate loses a field.
+export const registerBodySchema = insertUserSchema.omit({
+  isAdmin: true,
+  isVerified: true,
+  verificationToken: true,
+});
 
 declare global {
   namespace Express {
@@ -78,19 +97,29 @@ export function setupAuth(app: Express) {
   // Authentication endpoints
   app.post("/api/auth/register", async (req, res, next) => {
     try {
-      const existingUser = await storage.getUserByUsername(req.body.username);
+      const parsed = registerBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Invalid registration details",
+          details: parsed.error.flatten().fieldErrors,
+        });
+      }
+      const credentials = parsed.data;
+
+      const existingUser = await storage.getUserByUsername(credentials.username);
       if (existingUser) {
         return res.status(400).json({ error: "Username already exists" });
       }
 
-      const existingEmail = await storage.getUserByEmail(req.body.email);
+      const existingEmail = await storage.getUserByEmail(credentials.email);
       if (existingEmail) {
         return res.status(400).json({ error: "Email already in use" });
       }
 
+      // Spread the PARSED body, never req.body -- that is the whole point.
       const user = await storage.createUser({
-        ...req.body,
-        password: await hashPassword(req.body.password),
+        ...credentials,
+        password: await hashPassword(credentials.password),
       });
 
       req.login(user, (err) => {
