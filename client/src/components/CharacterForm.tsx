@@ -50,7 +50,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -381,98 +380,103 @@ export default function CharacterForm({
                     ))}
 
                     {/*
-                      `modal` is load-bearing, and only here.
+                      A plain toggle button, and the list renders INLINE below.
 
-                      This form is the only one rendered inside a Dialog, and
-                      Radix's Dialog is modal by default: it traps focus and
-                      puts pointer-events: none on the body. PopoverContent
-                      portals to document.body, i.e. outside the trapped
-                      subtree, so the search box could not be clicked or typed
-                      in at all. Marking the popover modal makes Radix layer it
-                      as its own dismissable layer above the dialog.
+                      This was a Popover, and it did not work: Radix's Dialog is
+                      modal, so it puts pointer-events: none on the body and runs
+                      a focus trap. PopoverContent portals to document.body,
+                      outside DialogContent -- so clicks were swallowed and
+                      autoFocus was pulled straight back into the dialog. The
+                      search box could be seen and not used.
 
-                      HeroPicker and CharacterPicker use the same pattern and
-                      work, because they live in StoryForm, which is not in a
-                      dialog. Fixed here rather than in ui/popover.tsx, which
-                      four other components depend on behaving as it does.
+                      `<Popover modal>` was the obvious fix and does not help:
+                      it changes layering, not either of those. Rendering inside
+                      the dialog's own DOM removes the cause rather than working
+                      around it, and cannot regress for this reason again.
+                      HeroPicker and CharacterPicker keep their popovers because
+                      StoryForm is not inside a dialog.
+
+                      It also just fits better: a floating panel in a tabbed
+                      dialog spilled outside the dialog's edge.
                     */}
-                    <Popover modal open={kindOpen} onOpenChange={setKindOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={
-                            field.value && !PRESETS.some((p) => p.kind === field.value)
-                              ? "default"
-                              : "outline"
-                          }
-                        >
-                          Something else…
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-80 p-0" align="start">
-                        <div className="flex items-center gap-2 border-b px-3 py-2">
-                          <Search className="h-4 w-4 opacity-50" />
-                          <input
-                            autoFocus
-                            className="flex-1 bg-transparent text-sm outline-none"
-                            placeholder="Search every character…"
-                            value={kindSearch}
-                            onChange={(e) => setKindSearch(e.target.value)}
-                          />
-                        </div>
-                        {/*
-                          Popular first, search for the rest. There are 788 of
-                          them; a list that long to scroll is worse than the
-                          text box this replaced.
-                        */}
-                        <div className="max-h-72 overflow-y-auto p-2">
-                          {results.length > 0 ? (
-                            results.map((k) => (
-                              <button
-                                key={k}
-                                type="button"
-                                className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-muted"
-                                onClick={() => chooseKind(k)}
-                              >
-                                {title(k)}
-                              </button>
-                            ))
-                          ) : (
-                            CHARACTER_CATEGORIES.map((c) => (
-                              <div key={c} className="mb-3">
-                                <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">
-                                  {CATEGORY_LABELS[c]}
-                                </div>
-                                <div className="flex flex-wrap gap-1 px-1">
-                                  {popularKinds(c).map((k) => (
-                                    <Button
-                                      key={k}
-                                      type="button"
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7"
-                                      onClick={() => chooseKind(k)}
-                                    >
-                                      {title(k)}
-                                    </Button>
-                                  ))}
-                                </div>
-                              </div>
-                            ))
-                          )}
-                          {kindSearch && results.length === 0 && (
-                            <p className="px-2 py-4 text-sm text-muted-foreground">
-                              Nothing called “{kindSearch}”.
-                              {parentMode
-                                ? " A grown-up can type it in below."
-                                : " Try another word."}
-                            </p>
-                          )}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={
+                        field.value && !PRESETS.some((p) => p.kind === field.value)
+                          ? "default"
+                          : "outline"
+                      }
+                      aria-expanded={kindOpen}
+                      onClick={() => setKindOpen((o) => !o)}
+                    >
+                      {kindOpen ? "Close the list" : "Something else…"}
+                    </Button>
                   </div>
+
+                  {kindOpen && (
+                    <div className="mt-2 rounded-md border">
+                      <div className="flex items-center gap-2 border-b px-3 py-2">
+                        <Search className="h-4 w-4 opacity-50" />
+                        <input
+                          autoFocus
+                          className="flex-1 bg-transparent text-sm outline-none"
+                          placeholder="Search every character…"
+                          value={kindSearch}
+                          onChange={(e) => setKindSearch(e.target.value)}
+                        />
+                      </div>
+                      {/*
+                        Popular first, search for the rest. There are 788 of
+                        them; a list that long to scroll is worse than the text
+                        box this replaced.
+                      */}
+                      <div className="max-h-72 overflow-y-auto p-2">
+                        {results.length > 0 ? (
+                          results.map((k) => (
+                            <button
+                              key={k}
+                              type="button"
+                              className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-muted"
+                              onClick={() => chooseKind(k)}
+                            >
+                              {title(k)}
+                            </button>
+                          ))
+                        ) : (
+                          CHARACTER_CATEGORIES.map((c) => (
+                            <div key={c} className="mb-3">
+                              <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">
+                                {CATEGORY_LABELS[c]}
+                              </div>
+                              <div className="flex flex-wrap gap-1 px-1">
+                                {popularKinds(c).map((k) => (
+                                  <Button
+                                    key={k}
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7"
+                                    onClick={() => chooseKind(k)}
+                                  >
+                                    {title(k)}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                        {kindSearch && results.length === 0 && (
+                          <p className="px-2 py-4 text-sm text-muted-foreground">
+                            Nothing called “{kindSearch}”.
+                            {parentMode
+                              ? " A grown-up can type it in below."
+                              : " Try another word."}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {parentMode && (
                     <div className="pt-2">
