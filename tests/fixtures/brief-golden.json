@@ -58,5 +58,11 @@
     "outline": "WHO THIS IS ABOUT\n    Mia, aged 8, a girl. Mia uses a wheelchair.\n    Mia has brown hair, blue eyes, a curious nature. Mia likes drawing. Favourite colour: purple. Mia has a rabbit as a companion; give it a name and a personality.\n    Use these details only where a scene naturally calls for them. Do not introduce them as a list, and do not make appearance or companions the subject of what happens.\n    \n    WHAT IT IS ABOUT\n    Theme: kindness.\n    Invent the events yourself. The section above is who they are, not what happens to them.\n    \n    HOW TO WRITE IT\n    Reading level: early-elementary.\n    Give them a real problem with something at stake, and let their choices change what happens. Avoid a tidy lesson stated by the narrator.",
     "chapter": "The story is about Mia, aged 8, a girl. Mia uses a wheelchair. Keep this consistent.",
     "image": "Mia, aged 8, a girl. Mia uses a wheelchair."
+  },
+  "form defaults, no character": {
+    "single": "WHO THIS IS ABOUT\n    Sam, a boy.\n    \n    WHAT IT IS ABOUT\n    Theme: kindness.\n    Invent the events yourself. The section above is who they are, not what happens to them.\n    \n    HOW TO WRITE IT\n    Reading level: early-elementary.\n    Give them a real problem with something at stake, and let their choices change what happens. Avoid a tidy lesson stated by the narrator.",
+    "outline": "WHO THIS IS ABOUT\n    Sam, a boy.\n    \n    WHAT IT IS ABOUT\n    Theme: kindness.\n    Invent the events yourself. The section above is who they are, not what happens to them.\n    \n    HOW TO WRITE IT\n    Reading level: early-elementary.\n    Give them a real problem with something at stake, and let their choices change what happens. Avoid a tidy lesson stated by the narrator.",
+    "chapter": "The story is about Sam, a boy. Keep this consistent.",
+    "image": "Sam, a boy."
   }
 }

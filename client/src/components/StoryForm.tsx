@@ -175,15 +175,15 @@ export default function StoryForm({
       customSystemPrompt: "",
       customUserPrompt: "",
       useCustomPrompts: false,
-      characterDetails: {
-        age: 8,
-        hair: "",
-        eyes: "",
-        favoriteColor: "",
-        personality: "",
-        hobby: "",
-        favoriteAnimal: ""
-      },
+      // NO characterDetails DEFAULT. It used to be {age: 8, ...}, no field on
+      // the form ever rendered it, and nothing stripped it -- so every request
+      // carried it, and buildStoryBrief read the age from it whenever no saved
+      // character was chosen. Every "just type a name" story in the library was
+      // written about an eight-year-old nobody specified.
+      //
+      // The golden fixture could not see it: its base request omits
+      // characterDetails entirely, so the test asserted a prompt the form never
+      // actually sent. There is a case built from these defaults now.
     },
   });
 

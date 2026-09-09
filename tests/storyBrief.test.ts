@@ -87,6 +87,25 @@ const cases: Record<string, () => ReturnType<typeof buildStoryBrief>> = {
   "lead with parent notes": () =>
     buildStoryBrief({ ...base, characterIds: ["c1"] } as StoryRequest,
       [{ ...mia, mustBeTrue: "Mia uses a wheelchair." }]),
+
+  /**
+   * What StoryForm actually sends, rather than a tidy subset of it.
+   *
+   * `base` omits characterDetails, so for as long as this fixture has existed
+   * it asserted a prompt the form never sent: the form defaulted
+   * characterDetails to {age: 8}, no field rendered it, nothing stripped it, and
+   * buildStoryBrief read the age out of it whenever no saved character was
+   * chosen. The captured string said "Sam, a boy." while production said
+   * "Sam, aged 8, a boy." -- a golden test cannot catch what its inputs do not
+   * contain.
+   */
+  "form defaults, no character": () =>
+    buildStoryBrief({
+      childName: "Sam", gender: "boy", animal: "", useAnimal: true, theme: "kindness",
+      storyType: "regular", storyLength: "medium", readingLevel: "early-elementary",
+      useCharacter: false, characterIds: [], customPrompt: "", biblePassage: "",
+      learningFocus: "", heroOfFaith: "", biblicalEvent: "", useTimeTravel: false,
+    } as unknown as StoryRequest, []),
 };
 
 describe("a brief with no cast renders exactly as it always has", () => {
