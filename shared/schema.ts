@@ -665,6 +665,28 @@ export const storyRequestSchema = z.object({
       reference: z.string().optional(),
     })
     .optional(),
+  /**
+   * The user expects to write more stories in this world.
+   *
+   * What it buys is one extra model call after the story is written, which
+   * extracts what a later story would need to know -- who appeared, what is now
+   * true, what was left open. That is not worth paying for on a one-off, so it
+   * is opt-in rather than automatic.
+   *
+   * A CONTINUATION implies it without the box being ticked: a story that has
+   * already been continued once is very likely to be continued again.
+   */
+  mayContinue: z.boolean().default(false),
+  /**
+   * End without resolving.
+   *
+   * moralOutcome is picked at random when the user does not choose one, and it
+   * instructs the story to resolve -- so a cliffhanger has to suppress it, in
+   * exactly the way a retelling already does. See the `ending` line in
+   * buildStoryBrief: "the account already has an ending; it is not ours to
+   * assign." The same is true of a story the user has said is not over.
+   */
+  cliffhanger: z.boolean().default(false),
   useTimeTravel: z.boolean().default(false),
   /**
    * The cast, in order. Index 0 is the protagonist, and that ordering is

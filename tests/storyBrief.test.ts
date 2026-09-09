@@ -523,3 +523,47 @@ describe("a retelling needs no protagonist", () => {
     expect(brief.cast[0].colour).toBe("");
   });
 });
+
+describe("a cliffhanger stops the story resolving itself", () => {
+  const render = (over: Record<string, unknown>) =>
+    renderBrief(buildStoryBrief({ ...base, ...over } as StoryRequest, []), "outline");
+
+  it("suppresses the moral-outcome instruction", () => {
+    // moralOutcome is picked at RANDOM when the user does not choose one, and
+    // it tells the story to resolve. Left in, the two instructions contradict
+    // and the model picks one -- which looks like the flag doing nothing.
+    const resolved = render({ moralOutcome: "consequences", cliffhanger: false });
+    const open = render({ moralOutcome: "consequences", cliffhanger: true });
+    expect(resolved).not.toBe(open);
+    expect(open).not.toContain("consequence");
+  });
+
+  it("says what to do instead, not only what not to do", () => {
+    const text = render({ cliffhanger: true });
+    expect(text).toContain("Do NOT resolve this story");
+    expect(text).toContain("want the next one");
+  });
+
+  it("still asks for a finished scene", () => {
+    // An unresolved story is not an unfinished sentence. Without this a model
+    // stops mid-paragraph and a child thinks the app broke.
+    const text = render({ cliffhanger: true });
+    expect(text).toContain("finish the SCENE properly");
+    expect(text).toContain('Do not write "to be continued"');
+  });
+
+  it("changes nothing when it is off", () => {
+    // The default path must be untouched -- the golden strings above are the
+    // real guard, this is the statement of intent.
+    expect(render({ cliffhanger: false })).toBe(render({}));
+  });
+
+  it("does not double up on a retelling, which already suppressed the ending", () => {
+    const a = render({ biblicalEvent: "noah", cliffhanger: false });
+    const b = render({ biblicalEvent: "noah", cliffhanger: true });
+    // The retelling already dropped moralOutcome; the cliffhanger adds only its
+    // own instruction rather than re-suppressing something already gone.
+    expect(b).toContain("Do NOT resolve this story");
+    expect(a).not.toContain("Do NOT resolve this story");
+  });
+});

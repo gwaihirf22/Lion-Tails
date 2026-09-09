@@ -1,6 +1,6 @@
 
 import { db, pool } from './db';
-import { users, verificationTokens, readingPrefsSchema, type ReadingPrefs, type User, type InsertUser, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
+import { users, verificationTokens, readingPrefsSchema, storyRequestSchema, type ReadingPrefs, type User, type InsertUser, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
 import { eq, and, desc, isNull, sql, or, like, ilike } from 'drizzle-orm';
@@ -621,22 +621,17 @@ export class DbStorage implements IStorage {
               reference: "Hebrews 13:6"
             }
           },
-          request: {
-            theme: "",
-            animal: "",
-            gender: "boy" as "boy" | "girl" | undefined,
-            childName: "",
-            storyType: "regular" as const,
-            heroOfFaith: "",
-            customPrompt: "",
-            biblicalEvent: "",
-            useTimeTravel: false,
-            useAnimal: true,
-            readingLevel: "early-elementary" as const,
-            storyLength: "short" as const,
-            useCustomPrompts: false,
-            useCharacter: false
-          },
+          // Parsed from the schema rather than written out, so every field with
+          // a default fills itself. As a literal this had to be extended by
+          // hand for each new request field -- it broke the build twice on
+          // fields that have nothing to do with a corrupt-row placeholder --
+          // and the values here mean nothing anyway. childName and gender are
+          // supplied because the schema's refine requires a protagonist or a
+          // cast, and this stands in for a story whose real request is lost.
+          request: storyRequestSchema.parse({
+            childName: "Unknown",
+            gender: "boy",
+          }),
           searchMetadata: {
             keywords: [],
             tags: [],

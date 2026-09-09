@@ -441,10 +441,26 @@ export function buildStoryBrief(
   // not soften it into a happy ending" is a direct instruction to change how the
   // account of Noah ends. The account already has an ending; it is not ours to
   // assign. This is the same class of conflict as "invent the events yourself".
-  const ending = sourceMaterial
-    ? undefined
-    : moralOutcomeInstruction(request.moralOutcome);
+  //
+  // A cliffhanger is the SECOND case on this line, for the same reason. The
+  // user has said the story is not over; moralOutcome would tell it to resolve.
+  // Two instructions that contradict, and the model picks one -- which is how
+  // "leave it open" produced a tidy ending and looked like the flag doing
+  // nothing.
+  const ending =
+    sourceMaterial || request.cliffhanger
+      ? undefined
+      : moralOutcomeInstruction(request.moralOutcome);
   if (ending) premise.push(ending);
+  if (request.cliffhanger) {
+    premise.push(
+      "Do NOT resolve this story. End it at a moment that makes the reader " +
+        "want the next one -- a decision not yet made, a door not yet opened, " +
+        "a question just asked. Still finish the SCENE properly: an unresolved " +
+        "story is not an unfinished sentence, and a child should not feel the " +
+        "story broke off. Do not write \"to be continued\".",
+    );
+  }
 
   // ---- HOW ------------------------------------------------------------------
   const craft: string[] = [];

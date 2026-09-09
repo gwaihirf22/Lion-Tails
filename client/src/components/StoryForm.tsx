@@ -56,6 +56,12 @@ interface StoryFormProps {
   inheritedCharacterIds?: string[];
   /** Title of the story being continued, for the confirmation copy. */
   parentStoryTitle?: string;
+  /**
+   * This story continues another. Implies the series flag without the box, and
+   * makes the cliffhanger option always available -- a story in a series is
+   * exactly where "not over yet" is a real choice.
+   */
+  isContinuation?: boolean;
 }
 
 export default function StoryForm({ 
@@ -75,6 +81,7 @@ export default function StoryForm({
   showCustomCharacter = true,
   inheritedCharacterIds = [],
   parentStoryTitle,
+  isContinuation = false,
 }: StoryFormProps) {
   const [useTimeTravel, setUseTimeTravel] = useState(false);
   const [hasSelectedBiblicalEvent, setHasSelectedBiblicalEvent] = useState(false);
@@ -603,6 +610,70 @@ export default function StoryForm({
                 )}
               />
             )}
+
+            {/* SERIES. Two related choices, boxed together because they are one
+                decision: is this story the end of something, or the start.
+                
+                mayContinue is what buys the extraction call that lets a later
+                story know who appeared and what is now true, so it is opt-in --
+                a one-off story should not pay for it. A CONTINUATION implies it
+                without the box, which is why the box hides itself there. */}
+            <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
+              <h3 className="text-sm font-semibold">Part of a series?</h3>
+
+              {isContinuation ? (
+                <p className="text-xs text-muted-foreground">
+                  This story continues an earlier one, so what happens in it will
+                  be remembered for the next one automatically.
+                </p>
+              ) : (
+                <FormField
+                  control={form.control}
+                  name="mayContinue"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel className="text-sm font-medium">
+                          I might write more stories in this world
+                        </FormLabel>
+                        <FormDescription className="text-xs">
+                          Keeps track of who appeared and what happened, so a later
+                          story stays true to this one. Costs one extra request when
+                          the story is finished.
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {(isContinuation || form.watch("mayContinue")) && (
+                <FormField
+                  control={form.control}
+                  name="cliffhanger"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel className="text-sm font-medium">
+                          Leave it on a cliffhanger
+                        </FormLabel>
+                        <FormDescription className="text-xs">
+                          End without resolving it, so the next story picks it up.
+                          The scene still finishes properly.
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+
             
             {/* Character selection has been moved to the top of the form */}
             

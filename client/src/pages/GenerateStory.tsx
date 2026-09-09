@@ -240,6 +240,7 @@ export default function GenerateStory() {
             loading={generating || Boolean(watchedJob)}
             inheritedCharacterIds={inheritedCharacterIds}
             parentStoryTitle={parentStory?.story?.title}
+            isContinuation={Boolean(continuesStoryId)}
           />
         </div>
 
