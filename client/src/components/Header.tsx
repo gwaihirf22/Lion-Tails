@@ -82,16 +82,19 @@ export default function Header() {
     const handleResize = () => {
       const width = window.innerWidth;
 
-      if (width > 1200) {
-        setVisibleItems(6); 
-      } else if (width > 1000) {
-        setVisibleItems(5); 
-      } else if (width > 800) {
-        setVisibleItems(4); 
-      } else if (width > 640) {
-        setVisibleItems(3); 
+      // Raised across the board because nothing wraps to a second line any
+      // more: an item that used to fold into two stacked words now claims its
+      // full width, so each count needs more room than it did.
+      if (width > 1400) {
+        setVisibleItems(6);
+      } else if (width > 1240) {
+        setVisibleItems(5);
+      } else if (width > 1060) {
+        setVisibleItems(4);
+      } else if (width > 900) {
+        setVisibleItems(3);
       } else {
-        setVisibleItems(2); 
+        setVisibleItems(2);
       }
     };
 
@@ -109,15 +112,22 @@ export default function Header() {
 
   return (
     <>
-      <header className="bg-primary/80 backdrop-blur-md shadow-lg border-b border-border sticky top-0 z-30">
+      {/* Solid, not bg-primary/80. At 80% the blue blended with the page
+          behind it and white text measured 4.12:1 in Paper -- under AA -- and
+          the blend changed with whatever was scrolling underneath, so the
+          contrast was not a fixed quantity at all. --header is opaque and
+          per-palette, so it is one number that can be checked. */}
+      <header className="bg-header text-header-foreground shadow-lg border-b border-header-foreground/20 sticky top-0 z-30">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-          <div ref={logoContainerRef} className="flex items-center space-x-3">
+          <div ref={logoContainerRef} className="flex min-w-0 items-center space-x-3">
             <img 
               src={appIcon} 
               alt="Lion Tails Logo" 
-              className="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover border-2 border-border shadow-lg"
+              className="h-12 w-12 shrink-0 rounded-full border-2 border-header-foreground/25 object-cover shadow-lg md:h-14 md:w-14"
             />
-            <h1 className="text-xl md:text-3xl font-heading font-bold text-foreground">Lion Tails</h1>
+            <h1 className="brand-wordmark text-2xl md:text-3xl text-header-foreground">
+              Lion<span className="brand-accent"> Tails</span>
+            </h1>
 
             {/* The affordance that makes navigating away feel safe. The Header
                 is sticky and always mounted, so this is visible from every
@@ -146,7 +156,7 @@ export default function Header() {
                   onClick={() => setSettingsOpen(true)}
                   title="Settings"
                   aria-label="Settings"
-                  className="p-2 focus:outline-none"
+                  className="rounded-full p-2 text-header-foreground hover:bg-header-foreground/15 focus:outline-none"
                 >
                   <SettingsIcon className="h-5 w-5" />
                 </button>
@@ -156,7 +166,7 @@ export default function Header() {
                   variant="ghost" 
                   size="icon" 
                   onClick={() => logoutMutation.mutate()} 
-                  className="text-foreground"
+                  className="text-header-foreground hover:bg-header-foreground/15 hover:text-header-foreground"
                   disabled={logoutMutation.isPending}
                 >
                   <LogOut size={20} />
@@ -164,7 +174,7 @@ export default function Header() {
               )}
               <button 
                 onClick={() => setMenuOpen(!menuOpen)} 
-                className="text-foreground p-2 focus:outline-none z-50"
+                className="z-50 rounded-full p-2 text-header-foreground hover:bg-header-foreground/15 focus:outline-none"
                 aria-label={menuOpen ? "Close menu" : "Open menu"}
               >
                 {menuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -172,13 +182,18 @@ export default function Header() {
             </div>
           ) : (
             <div className="flex items-center">
-              <nav className="mr-4">
-                <ul ref={navContainerRef} className="flex space-x-2 font-heading text-sm md:text-base">
+              <nav className="mr-4 min-w-0">
+                <ul ref={navContainerRef} className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden text-sm md:text-base">
                   {visibleNavItems.map((item) => (
-                    <li key={item.href}>
-                      <Link 
-                        href={item.href} 
-                        className={`nav-text hover:text-primary duration-200 px-3 py-1.5 rounded-full ${location === item.href ? 'bg-muted font-bold shadow-inner' : 'hover:bg-muted'}`}
+                    <li key={item.href} className="shrink-0">
+                      <Link
+                        href={item.href}
+                        aria-current={location === item.href ? "page" : undefined}
+                        className={`inline-flex h-9 items-center whitespace-nowrap rounded-full px-3 font-medium transition-colors duration-200 ${
+                          location === item.href
+                            ? "bg-header-foreground text-header font-semibold shadow-sm"
+                            : "text-header-foreground hover:bg-header-foreground/15"
+                        }`}
                       >
                         {item.text}
                       </Link>
@@ -189,17 +204,24 @@ export default function Header() {
                     <li>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="flex items-center nav-text hover:text-primary duration-200 px-3 py-1.5 rounded-full hover:bg-muted">
+                          <button className="inline-flex h-9 items-center whitespace-nowrap rounded-full px-3 font-medium text-header-foreground transition-colors duration-200 hover:bg-header-foreground/15 data-[state=open]:bg-header-foreground/15">
                             <span className="mr-1">More</span>
                             <ChevronDown size={16} />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 bg-card border-border shadow-lg">
+                        {/* No nav-text and no bg-card here. This menu is a
+                            POPOVER -- a light surface -- and nav-text paints
+                            --header-foreground, which is white in three of the
+                            four palettes. White on a near-white menu is why
+                            "More" was unreadable until hovered. The shadcn
+                            defaults already carry the right tokens. */}
+                        <DropdownMenuContent align="end" className="w-48">
                           {overflowNavItems.map((item) => (
                             <DropdownMenuItem key={item.href} asChild>
-                              <Link 
+                              <Link
                                 href={item.href}
-                                className={`w-full px-2 py-1.5 rounded-sm nav-text ${location === item.href ? 'bg-card font-bold' : 'hover:bg-muted'}`}
+                                aria-current={location === item.href ? "page" : undefined}
+                                className={`w-full cursor-pointer ${location === item.href ? "font-semibold text-primary" : ""}`}
                               >
                                 {item.text}
                               </Link>
@@ -214,7 +236,7 @@ export default function Header() {
 
               {user ? (
                 <div className="flex items-center">
-                  <span className="nav-text mr-2 hidden md:block">
+                  <span className="nav-text mr-2 hidden truncate md:block">
                     {user.username}
                   </span>
                   <Button
@@ -223,7 +245,7 @@ export default function Header() {
                     onClick={() => setSettingsOpen(true)}
                     title="Settings"
                     aria-label="Settings"
-                    className="h-9 w-9 text-foreground border-border hover:bg-muted hover:text-primary"
+                    className="h-9 w-9 shrink-0 border-header-foreground/30 bg-transparent text-header-foreground hover:bg-header-foreground/15 hover:text-header-foreground"
                   >
                     <SettingsIcon className="h-4 w-4" />
                   </Button>
@@ -234,7 +256,7 @@ export default function Header() {
                     disabled={logoutMutation.isPending}
                     title="Log out"
                     aria-label="Log out"
-                    className="h-9 w-9 text-foreground border-border hover:bg-muted hover:text-primary"
+                    className="h-9 w-9 shrink-0 border-header-foreground/30 bg-transparent text-header-foreground hover:bg-header-foreground/15 hover:text-header-foreground"
                   >
                     <LogOut className="h-4 w-4" />
                   </Button>
@@ -244,7 +266,7 @@ export default function Header() {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    className="text-foreground border-border hover:bg-muted hover:text-primary font-bold shadow-md" 
+                    className="border-header-foreground/30 bg-transparent text-header-foreground hover:bg-header-foreground/15 hover:text-header-foreground font-bold shadow-md" 
                   >
                     <User className="mr-1 h-4 w-4" />
                     <span>Login</span>
@@ -285,9 +307,17 @@ export default function Header() {
                 <ul className="flex flex-col space-y-2 font-heading text-base">
                   {navItems.map((item) => (
                     <li key={item.href}>
-                      <Link 
-                        href={item.href} 
-                        className={`block nav-text hover:text-primary duration-200 px-4 py-3 rounded-full ${location === item.href ? 'bg-muted font-bold shadow-inner' : 'hover:bg-muted'}`}
+                      {/* Not nav-text: this sheet is bg-card, a light surface,
+                          and nav-text is the bar's colour. Every item in here
+                          was white on near-white. */}
+                      <Link
+                        href={item.href}
+                        aria-current={location === item.href ? "page" : undefined}
+                        className={`block rounded-full px-4 py-3 font-medium transition-colors duration-200 ${
+                          location === item.href
+                            ? "bg-header font-semibold text-header-foreground shadow-sm"
+                            : "text-foreground hover:bg-muted"
+                        }`}
                       >
                         {item.text}
                       </Link>
@@ -299,7 +329,7 @@ export default function Header() {
                       <button
                         onClick={() => logoutMutation.mutate()}
                         disabled={logoutMutation.isPending}
-                        className="flex items-center w-full nav-text hover:text-primary duration-200 px-4 py-3 rounded-full hover:bg-muted font-bold shadow-sm" 
+                        className="flex w-full items-center rounded-full px-4 py-3 font-semibold text-foreground transition-colors duration-200 hover:bg-muted" 
                       >
                         <LogOut className="mr-2 h-5 w-5" />
                         <span>Logout ({user.username})</span>
@@ -309,7 +339,7 @@ export default function Header() {
                     <li>
                       <Link
                         href="/auth"
-                        className="flex items-center nav-text hover:text-primary duration-200 px-4 py-3 rounded-full hover:bg-muted font-bold shadow-sm" 
+                        className="flex items-center rounded-full px-4 py-3 font-semibold text-foreground transition-colors duration-200 hover:bg-muted" 
                       >
                         <User className="mr-2 h-5 w-5" />
                         <span>Login / Register</span>

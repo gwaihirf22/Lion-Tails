@@ -99,6 +99,10 @@ const PAIRS: Array<[string, string, number, string]> = [
   ["secondary", "background", 4.5, "secondary used as a text colour"],
   ["primary", "card", 4.5, "primary as text, on a card"],
   ["secondary", "card", 4.5, "secondary as text, on a card"],
+  // The branded top bar. AAA both ways round: the active nav item INVERTS the
+  // bar (light pill, bar-coloured text), so both directions are real text.
+  ["header-foreground", "header", 7, "nav text on the bar"],
+  ["header", "header-foreground", 7, "the active nav pill, which inverts the bar"],
 ];
 
 describe.each(NAMES)("%s palette", (name) => {
@@ -239,5 +243,47 @@ describe("translucent accent tints", () => {
       Number(r.toFixed(2)),
       `--foreground on a 50% --accent tint in ${name} is ${r.toFixed(2)}:1`,
     ).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("the header bar", () => {
+  const over = (
+    fg: [number, number, number],
+    bg: [number, number, number],
+    alpha: number,
+  ): [number, number, number] =>
+    fg.map((c, i) => Math.round(c * alpha + bg[i] * (1 - alpha))) as [number, number, number];
+
+  it.each(NAMES)("keeps nav text legible on the hover wash in %s", (name) => {
+    // Hover is header-foreground at 15% over the bar. The text stays
+    // header-foreground, so it sits on a lightly-washed version of its own
+    // colour -- the one combination that gets worse as the wash gets stronger.
+    const v = palettes[name];
+    const wash = over(v["header-foreground"], v.header, 0.15);
+    expect(
+      Number(contrast(v["header-foreground"], wash).toFixed(2)),
+      `nav text on its hover wash in ${name}`,
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(NAMES)("makes the hover wash visible against the bar in %s", (name) => {
+    const v = palettes[name];
+    const wash = over(v["header-foreground"], v.header, 0.15);
+    expect(
+      Number(contrast(wash, v.header).toFixed(2)),
+      `hover is indistinguishable from the bar in ${name}`,
+    ).toBeGreaterThan(1.2);
+  });
+
+  it.each(NAMES)("does not paint the bar with --primary in %s", (name) => {
+    // Night's --primary is a light blue. A bar painted with it would be the
+    // brightest thing on screen in the palette that exists to not be bright.
+    // The tokens are allowed to coincide in light palettes; what must not
+    // happen is Night inheriting a bright bar.
+    if (name !== "night") return;
+    const v = palettes[name];
+    const barLum = contrast(v.header, [0, 0, 0]);
+    const pageLum = contrast(v.background, [0, 0, 0]);
+    expect(barLum, "Night's header bar is far brighter than its page").toBeLessThan(pageLum * 3);
   });
 });

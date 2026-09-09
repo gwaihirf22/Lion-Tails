@@ -117,7 +117,8 @@ account-synced is a schema change.
 | Interrupted attempts write no `generation_record` | biases the stats toward failures |
 | `GenerateStory.tsx:293`'s `StoryDisplay` is unreachable | `setGeneratedStory` is only ever called with `null`. Verified — but see `decisions.md` §12 before deleting it |
 | The settings UI carries its own hardcoded model list | `GET /api/settings/models` exists precisely so it does not have to |
-| zod 3 → 4 migration | blocks two Dependabot PRs |
+| zod 3 → 4 migration | blocks `drizzle-zod` 0.8 only, which is the sole failure in the 54-package `production-minor` PR. Ignored in `dependabot.yml` until the migration happens |
+| `@vitejs/plugin-react` 6 | needs Vite 5 → 8 plus three new peer deps. Not a bump; a build-system migration, and `@replit/vite-plugin-shadcn-theme-json` has to be replaced first |
 | `characters` and `stories` tables | may still exist on old databases; never read, safe to drop |
 
 ---

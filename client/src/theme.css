@@ -71,6 +71,8 @@
   --secondary-foreground: 0 0% 100%;
   --accent: 43 32% 89%;
   --accent-foreground: 60 1.9% 10.4%;
+  --header: 216 56.3% 36%;
+  --header-foreground: 0 0% 100%;
   --ring: 216 56.3% 42.2%;
   --destructive: 0 72% 42%;
   --destructive-foreground: 0 0% 100%;
@@ -94,6 +96,8 @@
   --secondary-foreground: 0 0% 100%;
   --accent: 40 48% 85%;
   --accent-foreground: 35 32.6% 17.5%;
+  --header: 28 57.4% 27%;
+  --header-foreground: 0 0% 100%;
   --ring: 28 57.4% 30.4%;
   --destructive: 0 72% 42%;
   --destructive-foreground: 0 0% 100%;
@@ -117,6 +121,8 @@
   --secondary-foreground: 220 12% 9.8%;
   --accent: 220 12% 23%;
   --accent-foreground: 217 8% 80.4%;
+  --header: 220 14% 15%;
+  --header-foreground: 217 9% 84%;
   --ring: 217 88.7% 75.7%;
   --destructive: 0 70% 62%;
   --destructive-foreground: 0 0% 8%;
@@ -140,6 +146,8 @@
   --secondary-foreground: 0 0% 100%;
   --accent: 240 100% 27.3%;
   --accent-foreground: 0 0% 100%;
+  --header: 240 100% 20%;
+  --header-foreground: 0 0% 100%;
   --ring: 240 100% 27.3%;
   --destructive: 0 72% 42%;
   --destructive-foreground: 0 0% 100%;
@@ -151,23 +159,20 @@
   --radius: 0.5rem;
 }
 
-/* Header and footer follow the palette everywhere, not only in the reader.
-   Both are built as `bg-primary/N ... text-white`, which is unreadable on a
-   light palette and wrong on a dark one. */
-header,
-footer {
-  background: hsl(var(--card));
-  color: hsl(var(--foreground));
-  border-color: hsl(var(--border));
-  backdrop-filter: none;
-}
-header :not(svg):not(path),
-footer :not(svg):not(path) {
-  color: inherit;
-}
-/* The site title keeps its drop shadow class from when it sat on a photo; on a
-   flat surface that reads as a smudge. */
+/* The header is a solid branded bar and paints itself from --header /
+   --header-foreground, applied as Tailwind classes on the element.
+ 
+   What was here before was an element-selector override -- `header { ... }`,
+   specificity 0,0,1 -- fighting `.bg-primary/80`, specificity 0,1,0. The
+   class won, so the whole block was dead except for one line that was doing
+   load-bearing work by accident: `color: inherit` was the only thing stopping
+   `text-foreground` on the settings and logout buttons from rendering
+   near-black on a dark blue bar. Inheritance that broad hides exactly this
+   kind of dependency, so every element in the header now names its own token.
+ 
+   The footer is `bg-card text-foreground` in its own markup already. */
 header h1 {
+  /* The wordmark carries a drop-shadow class from when it sat on a photo. */
   text-shadow: none;
 }
 

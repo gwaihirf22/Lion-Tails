@@ -25,6 +25,14 @@ export default {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
         },
+        // The branded top bar. Its own token rather than --primary because in
+        // Night --primary is a LIGHT blue, and a bar painted with it would be
+        // the brightest thing on screen in the palette whose whole job is not
+        // being bright at bedtime.
+        header: {
+          DEFAULT: "hsl(var(--header))",
+          foreground: "hsl(var(--header-foreground))",
+        },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
           foreground: "hsl(var(--secondary-foreground))",

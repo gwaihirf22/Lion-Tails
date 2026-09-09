@@ -44,7 +44,7 @@ export default function Music() {
     <div>
       <div className="mb-6 flex justify-between items-center">
         <h2 className="text-3xl font-heading font-bold text-secondary">Bedtime Songs</h2>
-        <Button variant="outline" onClick={() => navigate("/")}>
+        <Button variant="outline" onClick={() => navigate("/saved-stories")}>
           Back to Stories
         </Button>
       </div>

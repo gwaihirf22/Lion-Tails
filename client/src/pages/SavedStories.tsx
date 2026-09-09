@@ -206,7 +206,7 @@ export default function SavedStories() {
       <div className="mb-6 flex justify-between items-center">
         <h2 className="text-3xl font-heading font-bold text-secondary">Your Saved Stories</h2>
         <div>
-          <Button onClick={() => navigate("/")} className="mr-2">
+          <Button onClick={() => navigate("/generate-story")} className="mr-2">
             Create New Story
           </Button>
           <Button variant="outline" onClick={() => navigate("/music")}>
@@ -277,7 +277,7 @@ export default function SavedStories() {
           <CardContent className="p-8 text-center">
             <h3 className="text-2xl font-medium text-foreground mb-4">No Stories Yet</h3>
             <p className="text-muted-foreground mb-6">You haven't created any stories yet. Create your first personalized story now!</p>
-            <Button onClick={() => navigate("/")}>Create Your First Story</Button>
+            <Button onClick={() => navigate("/generate-story")}>Create Your First Story</Button>
           </CardContent>
         </Card>
       ) : (

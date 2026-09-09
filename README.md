@@ -473,4 +473,7 @@ this app has any business reaching it.
   browser.
 - Every story route uses an inline auth check rather than `requireAuth` in the
   signature, which is how eight unguarded write routes once shipped.
-- The zod 3 → 4 migration blocks two Dependabot PRs.
+- The zod 3 → 4 migration blocks `drizzle-zod` 0.8, which is the only thing
+  holding back a 54-package Dependabot update. It does **not** block
+  `zod-validation-error` 5, which needed one import specifier — see
+  `docs/decisions.md`.
