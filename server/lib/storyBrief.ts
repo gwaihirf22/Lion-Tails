@@ -1,10 +1,20 @@
 import {
+  characterRoleOf,
   characterIdsOf,
+  characterKind,
+  statsOf,
+  CHARACTER_STATS,
+  STAT_BASE,
+  STAT_NOTABLE_HIGH,
+  STAT_NOTABLE_LOW,
   MAX_STORY_CHARACTERS,
+  type CharacterStat,
+  type CharacterStats,
   type StoryRequest,
   type Character,
   type HeroOfFaith,
 } from "@shared/schema";
+import { coveringNoun } from "@shared/characterVocab";
 import { storage } from "../storage";
 import { getBiblicalEvent } from "../data/biblicalEvents";
 
@@ -14,15 +24,49 @@ export type CustomPrompts = {
 };
 
 /**
+ * "a" or "an", for a noun the user chose.
+ *
+ * Extracted from the companion-animal line, which had it inline. That comment
+ * is worth keeping in view: "There is rabbit in Mia's life" is ungrammatical,
+ * and a model handed ungrammatical input stopped naming the animal and repeated
+ * the bare noun instead -- one prompt produced a companion called Benny, the
+ * other produced "the rabbit" fifteen times. A cast that can contain an owl, an
+ * elephant and an android needs the same care the rabbit got.
+ */
+function article(noun: string): string {
+  return /^[aeiou]/i.test(noun.trim()) ? "an" : "a";
+}
+
+/**
+ * How to refer to them, in two words, inside the clause that already exists.
+ *
+ * Derived from `sex` rather than stored as a pronoun. Absent for every
+ * character saved before this, and for "boy" and "girl", where the noun carries
+ * it already and a tag would be noise.
+ */
+function sexTag(sex?: Character["sex"]): string {
+  if (sex === "male") return " (he)";
+  if (sex === "female") return " (she)";
+  if (sex === "it") return " (it)";
+  return "";
+}
+
+/**
  * Resolves the saved characters a request refers to, in the requested order.
  *
- * ONE user-scoped read, then an index. The tempting implementation -- a loop of
- * getCharacterById(id) -- is the vulnerability this function was written to
- * avoid: that lookup takes only an id, Character carries no userId, and so an
- * id-only fetch would let any user generate a story starring another user's
- * character. Going plural makes that mistake N times easier to commit and no
- * less severe, so ownership comes from getAllCharacters(userId) and the request
- * supplies nothing but the ORDER.
+ * ONE user-scoped read, then an index. The request supplies nothing but the
+ * ORDER.
+ *
+ * This used to be the only thing standing between a request and another user's
+ * characters: getCharacterById took an id alone, Character carries no userId,
+ * and a loop of it would have starred anyone's character in anyone's story.
+ * That is no longer true -- every storage method now REQUIRES the owner and
+ * scopes in the SQL, so an unscoped fetch cannot be written. The reason to keep
+ * one read is now ordinary: it is a single round trip instead of N, and it
+ * gives the warning below somewhere to live.
+ *
+ * Left explicit because a comment that still described a fixed hole would
+ * eventually be read as licence to re-open it.
  *
  * Returns [] rather than undefined on any failure -- story generation must
  * still work when the database is unavailable and storage has fallen back to
@@ -110,7 +154,27 @@ const isSet = (v: unknown): v is string =>
  * Noah story opened "WHO THIS IS ABOUT: Biblical Character, a boy." and the
  * model, given a protagonist, wrote about him instead of about Noah.
  */
-const PLACEHOLDER_NAMES = new Set(["biblical character", "character", "a child", "child"]);
+/**
+ * Said in the full brief AND in every chapter prompt, so it is written once.
+ *
+ * "Child" was the wrong noun and had become misleading. A character is not
+ * assumed to be the reader's child any more -- it may be a dragon or a robot --
+ * and "do not add a child" does not forbid inserting a dragon into Numbers 13.
+ * The audience is still a child; the CAST is not, and this sentence is about
+ * the cast.
+ */
+export const SOLO_RETELLING_GUARD =
+  "Nobody has been invented to walk through this account. Do not add a modern " +
+  "character, a narrator being told the story, or any framing device around it.";
+
+const PLACEHOLDER_NAMES = new Set([
+  "biblical character",
+  "character",
+  "a character",
+  // Kept: rows and in-flight requests written before the rename still say it.
+  "a child",
+  "child",
+]);
 const isPlaceholderName = (v: string | undefined): boolean =>
   typeof v === "string" && PLACEHOLDER_NAMES.has(v.trim().toLowerCase());
 
@@ -247,8 +311,21 @@ export type BriefCharacter = {
   name: string;
   /** "Mia, aged 8, a girl." */
   identity: string;
+  /**
+   * What must stay true of them, if a parent said so. Carried apart from
+   * `identity` because the chapter projection reduces the supporting cast to
+   * names, and this is the one thing about them that must survive that.
+   */
+  mustHold?: string;
   /** Appearance, hobbies, companions. Colour, not requirements. */
   colour: string;
+  /**
+   * What they can do, as five numbers. Absent for a character who has never
+   * spent a point, which is what keeps this free for everyone who has not.
+   */
+  stats?: CharacterStats;
+  /** False when this character opted out of stats entirely. */
+  statsEnabled?: boolean;
 };
 
 export type StoryBrief = {
@@ -261,6 +338,18 @@ export type StoryBrief = {
    * to prevent.
    */
   cast: BriefCharacter[];
+  /**
+   * A retelling with nobody invented walking through it.
+   *
+   * EXPLICIT, because the thing it replaced was an inference. Both the full
+   * brief and the per-chapter prompt need this fact, and they used to derive it
+   * separately -- one from "is the lead's colour empty", the other not at all.
+   * A child who simply has no hair or hobby recorded ALSO has empty colour, so
+   * the proxy could not tell "there is no child" from "there is a child nobody
+   * described", and the two prompts could contradict each other in the same
+   * generation. Carried on the brief so there is one answer.
+   */
+  soloRetelling: boolean;
   /** What the story is about -- the thing to actually invent around. */
   premise: string[];
   /** Constraints on how it is written. */
@@ -322,10 +411,23 @@ export function buildStoryBrief(
   // tests/storyBrief.test.ts asserts exactly that against captured strings.
   const details = characters[0];
   const supporting = characters.slice(1);
-  const d = request.characterDetails;
 
-  const name = details?.name || request.childName || "A child";
-  const gender = details?.gender || request.gender;
+  /**
+   * The inline character the form collects when nobody picked a saved one.
+   *
+   * ALL OR NOTHING against `details`, not merged field by field. The old code
+   * took each field from the saved character "or" this shape, which meant a
+   * saved character who had left a field blank silently inherited a stranger's
+   * value from a form section that was not even on screen. Once a field can be
+   * genuinely unset -- which is the point of removing the defaults -- that stops
+   * being theoretical.
+   */
+  const d = details ? undefined : request.characterDetails;
+
+  const name = details?.name || request.childName || "A character";
+  // What they ARE. characterKind() is the one place that knows the widened
+  // `kind` and the legacy `gender` are the same fact.
+  const kind = characterKind(details) || request.gender;
   const age = details?.age ?? d?.age;
   const hair = details?.hair || d?.hair;
   const eyes = details?.eyes || d?.eyes;
@@ -355,8 +457,16 @@ export function buildStoryBrief(
     // biography rather than the name. heroesOfFaith.ts has carried timePeriod,
     // contribution, keyEvents and a verse for every one of the fifteen heroes
     // all along, and the prompt received none of it.
+    // A history event carries a year and a Scripture event carries a
+    // reference -- types.ts says so, and the 39 bible-* heroes deliberately
+    // have no year. Interpolating e.year regardless put the literal word
+    // "undefined" in front of all six of Caleb's events, in the ACCOUNT block
+    // the model is told to follow, and threw the chapter-and-verse away.
     const events = (hero.keyEvents ?? [])
-      .map((e) => `${e.year}: ${e.description}`)
+      .map((e) => {
+        const when = e.year || e.reference;
+        return when ? `${when}: ${e.description}` : e.description;
+      })
       .join("; ");
     sourceMaterial = {
       kind: "hero-of-faith",
@@ -365,7 +475,9 @@ export function buildStoryBrief(
       account: [
         hero.description,
         hero.contribution,
-        events && `Key events -- ${events}`,
+        // The events list has no terminator of its own, so without this the
+        // account read "...the springs she asks for In their own words:".
+        events && `Key events -- ${events}.`.replace(/\.\.$/, "."),
         hero.famousQuote && `In their own words: "${hero.famousQuote}"`,
       ]
         .filter(Boolean)
@@ -382,19 +494,72 @@ export function buildStoryBrief(
   // A retelling has its own cast. When the form supplied a placeholder name
   // there is no child in this story, and saying there is one hands the model a
   // protagonist to displace Noah with.
-  const anonymous = isPlaceholderName(name) && Boolean(sourceMaterial);
+  /**
+   * Is the child IN the account, or is this a straight retelling?
+   *
+   * Time travel is the only thing that puts them there. It already exists and
+   * already works -- "Lucy's feet were dancing when the time-step began" -- so
+   * with it off, a retelling is about the person it is about and the child is
+   * not in the scene.
+   *
+   * A placeholder name is never in the scene whatever the flag says: the form
+   * writes the literal string "Character" for the historical tab, and
+   * "Character travels back in time" is not a sentence anyone meant.
+   */
+  const placeholder = isPlaceholderName(name);
+  const childInScene = characterRoleOf(request) === "meets" && !placeholder;
+
+  /**
+   * The child is not a participant, so the prompt is about the account.
+   *
+   * THIS USED TO TEST THE NAME, and that is the bug it now fixes. The condition
+   * was isPlaceholderName(name) && sourceMaterial, so a retelling requested with
+   * a REAL child's name fell through: the brief named her as the subject, the
+   * chapter projection told every chapter to keep the story about her, and the
+   * model did as it was told and wrote her into the wilderness of Paran.
+   *
+   * It went unnoticed because the app's own hero stories pass the literal
+   * "Character", which took the placeholder branch and looked correct. It
+   * surfaced when a child called Esther was given a story about Caleb -- and
+   * because her name is itself a major biblical figure, an inserted child read
+   * as the app confusing two people in Scripture. It was not: the account was
+   * accurate throughout. She had simply been put inside it.
+   *
+   * Keyed on participation, not on what the name looks like.
+   */
+  const anonymous = Boolean(sourceMaterial) && !childInScene;
   const who = [name];
   if (age) who.push(`aged ${age}`);
-  if (isSet(gender)) who.push(`a ${gender}`);
+  // WHAT THEY ARE goes in the identity slot, not in colour. "Is a dragon" is a
+  // hard fact a story must not contradict, unlike brown fur, and it occupies
+  // exactly the slot "a girl" already filled -- so a cast of eight non-humans
+  // costs one clause each rather than a share of the colour ration below.
+  if (isSet(kind)) who.push(`${article(kind!)} ${kind}${sexTag(details?.sex)}`);
   const identity = anonymous
     ? sourceMaterial!.kind === "hero-of-faith"
       ? `${sourceMaterial!.label}, and the people around them.`
       : `the people in the account of ${sourceMaterial!.label}.`
-    : sentence([who.join(", ")]);
+    // mustBeTrue rides in identity because identity is what the chapter
+    // projection reprints with "Keep this consistent." As colour it would be
+    // followed by "use these details only where a scene naturally calls for
+    // them", which is the wrong thing to say about a wheelchair.
+    //
+    // Punctuated as two sentences rather than passed to sentence() as two
+    // parts: that helper terminates only the LAST part, so a single call
+    // produced "Mia, aged 8, a girl Mia uses a wheelchair." -- the same
+    // ungrammatical input the companion-animal comment above records a model
+    // reacting badly to. Written this way, the no-notes case is character for
+    // character the expression it has always been.
+    : isSet(details?.mustBeTrue)
+      ? `${sentence([who.join(", ")])} ${sentence([details!.mustBeTrue])}`
+      : sentence([who.join(", ")]);
 
   // ---- Colour: usable if it fits, never required ---------------------------
   const traits: string[] = [];
-  if (isSet(hair)) traits.push(`${hair} hair`);
+  // The noun follows what they are: hair, fur, feathers, scales, plating. The
+  // stored field is `hair` whatever the answer, and a character with no
+  // category -- which is every character saved before this -- gets "hair".
+  if (isSet(hair)) traits.push(`${hair} ${coveringNoun(details?.category, kind)}`);
   if (isSet(eyes)) traits.push(`${eyes} eyes`);
   if (isSet(personality)) traits.push(`a ${personality} nature`);
   const colourParts: string[] = [];
@@ -402,15 +567,15 @@ export function buildStoryBrief(
   if (isSet(hobby)) colourParts.push(`${name} likes ${hobby}.`);
   if (isSet(favoriteColor)) colourParts.push(`Favourite colour: ${favoriteColor}.`);
   if (animal) {
-    // Article matters more than it looks. "There is rabbit in Mia's life" is
-    // ungrammatical, and a model handed ungrammatical input stopped naming the
-    // animal and repeated the bare noun instead -- the previous prompt produced
-    // a companion called Benny, this one produced "the rabbit" fifteen times.
-    const article = /^[aeiou]/i.test(animal) ? "an" : "a";
     colourParts.push(
-      `${name} has ${article} ${animal} as a companion; give it a name and a personality.`,
+      `${name} has ${article(animal)} ${animal} as a companion; give it a name and a personality.`,
     );
   }
+  // Whatever the user wrote about them, LAST and SOFT. It is the one field a
+  // child can type into freely, so it must not be able to act as an
+  // instruction: colour is followed by "use these details only where a scene
+  // naturally calls for them", and it never goes near userInstructions.
+  if (isSet(details?.notes)) colourParts.push(sentence([details!.notes]));
   const colour = anonymous ? "" : colourParts.join(" ");
 
   // ---- WHAT: the thing to invent around ------------------------------------
@@ -432,8 +597,38 @@ export function buildStoryBrief(
     premise.push(`Feature this hero of faith: ${request.heroOfFaith}.`);
   }
   if (isSet(request.biblePassage)) premise.push(`Draw on this passage: ${request.biblePassage}.`);
-  if (request.useTimeTravel && !anonymous) {
-    premise.push(`${name} travels back in time and witnesses this first-hand.`);
+  if (childInScene) {
+    if (sourceMaterial) {
+      /**
+       * The character MEETS the figure, and the story is allowed to be fun.
+       *
+       * Blake's framing, and the balance is the whole instruction: wacky, but
+       * the real events still happen and still land. Left as the bare "travels
+       * back in time and witnesses this first-hand", a model writes a polite
+       * tour -- the character stands and watches, nothing is at stake, and the
+       * account is narrated at them. That is the dullest possible use of the
+       * mode and it was what the sentence asked for.
+       *
+       * The invention is bounded to the MEETING. Everything that actually
+       * happened still has to happen, in order, with the right names and the
+       * right outcome -- the cautions and the account block are unchanged and
+       * still apply. What is licensed is how the character gets there and what
+       * they do while they are, not the history.
+       */
+      premise.push(
+        `${name} meets them and is part of the adventure -- not a visitor ` +
+          "watching it happen. Let it be fun, surprising, even a little silly " +
+          "in how they arrive and how they help.",
+      );
+      premise.push(
+        "The real events still happen exactly as the account gives them, in " +
+          "that order, with those names and that outcome. Invent the meeting " +
+          "and the fun around it; do not invent history, do not let them " +
+          "change what happened, and do not have them rescue anyone from it.",
+      );
+    } else {
+      premise.push(`${name} travels back in time and witnesses this first-hand.`);
+    }
   }
 
   // Scope. Without it, "a story about Corrie ten Boom" gets a life summary --
@@ -493,25 +688,62 @@ export function buildStoryBrief(
   // the companion animal goes because "give it a name and a personality" eight
   // times is a menagerie, not a cast.
   const cast: BriefCharacter[] = [
-    { name, identity, colour },
+    { name, identity, colour, stats: details?.stats, statsEnabled: details?.statsEnabled },
     ...supporting.map((c): BriefCharacter => {
       const who = [c.name];
       if (c.age) who.push(`aged ${c.age}`);
-      if (isSet(c.gender)) who.push(`a ${c.gender}`);
+      // The same widening as the lead, and it has to be here too: a supporting
+      // dragon read through the old line rendered "Ember, aged 300." -- the
+      // hard fact about her silently gone, because `gender` was empty and
+      // nothing else was consulted.
+      const ckind = characterKind(c);
+      if (isSet(ckind)) who.push(`${article(ckind!)} ${ckind}${sexTag(c.sex)}`);
       const trait = isSet(c.personality)
         ? `a ${c.personality} nature`
         : isSet(c.hair)
-          ? `${c.hair} hair`
+          ? `${c.hair} ${coveringNoun(c.category, ckind)}`
           : undefined;
       const likes = isSet(c.hobby) ? `likes ${c.hobby}` : undefined;
       const both = trait && likes ? `${c.name} has ${trait} and ${likes}.` : undefined;
-      const one = trait ? `${c.name} has ${trait}.` : likes ? `${c.name} ${likes}.` : "";
-      return { name: c.name, identity: sentence([who.join(", ")]), colour: both ?? one };
+      // Their note fills the slot only when nothing else would. Notes are the
+      // lead's field by default, but a supporting character with no
+      // personality, hair or hobby renders an empty colour -- the two-fact
+      // ration spends nothing on them AND the one thing their owner actually
+      // wrote gets dropped. Using it here costs the budget nothing it was not
+      // already willing to spend, and it is still capped at one fact.
+      const one = trait
+        ? `${c.name} has ${trait}.`
+        : likes
+          ? `${c.name} ${likes}.`
+          : isSet(c.notes)
+            ? sentence([c.notes])
+            : "";
+      // mustBeTrue rides along even here, where everything else is rationed.
+      //
+      // It was lead-only, so the SAME character moved from first to second in
+      // the cast lost her wheelchair from all four projections -- and silently,
+      // which is the worst way to lose it. The two-fact ration is an argument
+      // about COLOUR: six decorative facts times eight characters is a
+      // character-sheet tour. This is not colour. It is the one field a parent
+      // typed because it must not be got wrong, so it should be the last thing
+      // cut at eight characters rather than the first. It is opt-in and capped
+      // at 200 characters, so a cast without one pays nothing.
+      return {
+        name: c.name,
+        stats: c.stats,
+        statsEnabled: c.statsEnabled,
+        identity: isSet(c.mustBeTrue)
+          ? `${sentence([who.join(", ")])} ${sentence([c.mustBeTrue])}`
+          : sentence([who.join(", ")]),
+        mustHold: isSet(c.mustBeTrue) ? c.mustBeTrue : undefined,
+        colour: both ?? one,
+      };
     }),
   ];
 
   return {
     cast,
+    soloRetelling: anonymous,
     premise,
     craft,
     userInstructions: isSet(request.customPrompt) ? request.customPrompt : undefined,
@@ -540,6 +772,140 @@ export function buildStoryBrief(
  * time as a mandatory constant.
  */
 export type BriefPurpose = "single" | "outline" | "chapter" | "image";
+
+/**
+ * How the stat sheet is written into the prompt.
+ *
+ * "table" gives the model every number, which is the only form that can answer
+ * "who here is strongest" -- eight separate prose clauses cannot. "prose"
+ * mentions only the notable ones and is the fallback if numbers turn out to
+ * leak into stories. "off" removes the block entirely.
+ *
+ * An env var rather than a constant because the answer is empirical and we do
+ * not have it yet: the risk is that a five-number block is the most list-shaped
+ * thing in the brief, and decisions.md §24 measured a model taking up all three
+ * "optional" threads it was handed. Switching this costs a restart rather than
+ * a deploy, which is what makes an A/B on the dev rig cheap.
+ */
+export const ABILITY_STYLE = (process.env.CHARACTER_STATS_STYLE ?? "table") as
+  | "table"
+  | "prose"
+  | "off";
+
+const STAT_LABELS: Record<CharacterStat, string> = {
+  strength: "Str",
+  agility: "Agi",
+  constitution: "Con",
+  wisdom: "Wis",
+  heart: "Hrt",
+};
+
+/** How a single notable stat reads, when written out rather than tabulated. */
+const HIGH_PHRASE: Record<CharacterStat, string> = {
+  strength: "stronger than most",
+  agility: "quick on their feet",
+  constitution: "able to keep going long after others stop",
+  wisdom: "quick to notice and work things out",
+  heart: "steady when things are frightening",
+};
+const LOW_PHRASE: Record<CharacterStat, string> = {
+  strength: "not strong",
+  agility: "slow and easily out-paced",
+  constitution: "tires quickly",
+  wisdom: "slow to notice what is going on",
+  heart: "easily frightened",
+};
+
+/**
+ * WHAT EACH OF THEM CAN DO.
+ *
+ * The fourth force in this brief, after identity (hard), colour (soft) and
+ * threads (explicitly optional). This one is CONSULTED, NOT NARRATED: it exists
+ * to settle moments the story has already created, and the instruction has to
+ * say so, because a model handed a trait writes a scene to display it -- which
+ * is the same failure colour needed its own disclaimer for.
+ *
+ * Two lines are load-bearing and should not be trimmed as padding:
+ *
+ *   "Never write a number, never name a stat" -- forbids the VOCABULARY, not
+ *   just the emphasis. Without it you get "with her great strength, Ember
+ *   lifted the beam", which is a game manual, not a bedtime story.
+ *
+ *   "let it decide AGAINST them" -- without it every stat becomes a triumph,
+ *   weakness never costs anybody anything, and the one who cannot lift the beam
+ *   stops being the reason somebody else has to. That is usually where the
+ *   lesson of the story lives.
+ *
+ * Renders NOTHING when every character is untouched, so a cast that has never
+ * spent a point costs zero tokens and reads exactly as it did before.
+ */
+function renderAbilities(cast: BriefCharacter[]): string {
+  if (ABILITY_STYLE === "off") return "";
+  // EVERYONE is in the table, including characters who have never spent a
+  // point -- they show the baseline. A cast member missing from it is a
+  // character the model cannot place: is Mia stronger than Ember or not? The
+  // whole reason for giving numbers rather than prose is that the comparison
+  // is answerable, and a partial table is not.
+  const sheets = cast
+    .filter((c) => c.statsEnabled !== false)
+    .map((c) => ({ name: c.name, stats: statsOf(c) }));
+  const touched = sheets.filter((c) =>
+    CHARACTER_STATS.some((s) => c.stats[s] !== STAT_BASE),
+  );
+  // Nobody has spent anything, so there is nothing to say and a cast of
+  // untouched characters costs no tokens at all.
+  if (touched.length === 0) return "";
+
+  const guidance =
+    "Reference, not content. Never write a number, never name a stat, and never " +
+    "call anyone strong or weak. Do not build a scene to show any of it off. It " +
+    "is here only for moments the story reaches on its own -- who gets the door " +
+    "open, who spots the crack in the wall, who is still going at the end -- and " +
+    "it should decide those AGAINST them as readily as for them: the one who " +
+    "cannot lift the beam is why somebody else has to.";
+
+  if (ABILITY_STYLE === "prose") {
+    const lines = touched.map((c) => {
+      const high = CHARACTER_STATS.filter((s) => c.stats[s] >= STAT_NOTABLE_HIGH).map((s) => HIGH_PHRASE[s]);
+      const low = CHARACTER_STATS.filter((s) => c.stats[s] <= STAT_NOTABLE_LOW).map((s) => LOW_PHRASE[s]);
+      const both = [...high, ...low];
+      return both.length ? `  ${c.name} is ${both.join(", and ")}.` : "";
+    }).filter(Boolean);
+    if (!lines.length) return "";
+    return ["WHAT EACH OF THEM CAN DO", ...lines, guidance].join("\n    ");
+  }
+
+  // The whole sheet, for everyone, so "who here is strongest" is answerable.
+  // The baseline is stated because a bare 7 means nothing: models compare
+  // reliably and read absolute numbers badly, so anchor the scale and let them
+  // compare.
+  const width = Math.max(...sheets.map((c) => c.name.length));
+  const header = `  ${"".padEnd(width)}  ${CHARACTER_STATS.map((s) => STAT_LABELS[s]).join("  ")}`;
+  const rows = sheets.map(
+    (c) =>
+      `  ${c.name.padEnd(width)}  ` +
+      CHARACTER_STATS.map((s) => String(c.stats[s]).padStart(STAT_LABELS[s].length)).join("  "),
+  );
+  return [
+    "WHAT EACH OF THEM CAN DO",
+    `  Scale 1-10. ${STAT_BASE} is ordinary for their age; ${STAT_NOTABLE_HIGH} is notable; 9 is rare.`,
+    header,
+    ...rows,
+    guidance,
+  ].join("\n    ");
+}
+
+/**
+ * Is this a retelling with nobody invented to walk through it?
+ *
+ * One reader of one recorded fact. Both the full brief and the per-chapter
+ * prompt ask this, and they MUST agree -- they disagreed before, and the
+ * chapter prompt is the one repeated once per chapter, so it is the one the
+ * story followed.
+ */
+function noInventedChild(brief: StoryBrief): boolean {
+  return brief.soloRetelling === true;
+}
 
 export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
   // Index 0 is the protagonist; every projection below leans on that.
@@ -590,7 +956,28 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     const alsoLine = otherNames.length
       ? ` Also in this story: ${otherNames.join(", ")} -- use them only where this chapter's instruction calls for them, and do not add anyone who is not named here.`
       : "";
-    return `The story is about ${lead.identity} Keep this consistent.${alsoLine}${sourceLine}${canonLine}`;
+    // The ONE exception to names-only. Everything else about a supporting
+    // character is decoration that a chapter can do without; a must-be-true is
+    // the opposite -- it is what a parent wrote down precisely so that chapter 5
+    // does not have her climb the stairs. Guarded, so a cast with none of these
+    // renders exactly as it did before.
+    const holds = others.map((c) => c.mustHold).filter(Boolean);
+    const holdLine = holds.length ? ` These must stay true: ${holds.join(" ")}` : "";
+    // THE LINE THIS PROJECTION WAS MISSING.
+    //
+    // The full brief said "There is no invented child in this story"; this one
+    // said "The story is about Esther, aged 8, a girl. Keep this consistent."
+    // A medium story is the multi-chapter path, so both were sent -- and the
+    // chapter prompt is the one repeated for every chapter. The model kept
+    // Esther consistent, as instructed, by putting her in the wilderness of
+    // Paran with Caleb.
+    //
+    // Two prompts in one generation must not contradict each other. They now
+    // read the same predicate.
+    const soloLine = noInventedChild(brief)
+      ? ` ${SOLO_RETELLING_GUARD}`
+      : "";
+    return `The story is about ${lead.identity} Keep this consistent.${soloLine}${alsoLine}${holdLine}${sourceLine}${canonLine}`;
   }
 
   const out: string[] = [];
@@ -607,12 +994,11 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     );
   }
   out.push(lead.identity);
-  if (brief.sourceMaterial && !lead.colour) {
+  if (noInventedChild(brief)) {
     // No invented protagonist was supplied, so say so explicitly. Left silent,
     // a model asked for a children's story reaches for a child to put in it.
     out.push(
-      "There is no invented child in this story. Do not add a modern character, " +
-        "a narrator-child, or a framing device where someone is told the story.",
+      SOLO_RETELLING_GUARD,
     );
   }
   if (lead.colour) out.push(lead.colour);
@@ -631,6 +1017,8 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
         "subject of what happens.",
     );
   }
+  const abilities = renderAbilities(brief.cast);
+  if (abilities) out.push(abilities);
   if (others.length > 0) {
     // The multi-character analogue of the line above, and the failure it names
     // is specific: handed N equal entities a model round-robins them, giving
@@ -647,7 +1035,9 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     );
     out.push(
       "Everyone in this story is named above. Do not rename them, do not merge " +
-        "two of them into one, and do not add extra children of your own.",
+        // "children" for the same reason as above: a cast may be a dragon and
+        // an owl, and "do not add extra children" does not forbid a third owl.
+        "two of them into one, and do not add extra characters of your own.",
     );
     if (n >= 4) {
       out.push(
@@ -908,7 +1298,18 @@ export function deserialiseBrief(raw: string): StoryBrief {
   try {
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") {
-      if (Array.isArray(parsed.cast)) return parsed as StoryBrief;
+      if (Array.isArray(parsed.cast)) {
+        // soloRetelling arrived after some briefs were frozen. For those, fall
+        // back to what the old code did -- an empty lead colour alongside
+        // source material meant the child had been anonymised -- rather than
+        // defaulting to false, which would put the invented-child guard back to
+        // silent for every job already queued when this deployed.
+        if (typeof parsed.soloRetelling !== "boolean") {
+          parsed.soloRetelling =
+            Boolean(parsed.sourceMaterial) && !parsed.cast[0]?.colour;
+        }
+        return parsed as StoryBrief;
+      }
       // A brief frozen before the cast became plural. These are IN FLIGHT
       // ACROSS EVERY DEPLOY -- story_jobs.brief is frozen text written at
       // enqueue and never rewritten -- so a brief written five minutes before
@@ -923,6 +1324,9 @@ export function deserialiseBrief(raw: string): StoryBrief {
         const identity = String(parsed.identity ?? "");
         return {
           ...parsed,
+          soloRetelling:
+            Boolean(parsed.sourceMaterial) &&
+            !(typeof parsed.colour === "string" && parsed.colour),
           cast: [
             {
               // The identity sentence is "Mia, aged 8, a girl." -- the name is
@@ -940,7 +1344,48 @@ export function deserialiseBrief(raw: string): StoryBrief {
   }
   return {
     cast: [{ name: "the main character", identity: "the main character", colour: "" }],
+    // An unparseable brief carries no source material, so there is no retelling
+    // for an invented child to be absent from.
+    soloRetelling: false,
     premise: [raw],
     craft: [],
   };
+}
+
+/**
+ * Did the stat sheet leak into the story?
+ *
+ * The block above tells the model never to write a number, name a stat, or call
+ * anyone strong or weak. Whether it obeys is an empirical question, and the one
+ * thing we know for certain is that obedience differs by model: decisions.md
+ * §24 measured gpt-oss:20b taking up all three "optional" threads it was handed
+ * while gpt-5.6-luna left the loaded one alone.
+ *
+ * So rather than assume, count. This does not fail a story -- a leak is a
+ * quality problem, not a broken one, and failing a finished story over a
+ * stray "strong" would be worse than the leak. It logs, so that "the stat block
+ * is too finicky" becomes a thing we know rather than a thing we suspect, and
+ * CHARACTER_STATS_STYLE can be switched to prose on evidence.
+ *
+ * Deliberately narrow. "strong" appears in ordinary prose all the time, so this
+ * looks for the sheet's OWN vocabulary -- the stat names and the scale -- which
+ * is the shape a leak actually takes.
+ */
+const LEAK_PATTERNS: ReadonlyArray<[string, RegExp]> = [
+  ["stat name", /\b(strength|agility|constitution|wisdom|heart)\s+(?:of\s+)?(?:is\s+)?\d/gi],
+  ["scale", /\b\d\s*(?:\/|out of)\s*10\b/gi],
+  ["sheet word", /\b(stat|stats|statistic|attribute|ability score|character sheet)\b/gi],
+  // No \b before the +: it is not a word character, so \b\+ can only match
+  // after one, and "gained +1" has a space there. The pattern would have been
+  // dead in exactly the case it was written for.
+  ["level talk", /(\blevel \d|\bpoints? in\b|\+\d\b)/gi],
+];
+
+export function statLeakage(story: string): string[] {
+  const found: string[] = [];
+  for (const [label, re] of LEAK_PATTERNS) {
+    const hits = story.match(re);
+    if (hits?.length) found.push(`${label}: ${[...new Set(hits)].slice(0, 5).join(", ")}`);
+  }
+  return found;
 }

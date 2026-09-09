@@ -267,23 +267,20 @@ export class DbStorage implements IStorage {
   }
 
   // Character related methods - implementing temporary JSON storage
-  async getAllCharacters(userId?: number): Promise<Character[]> {
+  async getAllCharacters(userId: number): Promise<Character[]> {
     try {
-      let rows: any[];
-      if (userId) {
-        const result = await pool!.query(
-          `SELECT * FROM user_characters WHERE user_id = $1 ORDER BY created_at DESC`,
-          [userId]
-        );
-        rows = result.rows;
-      } else {
-        // Admin function to get all characters
-        const result = await pool!.query(
-          `SELECT * FROM user_characters ORDER BY created_at DESC`
-        );
-        rows = result.rows;
-      }
-      
+      // One statement, always scoped. There used to be a second branch here
+      // that selected every character in the database when userId was falsy,
+      // described as an admin function and called by nobody. It was reachable
+      // only if a caller passed 0 or undefined -- and 0 IS falsy, so the only
+      // thing standing between it and every user's characters was that
+      // Postgres serial ids happen to start at 1. That is not a guard, it is a
+      // coincidence, and it is the kind that survives review forever.
+      const { rows } = await pool!.query(
+        `SELECT * FROM user_characters WHERE user_id = $1 ORDER BY created_at DESC`,
+        [userId]
+      );
+
       if (!rows.length) return [];
       
       return rows.map(row => {
@@ -296,20 +293,17 @@ export class DbStorage implements IStorage {
           return JSON.parse(row.character_data);
         } catch (parseError) {
           console.error("Error parsing character data:", parseError);
-          // Return a default object to prevent app crashes
+          // A placeholder so one corrupt row does not empty the whole page.
+          //
+          // It asserts NOTHING it does not know. The version before this one
+          // filled in gender "boy", age 0 and six fields from a schema that had
+          // not existed for months (hairColor, outfit, specialAbility,
+          // backstory) -- invented facts about a character whose real data
+          // could not be read. Only the three fields the row itself supplies.
           return {
             id: row.character_id || "unknown",
             name: "Unknown Character",
-            gender: "boy" as "boy" | "girl", // Default to boy to match schema
-            age: 0,
-            hairColor: "",
-            eyeColor: "",
-            outfit: "",
-            favoriteActivity: "",
-            specialAbility: "",
-            personality: "",
-            backstory: "",
-            createdAt: new Date(row.created_at) || new Date()
+            createdAt: new Date(row.created_at ?? Date.now()).toISOString(),
           };
         }
       });
@@ -319,11 +313,15 @@ export class DbStorage implements IStorage {
     }
   }
 
-  async getCharacterById(id: string): Promise<Character | undefined> {
+  async getCharacterById(id: string, userId: number): Promise<Character | undefined> {
     try {
+      // Scoped in the statement, not by the caller. A character that is not
+      // this user's is indistinguishable from one that does not exist, which is
+      // what lets the route answer 404 rather than 403 -- a 403 would confirm
+      // the id is real to anyone guessing.
       const { rows } = await pool!.query(
-        `SELECT * FROM user_characters WHERE character_id = $1`,
-        [id]
+        `SELECT * FROM user_characters WHERE character_id = $1 AND user_id = $2`,
+        [id, userId]
       );
       
       if (!rows.length) return undefined;
@@ -337,22 +335,17 @@ export class DbStorage implements IStorage {
         return JSON.parse(rows[0].character_data);
       } catch (parseError) {
         console.error("Error parsing character data:", parseError);
-        // Return a default object to prevent app crashes.
+        // A placeholder so one corrupt row does not crash the page.
         //
-        // This previously used hairColor/eyeColor/outfit/favoriteActivity/
-        // specialAbility/backstory -- field names from an older schema that no
-        // longer exist on Character. It only runs when stored JSON fails to
-        // parse, so nothing exercised it and the drift went unnoticed.
+        // It asserts NOTHING it does not know. This drifted once already --
+        // it carried hairColor/outfit/specialAbility/backstory from a schema
+        // long gone -- because nothing exercises a branch that only runs on
+        // unparseable JSON. Naming fewer fields is what stops it drifting
+        // again: there is nothing here left to go stale.
         return {
-          id: id,
+          id,
           name: "Unknown Character",
-          gender: "boy" as "boy" | "girl", // Default to boy to match schema
-          age: 8,
-          hair: "brown",
-          eyes: "brown",
-          favoriteColor: "blue",
-          timeTravelExperience: 0,
-          createdAt: (new Date(rows[0].created_at) || new Date()).toISOString()
+          createdAt: new Date(rows[0].created_at ?? Date.now()).toISOString(),
         };
       }
     } catch (error) {
@@ -380,30 +373,40 @@ export class DbStorage implements IStorage {
     return character;
   }
 
-  async updateCharacter(id: string, updates: Partial<Character>): Promise<Character | undefined> {
-    // First get the current character
-    const character = await this.getCharacterById(id);
+  async updateCharacter(
+    id: string,
+    userId: number,
+    updates: Partial<Character>,
+  ): Promise<Character | undefined> {
+    const character = await this.getCharacterById(id, userId);
     if (!character) return undefined;
-    
+
     const updatedCharacter: Character = {
       ...character,
       ...updates
     };
-    
-    await pool!.query(
-      `UPDATE user_characters SET character_data = $1 WHERE character_id = $2`,
-      [JSON.stringify(updatedCharacter), id]
+
+    // user_id repeated on the write even though the read above already checked
+    // it. The read and the write are two statements, and between them the row
+    // can change owner or be deleted; a WHERE that only trusts the earlier
+    // check is trusting a fact that has since expired.
+    const result = await pool!.query(
+      `UPDATE user_characters SET character_data = $1
+        WHERE character_id = $2 AND user_id = $3`,
+      [JSON.stringify(updatedCharacter), id, userId]
     );
-    
+    if (!result.rowCount) return undefined;
+
     return updatedCharacter;
   }
 
-  async deleteCharacter(id: string): Promise<boolean> {
+  async deleteCharacter(id: string, userId: number): Promise<boolean> {
     const result = await pool!.query(
-      `DELETE FROM user_characters WHERE character_id = $1 RETURNING character_id`,
-      [id]
+      `DELETE FROM user_characters
+        WHERE character_id = $1 AND user_id = $2 RETURNING character_id`,
+      [id, userId]
     );
-    
+
     return (result.rowCount || 0) > 0;
   }
 
@@ -1443,6 +1446,79 @@ export class DbStorage implements IStorage {
     }
   }
   
+  async getAvatarCount(userId: number): Promise<number> {
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in getAvatarCount(${userId}). Reporting 0.`);
+      return 0;
+    }
+    try {
+      const { rows } = await pool!.query(
+        `SELECT avatar_count FROM user_usage WHERE user_id = $1`,
+        [userId],
+      );
+      return rows.length ? Number(rows[0].avatar_count) : 0;
+    } catch (error) {
+      console.error(`Error getting avatar count for user ${userId}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Spend one avatar generation if the account has one left.
+   *
+   * ONE statement, deliberately. The obvious shape -- read the count, compare
+   * it to the cap, then increment -- has a window between the read and the
+   * write in which a second request reads the same number, and a cap that can
+   * be exceeded by pressing a button twice is not a cap. The WHERE clause is
+   * the check, so the row is only ever incremented from a value that was still
+   * under the limit when the write happened.
+   *
+   * Returns false rather than throwing: the caller is deciding whether to spend
+   * the owner's money, and "no" is an ordinary answer to that question.
+   *
+   * On a database failure it returns FALSE, not true. Every other read in this
+   * file degrades towards letting the user carry on, because the alternative
+   * was refusing to show them a story they already own. This one degrades the
+   * other way: the failure mode of guessing wrong here is an uncapped bill.
+   */
+  async chargeAvatarGeneration(userId: number, limit: number): Promise<boolean> {
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in chargeAvatarGeneration(${userId}). Refusing.`);
+      return false;
+    }
+    // Infinity has no integer to compare against in SQL; an unlimited user is
+    // still counted, so the number stays true, but never blocked.
+    const capped = Number.isFinite(limit);
+    try {
+      const { rows } = await pool!.query(
+        `INSERT INTO user_usage (user_id, avatar_count) VALUES ($1, 1)
+         ON CONFLICT (user_id) DO UPDATE SET avatar_count = user_usage.avatar_count + 1
+         WHERE $2::boolean IS FALSE OR user_usage.avatar_count < $3::integer
+         RETURNING avatar_count`,
+        [userId, capped, capped ? limit : 0],
+      );
+      return rows.length > 0;
+    } catch (error) {
+      console.error(`Error charging avatar generation for user ${userId}:`, error);
+      return false;
+    }
+  }
+
+  async refundAvatarGeneration(userId: number): Promise<void> {
+    if (!isDatabaseAvailable()) return;
+    try {
+      // GREATEST(...,0) rather than a plain subtraction: a refund that could
+      // drive the count negative would hand out free generations, which is the
+      // exact thing the counter exists to prevent.
+      await pool!.query(
+        `UPDATE user_usage SET avatar_count = GREATEST(avatar_count - 1, 0) WHERE user_id = $1`,
+        [userId],
+      );
+    } catch (error) {
+      console.error(`Error refunding avatar generation for user ${userId}:`, error);
+    }
+  }
+
   async getLastResetDate(userId: number): Promise<Date | null> {
     if (!isDatabaseAvailable()) {
       console.warn(`Database unavailable in getLastResetDate(${userId}). Using current date as fallback.`);

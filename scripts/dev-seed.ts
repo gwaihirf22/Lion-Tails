@@ -20,7 +20,7 @@ const PEOPLE = [
   { name: "Mia",  gender: "girl", age: 8,  hair: "brown", eyes: "blue",  favoriteColor: "purple", favoriteAnimal: "rabbit", hobby: "drawing",           personality: "curious" },
   { name: "Noah", gender: "boy",  age: 6,  hair: "black", eyes: "brown", favoriteColor: "green",                            hobby: "building things",   personality: "patient" },
   { name: "Ruth", gender: "girl", age: 10, hair: "red",   eyes: "green", favoriteColor: "yellow",                           hobby: "climbing trees",    personality: "brave" },
-  { name: "Sam",  gender: "boy",  age: 7,  hair: "blond", eyes: "hazel", favoriteColor: "blue",                             hobby: "collecting rocks",  personality: "thoughtful" },
+  { name: "Sam",  gender: "boy",  age: 7,  hair: "blonde", eyes: "hazel", favoriteColor: "blue",                            hobby: "collecting rocks",  personality: "thoughtful" },
 ];
 
 async function main() {
@@ -54,18 +54,35 @@ async function main() {
   const have = new Set(existing.map((c) => c.name));
 
   let added = 0;
+  const refused: string[] = [];
   for (const p of PEOPLE) {
     if (have.has(p.name)) continue;
     const r = await fetch(`${BASE}/api/characters`, {
       method: "POST",
       headers: { "content-type": "application/json", cookie },
-      body: JSON.stringify({ ...p, timeTravelExperience: 0 }),
+      body: JSON.stringify(p),
     });
-    if (r.ok) added++;
+    if (r.ok) {
+      added++;
+      continue;
+    }
+    // SAY SO. This used to be `if (r.ok) added++;` with no else, so when the
+    // character vocabulary landed and three of the four fixtures stopped
+    // validating, `reset && up` brought the dev box up with one character
+    // instead of four and printed a cheerful count. A seeder that cannot fail
+    // out loud is a seeder that quietly stops seeding.
+    const body = await r.json().catch(() => ({}));
+    refused.push(`${p.name}: ${r.status} ${(body as { message?: string }).message ?? ""}`.trim());
   }
 
   console.log(`dev-seed: ${USER} / ${PASS}`);
   console.log(`dev-seed: ${existing.length + added} characters (${added} added)`);
+  if (refused.length) {
+    console.error(`dev-seed: ${refused.length} REFUSED by the API:`);
+    for (const r of refused) console.error(`  - ${r}`);
+    console.error("dev-seed: the fixtures and shared/characterVocab.ts disagree.");
+    process.exitCode = 1;
+  }
 }
 
 void main();

@@ -136,7 +136,7 @@ See `.env.example`. Summary:
 
 ## Schema and migrations
 
-`shared/schema.ts` is the single source of truth for all thirteen tables, including
+`shared/schema.ts` is the single source of truth for every table, including
 `session` (owned by connect-pg-simple, which is configured with
 `createTableIfMissing: false` so migrations own it instead).
 

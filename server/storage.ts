@@ -47,12 +47,25 @@ export interface IStorage {
   // User stories methods
   getUserStories(userId: number): Promise<SavedStory[]>;
 
-  // Character related methods
-  getAllCharacters(userId?: number): Promise<Character[]>;
-  getCharacterById(id: string): Promise<Character | undefined>;
+  /**
+   * Character methods. EVERY ONE TAKES THE OWNER.
+   *
+   * Not a convenience: an id alone is a uuid a user can hold from a previous
+   * session or read off a URL, and these rows belong to somebody. The three
+   * by-id routes carried a commented-out ownership check for months --
+   * "in the future, we should check ownership" -- because Character has no
+   * userId to compare against, so the check had nothing to say. Making the
+   * owner a required argument means an unscoped read or write cannot be
+   * expressed, rather than being possible and remembered against.
+   *
+   * The scoping is in the SQL, not only in the caller, which also removes the
+   * gap between reading a character to check it and writing it back.
+   */
+  getAllCharacters(userId: number): Promise<Character[]>;
+  getCharacterById(id: string, userId: number): Promise<Character | undefined>;
   createCharacter(character: Omit<Character, "id" | "createdAt">, userId: number): Promise<Character>;
-  updateCharacter(id: string, character: Partial<Character>): Promise<Character | undefined>;
-  deleteCharacter(id: string): Promise<boolean>;
+  updateCharacter(id: string, userId: number, character: Partial<Character>): Promise<Character | undefined>;
+  deleteCharacter(id: string, userId: number): Promise<boolean>;
 
   // Song related methods
   getAllSongs(): Promise<Song[]>;
@@ -114,6 +127,25 @@ export interface IStorage {
   getStoryGenerationCount(userId: number): Promise<number>;
   incrementStoryGenerationCount(userId: number): Promise<number>;
   resetStoryGenerationCount(userId: number): Promise<void>;
+  /** Avatars this account has ever generated. Lifetime; nothing resets it. */
+  getAvatarCount(userId: number): Promise<number>;
+  /**
+   * Spend one avatar generation, but only if there is one left.
+   *
+   * Returns false when the cap is already reached. The check and the charge
+   * are ONE statement on purpose: two requests arriving together would both
+   * pass a separate "are they under the cap" read and both then increment,
+   * which is how a hard cap becomes a soft one. Pass Infinity for a user who
+   * is not capped.
+   */
+  chargeAvatarGeneration(userId: number, limit: number): Promise<boolean>;
+  /**
+   * Give back an avatar generation that was charged and then did not happen.
+   *
+   * Never below zero: a refund for something that was not charged would mint
+   * an allowance out of nothing.
+   */
+  refundAvatarGeneration(userId: number): Promise<void>;
   getLastResetDate(userId: number): Promise<Date | null>;
   setLastResetDate(userId: number, date: Date): Promise<void>;
 
@@ -143,6 +175,8 @@ export class MemStorage implements IStorage {
   private heroStories: Map<string, HeroStory>;
   private verificationTokens: Map<string, {userId: number, type: string, expiresAt: Date}>;
   private userStoryGenerationCounts: Map<number, number>;
+  /** Lifetime, unlike the story counter above: resetStoryGenerationCount does not touch it. */
+  private userAvatarCounts: Map<number, number> = new Map();
   private userLastResetDates: Map<number, Date>;
   private userOpenAIKeys: Map<number, string>;
   private userOpenAIModels: Map<number, string>;
@@ -329,7 +363,8 @@ export class MemStorage implements IStorage {
     }
   }
 
-  async getCharacterById(id: string): Promise<Character | undefined> {
+  async getCharacterById(id: string, userId: number): Promise<Character | undefined> {
+    if (!this.userCharacters.get(userId)?.has(id)) return undefined;
     return this.characters.get(id);
   }
 
@@ -353,7 +388,12 @@ export class MemStorage implements IStorage {
     return character;
   }
 
-  async updateCharacter(id: string, updates: Partial<Character>): Promise<Character | undefined> {
+  async updateCharacter(
+    id: string,
+    userId: number,
+    updates: Partial<Character>,
+  ): Promise<Character | undefined> {
+    if (!this.userCharacters.get(userId)?.has(id)) return undefined;
     const character = this.characters.get(id);
     if (!character) return undefined;
 
@@ -366,19 +406,12 @@ export class MemStorage implements IStorage {
     return updatedCharacter;
   }
 
-  async deleteCharacter(id: string): Promise<boolean> {
-    const deleted = this.characters.delete(id);
+  async deleteCharacter(id: string, userId: number): Promise<boolean> {
+    const owned = this.userCharacters.get(userId);
+    if (!owned?.has(id)) return false;
 
-    // Remove from all user's character collections
-    for (const userCharMap of this.userCharacters) {
-      const userId = userCharMap[0];
-      const characters = userCharMap[1];
-      if (characters.has(id)) {
-        characters.delete(id);
-      }
-    }
-
-    return deleted;
+    owned.delete(id);
+    return this.characters.delete(id);
   }
 
   // Song methods
@@ -845,6 +878,22 @@ export class MemStorage implements IStorage {
   async resetStoryGenerationCount(userId: number): Promise<void> {
     this.userStoryGenerationCounts.set(userId, 0);
     this.userLastResetDates.set(userId, new Date());
+  }
+
+  async getAvatarCount(userId: number): Promise<number> {
+    return this.userAvatarCounts.get(userId) || 0;
+  }
+
+  async chargeAvatarGeneration(userId: number, limit: number): Promise<boolean> {
+    const used = this.userAvatarCounts.get(userId) || 0;
+    if (used >= limit) return false;
+    this.userAvatarCounts.set(userId, used + 1);
+    return true;
+  }
+
+  async refundAvatarGeneration(userId: number): Promise<void> {
+    const used = this.userAvatarCounts.get(userId) || 0;
+    this.userAvatarCounts.set(userId, Math.max(0, used - 1));
   }
 
   async getLastResetDate(userId: number): Promise<Date | null> {

@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, getQueryFn } from "@/lib/queryClient";
 import { type Character } from "@shared/schema";
-import CharacterForm from "@/components/CharacterForm";
+import CharacterForm, { type CharacterFormValues } from "@/components/CharacterForm";
+import { saveCharacter } from "@/lib/saveCharacter";
 import CharacterCard from "@/components/CharacterCard";
 import { Button } from "@/components/ui/button";
 import { PlusIcon } from "lucide-react";
@@ -48,9 +49,8 @@ export default function Characters() {
 
   // Create a new character
   const createMutation = useMutation({
-    mutationFn: (character: Omit<Character, "id" | "createdAt">) =>
-      apiRequest("POST", '/api/characters', character)
-        .then(res => res.json()),
+    mutationFn: ({ values, custom }: { values: CharacterFormValues; custom: boolean }) =>
+      saveCharacter(values, custom),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/characters'] });
       setIsCreating(false);
@@ -70,9 +70,8 @@ export default function Characters() {
 
   // Update a character
   const updateMutation = useMutation({
-    mutationFn: ({id, character}: {id: string, character: Partial<Character>}) =>
-      apiRequest("PUT", `/api/characters/${id}`, character)
-        .then(res => res.json()),
+    mutationFn: ({ id, values, custom }: { id: string; values: CharacterFormValues; custom: boolean }) =>
+      saveCharacter(values, custom, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/characters'] });
       setIsEditing(false);
@@ -114,8 +113,8 @@ export default function Characters() {
     },
   });
 
-  const handleCreateCharacter = (data: Omit<Character, "id" | "createdAt">) => {
-    createMutation.mutate(data);
+  const handleCreateCharacter = (values: CharacterFormValues, custom: boolean) => {
+    createMutation.mutate({ values, custom });
   };
 
   const handleEditCharacter = (character: Character) => {
@@ -123,12 +122,9 @@ export default function Characters() {
     setIsEditing(true);
   };
 
-  const handleUpdateCharacter = (data: Omit<Character, "id" | "createdAt">) => {
+  const handleUpdateCharacter = (values: CharacterFormValues, custom: boolean) => {
     if (editingCharacter) {
-      updateMutation.mutate({
-        id: editingCharacter.id,
-        character: data,
-      });
+      updateMutation.mutate({ id: editingCharacter.id, values, custom });
     }
   };
 
@@ -227,6 +223,7 @@ export default function Characters() {
               onSubmit={handleUpdateCharacter}
               loading={updateMutation.isPending}
               initialCharacter={editingCharacter}
+              saved={editingCharacter}
             />
           )}
         </DialogContent>

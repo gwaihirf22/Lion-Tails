@@ -7,14 +7,20 @@ import {
   deserialiseBrief,
   renderBrief,
   resolveStoryFocus,
+  statLeakage,
+  SOLO_RETELLING_GUARD,
   type BriefPurpose,
 } from "../server/lib/storyBrief";
 import {
   characterIdsOf,
+  characterRoleOf,
+  baseStats,
   MAX_STORY_CHARACTERS,
   storyRequestSchema,
   type StoryRequest,
   type Character,
+  type HeroOfFaith,
+  type CharacterStats,
 } from "../shared/schema";
 
 /**
@@ -38,7 +44,20 @@ const golden: Record<string, Record<string, string>> = JSON.parse(
 const mia: Character = {
   id: "c1", name: "Mia", gender: "girl", age: 8, hair: "brown", eyes: "blue",
   favoriteColor: "purple", favoriteAnimal: "rabbit", hobby: "drawing",
-  timeTravelExperience: 0, personality: "curious", createdAt: "2026-01-01",
+  personality: "curious", createdAt: "2026-01-01",
+};
+
+/** A character who is not a person, and not a "boy" or a "girl". */
+const ember: Character = {
+  id: "c2", name: "Ember", kind: "dragon", category: "mythical", sex: "female",
+  age: 300, hair: "emerald", eyes: "gold", personality: "patient",
+  createdAt: "2026-01-01",
+};
+
+/** A made thing: the only sort of character that may be an "it". */
+const bolt: Character = {
+  id: "c3", name: "Bolt", kind: "robot", category: "machine", sex: "it",
+  hair: "copper", hobby: "inventing", createdAt: "2026-01-01",
 };
 
 const base = {
@@ -60,6 +79,39 @@ const cases: Record<string, () => ReturnType<typeof buildStoryBrief>> = {
       { canon: ["The lantern is empty."], summary: "Mia found a lantern." }),
   "time travel": () =>
     buildStoryBrief({ ...base, useTimeTravel: true, characterId: "c1" } as StoryRequest, [mia]),
+
+  // Added when a character stopped having to be a child. Everything above this
+  // line predates it and MUST NOT MOVE -- those six are the compatibility
+  // assertion, and these four are what the widening is supposed to produce.
+  "non-human lead": () =>
+    buildStoryBrief({ ...base, characterIds: ["c2"] } as StoryRequest, [ember]),
+  "mixed cast": () =>
+    buildStoryBrief({ ...base, characterIds: ["c1", "c2", "c3"] } as StoryRequest, [mia, ember, bolt]),
+  "lead with notes": () =>
+    buildStoryBrief({ ...base, characterIds: ["c1"] } as StoryRequest,
+      [{ ...mia, notes: "She keeps a pebble from the riverbank in her pocket." }]),
+  "lead with parent notes": () =>
+    buildStoryBrief({ ...base, characterIds: ["c1"] } as StoryRequest,
+      [{ ...mia, mustBeTrue: "Mia uses a wheelchair." }]),
+
+  /**
+   * What StoryForm actually sends, rather than a tidy subset of it.
+   *
+   * `base` omits characterDetails, so for as long as this fixture has existed
+   * it asserted a prompt the form never sent: the form defaulted
+   * characterDetails to {age: 8}, no field rendered it, nothing stripped it, and
+   * buildStoryBrief read the age out of it whenever no saved character was
+   * chosen. The captured string said "Sam, a boy." while production said
+   * "Sam, aged 8, a boy." -- a golden test cannot catch what its inputs do not
+   * contain.
+   */
+  "form defaults, no character": () =>
+    buildStoryBrief({
+      childName: "Sam", gender: "boy", animal: "", useAnimal: true, theme: "kindness",
+      storyType: "regular", storyLength: "medium", readingLevel: "early-elementary",
+      useCharacter: false, characterIds: [], customPrompt: "", biblePassage: "",
+      learningFocus: "", heroOfFaith: "", biblicalEvent: "", useTimeTravel: false,
+    } as unknown as StoryRequest, []),
 };
 
 describe("a brief with no cast renders exactly as it always has", () => {
@@ -194,8 +246,8 @@ describe("a cast is weighted, not enumerated", () => {
     expect(text).toContain("may say nothing at all");
   });
 
-  it("forbids inventing a ninth child", () => {
-    expect(renderBrief(make(3), "single")).toContain("do not add extra children of your own");
+  it("forbids inventing a ninth character", () => {
+    expect(renderBrief(make(3), "single")).toContain("do not add extra characters of your own");
   });
 
   it("caps a scene at three of them once the cast is large", () => {
@@ -512,14 +564,14 @@ describe("a retelling needs no protagonist", () => {
     expect(parse({ biblicalEvent: "", heroOfFaith: "  " }).success).toBe(false);
   });
 
-  it("still renders the retelling as having no invented child", () => {
+  it("still renders the retelling as having nobody invented", () => {
     // With no name supplied, buildStoryBrief falls back to "A child", which is
     // in PLACEHOLDER_NAMES -- so the anonymous branch still fires and the
     // account keeps its own cast.
     const brief = buildStoryBrief(
       { ...base, biblicalEvent: "noah", childName: "" } as StoryRequest, []);
     const text = renderBrief(brief, "single");
-    expect(text).toContain("There is no invented child in this story");
+    expect(text).toContain("Nobody has been invented to walk through this account");
     expect(brief.cast[0].colour).toBe("");
   });
 });
@@ -624,5 +676,373 @@ describe("the three continuity tiers carry different force", () => {
 
   it("adds nothing when there is no world at all", () => {
     expect(render(undefined)).not.toContain("ALREADY TRUE IN THIS WORLD");
+  });
+});
+
+/**
+ * A character can now be a dragon, and can carry text somebody typed.
+ *
+ * The rules being asserted are about FORCE, not wording. Three fields reach the
+ * prompt with three different weights, and the whole design of the brief is
+ * that those weights stay different:
+ *
+ *   kind / mustBeTrue  identity -- reprinted every chapter, "keep consistent"
+ *   notes              colour   -- "only where a scene naturally calls for it"
+ *   canonicalLook      nowhere  -- it is for pictures, in a later slice
+ */
+describe("a character who is not a child", () => {
+  const of = (c: Partial<Character>, p: BriefPurpose = "single") =>
+    renderBrief(
+      buildStoryBrief({ ...base, characterIds: ["c9"] } as StoryRequest, [
+        { id: "c9", name: "Ember", createdAt: "2026-01-01", ...c } as Character,
+      ]),
+      p,
+    );
+
+  it("says what they are, in the slot a gender used to fill", () => {
+    expect(of({ kind: "dragon" })).toContain("Ember, a dragon.");
+  });
+
+  it("keeps that in every chapter, because it is not decoration", () => {
+    // A supporting dragon whose species is dropped becomes a person with a
+    // strange name. This is identity, so it survives the tightest projection.
+    expect(of({ kind: "dragon" }, "chapter")).toContain("a dragon");
+  });
+
+  it("names the covering after what they are", () => {
+    expect(of({ kind: "dragon", category: "mythical", hair: "emerald" })).toContain("emerald scales");
+    expect(of({ kind: "owl", category: "bird", hair: "brown" })).toContain("brown feathers");
+    expect(of({ kind: "robot", category: "machine", hair: "copper" })).toContain("copper plating");
+  });
+
+  it("still calls it hair when the character predates categories", () => {
+    // The compatibility path: every character saved before this has no
+    // category, and "Mia has brown hair" is asserted byte-for-byte above.
+    expect(of({ gender: "girl", hair: "brown" })).toContain("brown hair");
+  });
+
+  it("refers to a machine as an it, and a creature as a he or a she", () => {
+    expect(of({ kind: "robot", sex: "it" })).toContain("a robot (it)");
+    expect(of({ kind: "dragon", sex: "female" })).toContain("a dragon (she)");
+  });
+
+  it("says a, or an, for whatever noun it was given", () => {
+    // The companion-animal line already paid for this once: ungrammatical input
+    // made a model stop naming the animal and repeat the bare noun instead.
+    expect(of({ kind: "owl" })).toContain("Ember, an owl.");
+    expect(of({ kind: "elephant" })).toContain("an elephant");
+  });
+});
+
+describe("text somebody typed", () => {
+  const brief = (c: Partial<Character>) =>
+    buildStoryBrief({ ...base, characterIds: ["c9"] } as StoryRequest, [
+      { id: "c9", name: "Ember", createdAt: "2026-01-01", kind: "dragon", ...c } as Character,
+    ]);
+
+  it("carries a parent's must-be-true into every chapter", () => {
+    const t = renderBrief(brief({ mustBeTrue: "Ember cannot fly." }), "chapter");
+    expect(t).toContain("Ember cannot fly.");
+  });
+
+  it("punctuates it as its own sentence", () => {
+    // "a dragon Ember cannot fly." is the failure this guards.
+    expect(renderBrief(brief({ mustBeTrue: "Ember cannot fly." }), "chapter"))
+      .toContain("a dragon. Ember cannot fly.");
+  });
+
+  it("keeps the open notes box out of the chapter prompt", () => {
+    // notes is the one field a child types freely, so it is colour: usable,
+    // never required, and never repeated as a per-chapter constant.
+    const b = brief({ notes: "She hums when she is thinking." });
+    expect(renderBrief(b, "single")).toContain("She hums when she is thinking.");
+    expect(renderBrief(b, "chapter")).not.toContain("hums");
+  });
+
+  it("never puts canonicalLook into any prompt", () => {
+    // Stored for the avatar slice, which will use it for image prompts only.
+    // Keeping appearance out of the story prompt is what lets it be as long as
+    // anyone likes without competing for the cast's few facts.
+    const b = brief({ canonicalLook: "Copper scales with a torn left wing." });
+    for (const p of ["single", "outline", "chapter", "image"] as BriefPurpose[]) {
+      expect(renderBrief(b, p), p).not.toContain("torn left wing");
+    }
+  });
+});
+
+describe("a must-be-true belongs to whoever has one, not to whoever is first", () => {
+  const mia = { id: "c1", name: "Mia", gender: "girl", age: 8, createdAt: "x" } as Character;
+  const ella = {
+    id: "c2", name: "Ella", kind: "space whale", category: "creature", sex: "female",
+    mustBeTrue: "Ella uses a wheelchair and cannot climb stairs.", createdAt: "x",
+  } as Character;
+  const req = (ids: string[]) =>
+    ({ ...base, characterIds: ids }) as unknown as StoryRequest;
+
+  it("survives being moved out of the lead position", () => {
+    // The bug this replaces: the SAME character, second in the cast rather than
+    // first, lost her wheelchair from all four projections -- silently, which
+    // is the worst way to lose it.
+    const supporting = buildStoryBrief(req(["c1", "c2"]), [mia, ella]);
+    expect(supporting.cast[1].identity).toContain("wheelchair");
+  });
+
+  it("reaches every chapter, where nothing else about a supporting character does", () => {
+    // The two-fact ration is an argument about colour. This is not colour: it
+    // is what a parent wrote down so that chapter 5 does not have her climb the
+    // stairs, so it is the last thing cut at eight characters, not the first.
+    const t = renderBrief(buildStoryBrief(req(["c1", "c2"]), [mia, ella]), "chapter");
+    expect(t).toContain("These must stay true:");
+    expect(t).toContain("cannot climb stairs");
+  });
+
+  it("costs a cast without one exactly nothing", () => {
+    const plain = renderBrief(
+      buildStoryBrief(req(["c1", "c2"]), [mia, { ...ella, mustBeTrue: undefined }]),
+      "chapter",
+    );
+    expect(plain).not.toContain("These must stay true");
+    expect(plain).toContain("Also in this story: Ella");
+  });
+
+  it("carries one for every character who has one", () => {
+    const bolt = { id: "c3", name: "Bolt", kind: "robot", mustBeTrue: "Bolt cannot speak.", createdAt: "x" } as Character;
+    const t = renderBrief(buildStoryBrief(req(["c1", "c2", "c3"]), [mia, ella, bolt]), "chapter");
+    expect(t).toContain("cannot climb stairs");
+    expect(t).toContain("Bolt cannot speak.");
+  });
+});
+
+/**
+ * The stat sheet, and whether the model was told about it correctly.
+ *
+ * The design question this encodes: five numbers per character is the most
+ * list-shaped thing in the brief, and decisions.md §24 measured a model using
+ * every item of a list it was told was optional. So the block is guarded on
+ * somebody having actually spent a point, it names every cast member so the
+ * comparison it exists to enable is answerable, and it never reaches the
+ * chapter prompt, which runs seven times.
+ */
+describe("what each of them can do", () => {
+  const withStats = (name: string, stats: Partial<CharacterStats>, id = "c1") =>
+    ({ id, name, kind: "girl", createdAt: "x", stats: { ...baseStats(), ...stats } }) as Character;
+  const plain = (name: string, id: string) =>
+    ({ id, name, kind: "girl", createdAt: "x" }) as Character;
+  const render = (cs: Character[], p: BriefPurpose = "single") =>
+    renderBrief(
+      buildStoryBrief({ ...base, characterIds: cs.map((c) => c.id) } as StoryRequest, cs),
+      p,
+    );
+
+  it("says nothing at all when nobody has spent a point", () => {
+    // Every character starts at the baseline, so this is the common case for a
+    // long time. It must cost nothing.
+    expect(render([plain("Mia", "c1"), plain("Sam", "c2")])).not.toContain("WHAT EACH OF THEM CAN DO");
+  });
+
+  it("names every character once anyone has spent one", () => {
+    // A cast member missing from the table is one the model cannot place. The
+    // entire reason for numbers over prose is that "who is strongest" has an
+    // answer, and a partial table does not give it one.
+    const t = render([withStats("Ember", { strength: 7 }), plain("Mia", "c2")]);
+    expect(t).toContain("WHAT EACH OF THEM CAN DO");
+    expect(t).toMatch(/Ember\s+7/);
+    expect(t).toMatch(/Mia\s+3/);
+  });
+
+  it("anchors the scale, because a bare 7 means nothing", () => {
+    expect(render([withStats("Ember", { strength: 7 })])).toContain("3 is ordinary");
+  });
+
+  it("forbids the vocabulary, not just the emphasis", () => {
+    // "Do not focus on this" still permits "with her great strength, Ember
+    // lifted the beam". Forbidding the words is what stops a bedtime story
+    // reading like a game manual.
+    const t = render([withStats("Ember", { strength: 7 })]);
+    expect(t).toContain("Never write a number");
+    expect(t).toContain("never name a stat");
+  });
+
+  it("lets a weakness cost them something", () => {
+    // Without this line every stat becomes a triumph and the one who cannot
+    // lift the beam stops being the reason somebody else has to -- which is
+    // usually where the lesson is.
+    expect(render([withStats("Ember", { agility: 1 })])).toContain("AGAINST them");
+  });
+
+  it("stays out of the chapter prompt", () => {
+    // Seven chapters times a five-column table is the character-sheet tour at
+    // scale. The outline has already decided who does what.
+    expect(render([withStats("Ember", { strength: 7 })], "chapter")).not.toContain("Str");
+  });
+});
+
+describe("statLeakage", () => {
+  it("catches the sheet's own vocabulary", () => {
+    expect(statLeakage("With her Strength 7, Ember lifted the beam.")).toHaveLength(1);
+    expect(statLeakage("Ember was a 7 out of 10 in strength.")).toHaveLength(1);
+    expect(statLeakage("Her stats made her the obvious choice.")).toHaveLength(1);
+    expect(statLeakage("Ember gained +1 courage.")).toHaveLength(1);
+  });
+
+  it("leaves ordinary prose alone", () => {
+    // "strong" is a normal English word and a story about a strong character is
+    // the point. A check that fires on it would be useless.
+    expect(statLeakage("Ember was strong enough, and the strong wind did not stop her.")).toEqual([]);
+    expect(statLeakage("She heaved at the beam until it shifted.")).toEqual([]);
+  });
+});
+
+describe("stats can be switched off for a character", () => {
+  const on = { id: "c1", name: "Ember", kind: "dragon", createdAt: "x",
+    stats: { ...baseStats(), strength: 7 } } as Character;
+  const off = { id: "c2", name: "Quiet", kind: "dog", createdAt: "x", statsEnabled: false,
+    stats: { strength: 9, agility: 9, constitution: 9, wisdom: 9, heart: 9 } } as Character;
+  const render = (cs: Character[]) =>
+    renderBrief(buildStoryBrief({ ...base, characterIds: cs.map((c) => c.id) } as StoryRequest, cs), "single");
+
+  it("leaves a disabled character out of the table entirely", () => {
+    // Not a gap: "we do not describe Quiet this way" and "Quiet is
+    // unremarkable" are the same instruction, and the baseline already says
+    // the second. Their stored nines must not reach the model.
+    const t = render([on, off]);
+    expect(t).toContain("Ember");
+    expect(t).not.toMatch(/Quiet\s+9/);
+    expect(t).not.toContain("9  9  9");
+  });
+
+  it("says nothing at all when every character has it off", () => {
+    expect(render([off])).not.toContain("WHAT EACH OF THEM CAN DO");
+  });
+
+  it("treats a character saved before the checkbox existed as enabled", () => {
+    // statsEnabled is absent on every existing row; only an explicit false
+    // turns it off.
+    expect(render([on])).toContain("WHAT EACH OF THEM CAN DO");
+  });
+});
+
+/**
+ * A real child's name, a biblical retelling, and no time travel.
+ *
+ * THE BUG THESE EXIST FOR. A story was requested with hero "Caleb" for a child
+ * called Esther, time travel off. The account was accurate throughout -- Numbers
+ * 13-14, the twelve spies, the Anakim, Hebron, 14:24 quoted correctly. What went
+ * wrong is that Esther was put INSIDE it: three paragraphs opened by addressing
+ * her, and the illustration prompt had her standing beside Caleb in biblical
+ * dress. Because her name is itself a major figure in Scripture, that read as
+ * the app confusing two Bible characters. It was not.
+ *
+ * Two prompts in one generation contradicted each other. The full brief said
+ * nobody had been invented; the chapter prompt said "The story is about Esther,
+ * aged 8, a girl. Keep this consistent." A medium story is the multi-chapter
+ * path, so both were sent -- and the chapter prompt is the one repeated for
+ * every chapter, so it is the one the model followed.
+ *
+ * It survived because the app's own hero stories pass the literal string
+ * "Character" as the name, which took a different branch and looked right.
+ * Nobody had run it with a real name.
+ */
+describe("a retelling requested with a real character's name", () => {
+  const hero = {
+    id: "bible-caleb", name: "Caleb", timePeriod: "Numbers and Joshua",
+    description: "One of two spies who said the land could be taken.",
+    keyEvents: [{ description: "Quiets the people", reference: "Numbers 13:30" }],
+  } as unknown as HeroOfFaith;
+
+  const brief = (o: Record<string, unknown> = {}) =>
+    buildStoryBrief(
+      { childName: "Esther", gender: "girl", storyType: "regular",
+        storyLength: "medium", theme: "courage", heroOfFaith: hero.id,
+        useTimeTravel: false, ...o } as unknown as StoryRequest,
+      [], undefined, hero,
+    );
+
+  it("does not make the story about her", () => {
+    // This is the whole bug: a real name took a different path from the
+    // placeholder the app itself sends.
+    expect(renderBrief(brief(), "chapter")).not.toContain("about Esther");
+    expect(renderBrief(brief(), "single")).not.toContain("Esther");
+  });
+
+  it("tells EVERY chapter that nobody was invented, not just the full brief", () => {
+    // The projection that was missing it is the one that gets repeated.
+    for (const purpose of ["single", "outline", "chapter"] as const) {
+      expect(renderBrief(brief(), purpose)).toContain(SOLO_RETELLING_GUARD);
+    }
+  });
+
+  it("puts her in when time travel is on, and then does NOT deny she exists", () => {
+    // The opposite failure, and just as bad: a chapter prompt that says the
+    // story is about Esther and that nobody was invented is incoherent, and a
+    // first attempt at this fix produced exactly that.
+    const t = brief({ characterRole: "meets" });
+    expect(renderBrief(t, "single")).toContain("meets them and is part of the adventure");
+    expect(renderBrief(t, "chapter")).toContain("Esther");
+    expect(renderBrief(t, "chapter")).not.toContain(SOLO_RETELLING_GUARD);
+  });
+
+  it("keeps the placeholder name out of the scene however the flag is set", () => {
+    // "Character travels back in time and witnesses this first-hand" is not a
+    // sentence anyone meant, and the form sends that literal string.
+    const t = brief({ childName: "Character", characterRole: "meets" });
+    expect(renderBrief(t, "single")).not.toContain("part of the adventure");
+    expect(renderBrief(t, "chapter")).toContain(SOLO_RETELLING_GUARD);
+  });
+
+  it("emits the scripture reference and never the word undefined", () => {
+    // Biblical heroes deliberately carry no year -- types.ts says so -- and
+    // `${e.year}: ${e.description}` put a literal "undefined:" in front of all
+    // six of Caleb's events, inside the ACCOUNT the model is told to follow,
+    // while throwing the chapter-and-verse away.
+    const t = renderBrief(brief(), "single");
+    expect(t).toContain("Numbers 13:30: Quiets the people");
+    expect(t).not.toContain("undefined");
+  });
+
+  it("does not run the events list into the quote", () => {
+    const withQuote = buildStoryBrief(
+      { childName: "Character", storyType: "regular", storyLength: "medium",
+        theme: "courage", heroOfFaith: hero.id } as unknown as StoryRequest,
+      [], undefined, { ...hero, famousQuote: "Give me this hill country." } as HeroOfFaith,
+    );
+    const t = renderBrief(withQuote, "single");
+    expect(t).not.toContain("Quiets the people In their own words");
+    expect(t).toContain("Numbers 13:30: Quiets the people. In their own words:");
+  });
+});
+
+/**
+ * The explicit choice, and the one reader that knows the old flag.
+ *
+ * The two used to be able to contradict each other with nothing making the
+ * user decide, which is how a character ended up in Numbers 13 with the flag
+ * turned off. characterRoleOf is the characterIdsOf/characterKind precedent:
+ * one function, so a request frozen before the field existed still answers.
+ */
+describe("how a character appears in a retelling", () => {
+  it("defaults to absent, which is the safe way to be wrong", () => {
+    expect(characterRoleOf({})).toBe("absent");
+    expect(characterRoleOf(null)).toBe("absent");
+    expect(characterRoleOf(undefined)).toBe("absent");
+  });
+
+  it("reads the legacy flag for requests frozen before the field existed", () => {
+    // story_jobs.request is written at enqueue and never rewritten, so these
+    // are in flight across the deploy that adds characterRole.
+    expect(characterRoleOf({ useTimeTravel: true })).toBe("meets");
+    expect(characterRoleOf({ useTimeTravel: false })).toBe("absent");
+  });
+
+  it("lets the explicit choice win over the legacy flag", () => {
+    // The historical tab force-sets useTimeTravel to false, so without this
+    // precedence the new control could not turn the mode on at all.
+    expect(characterRoleOf({ characterRole: "meets", useTimeTravel: false })).toBe("meets");
+    expect(characterRoleOf({ characterRole: "absent", useTimeTravel: true })).toBe("absent");
+  });
+
+  it("ignores a value that is not one of the two", () => {
+    expect(characterRoleOf({ characterRole: "sidekick", useTimeTravel: true })).toBe("meets");
+    expect(characterRoleOf({ characterRole: "", useTimeTravel: false })).toBe("absent");
   });
 });

@@ -110,7 +110,7 @@ server/        Express API + SPA serving
   data/biblicalEvents.ts  scripture anchors for story generation (NOT the same
                job as data/heroes/bible.ts — one anchors a retelling, the other
                describes a person; overlapping figures are deliberate)
-shared/schema.ts  single source of truth for all 13 tables + Zod schemas
+shared/schema.ts  single source of truth for every table + Zod schemas
 migrations/    generated SQL, applied at container start
 tests/         vitest — pure functions only, no network, no database
 scripts/verify-heroes.ts  hero facts vs Wikipedia/Wikidata/bible-api (network)
@@ -135,7 +135,7 @@ when a configured database is unreachable or its schema has drifted.
 
 ## Database
 
-`shared/schema.ts` is the single source of truth for all ten tables, including
+`shared/schema.ts` is the single source of truth for every table, including
 `session` (owned by connect-pg-simple, which runs with
 `createTableIfMissing: false`).
 
@@ -232,11 +232,107 @@ concurrency limit: background work must not refuse the story they are writing.
 asserts the legacy name appears nowhere else in `server/`, `client/src` or
 `shared/`.
 
+A character may be a person, an animal, a dragon or a robot. **`kind` is the
+noun the story uses, and `gender` is LEGACY** — read them only through
+`characterKind()`, which is `characterIdsOf()`'s counterpart and the one place
+that knows they are the same fact. `category` never reaches a prompt: it chooses
+the form's vocabulary and the covering noun (`coveringNoun()` → hair, fur,
+feathers, scales, plating), so the story sees only `kind` and a girl renders "a
+girl" rather than "a human". A row saved before any of this has no category and
+falls through to "hair", which is what keeps the golden briefs identical.
+
+**Nothing on a character is defaulted.** Every field is optional, and the form
+starts empty except the name. Six defaults — brown hair, brown eyes, blue,
+reading, kind, age 8 — used to reach every story.
+
+Three fields carry text, with three different forces: `mustBeTrue` (Parent Mode
+only) is identity, reprinted every chapter under "keep this consistent";
+`notes` (anyone) is colour, "only where a scene naturally calls for it", and
+must never reach `userInstructions`, which is a directive channel; and
+`canonicalLook` renders **nowhere** — it is stored for the avatar work.
+
+**Children select, parents type.** `shared/characterVocab.ts` is one list serving
+both the form's options and the server's validation. `POST/PUT /api/characters`
+refuse anything off-catalogue; `POST /api/characters/custom` and
+`PUT /api/characters/:id/custom` carry `requireParentMode` and accept anything.
+The strict path validates **the patch, not the merged character**, or a parent's
+custom value would block a child's unrelated edit.
+
 Before changing `storyBrief.ts`, know that `tests/fixtures/brief-golden.json`
-holds 25 captured strings asserting a 0/1-character brief renders
-BYTE-IDENTICALLY to before multi-character shipped. If a change is deliberate,
-read the diff before regenerating — that diff is the prompt every existing story
-would now be written from.
+holds 44 captured strings (11 cases × 4 projections) asserting the rendered
+brief. The first six are the compatibility set and **must not move**: they are
+what a 0/1-character request rendered before any of this. If a change is
+deliberate, read the diff before regenerating — that diff is the prompt every
+existing story would now be written from. There is no regeneration script, which
+makes it easy to regenerate first and "verify" against your own output.
+
+## A character in a real account
+
+Attaching a character to a hero or a biblical event is an explicit choice, not
+an inference. `characterRole` is the field; `useTimeTravel` is LEGACY and both
+are read only through `characterRoleOf()` — the `characterIdsOf()` precedent.
+
+- `"absent"` — a straight retelling. Nobody is written into the account. The
+  default, because being wrong this way gives a plainer story, and being wrong
+  the other way puts a child into Scripture.
+- `"meets"` — they meet the figure and join in. Fun and a little silly in how
+  they arrive and help; the real events still happen in order, with the right
+  names and outcome. The story gets a short appended note saying the meeting
+  was invented.
+
+**The note is appended by the server, never asked of the model** — a disclaimer
+the model writes is one it can forget, soften, or bury mid-story, and this one
+has to be exactly right and always present.
+
+This exists because the two used to contradict each other with nothing making
+anyone choose. The historical tab force-sets `useTimeTravel: false`, and the
+brief then wrote the character into the account regardless: a story about Caleb
+came back with a child called Esther in the wilderness of Paran, and because her
+name is itself a figure in Scripture it read as the app confusing two people. It
+was not — the account was accurate throughout. `soloRetelling` is carried on the
+brief as a fact rather than inferred, because the full brief and the per-chapter
+prompt must agree and once did not.
+
+## Avatars
+
+`POST /api/characters/:id/avatar` generates a portrait with `gpt-image-2` and
+stores two things on the character: `avatarUrl` and **`avatarPrompt`, the exact
+string it was generated from**. Both are server-owned — omitted from all four
+character write schemas, Parent Mode included, because the field ends up in
+`<img src>` and a request-supplied URL is a tracking pixel on a child's page.
+
+The stored prompt is the consistency mechanism. Image models do not reproduce a
+character from scratch: describe the same girl twice and you get two girls. So
+an illustration that has to show a character again is built on that literal
+string, never on a fresh or "tidied" description — a different prompt is a
+different child. `buildAvatarPrompt()` is pure and unit-tested for exactly what
+it must NOT contain: personality, hobby, notes, mustBeTrue and every stat.
+`canonicalLook` leads when set, which is what it was stored for.
+
+**This is a new owner-billed path**, and it runs against `decisions.md` §16
+("no automatic fallback to a paid model, because it spends his credits
+unasked"). `MAX_FREE_AVATARS` = 8 is what makes it acceptable, so the cap is the
+feature rather than a detail:
+
+- **Lifetime generations, never live characters.** A cap on how many a user
+  currently HAS is farmable — delete, regenerate, repeat, owner pays each time.
+- **Reserved before the call, refunded if nothing was generated.** Charging on
+  success (what storyWorker does for stories) leaves a window in which two
+  requests both read the same count and both increment. The two failure modes
+  are not symmetric: a crash costs a user one picture, the other way costs the
+  owner an unbounded bill. `chargeAvatarGeneration` is one statement for the
+  same reason, and refuses on a database error rather than allowing.
+- `user_usage.avatar_count` never resets. The monthly reset sets `count` by
+  name, so this survives for free — verified against a real Postgres.
+- A free account reaches the premium model only via
+  `resolveModel(..., { grantedByAllowance: true })`, which is true of a single
+  already-counted request and is not a property of the user. Charge first, then
+  pass the result of having charged.
+
+Files go to `public/images/stories/avatars`. That looks like the wrong
+directory and is the right path: the parent is the mount point of the
+`story_images` volume, so anything written there survives a redeploy and
+anything written beside it does not.
 
 ## Heroes of Faith data
 

@@ -432,12 +432,21 @@ export default function SavedStories() {
                           <div className="flex-1">
                             <div className="text-sm text-muted-foreground mb-1">Story details:</div>
                             <div className="flex flex-wrap gap-2">
-                              <Badge variant="outline" className="bg-primary/10">
-                                {savedStory.request.childName}
-                              </Badge>
-                              <Badge variant="outline" className="bg-primary/10">
-                                {savedStory.request.gender === 'boy' ? 'Boy' : 'Girl'}
-                              </Badge>
+                              {savedStory.request.childName && (
+                                <Badge variant="outline" className="bg-primary/10">
+                                  {savedStory.request.childName}
+                                </Badge>
+                              )}
+                              {/* Guarded, for the same reason as the animal
+                                  badge below: this was `gender === 'boy' ? 'Boy'
+                                  : 'Girl'`, so every story that never had a
+                                  gender -- every retelling, and every story told
+                                  about a saved character -- was labelled "Girl". */}
+                              {savedStory.request.gender && (
+                                <Badge variant="outline" className="bg-primary/10">
+                                  {savedStory.request.gender === 'boy' ? 'Boy' : 'Girl'}
+                                </Badge>
+                              )}
                               {/* Guarded: the form wrote the literal string
                                   "none" to mean no animal, so this rendered a
                                   badge reading "none" on most saved stories. */}

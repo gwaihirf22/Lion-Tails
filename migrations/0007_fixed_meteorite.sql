@@ -1,0 +1,1 @@
+ALTER TABLE "user_usage" ADD COLUMN "avatar_count" integer DEFAULT 0 NOT NULL;

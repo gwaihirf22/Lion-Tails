@@ -1,10 +1,12 @@
 import OpenAI from "openai";
-import { StoryRequest, StoryResponse } from "@shared/schema";
+import {
+  characterRoleOf, StoryRequest, StoryResponse } from "@shared/schema";
 import {
   buildSystemPrompt,
   buildUserInstruction,
   deserialiseBrief,
   renderBrief,
+  statLeakage,
   storyFormFor,
   WORDS_PER_VERSE_LINE,
   type StoryBrief,
@@ -900,6 +902,17 @@ async function runGeneration(
       ratio: Number(lengthRatio.toFixed(2)),
     });
 
+    // Did the character sheet leak into the prose? Logged, never fatal: a
+    // stray "Strength 7" is a quality problem and failing a finished story
+    // over one would be worse than the leak. See statLeakage().
+    const leaks = statLeakage(finalDetails.content || "");
+    if (leaks.length) {
+      console.warn(
+        `[stats] sheet vocabulary reached the story (${ctx.resolved.model}): ${leaks.join(" | ")}`,
+      );
+      debugData.push({ step: "statLeak", model: ctx.resolved.model, leaks });
+    }
+
     if (lengthRatio < MINIMUM_LENGTH_RATIO) {
       throw new StoryGenerationError(
         "story_too_short",
@@ -947,6 +960,29 @@ async function runGeneration(
       imageUrl = await generateStoryImage(finalDetails.imagePrompt, userId);
     } catch (imageError) {
       console.error("Error generating story image:", imageError);
+    }
+
+    /**
+     * Say plainly that the meeting was invented.
+     *
+     * APPENDED HERE, not asked of the model. A disclaimer the model writes is
+     * one it can forget, soften, or put in the middle -- and this one has to be
+     * exactly right and always present, because it is the difference between a
+     * fun story about Caleb and a child believing they read Scripture. It costs
+     * nothing and it cannot be dropped.
+     *
+     * Only for a retelling the character was written INTO. A straight retelling
+     * invents nobody and needs no note; an ordinary made-up story is not
+     * claiming to be anything.
+     */
+    const meets = characterRoleOf(request) === "meets";
+    const account = ctx.brief.sourceMaterial;
+    if (meets && account && !finalDetails.content.includes(MEETING_NOTE_HEADING)) {
+      const who = ctx.brief.cast[0]?.name;
+      finalDetails.content +=
+        `\n\n${MEETING_NOTE_HEADING} ${account.label} really lived, and what happens ` +
+        `in this story is what the account records.` +
+        (who ? ` ${who} was added so it could be told as an adventure -- that meeting is made up.` : "");
     }
 
     if (!finalDetails.content.includes("For Further Learning")) {
@@ -1113,6 +1149,9 @@ function buildDebugHeader(
 // =========================================================================
 // OTHER EXPORTED FUNCTIONS (Image Generation, etc.)
 // =========================================================================
+
+/** Matched before appending, so a regenerated story cannot collect two. */
+const MEETING_NOTE_HEADING = "**About this story:**";
 
 export async function generateStoryImage(
   imagePrompt: string,

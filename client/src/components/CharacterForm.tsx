@@ -2,7 +2,33 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { characterSchema } from "@shared/schema";
+import { Pencil, Search, Undo2 } from "lucide-react";
+import {
+  characterSchema,
+  baseStats,
+  statsOf,
+  pointsEarned,
+  pointsSpent,
+  CHARACTER_STATS,
+  STAT_BASE,
+  STAT_FLOOR,
+  STAT_CAP,
+  STARTING_POINTS,
+  virtueLevels,
+  type Character,
+  type CharacterStat,
+} from "@shared/schema";
+import {
+  CHARACTER_CATEGORIES,
+  categoryOf,
+  coveringNoun,
+  optionsFor,
+  popularKinds,
+  randomName,
+  searchKinds,
+  type CharacterCategory,
+  type VocabField,
+} from "@shared/characterVocab";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -13,6 +39,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import CharacterAvatar from "./CharacterAvatar";
 import {
   Select,
   SelectContent,
@@ -21,140 +51,474 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Slider } from "@/components/ui/slider";
+import { useParentMode } from "@/hooks/use-parent-mode";
 import AnimalAutocomplete from "./AnimalAutocomplete";
 
-// Create a form schema based on the Character schema, but make specific fields required
-const formSchema = characterSchema
-  .omit({ id: true, createdAt: true }) // These will be generated on the server
-  .extend({
-    name: z.string().min(1, "Character name is required"),
-    gender: z.enum(["boy", "girl"], {
-      required_error: "Please select a gender",
-    }),
-  });
+/**
+ * Making a character.
+ *
+ * ONE component, not a basic one and an advanced one. Two would be two field
+ * lists, and the second would fall behind the first -- which is the failure
+ * this repo names most often.
+ *
+ * Three rules shape it:
+ *
+ *  1. A CHILD SELECTS. Every descriptive control is a list from
+ *     shared/characterVocab.ts, the same catalogue the server validates
+ *     against. The only boxes anyone can type into are the name and the notes.
+ *
+ *  2. NOTHING IS DEFAULTED. The form used to open with brown hair, brown eyes,
+ *     blue, reading, kind and age 8 already filled in, so every character
+ *     claimed six things nobody chose and every story mentioned them. A preset
+ *     writes ONE real value -- what they are -- and nothing else.
+ *
+ *  3. A PARENT MAY TYPE ANYTHING. In Parent Mode every field grows a pencil
+ *     that swaps its list for a text box, and the save goes to the /custom
+ *     route, which is the only one allowed to accept an off-catalogue value.
+ */
 
-// Define the colors and animals for the form
-const hairColors = ["brown", "black", "blonde", "red", "white", "gray", "purple", "blue", "green"];
-const eyeColors = ["brown", "blue", "green", "hazel", "gray", "amber"];
-const favoriteColors = ["red", "blue", "green", "yellow", "purple", "orange", "pink", "teal", "gold", "silver"];
-const favoriteAnimals = [
-  // Domestic Animals
-  "dog", "cat", "rabbit", "hamster", "guinea pig", "bird", "fish", "turtle", "ferret", "chinchilla",
-  
-  // Farm Animals  
-  "horse", "cow", "pig", "sheep", "goat", "chicken", "duck", "goose", "donkey", "llama", "alpaca",
-  
-  // Wild Animals - African
-  "lion", "elephant", "giraffe", "zebra", "rhinoceros", "hippopotamus", "cheetah", "leopard", "hyena", "meerkat",
-  
-  // Wild Animals - Forest
-  "bear", "wolf", "fox", "deer", "moose", "elk", "raccoon", "squirrel", "chipmunk", "beaver", "otter",
-  
-  // Wild Animals - Jungle/Tropical
-  "tiger", "jaguar", "panther", "monkey", "orangutan", "gorilla", "chimpanzee", "sloth", "toucan", "parrot",
-  
-  // Ocean Animals
-  "dolphin", "whale", "shark", "seal", "sea lion", "octopus", "jellyfish", "starfish", "seahorse", "turtle",
-  
-  // Birds
-  "eagle", "hawk", "owl", "cardinal", "robin", "blue jay", "hummingbird", "penguin", "flamingo", "peacock",
-  
-  // Small Creatures
-  "butterfly", "ladybug", "bee", "dragonfly", "grasshopper", "cricket", "spider", "snail", "frog", "lizard",
-  
-  // Unique/Exotic
-  "panda", "koala", "kangaroo", "platypus", "armadillo", "anteater", "hedgehog", "skunk", "porcupine", "badger",
-  
-  // Biblical Animals
-  "lamb", "dove", "camel", "locust", "raven", "sparrow", "quail", "ox", "colt", "serpent"
-];
-const hobbies = [
-  "reading", "drawing", "singing", "dancing", "sports", "cooking", 
-  "hiking", "gardening", "collecting", "writing", "music", "astronomy"
-];
-const personalityTraits = [
-  "brave", "kind", "curious", "shy", "energetic", "patient", 
-  "creative", "thoughtful", "joyful", "determined", "gentle", "adventurous"
+const formSchema = characterSchema.omit({ id: true, createdAt: true, customFields: true });
+export type CharacterFormValues = z.infer<typeof formSchema>;
+
+/**
+ * The eight answers that cover most characters, and a door to the other 780.
+ *
+ * No alien: Blake, "I don't think we want that anyway."
+ */
+const PRESETS: ReadonlyArray<{ kind: string; label: string }> = [
+  { kind: "boy", label: "Boy" },
+  { kind: "girl", label: "Girl" },
+  { kind: "dog", label: "Dog" },
+  { kind: "cat", label: "Cat" },
+  { kind: "horse", label: "Horse" },
+  { kind: "dragon", label: "Dragon" },
+  { kind: "robot", label: "Robot" },
 ];
 
-// Random name generator
-const boyNames = [
-  "Noah", "Elijah", "Daniel", "Matthew", "David", "Joseph", "Benjamin", 
-  "Samuel", "John", "Isaac", "Jacob", "Ethan", "James", "Joshua", "Luke"
-];
-
-const girlNames = [
-  "Sarah", "Hannah", "Ruth", "Esther", "Mary", "Naomi", "Rachel", 
-  "Deborah", "Elizabeth", "Grace", "Faith", "Anna", "Leah", "Abigail", "Rebecca"
-];
-
-type CharacterFormProps = {
-  onSubmit: (data: z.infer<typeof formSchema>) => void;
-  loading?: boolean;
-  initialCharacter?: Partial<z.infer<typeof formSchema>>;
+const CATEGORY_LABELS: Record<CharacterCategory, string> = {
+  human: "People",
+  mammal: "Animals",
+  bird: "Birds",
+  reptile: "Reptiles and dinosaurs",
+  amphibian: "Frogs and newts",
+  fish: "Fish",
+  insect: "Bugs and spiders",
+  creature: "Sea creatures",
+  mythical: "Make-believe",
+  machine: "Machines",
 };
 
-export default function CharacterForm({ 
-  onSubmit, 
-  loading = false, 
-  initialCharacter 
+const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * Wraps one field so a parent can type into it instead of choosing.
+ *
+ * The pencil is the whole Parent Mode feature: whatever we failed to think of
+ * goes in here. A field already holding a value the catalogue does not contain
+ * opens in text mode by itself, so an edit never silently blanks it for being
+ * off-list.
+ */
+function ParentEditable({
+  active,
+  value,
+  onChange,
+  placeholder,
+  children,
+}: {
+  active: boolean;
+  value?: string;
+  onChange: (v: string | undefined) => void;
+  placeholder?: string;
+  children: React.ReactNode;
+}) {
+  const [typing, setTyping] = useState(false);
+  if (!active) return <>{children}</>;
+
+  return (
+    <div className="flex gap-2 items-start">
+      <div className="flex-1">
+        {typing ? (
+          <Input
+            autoFocus
+            placeholder={placeholder}
+            value={value ?? ""}
+            onChange={(e) => onChange(e.target.value || undefined)}
+          />
+        ) : (
+          children
+        )}
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        title={typing ? "Choose from the list instead" : "Type something else"}
+        onClick={() => setTyping((t) => !t)}
+      >
+        {typing ? <Undo2 className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+      </Button>
+    </div>
+  );
+}
+
+type CharacterFormProps = {
+  /**
+   * `custom` is true when anything was typed rather than chosen, which is what
+   * sends the save to the Parent Mode route. The page decides the endpoint; the
+   * form only reports how the values were arrived at.
+   */
+  onSubmit: (data: CharacterFormValues, custom: boolean) => void;
+  loading?: boolean;
+  initialCharacter?: Partial<CharacterFormValues>;
+  /**
+   * The saved row, when editing. Carries the two things the form shows but
+   * never writes -- adventures and therefore virtues, which are the server's.
+   */
+  saved?: Pick<Character, "adventures">;
+};
+
+export default function CharacterForm({
+  onSubmit,
+  loading = false,
+  initialCharacter,
+  saved,
 }: CharacterFormProps) {
-  const form = useForm<z.infer<typeof formSchema>>({
+  const { isActive: parentMode } = useParentMode();
+  const [kindSearch, setKindSearch] = useState("");
+  const [kindOpen, setKindOpen] = useState(false);
+
+  const form = useForm<CharacterFormValues>({
     resolver: zodResolver(formSchema),
+    // Everything empty but the name. See rule 2 above -- the previous defaults
+    // are the reason every story mentioned brown hair.
     defaultValues: {
-      name: initialCharacter?.name || "",
-      gender: initialCharacter?.gender || "boy",
-      age: initialCharacter?.age || 8,
-      hair: initialCharacter?.hair || "brown",
-      eyes: initialCharacter?.eyes || "brown",
-      favoriteColor: initialCharacter?.favoriteColor || "blue",
-      // No default: a character has a favourite animal because the user chose
-      // one. Defaulting it put a lion in every story nobody asked for.
-      favoriteAnimal: initialCharacter?.favoriteAnimal || "",
-      hobby: initialCharacter?.hobby || "reading",
-      timeTravelExperience: initialCharacter?.timeTravelExperience || 0,
-      personality: initialCharacter?.personality || "kind",
+      name: initialCharacter?.name ?? "",
+      kind: initialCharacter?.kind,
+      category: initialCharacter?.category,
+      gender: initialCharacter?.gender,
+      sex: initialCharacter?.sex,
+      age: initialCharacter?.age,
+      hair: initialCharacter?.hair,
+      eyes: initialCharacter?.eyes,
+      favoriteColor: initialCharacter?.favoriteColor,
+      favoriteAnimal: initialCharacter?.favoriteAnimal,
+      hobby: initialCharacter?.hobby,
+      personality: initialCharacter?.personality,
+      notes: initialCharacter?.notes,
+      mustBeTrue: initialCharacter?.mustBeTrue,
+      canonicalLook: initialCharacter?.canonicalLook,
+      avatarUrl: initialCharacter?.avatarUrl,
+      statsEnabled: initialCharacter?.statsEnabled,
+      stats: initialCharacter?.stats,
     },
   });
 
-  const generateRandomName = () => {
-    const gender = form.getValues("gender");
-    const names = gender === "boy" ? boyNames : girlNames;
-    const randomName = names[Math.floor(Math.random() * names.length)];
-    form.setValue("name", randomName);
+  const kind = form.watch("kind") ?? initialCharacter?.gender;
+  const category = form.watch("category");
+  const covering = coveringNoun(category, kind);
+
+  // Stats live in form state like everything else; these are just the readouts.
+  // earned comes from the SAVED row, never the form -- how many stories a
+  // character has been in is not something the form gets an opinion about.
+  const statValues = statsOf({ stats: form.watch("stats") });
+  const earned = pointsEarned(saved);
+  const available = earned + STARTING_POINTS - pointsSpent(statValues);
+  const levels = virtueLevels(saved);
+
+  const setStat = (stat: CharacterStat, value: number) => {
+    if (value < STAT_FLOOR || value > STAT_CAP) return;
+    form.setValue("stats", { ...statValues, [stat]: value }, { shouldDirty: true });
   };
+
+  /** Choosing what they are also fixes which vocabulary the rest of the form offers. */
+  const chooseKind = (k: string) => {
+    form.setValue("kind", k, { shouldDirty: true });
+    form.setValue("category", categoryOf(k), { shouldDirty: true });
+    // Colour words do not survive a change of species: "blonde" is not a thing
+    // a dragon's scales can be, and the server would refuse the save.
+    for (const f of ["hair", "eyes"] as const) {
+      const v = form.getValues(f);
+      if (v && !optionsFor(f, categoryOf(k)).includes(v)) {
+        form.setValue(f, undefined, { shouldDirty: true });
+      }
+    }
+    setKindOpen(false);
+    setKindSearch("");
+  };
+
+  // Suited to what they are, and never the name already in the box -- pressing
+  // it twice and getting the same answer is what makes a random button feel
+  // broken. The pools live beside the catalogue, not here.
+  const pickRandomName = () =>
+    form.setValue("name", randomName(category, form.getValues("name")), { shouldDirty: true });
+
+  /** A value that is not in the list it came from was typed by a parent. */
+  const isCustom = (values: CharacterFormValues) => {
+    if (values.mustBeTrue) return true;
+    if (values.kind && !categoryOf(values.kind)) return true;
+    for (const f of ["hair", "eyes", "favoriteColor", "hobby", "personality"] as VocabField[]) {
+      const v = values[f];
+      if (v && !optionsFor(f, values.category).includes(v)) return true;
+    }
+    return false;
+  };
+
+  const submit = (values: CharacterFormValues) => onSubmit(values, isCustom(values));
+
+  /**
+   * One list-backed field, with the Parent Mode pencil already attached.
+   *
+   * A function that RETURNS jsx, called as vocabField(...), not a component
+   * used as <VocabField/>. Declared inside the form it needs, a component gets
+   * a new identity on every render, so React unmounts and remounts its subtree
+   * -- which resets ParentEditable's "I am typing" state on the first
+   * keystroke, and makes the pencil impossible to use.
+   */
+  const vocabField = (name: VocabField, label: string) => (
+    <FormField
+      key={name}
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <ParentEditable
+            active={parentMode}
+            value={field.value}
+            onChange={field.onChange}
+            placeholder={`Anything you like for ${label.toLowerCase()}`}
+          >
+            <Select onValueChange={field.onChange} value={field.value ?? ""}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Not set" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {optionsFor(name, category).map((o) => (
+                  <SelectItem key={o} value={o}>{title(o)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </ParentEditable>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+
+  const results = kindSearch ? searchKinds(kindSearch, 40) : [];
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(submit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Create Your Time Traveler</CardTitle>
+            <CardTitle>Make a character</CardTitle>
             <CardDescription>
-              Design a character who can travel back in time to witness biblical events!
+              Anyone you like — a person, an animal, or something make-believe.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+
+          <CardContent>
+            {/*
+              Tabs rather than one long scroll. The sheet has grown past what
+              fits in a dialog, and the sections answer genuinely different
+              questions -- what they are, what they look like, what they are
+              like, what they can do, where they have been. Every tab shares ONE
+              form state, so nothing is lost by switching between them
+              mid-edit.
+            */}
+            <Tabs defaultValue="basics" className="w-full">
+              <TabsList className="w-full justify-start flex-wrap h-auto">
+                <TabsTrigger value="basics">Basics</TabsTrigger>
+                <TabsTrigger value="appearance">Appearance</TabsTrigger>
+                <TabsTrigger value="personality">Personality</TabsTrigger>
+                <TabsTrigger value="stats">Statistics</TabsTrigger>
+                <TabsTrigger value="virtues">Virtues</TabsTrigger>
+                {parentMode && <TabsTrigger value="grown-ups">Grown-ups</TabsTrigger>}
+              </TabsList>
+
+            <TabsContent value="basics" className="space-y-5 pt-4">
+              {/* Their picture, or a stand-in for one until the avatar work
+                  lands. Here and on the card, which is the minimum. */}
+              <div className="flex items-center gap-4">
+                <CharacterAvatar
+                  size="lg"
+                  character={{
+                    name: form.watch("name") || "This character",
+                    kind, category, gender: form.watch("gender"),
+                    avatarUrl: form.watch("avatarUrl"),
+                  }}
+                />
+                <p className="text-sm text-muted-foreground">
+                  No picture yet — you will be able to make one soon.
+                </p>
+              </div>
+
+            {/* ---- What are they? The one question worth asking first. ---- */}
+            <FormField
+              control={form.control}
+              name="kind"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>What are they?</FormLabel>
+                  <div className="flex flex-wrap gap-2">
+                    {PRESETS.map((p) => (
+                      <Button
+                        key={p.kind}
+                        type="button"
+                        variant={field.value === p.kind ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => chooseKind(p.kind)}
+                      >
+                        {p.label}
+                      </Button>
+                    ))}
+
+                    {/*
+                      A plain toggle button, and the list renders INLINE below.
+
+                      This was a Popover, and it did not work: Radix's Dialog is
+                      modal, so it puts pointer-events: none on the body and runs
+                      a focus trap. PopoverContent portals to document.body,
+                      outside DialogContent -- so clicks were swallowed and
+                      autoFocus was pulled straight back into the dialog. The
+                      search box could be seen and not used.
+
+                      `<Popover modal>` was the obvious fix and does not help:
+                      it changes layering, not either of those. Rendering inside
+                      the dialog's own DOM removes the cause rather than working
+                      around it, and cannot regress for this reason again.
+                      HeroPicker and CharacterPicker keep their popovers because
+                      StoryForm is not inside a dialog.
+
+                      It also just fits better: a floating panel in a tabbed
+                      dialog spilled outside the dialog's edge.
+                    */}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={
+                        field.value && !PRESETS.some((p) => p.kind === field.value)
+                          ? "default"
+                          : "outline"
+                      }
+                      aria-expanded={kindOpen}
+                      onClick={() => setKindOpen((o) => !o)}
+                    >
+                      {kindOpen ? "Close the list" : "Something else…"}
+                    </Button>
+                  </div>
+
+                  {kindOpen && (
+                    <div className="mt-2 rounded-md border">
+                      <div className="flex items-center gap-2 border-b px-3 py-2">
+                        <Search className="h-4 w-4 opacity-50" />
+                        <input
+                          autoFocus
+                          className="flex-1 bg-transparent text-sm outline-none"
+                          placeholder="Search every character…"
+                          value={kindSearch}
+                          onChange={(e) => setKindSearch(e.target.value)}
+                        />
+                      </div>
+                      {/*
+                        Popular first, search for the rest. There are 788 of
+                        them; a list that long to scroll is worse than the text
+                        box this replaced.
+                      */}
+                      <div className="max-h-72 overflow-y-auto p-2">
+                        {results.length > 0 ? (
+                          results.map((k) => (
+                            <button
+                              key={k}
+                              type="button"
+                              className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-muted"
+                              onClick={() => chooseKind(k)}
+                            >
+                              {title(k)}
+                            </button>
+                          ))
+                        ) : (
+                          CHARACTER_CATEGORIES.map((c) => (
+                            <div key={c} className="mb-3">
+                              <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">
+                                {CATEGORY_LABELS[c]}
+                              </div>
+                              <div className="flex flex-wrap gap-1 px-1">
+                                {popularKinds(c).map((k) => (
+                                  <Button
+                                    key={k}
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7"
+                                    onClick={() => chooseKind(k)}
+                                  >
+                                    {title(k)}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                        {kindSearch && results.length === 0 && (
+                          <p className="px-2 py-4 text-sm text-muted-foreground">
+                            Nothing called “{kindSearch}”.
+                            {parentMode
+                              ? " A grown-up can type it in below."
+                              : " Try another word."}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {parentMode && (
+                    <div className="pt-2">
+                      <Input
+                        placeholder="Or type anything at all (grown-ups only)"
+                        value={
+                          field.value && !categoryOf(field.value) ? field.value : ""
+                        }
+                        onChange={(e) => field.onChange(e.target.value || undefined)}
+                      />
+                    </div>
+                  )}
+
+                  {kind && (
+                    <FormDescription>
+                      {title(kind)}
+                      {category ? ` — we’ll ask about ${covering}.` : " — typed in, not from the list."}
+                    </FormDescription>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* ---- Name and age ---- */}
             <div className="grid md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Character Name</FormLabel>
+                    <FormLabel>Name</FormLabel>
                     <div className="flex gap-2">
                       <FormControl>
-                        <Input placeholder="Enter a name" {...field} />
+                        <Input placeholder="What are they called?" {...field} />
                       </FormControl>
-                      <Button 
-                        type="button" 
-                        variant="outline"
-                        onClick={generateRandomName}
-                        className="whitespace-nowrap"
-                      >
-                        Random Name
+                      {/* Shown for everyone now. It used to appear only for a
+                          boy or a girl, because the only names it had were
+                          fifteen biblical ones -- so most of the catalogue got
+                          no button at all rather than a name that suited it. */}
+                      <Button type="button" variant="outline" onClick={pickRandomName} className="whitespace-nowrap">
+                        Random
                       </Button>
                     </div>
                     <FormMessage />
@@ -164,138 +528,24 @@ export default function CharacterForm({
 
               <FormField
                 control={form.control}
-                name="gender"
+                name="age"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Gender</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select gender" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="boy">Boy</SelectItem>
-                        <SelectItem value="girl">Girl</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="age"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Age: {field.value}</FormLabel>
-                  <FormControl>
-                    <Slider
-                      min={5}
-                      max={12}
-                      step={1}
-                      value={[field.value]}
-                      onValueChange={(value) => field.onChange(value[0])}
-                    />
-                  </FormControl>
-                  <FormDescription>Choose an age between 5 and 12</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="hair"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Hair Color</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select hair color" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {hairColors.map((color) => (
-                          <SelectItem key={color} value={color}>
-                            {color.charAt(0).toUpperCase() + color.slice(1)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="eyes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Eye Color</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select eye color" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {eyeColors.map((color) => (
-                          <SelectItem key={color} value={color}>
-                            {color.charAt(0).toUpperCase() + color.slice(1)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="favoriteColor"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Favorite Color</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select favorite color" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {favoriteColors.map((color) => (
-                          <SelectItem key={color} value={color}>
-                            {color.charAt(0).toUpperCase() + color.slice(1)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="favoriteAnimal"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Favorite Animal</FormLabel>
+                    <FormLabel>Age</FormLabel>
                     <FormControl>
-                      <AnimalAutocomplete
-                        value={field.value}
-                        onChange={field.onChange}
-                        placeholder="Type any animal name..."
-                        allowNone={false}
+                      {/*
+                        A number, not a slider: a slider cannot say "no age in
+                        particular", and cannot reach three hundred.
+                      */}
+                      <Input
+                        type="number"
+                        min={0}
+                        max={9999}
+                        placeholder="Leave blank if it doesn't matter"
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)
+                        }
                       />
                     </FormControl>
                     <FormMessage />
@@ -304,85 +554,307 @@ export default function CharacterForm({
               />
             </div>
 
-            <div className="grid md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="hobby"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Favorite Hobby</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+            {/* ---- Everything else, folded away until it is wanted ---- */}
+            </TabsContent>
+
+            <TabsContent value="appearance" className="space-y-4 pt-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                  {vocabField("hair", `${title(covering)} colour`)}
+                  {vocabField("eyes", "Eye colour")}
+              </div>
+                <FormField
+                  control={form.control}
+                  name="canonicalLook"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>How they look, for pictures</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select hobby" />
-                        </SelectTrigger>
+                        <Textarea
+                          rows={2}
+                          maxLength={300}
+                          placeholder="Copper scales, a torn left wing, a green scarf."
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value || undefined)}
+                        />
                       </FormControl>
-                      <SelectContent>
-                        {hobbies.map((hobby) => (
-                          <SelectItem key={hobby} value={hobby}>
-                            {hobby.charAt(0).toUpperCase() + hobby.slice(1)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      {/*
+                        Said plainly, because otherwise this looks broken: it
+                        is saved for drawings and changes nothing about the
+                        words of the story.
+                      */}
+                      <FormDescription>
+                        Saved for drawing them. It does not change the story text.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+            </TabsContent>
 
-              <FormField
-                control={form.control}
-                name="personality"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Personality</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select personality trait" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {personalityTraits.map((trait) => (
-                          <SelectItem key={trait} value={trait}>
-                            {trait.charAt(0).toUpperCase() + trait.slice(1)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-
-            <FormField
-              control={form.control}
-              name="timeTravelExperience"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Time Travel Experience: {field.value}</FormLabel>
-                  <FormControl>
-                    <Slider
-                      min={0}
-                      max={10}
-                      step={1}
-                      value={[field.value]}
-                      onValueChange={(value) => field.onChange(value[0])}
+            <TabsContent value="personality" className="space-y-4 pt-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                  {vocabField("favoriteColor", "Favourite colour")}
+                  {vocabField("hobby", "Favourite thing to do")}
+                  {vocabField("personality", "What they are like")}
+                  <FormField
+                    control={form.control}
+                    name="favoriteAnimal"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Favourite animal</FormLabel>
+                        <FormControl>
+                          <AnimalAutocomplete
+                            value={field.value ?? ""}
+                            onChange={(v) => field.onChange(v || undefined)}
+                            allowNone={false}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+              </div>
+                  {category === "machine" && (
+                    <FormField
+                      control={form.control}
+                      name="sex"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Do we call them he, she, or it?</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                            <FormControl>
+                              <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="male">He</SelectItem>
+                              <SelectItem value="female">She</SelectItem>
+                              <SelectItem value="it">It</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </FormControl>
-                  <FormDescription>
-                    How many time travel adventures your character has been on (0 for beginners)
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
+                  )}
+
+                  <FormField
+                    control={form.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Anything you want to say about them</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            rows={2}
+                            maxLength={200}
+                            placeholder="She keeps a pebble from the river in her pocket."
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value || undefined)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Used where it fits the story — it will not be forced in.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+            </TabsContent>
+
+            <TabsContent value="stats" className="space-y-4 pt-4">
+              {/*
+                Points, not sliders you can drag to the top. Everyone starts
+                ordinary on everything; the only way to be good at something is
+                to have earned it, or to have accepted being worse at something
+                else. Spending is free to undo -- a child will mis-click, and an
+                irreversible dial on a character they love is a bad afternoon.
+              */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">
+                    {available} point{available === 1 ? "" : "s"} left to spend
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {earned === 0
+                      ? `Everyone starts with ${STARTING_POINTS}. One more for every story they finish.`
+                      : `${STARTING_POINTS} to start, and ${earned} from ${earned === 1 ? "a story" : "stories"} they have been in.`}
+                  </p>
+                </div>
+                {parentMode && (
+                  <Badge variant="secondary" title="Parent Mode ignores the points budget">
+                    Spending unlimited
+                  </Badge>
+                )}
+              </div>
+
+              {CHARACTER_STATS.map((stat) => {
+                const value = statValues[stat];
+                const canRaise = value < STAT_CAP && (available > 0 || parentMode);
+                return (
+                  <div key={stat} className="flex items-center gap-3">
+                    <span className="w-28 text-sm capitalize">{stat}</span>
+                    <Button
+                      type="button" variant="outline" size="icon" className="h-7 w-7"
+                      disabled={value <= STAT_FLOOR}
+                      onClick={() => setStat(stat, value - 1)}
+                      aria-label={`Lower ${stat}`}
+                    >
+                      −
+                    </Button>
+                    <span className="w-6 text-center text-sm tabular-nums">{value}</span>
+                    <Button
+                      type="button" variant="outline" size="icon" className="h-7 w-7"
+                      disabled={!canRaise}
+                      onClick={() => setStat(stat, value + 1)}
+                      aria-label={`Raise ${stat}`}
+                    >
+                      +
+                    </Button>
+                    <Progress value={(value / STAT_CAP) * 100} className="h-2 flex-1" />
+                  </div>
+                );
+              })}
+
+              <p className="text-xs text-muted-foreground">
+                Dropping one below {STAT_BASE} gives the point back, so a character can be
+                very good at one thing by being poor at another.
+              </p>
+
+              {/*
+                Off altogether. Distinct from "all threes": an untouched sheet
+                is a character who happens to be ordinary, and this is a
+                character the story is never told about in these terms at all.
+              */}
+              <FormField
+                control={form.control}
+                name="statsEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2 pt-2 border-t">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value !== false}
+                        onCheckedChange={(v) => field.onChange(v === true)}
+                      />
+                    </FormControl>
+                    <FormLabel className="!mt-0 font-normal">
+                      Use statistics for this character
+                    </FormLabel>
+                  </FormItem>
+                )}
+              />
+            </TabsContent>
+
+            <TabsContent value="virtues" className="space-y-3 pt-4">
+              {/*
+                A record, not a setting: nothing here is editable and none of it
+                is ever sent to the model. The seventeen story themes ARE the
+                virtues, so a level is simply how many finished stories carried
+                that theme -- there is no mapping table to fall out of step with
+                the themes the story form offers.
+              */}
+              <p className="text-sm text-muted-foreground">
+                What {form.watch("name") || "this character"} has learned along the way. A story
+                with a theme adds a level to that virtue.
+              </p>
+              {Object.keys(levels).length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">
+                  No stories yet. Virtues appear here after they have been in one.
+                </p>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {Object.entries(levels)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([virtue, level]) => (
+                      <div key={virtue} className="flex items-center gap-2">
+                        <span className="w-28 text-sm capitalize">{virtue}</span>
+                        <Badge variant="secondary">Level {level}</Badge>
+                      </div>
+                    ))}
+                </div>
               )}
-            />
+            </TabsContent>
+
+            {parentMode && (
+              <TabsContent value="grown-ups" className="space-y-4 pt-4">
+                {/*
+                  What sort of thing a typed kind IS.
+                  
+                  Only Parent Mode needs this, and only Parent Mode can produce
+                  the situation: categoryOf() derives the category from the
+                  catalogue, and a kind typed here is off-catalogue by
+                  definition, so it derives nothing. The consequence is not
+                  cosmetic -- the covering noun falls back to "hair", and a
+                  space whale is described to the model as having nebula-blue
+                  HAIR. This is the path most likely to hold a non-human,
+                  because typing is what you do when the list has no word for it.
+                */}
+                {!categoryOf(kind ?? "") && (
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>What sort of thing is {form.watch("name") || "this"}?</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Not set — we will say hair" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {CHARACTER_CATEGORIES.map((c) => (
+                              <SelectItem key={c} value={c}>
+                                {CATEGORY_LABELS[c]} — {coveringNoun(c)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Sets the word used for what covers them, and which colours
+                          the Appearance tab offers.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">Parent Mode</Badge>
+                  <span className="text-sm text-muted-foreground">
+                    Only visible while Parent Mode is unlocked.
+                  </span>
+                </div>
+                    <FormField
+                      control={form.control}
+                      name="mustBeTrue"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>What must always be true of them</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              rows={2}
+                              maxLength={200}
+                              placeholder="Mia uses a wheelchair."
+                              value={field.value ?? ""}
+                              onChange={(e) => field.onChange(e.target.value || undefined)}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Every chapter is told to keep this consistent, unlike the
+                            note above, which the story uses only where it fits.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+              </TabsContent>
+            )}
+            </Tabs>
           </CardContent>
+
           <CardFooter>
             <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "Creating..." : "Create Character"}
+              {loading ? "Saving…" : initialCharacter ? "Save changes" : "Create character"}
             </Button>
           </CardFooter>
         </Card>

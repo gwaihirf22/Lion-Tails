@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   StoryRequest,
   storyRequestSchema,
@@ -30,7 +31,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import AnimalAutocomplete from "./AnimalAutocomplete";
 import HeroPicker from "./HeroPicker";
 import type { HeroOfFaith } from "@shared/schema";
-import CharacterForm from "./CharacterForm";
+import CharacterForm, { type CharacterFormValues } from "./CharacterForm";
+import { saveCharacter } from "@/lib/saveCharacter";
+import { useToast } from "@/hooks/use-toast";
 import PromptEditor from "./PromptEditor";
 
 interface StoryFormProps {
@@ -83,6 +86,7 @@ export default function StoryForm({
   parentStoryTitle,
   isContinuation = false,
 }: StoryFormProps) {
+  const { toast } = useToast();
   const [useTimeTravel, setUseTimeTravel] = useState(false);
   const [hasSelectedBiblicalEvent, setHasSelectedBiblicalEvent] = useState(false);
   const [hasSelectedHeroOfFaith, setHasSelectedHeroOfFaith] = useState(false);
@@ -93,12 +97,28 @@ export default function StoryForm({
   // to work out which of the one selected characters to edit; with a cast the
   // chip knows which one it is and passes it, so there is nothing left to look up.
 
-  // Function to handle character update completion
-  const handleCharacterUpdated = (updatedCharacterData: any) => {
-    setEditDialogOpen(false);
-    setSelectedCharacter(undefined);
-    // Refresh characters list to show updated character
-    queryClient.invalidateQueries({ queryKey: ['/api/characters'] });
+  /**
+   * Save an edit made from the story form.
+   *
+   * This used to take the edited values, ignore them, close the dialog and
+   * invalidate the query -- so the list refetched, showed the unchanged
+   * character, and the edit was gone with no error anywhere. It looked exactly
+   * like a save that had worked.
+   */
+  const handleCharacterUpdated = async (values: CharacterFormValues, custom: boolean) => {
+    if (!selectedCharacter) return;
+    try {
+      await saveCharacter(values, custom, selectedCharacter.id);
+      setEditDialogOpen(false);
+      setSelectedCharacter(undefined);
+      queryClient.invalidateQueries({ queryKey: ['/api/characters'] });
+    } catch (error) {
+      toast({
+        title: "Could not save that character",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive",
+      });
+    }
   };
   
   // Fetch characters for selection - always fetch them as they can be used in any story type
@@ -145,6 +165,10 @@ export default function StoryForm({
       storyType: "regular" as const,
       useTimeTravel: false,
       characterIds: [],
+      // "absent" is the safe default: a retelling is about the person it is
+      // about, and getting it wrong this way gives a plainer story rather than
+      // a child written into Scripture.
+      characterRole: "absent" as const,
       customPrompt: "", // Empty custom prompt by default
       biblePassage: "", // New field for Bible passage study
       learningFocus: "", // No default learning focus
@@ -156,15 +180,15 @@ export default function StoryForm({
       customSystemPrompt: "",
       customUserPrompt: "",
       useCustomPrompts: false,
-      characterDetails: {
-        age: 8,
-        hair: "",
-        eyes: "",
-        favoriteColor: "",
-        personality: "",
-        hobby: "",
-        favoriteAnimal: ""
-      },
+      // NO characterDetails DEFAULT. It used to be {age: 8, ...}, no field on
+      // the form ever rendered it, and nothing stripped it -- so every request
+      // carried it, and buildStoryBrief read the age from it whenever no saved
+      // character was chosen. Every "just type a name" story in the library was
+      // written about an eight-year-old nobody specified.
+      //
+      // The golden fixture could not see it: its base request omits
+      // characterDetails entirely, so the test asserted a prompt the form never
+      // actually sent. There is a case built from these defaults now.
     },
   });
 
@@ -606,6 +630,66 @@ export default function StoryForm({
                         Enable this to create a time travel adventure where your character visits Biblical times. This only affects the story theme, not character selection.
                       </FormDescription>
                     </div>
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {/* HOW THE CHARACTER APPEARS -- the choice that did not exist.
+                
+                A character attached to a real account is ambiguous, and the app
+                used to resolve the ambiguity silently: this tab force-sets
+                useTimeTravel to false, and the brief then wrote the character
+                into the account anyway. A story about Caleb came back with a
+                child called Esther standing in the wilderness of Paran, which
+                read as the app confusing two figures in Scripture.
+                
+                So it is asked, not inferred, and only when there is actually a
+                character to ask about. */}
+            {formType === "historical" && characterIdsOf(form.watch()).length > 0 && (
+              <FormField
+                control={form.control}
+                name="characterRole"
+                render={({ field }) => (
+                  <FormItem className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
+                    <FormLabel className="text-sm font-semibold">
+                      How should your character appear?
+                    </FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        value={field.value ?? "absent"}
+                        className="space-y-2"
+                      >
+                        <FormItem className="flex items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="absent" className="mt-1" />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel className="font-medium">Not in the story</FormLabel>
+                            <FormDescription>
+                              A straight retelling of what actually happened. Your
+                              character is not written into it.
+                            </FormDescription>
+                          </div>
+                        </FormItem>
+                        <FormItem className="flex items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="meets" className="mt-1" />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel className="font-medium">They meet — an adventure</FormLabel>
+                            <FormDescription>
+                              Your character meets them and joins in. Fun, and a
+                              little silly, but the real events still happen the
+                              way they really did. The story ends with a short
+                              note saying the meeting was made up.
+                            </FormDescription>
+                          </div>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -1072,6 +1156,7 @@ export default function StoryForm({
         {selectedCharacter && (
           <CharacterForm
             initialCharacter={selectedCharacter}
+            saved={selectedCharacter}
             onSubmit={handleCharacterUpdated}
             loading={false}
           />

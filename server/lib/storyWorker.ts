@@ -21,7 +21,9 @@
  */
 import { randomUUID } from "crypto";
 import { pool, databaseReady } from "../db";
-import { resolveModel, createClient, tokenLimitFor, temperatureFor } from "./modelPolicy";
+import { resolveModel, createClient, tokenLimitFor, temperatureFor,
+  hasUnlimitedUse,
+} from "./modelPolicy";
 import { StoryGenerationError } from "./storyErrors";
 import {
   generateStoryFromJob,
@@ -36,6 +38,7 @@ import {
   summaryUserPrompt,
 } from "./universeSummary";
 import { newGenerationId, recordGeneration } from "./generationRecords";
+import { characterIdsOf } from "@shared/schema";
 import type { ResolvedModel } from "./modelPolicy";
 import { storage } from "../storage";
 import { enqueueStoryJob } from "./storyJobs";
@@ -213,6 +216,7 @@ async function finishSucceeded(job: JobRow, storyId: string): Promise<void> {
         [job.user_id],
       );
     }
+
     await client.query("COMMIT");
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
@@ -220,13 +224,59 @@ async function finishSucceeded(job: JobRow, storyId: string): Promise<void> {
   } finally {
     client.release();
   }
+
+  await recordAdventure(job, storyId);
+}
+
+/**
+ * Everyone in the cast went on the adventure, so everyone gets the point.
+ *
+ * AFTER the commit, and in its own try/catch, deliberately. Inside the finishing
+ * transaction it would be atomic with the job -- which sounds better until you
+ * notice the cost: any error in this statement rolls back a story that
+ * generated perfectly well, and the user is told their story failed because a
+ * stat point could not be written. "Nothing after a story is saved may fail it"
+ * is already a rule in this repo, and this is squarely after.
+ *
+ * Losing atomicity costs little because the write is IDEMPOTENT: the NOT ... @>
+ * guard means recording the same storyId twice changes nothing, so a crash
+ * between the commit and this line loses one point and can be replayed safely
+ * by anything that notices later. An extra point, by contrast, is the sort of
+ * wrong nobody would ever spot.
+ *
+ * A failed story is not an adventure -- this is only reached from the succeeded
+ * path.
+ */
+async function recordAdventure(job: JobRow, storyId: string): Promise<void> {
+  const cast = characterIdsOf(job.request);
+  if (cast.length === 0) return;
+
+  try {
+    const theme = typeof job.request?.theme === "string" ? job.request.theme : undefined;
+    const entry = JSON.stringify([{ storyId, theme, at: new Date().toISOString() }]);
+    const seen = JSON.stringify([{ storyId }]);
+    await pool!.query(
+      `UPDATE user_characters
+          SET character_data = jsonb_set(
+                character_data, '{adventures}',
+                COALESCE(character_data->'adventures', '[]'::jsonb) || $1::jsonb)
+        WHERE character_id = ANY($2) AND user_id = $3
+          AND NOT (COALESCE(character_data->'adventures', '[]'::jsonb) @> $4::jsonb)`,
+      [entry, cast, job.user_id, seen],
+    );
+  } catch (e) {
+    console.error(`[stats] could not record adventure ${storyId} for job ${job.job_id}:`, e);
+  }
 }
 
 async function shouldChargeQuota(userId: number): Promise<boolean> {
   const resolved = await resolveModel(userId, "chat").catch(() => null);
   if (!resolved) return false;
   if (resolved.provider !== "openai") return false;
-  return !resolved.usingOwnKey && !resolved.isAdmin;
+  // The third restatement of "own key or admin", now the same function as the
+  // other two. Negated here because this asks the opposite question: the people
+  // who are NOT charged are exactly the people who pay for their own use.
+  return !hasUnlimitedUse({ isAdmin: resolved.isAdmin, hasOwnKey: resolved.usingOwnKey });
 }
 
 /**

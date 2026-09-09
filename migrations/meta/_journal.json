@@ -50,6 +50,13 @@
       "when": 1788945183556,
       "tag": "0006_gigantic_nightshade",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788968399955,
+      "tag": "0007_fixed_meteorite",
+      "breakpoints": true
     }
   ]
 }
