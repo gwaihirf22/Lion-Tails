@@ -6,9 +6,18 @@ import { StoryRequest } from "@shared/schema";
 interface StoryGeneratorTabsProps {
   onSubmit: (data: StoryRequest) => void;
   loading?: boolean;
+  /** Cast carried over from a story being continued. */
+  inheritedCharacterIds?: string[];
+  /** Title of the story being continued, for the confirm-to-remove copy. */
+  parentStoryTitle?: string;
 }
 
-export default function StoryGeneratorTabs({ onSubmit, loading = false }: StoryGeneratorTabsProps) {
+export default function StoryGeneratorTabs({
+  onSubmit,
+  loading = false,
+  inheritedCharacterIds,
+  parentStoryTitle,
+}: StoryGeneratorTabsProps) {
   const [activeTab, setActiveTab] = useState<string>("children");
 
   return (
@@ -51,6 +60,8 @@ export default function StoryGeneratorTabs({ onSubmit, loading = false }: StoryG
             <StoryForm 
               onSubmit={onSubmit} 
               loading={loading} 
+              inheritedCharacterIds={inheritedCharacterIds}
+              parentStoryTitle={parentStoryTitle}
               formType="children"
               showChildFields={true}
               showTimeTravel={true}
@@ -82,6 +93,8 @@ export default function StoryGeneratorTabs({ onSubmit, loading = false }: StoryG
             <StoryForm 
               onSubmit={onSubmit} 
               loading={loading} 
+              inheritedCharacterIds={inheritedCharacterIds}
+              parentStoryTitle={parentStoryTitle}
               formType="historical"
               showChildFields={false}
               showTimeTravel={false}

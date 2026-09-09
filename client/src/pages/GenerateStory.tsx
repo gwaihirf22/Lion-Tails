@@ -13,6 +13,8 @@ import { apiRequest } from "@/lib/queryClient";
 import type { StoryRequest, StoryResponse } from "@shared/schema";
 import { useStoryJobs, describeJob } from "@/hooks/use-story-jobs";
 import ContinuationContext from "@/components/ContinuationContext";
+import { characterIdsOf, type SavedStory } from "@shared/schema";
+import { apiRequestAllowingErrors } from "@/lib/queryClient";
 
 export default function GenerateStory() {
   const { toast } = useToast();
@@ -30,6 +32,24 @@ export default function GenerateStory() {
     typeof window === "undefined" ? "" : window.location.search,
   ).get("continues");
   const { jobs, enqueue, cancel } = useStoryJobs();
+
+  /**
+   * The story being continued, for its cast.
+   *
+   * Shares ContinuationContext's query key, so the panel and the form read one
+   * fetch rather than two. characterIdsOf() means a parent saved before
+   * multi-character -- carrying only the singular characterId -- still hands
+   * its character forward.
+   */
+  const { data: parentStory } = useQuery<SavedStory | null>({
+    queryKey: [`/api/stories/${continuesStoryId}`],
+    queryFn: async () => {
+      const r = await apiRequestAllowingErrors("GET", `/api/stories/${continuesStoryId}`);
+      return r.ok ? ((await r.json()) as SavedStory) : null;
+    },
+    enabled: Boolean(continuesStoryId),
+  });
+  const inheritedCharacterIds = characterIdsOf(parentStory?.request);
 
   // The job we started this visit, if it is still in the provider list. Reading
   // it from the shared list rather than holding a local copy means a reload or
@@ -218,6 +238,8 @@ export default function GenerateStory() {
           <StoryGeneratorTabs
             onSubmit={handleGenerateStory}
             loading={generating || Boolean(watchedJob)}
+            inheritedCharacterIds={inheritedCharacterIds}
+            parentStoryTitle={parentStory?.story?.title}
           />
         </div>
 

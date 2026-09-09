@@ -12,7 +12,7 @@ import {
 import {
   buildStoryBrief,
   buildSystemPrompt,
-  resolveStoryCharacter,
+  resolveStoryCharacters,
   resolveHeroOfFaith,
   serialiseBrief,
 } from "./lib/storyBrief";
@@ -291,7 +291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const character = await resolveStoryCharacter(validatedData, userId);
+      const characters = await resolveStoryCharacters(validatedData, userId);
       // Resolved HERE, with the character, so the hero's actual biography is
       // frozen into the brief. The prompt used to receive the raw select value
       // -- a uuid -- as the hero's name.
@@ -304,7 +304,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         request: validatedData,
         // JSON, not prose: the worker renders a different projection per
         // prompt site, so freezing one rendering would lose the others.
-        brief: serialiseBrief(buildStoryBrief(validatedData, character, continuity, hero)),
+        brief: serialiseBrief(buildStoryBrief(validatedData, characters, continuity, hero)),
         // Parent Mode is derived inside buildSystemPrompt from the request, so
         // there is no second argument here to forget. See storyBrief.ts.
         systemPrompt: buildSystemPrompt(validatedData),

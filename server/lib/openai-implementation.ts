@@ -1,12 +1,10 @@
 import OpenAI from "openai";
 import { StoryRequest, StoryResponse } from "@shared/schema";
 import {
-  buildStoryBrief,
   buildSystemPrompt,
   buildUserInstruction,
   deserialiseBrief,
   renderBrief,
-  resolveStoryCharacter,
   storyFormFor,
   WORDS_PER_VERSE_LINE,
   type StoryBrief,

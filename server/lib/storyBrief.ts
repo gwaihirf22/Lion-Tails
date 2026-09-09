@@ -1,4 +1,10 @@
-import type { StoryRequest, Character, HeroOfFaith } from "@shared/schema";
+import {
+  characterIdsOf,
+  MAX_STORY_CHARACTERS,
+  type StoryRequest,
+  type Character,
+  type HeroOfFaith,
+} from "@shared/schema";
 import { storage } from "../storage";
 import { getBiblicalEvent } from "../data/biblicalEvents";
 
@@ -8,35 +14,44 @@ export type CustomPrompts = {
 };
 
 /**
- * Resolves the saved character a request refers to, if any.
+ * Resolves the saved characters a request refers to, in the requested order.
  *
- * Scoped to the requesting user on purpose: getCharacterById() takes only an
- * id and Character carries no userId, so looking one up by id alone would let
- * any user generate a story starring another user's character.
- * getAllCharacters(userId) is user-scoped, so we filter within that set.
+ * ONE user-scoped read, then an index. The tempting implementation -- a loop of
+ * getCharacterById(id) -- is the vulnerability this function was written to
+ * avoid: that lookup takes only an id, Character carries no userId, and so an
+ * id-only fetch would let any user generate a story starring another user's
+ * character. Going plural makes that mistake N times easier to commit and no
+ * less severe, so ownership comes from getAllCharacters(userId) and the request
+ * supplies nothing but the ORDER.
  *
- * Returns undefined rather than throwing on any failure -- story generation
- * must still work when the database is unavailable and storage has fallen back
- * to memory.
+ * Returns [] rather than undefined on any failure -- story generation must
+ * still work when the database is unavailable and storage has fallen back to
+ * memory -- and an empty array is harder for a caller to forget than undefined.
  */
-export async function resolveStoryCharacter(
+export async function resolveStoryCharacters(
   request: StoryRequest,
   userId: number,
-): Promise<Character | undefined> {
-  if (!request.characterId) return undefined;
+): Promise<Character[]> {
+  const wanted = characterIdsOf(request);
+  if (wanted.length === 0) return [];
 
   try {
-    const characters = await storage.getAllCharacters(userId);
-    const match = characters.find((c) => c.id === request.characterId);
-    if (!match) {
-      console.warn(
-        `Character ${request.characterId} not found for user ${userId}; falling back to the details on the request.`,
-      );
+    const owned = await storage.getAllCharacters(userId);
+    const byId = new Map(owned.map((c) => [c.id, c]));
+    const found: Character[] = [];
+    for (const id of wanted) {
+      const match = byId.get(id);
+      if (match) found.push(match);
+      // An id the user does not own, or one they deleted after choosing it.
+      // Dropping it silently would shrink the cast with no symptom, so say so
+      // -- and generateStory surfaces requested/resolved counts in the debug
+      // header for the same reason.
+      else console.warn(`Character ${id} not found for user ${userId}; leaving them out of the cast.`);
     }
-    return match;
+    return found.slice(0, MAX_STORY_CHARACTERS);
   } catch (error) {
     console.error("Could not load character details for story generation:", error);
-    return undefined;
+    return [];
   }
 }
 
@@ -188,11 +203,31 @@ function moralOutcomeInstruction(outcome: string | undefined): string | undefine
  * the thing to invent around, HOW is a constraint. Same information, different
  * instructional weight.
  */
-export type StoryBrief = {
-  /** Identity that must stay consistent across chapters. Always included. */
+/**
+ * One person in the story.
+ *
+ * `name` is carried apart from `identity` because it is needed in list
+ * positions -- the "also in this story" roll, the chapter line, the image line
+ * -- and re-extracting it from a rendered sentence is worse than storing it.
+ */
+export type BriefCharacter = {
+  name: string;
+  /** "Mia, aged 8, a girl." */
   identity: string;
   /** Appearance, hobbies, companions. Colour, not requirements. */
   colour: string;
+};
+
+export type StoryBrief = {
+  /**
+   * The people in this story. Index 0 is the protagonist.
+   *
+   * Every projection treats index 0 differently from the rest, and that is the
+   * whole design: eight equal names is eight protagonists, which is the
+   * multi-character form of the character-sheet tour this brief already exists
+   * to prevent.
+   */
+  cast: BriefCharacter[];
   /** What the story is about -- the thing to actually invent around. */
   premise: string[];
   /** Constraints on how it is written. */
@@ -222,11 +257,23 @@ export type StoryBrief = {
 
 export function buildStoryBrief(
   request: StoryRequest,
-  character?: Character,
+  /**
+   * The cast, protagonist first, already resolved and already owned by this
+   * user. REQUIRED rather than optional: db-storage.saveStory records what an
+   * optional parameter costs -- "the optional heroId parameter is exactly why
+   * hero_id is NULL on nearly every row" -- and a silently empty cast here
+   * produces a perfectly valid story about nobody in particular.
+   */
+  characters: Character[],
   continuity?: { canon: string[]; summary?: string },
   hero?: HeroOfFaith,
 ): StoryBrief {
-  const details = character;
+  // The LEAD. Everything below this line that builds identity and colour is
+  // unchanged from the single-character version, deliberately: a request with
+  // one character or none must render byte-identically, and
+  // tests/storyBrief.test.ts asserts exactly that against captured strings.
+  const details = characters[0];
+  const supporting = characters.slice(1);
   const d = request.characterDetails;
 
   const name = details?.name || request.childName || "A child";
@@ -357,9 +404,34 @@ export function buildStoryBrief(
   const form = storyFormFor(request.storyType);
   if (form.craft) craft.push(form.craft);
 
+  // Supporting cast: a name, an identity sentence, and AT MOST TWO FACTS.
+  //
+  // Not parity with the lead, and the arithmetic is the argument. One character
+  // contributes about six facts today; eight at parity is forty-eight, which is
+  // the character-sheet tour at eight times scale. Eyes and favourite colour go
+  // first because they are pure sheet data with nothing for a scene to do, and
+  // the companion animal goes because "give it a name and a personality" eight
+  // times is a menagerie, not a cast.
+  const cast: BriefCharacter[] = [
+    { name, identity, colour },
+    ...supporting.map((c): BriefCharacter => {
+      const who = [c.name];
+      if (c.age) who.push(`aged ${c.age}`);
+      if (isSet(c.gender)) who.push(`a ${c.gender}`);
+      const trait = isSet(c.personality)
+        ? `a ${c.personality} nature`
+        : isSet(c.hair)
+          ? `${c.hair} hair`
+          : undefined;
+      const likes = isSet(c.hobby) ? `likes ${c.hobby}` : undefined;
+      const both = trait && likes ? `${c.name} has ${trait} and ${likes}.` : undefined;
+      const one = trait ? `${c.name} has ${trait}.` : likes ? `${c.name} ${likes}.` : "";
+      return { name: c.name, identity: sentence([who.join(", ")]), colour: both ?? one };
+    }),
+  ];
+
   return {
-    identity,
-    colour,
+    cast,
     premise,
     craft,
     userInstructions: isSet(request.customPrompt) ? request.customPrompt : undefined,
@@ -383,10 +455,22 @@ export function buildStoryBrief(
 export type BriefPurpose = "single" | "outline" | "chapter" | "image";
 
 export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
+  // Index 0 is the protagonist; every projection below leans on that.
+  const lead = brief.cast[0];
+  const others = brief.cast.slice(1);
+  const otherNames = others.map((c) => c.name);
+
   if (purpose === "image") {
-    return brief.sourceMaterial
-      ? `${brief.identity} -- a scene from ${brief.sourceMaterial.label}.`
-      : brief.identity;
+    const base = brief.sourceMaterial
+      ? `${lead.identity} -- a scene from ${brief.sourceMaterial.label}.`
+      : lead.identity;
+    if (others.length === 0) return base;
+    // Naming everyone would put eight children in one frame. An illustration
+    // is a moment, and a moment has two or three people in it.
+    return (
+      `${base} Also in the story: ${otherNames.join(", ")}. Draw ${lead.name} and ` +
+      `at most two of the others -- a picture with everyone in it is a crowd, not a scene.`
+    );
   }
 
   if (purpose === "chapter") {
@@ -409,14 +493,34 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
       ? ` This is a retelling of ${source.label}${source.passage ? ` (${source.passage})` : ""}; stay faithful to it and invent nothing that contradicts it.` +
         (source.cautions.length ? ` Do not get these wrong: ${source.cautions.join(" ")}` : "")
       : "";
-    return `The story is about ${brief.identity} Keep this consistent.${sourceLine}${canonLine}`;
+    // NAMES ONLY for the supporting cast -- no ages, no colour. The whole
+    // reason this projection exists is that re-injecting attributes per chapter
+    // made a story a tour of the character sheet; eight characters is eight
+    // times that. The dozen tokens the names cost buy something specific: the
+    // outline has already decided who appears where, so chapter 5 naming a
+    // child who does not exist, or forgetting one who does, is the failure this
+    // prevents.
+    const alsoLine = otherNames.length
+      ? ` Also in this story: ${otherNames.join(", ")} -- use them only where this chapter's instruction calls for them, and do not add anyone who is not named here.`
+      : "";
+    return `The story is about ${lead.identity} Keep this consistent.${alsoLine}${sourceLine}${canonLine}`;
   }
 
   const out: string[] = [];
 
   out.push("WHO THIS IS ABOUT");
-  out.push(brief.identity);
-  if (brief.sourceMaterial && !brief.colour) {
+  if (others.length > 0) {
+    // Said BEFORE the names, so the model reads the whole roll knowing which
+    // one it is following. Said after, it has already given everyone equal
+    // weight by the time it is told not to.
+    out.push(
+      `This is ${lead.name}'s story. The others are in it with ${lead.name}, but ` +
+        `the choices the story turns on are ${lead.name}'s, and the reader stays ` +
+        `with ${lead.name}.`,
+    );
+  }
+  out.push(lead.identity);
+  if (brief.sourceMaterial && !lead.colour) {
     // No invented protagonist was supplied, so say so explicitly. Left silent,
     // a model asked for a children's story reaches for a child to put in it.
     out.push(
@@ -424,8 +528,14 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
         "a narrator-child, or a framing device where someone is told the story.",
     );
   }
-  if (brief.colour) {
-    out.push(brief.colour);
+  if (lead.colour) out.push(lead.colour);
+  if (others.length > 0) {
+    out.push(
+      `ALSO IN THE STORY -- ${others.length} ${others.length === 1 ? "other" : "others"}, present but not the subject:`,
+    );
+    for (const c of others) out.push(`  - ${[c.identity, c.colour].filter(Boolean).join(" ")}`);
+  }
+  if (lead.colour || others.some((c) => c.colour)) {
     // The single most important line in the brief. Without it these details are
     // read as requirements and the story becomes a tour of the character sheet.
     out.push(
@@ -433,6 +543,47 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
         "introduce them as a list, and do not make appearance or companions the " +
         "subject of what happens.",
     );
+  }
+  if (others.length > 0) {
+    // The multi-character analogue of the line above, and the failure it names
+    // is specific: handed N equal entities a model round-robins them, giving
+    // each a paragraph and a moment. Granting explicit permission to UNDER-USE
+    // people is what stops that -- "some of them may say nothing at all" is
+    // doing more work here than any instruction to be selective.
+    const n = brief.cast.length;
+    out.push(
+      `These are ${n} people in one story, not ${n} stories. Do not give them a ` +
+        `turn each, do not introduce them one after another, and do not write a ` +
+        `scene whose only purpose is that everybody gets a moment. Some of them ` +
+        `may say nothing at all -- that is better than a crowd in which nobody ` +
+        `is anybody.`,
+    );
+    out.push(
+      "Everyone in this story is named above. Do not rename them, do not merge " +
+        "two of them into one, and do not add extra children of your own.",
+    );
+    if (n >= 4) {
+      out.push(
+        "Keep no more than three of them in any one scene. The rest are " +
+          "elsewhere, and the story does not have to say where.",
+      );
+    }
+    if (brief.sourceMaterial) {
+      // Without this, eight modern children reshape the flood.
+      out.push(
+        `The account comes first. ${lead.name} and the others are visitors in ` +
+          `it: they can watch, help and be afraid, but nothing they do changes ` +
+          `what happens or how it ends.`,
+      );
+    }
+    if (purpose === "outline") {
+      // The outline is where per-chapter casting is actually decided, so this
+      // is the one place the instruction can be acted on rather than admired.
+      out.push(
+        "Not every part needs everyone. Decide who is in each part and leave " +
+          "the rest out of that part.",
+      );
+    }
   }
 
   out.push("");
@@ -636,11 +787,40 @@ export function serialiseBrief(brief: StoryBrief): string {
 export function deserialiseBrief(raw: string): StoryBrief {
   try {
     const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && "identity" in parsed) {
-      return parsed as StoryBrief;
+    if (parsed && typeof parsed === "object") {
+      if (Array.isArray(parsed.cast)) return parsed as StoryBrief;
+      // A brief frozen before the cast became plural. These are IN FLIGHT
+      // ACROSS EVERY DEPLOY -- story_jobs.brief is frozen text written at
+      // enqueue and never rewritten -- so a brief written five minutes before
+      // this shipped still has to render. The upgrade lives here because this
+      // is already the one function that knows about old brief formats.
+      //
+      // Note what is NOT done: renderBrief has no defensive `?? []` on the
+      // cast. A missing cast there would render a WHO section with nobody in
+      // it and produce a valid story about no one -- failing loudly at the
+      // seam is better than a silent story about nobody.
+      if ("identity" in parsed) {
+        const identity = String(parsed.identity ?? "");
+        return {
+          ...parsed,
+          cast: [
+            {
+              // The identity sentence is "Mia, aged 8, a girl." -- the name is
+              // everything before the first comma.
+              name: identity.split(",")[0].trim() || "the main character",
+              identity,
+              colour: typeof parsed.colour === "string" ? parsed.colour : "",
+            },
+          ],
+        } as StoryBrief;
+      }
     }
   } catch {
     // fall through
   }
-  return { identity: "the main character", colour: "", premise: [raw], craft: [] };
+  return {
+    cast: [{ name: "the main character", identity: "the main character", colour: "" }],
+    premise: [raw],
+    craft: [],
+  };
 }

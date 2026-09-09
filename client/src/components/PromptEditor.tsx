@@ -24,7 +24,8 @@ import {
   Info,
   Code2
 } from "lucide-react";
-import type { StoryRequest } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+import { characterIdsOf, type Character, type StoryRequest } from "@shared/schema";
 
 interface PromptEditorProps {
   storyRequest: StoryRequest;
@@ -86,6 +87,9 @@ Content Guidelines:
 
 export default function PromptEditor({ storyRequest, onPromptsChanged, className }: PromptEditorProps) {
   const { isActive } = useParentMode();
+  // Names for the preview. Shares the cache key the picker already uses, so
+  // this costs no extra request.
+  const { data: characters = [] } = useQuery<Character[]>({ queryKey: ["/api/characters"] });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [userPrompt, setUserPrompt] = useState("");
@@ -104,6 +108,18 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
       
       prompt += `Story Type: ${storyRequest.storyType}\n`;
       
+      // The cast. This preview showed NO character at all, which is a real
+      // hazard rather than an omission: a Parent Mode user who accepts the
+      // preview sets useCustomPrompts, and the whole cast then never reaches
+      // the model. It was survivable at one character and is not at eight.
+      //
+      // Names only, deliberately -- this is a preview of the request, not the
+      // brief, and the brief is where weighting and attributes are decided.
+      const cast = characterIdsOf(storyRequest);
+      if (cast.length > 0) {
+        const names = cast.map((id) => characters.find((c) => c.id === id)?.name ?? id);
+        prompt += `Characters: ${names[0]} (main)${names.length > 1 ? ", " + names.slice(1).join(", ") : ""}\n`;
+      }
       if (storyRequest.childName) prompt += `Child's Name: ${storyRequest.childName}\n`;
       if (storyRequest.characterDetails?.age) prompt += `Child's Age: ${storyRequest.characterDetails.age}\n`;
       if (storyRequest.theme) prompt += `Theme/Lesson: ${storyRequest.theme}\n`;
@@ -138,7 +154,9 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
     if (!userPromptManuallyEdited) {
       setUserPrompt(newUserPrompt);
     }
-  }, [storyRequest, systemPromptManuallyEdited, userPromptManuallyEdited]);
+    // `characters` is a dependency because the preview now names them: without
+    // it the prompt would show raw ids until something else re-rendered.
+  }, [storyRequest, characters, systemPromptManuallyEdited, userPromptManuallyEdited]);
 
   // Validate prompts
   useEffect(() => {
