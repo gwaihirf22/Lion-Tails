@@ -53,6 +53,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { useQueryClient } from "@tanstack/react-query";
+import { apiRequestAllowingErrors } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, Sparkles } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useParentMode } from "@/hooks/use-parent-mode";
 import AnimalAutocomplete from "./AnimalAutocomplete";
@@ -177,7 +181,7 @@ type CharacterFormProps = {
    * The saved row, when editing. Carries the two things the form shows but
    * never writes -- adventures and therefore virtues, which are the server's.
    */
-  saved?: Pick<Character, "adventures">;
+  saved?: Pick<Character, "adventures" | "id" | "avatarUrl">;
 };
 
 export default function CharacterForm({
@@ -310,6 +314,45 @@ export default function CharacterForm({
     />
   );
 
+  /**
+   * Ask the server to draw them.
+   *
+   * The allowance is NOT enforced here -- the button only reports what the
+   * server said. A disabled button is a courtesy; the cap is a POST away from
+   * being bypassed, so it lives in the route, and this reads the count back
+   * from the response rather than keeping its own tally that could drift.
+   */
+  const [drawing, setDrawing] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const makeAvatar = async () => {
+    if (!saved?.id || drawing) return;
+    setDrawing(true);
+    try {
+      const res = await apiRequestAllowingErrors("POST", `/api/characters/${saved.id}/avatar`);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({
+          title: res.status === 403 ? "No free pictures left" : "That did not work",
+          description: body?.message ?? "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      // Straight onto the form, so the picture appears without a refetch, and
+      // into the cache so the Characters list agrees with it.
+      form.setValue("avatarUrl", body.character?.avatarUrl);
+      if (typeof body.remaining === "number") setRemaining(body.remaining);
+      void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+    } catch {
+      toast({ title: "That did not work", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setDrawing(false);
+    }
+  };
+
   const results = kindSearch ? searchKinds(kindSearch, 40) : [];
 
   return (
@@ -354,9 +397,32 @@ export default function CharacterForm({
                     avatarUrl: form.watch("avatarUrl"),
                   }}
                 />
-                <p className="text-sm text-muted-foreground">
-                  No picture yet — you will be able to make one soon.
-                </p>
+                <div className="space-y-2">
+                  {saved?.id ? (
+                    <>
+                      <Button type="button" variant="outline" size="sm"
+                              onClick={makeAvatar} disabled={drawing}>
+                        {drawing
+                          ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Drawing…</>
+                          : <><Sparkles className="mr-2 h-4 w-4" />
+                              {form.watch("avatarUrl") ? "Draw a new picture" : "Make a picture"}</>}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        {drawing
+                          ? "This takes about half a minute."
+                          : remaining === null
+                            ? "Drawn from what they look like — fill in Appearance first, or describe them under Grown-ups."
+                            : `${remaining} free ${remaining === 1 ? "picture" : "pictures"} left.`}
+                      </p>
+                    </>
+                  ) : (
+                    // No id yet, so there is nothing to attach a picture TO.
+                    // Saying why beats a button that fails.
+                    <p className="text-sm text-muted-foreground">
+                      Save them first, then you can make a picture.
+                    </p>
+                  )}
+                </div>
               </div>
 
             {/* ---- What are they? The one question worth asking first. ---- */}
