@@ -8,6 +8,7 @@ import {
   renderBrief,
   resolveStoryFocus,
   statLeakage,
+  SOLO_RETELLING_GUARD,
   type BriefPurpose,
 } from "../server/lib/storyBrief";
 import {
@@ -17,6 +18,7 @@ import {
   storyRequestSchema,
   type StoryRequest,
   type Character,
+  type HeroOfFaith,
   type CharacterStats,
 } from "../shared/schema";
 
@@ -243,8 +245,8 @@ describe("a cast is weighted, not enumerated", () => {
     expect(text).toContain("may say nothing at all");
   });
 
-  it("forbids inventing a ninth child", () => {
-    expect(renderBrief(make(3), "single")).toContain("do not add extra children of your own");
+  it("forbids inventing a ninth character", () => {
+    expect(renderBrief(make(3), "single")).toContain("do not add extra characters of your own");
   });
 
   it("caps a scene at three of them once the cast is large", () => {
@@ -561,14 +563,14 @@ describe("a retelling needs no protagonist", () => {
     expect(parse({ biblicalEvent: "", heroOfFaith: "  " }).success).toBe(false);
   });
 
-  it("still renders the retelling as having no invented child", () => {
+  it("still renders the retelling as having nobody invented", () => {
     // With no name supplied, buildStoryBrief falls back to "A child", which is
     // in PLACEHOLDER_NAMES -- so the anonymous branch still fires and the
     // account keeps its own cast.
     const brief = buildStoryBrief(
       { ...base, biblicalEvent: "noah", childName: "" } as StoryRequest, []);
     const text = renderBrief(brief, "single");
-    expect(text).toContain("There is no invented child in this story");
+    expect(text).toContain("Nobody has been invented to walk through this account");
     expect(brief.cast[0].colour).toBe("");
   });
 });
@@ -916,5 +918,95 @@ describe("stats can be switched off for a character", () => {
     // statsEnabled is absent on every existing row; only an explicit false
     // turns it off.
     expect(render([on])).toContain("WHAT EACH OF THEM CAN DO");
+  });
+});
+
+/**
+ * A real child's name, a biblical retelling, and no time travel.
+ *
+ * THE BUG THESE EXIST FOR. A story was requested with hero "Caleb" for a child
+ * called Esther, time travel off. The account was accurate throughout -- Numbers
+ * 13-14, the twelve spies, the Anakim, Hebron, 14:24 quoted correctly. What went
+ * wrong is that Esther was put INSIDE it: three paragraphs opened by addressing
+ * her, and the illustration prompt had her standing beside Caleb in biblical
+ * dress. Because her name is itself a major figure in Scripture, that read as
+ * the app confusing two Bible characters. It was not.
+ *
+ * Two prompts in one generation contradicted each other. The full brief said
+ * nobody had been invented; the chapter prompt said "The story is about Esther,
+ * aged 8, a girl. Keep this consistent." A medium story is the multi-chapter
+ * path, so both were sent -- and the chapter prompt is the one repeated for
+ * every chapter, so it is the one the model followed.
+ *
+ * It survived because the app's own hero stories pass the literal string
+ * "Character" as the name, which took a different branch and looked right.
+ * Nobody had run it with a real name.
+ */
+describe("a retelling requested with a real character's name", () => {
+  const hero = {
+    id: "bible-caleb", name: "Caleb", timePeriod: "Numbers and Joshua",
+    description: "One of two spies who said the land could be taken.",
+    keyEvents: [{ description: "Quiets the people", reference: "Numbers 13:30" }],
+  } as unknown as HeroOfFaith;
+
+  const brief = (o: Record<string, unknown> = {}) =>
+    buildStoryBrief(
+      { childName: "Esther", gender: "girl", storyType: "regular",
+        storyLength: "medium", theme: "courage", heroOfFaith: hero.id,
+        useTimeTravel: false, ...o } as unknown as StoryRequest,
+      [], undefined, hero,
+    );
+
+  it("does not make the story about her", () => {
+    // This is the whole bug: a real name took a different path from the
+    // placeholder the app itself sends.
+    expect(renderBrief(brief(), "chapter")).not.toContain("about Esther");
+    expect(renderBrief(brief(), "single")).not.toContain("Esther");
+  });
+
+  it("tells EVERY chapter that nobody was invented, not just the full brief", () => {
+    // The projection that was missing it is the one that gets repeated.
+    for (const purpose of ["single", "outline", "chapter"] as const) {
+      expect(renderBrief(brief(), purpose)).toContain(SOLO_RETELLING_GUARD);
+    }
+  });
+
+  it("puts her in when time travel is on, and then does NOT deny she exists", () => {
+    // The opposite failure, and just as bad: a chapter prompt that says the
+    // story is about Esther and that nobody was invented is incoherent, and a
+    // first attempt at this fix produced exactly that.
+    const t = brief({ useTimeTravel: true });
+    expect(renderBrief(t, "single")).toContain("travels back in time");
+    expect(renderBrief(t, "chapter")).toContain("Esther");
+    expect(renderBrief(t, "chapter")).not.toContain(SOLO_RETELLING_GUARD);
+  });
+
+  it("keeps the placeholder name out of the scene however the flag is set", () => {
+    // "Character travels back in time and witnesses this first-hand" is not a
+    // sentence anyone meant, and the form sends that literal string.
+    const t = brief({ childName: "Character", useTimeTravel: true });
+    expect(renderBrief(t, "single")).not.toContain("travels back in time");
+    expect(renderBrief(t, "chapter")).toContain(SOLO_RETELLING_GUARD);
+  });
+
+  it("emits the scripture reference and never the word undefined", () => {
+    // Biblical heroes deliberately carry no year -- types.ts says so -- and
+    // `${e.year}: ${e.description}` put a literal "undefined:" in front of all
+    // six of Caleb's events, inside the ACCOUNT the model is told to follow,
+    // while throwing the chapter-and-verse away.
+    const t = renderBrief(brief(), "single");
+    expect(t).toContain("Numbers 13:30: Quiets the people");
+    expect(t).not.toContain("undefined");
+  });
+
+  it("does not run the events list into the quote", () => {
+    const withQuote = buildStoryBrief(
+      { childName: "Character", storyType: "regular", storyLength: "medium",
+        theme: "courage", heroOfFaith: hero.id } as unknown as StoryRequest,
+      [], undefined, { ...hero, famousQuote: "Give me this hill country." } as HeroOfFaith,
+    );
+    const t = renderBrief(withQuote, "single");
+    expect(t).not.toContain("Quiets the people In their own words");
+    expect(t).toContain("Numbers 13:30: Quiets the people. In their own words:");
   });
 });

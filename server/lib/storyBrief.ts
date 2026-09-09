@@ -153,7 +153,27 @@ const isSet = (v: unknown): v is string =>
  * Noah story opened "WHO THIS IS ABOUT: Biblical Character, a boy." and the
  * model, given a protagonist, wrote about him instead of about Noah.
  */
-const PLACEHOLDER_NAMES = new Set(["biblical character", "character", "a child", "child"]);
+/**
+ * Said in the full brief AND in every chapter prompt, so it is written once.
+ *
+ * "Child" was the wrong noun and had become misleading. A character is not
+ * assumed to be the reader's child any more -- it may be a dragon or a robot --
+ * and "do not add a child" does not forbid inserting a dragon into Numbers 13.
+ * The audience is still a child; the CAST is not, and this sentence is about
+ * the cast.
+ */
+export const SOLO_RETELLING_GUARD =
+  "Nobody has been invented to walk through this account. Do not add a modern " +
+  "character, a narrator being told the story, or any framing device around it.";
+
+const PLACEHOLDER_NAMES = new Set([
+  "biblical character",
+  "character",
+  "a character",
+  // Kept: rows and in-flight requests written before the rename still say it.
+  "a child",
+  "child",
+]);
 const isPlaceholderName = (v: string | undefined): boolean =>
   typeof v === "string" && PLACEHOLDER_NAMES.has(v.trim().toLowerCase());
 
@@ -317,6 +337,18 @@ export type StoryBrief = {
    * to prevent.
    */
   cast: BriefCharacter[];
+  /**
+   * A retelling with nobody invented walking through it.
+   *
+   * EXPLICIT, because the thing it replaced was an inference. Both the full
+   * brief and the per-chapter prompt need this fact, and they used to derive it
+   * separately -- one from "is the lead's colour empty", the other not at all.
+   * A child who simply has no hair or hobby recorded ALSO has empty colour, so
+   * the proxy could not tell "there is no child" from "there is a child nobody
+   * described", and the two prompts could contradict each other in the same
+   * generation. Carried on the brief so there is one answer.
+   */
+  soloRetelling: boolean;
   /** What the story is about -- the thing to actually invent around. */
   premise: string[];
   /** Constraints on how it is written. */
@@ -391,7 +423,7 @@ export function buildStoryBrief(
    */
   const d = details ? undefined : request.characterDetails;
 
-  const name = details?.name || request.childName || "A child";
+  const name = details?.name || request.childName || "A character";
   // What they ARE. characterKind() is the one place that knows the widened
   // `kind` and the legacy `gender` are the same fact.
   const kind = characterKind(details) || request.gender;
@@ -424,8 +456,16 @@ export function buildStoryBrief(
     // biography rather than the name. heroesOfFaith.ts has carried timePeriod,
     // contribution, keyEvents and a verse for every one of the fifteen heroes
     // all along, and the prompt received none of it.
+    // A history event carries a year and a Scripture event carries a
+    // reference -- types.ts says so, and the 39 bible-* heroes deliberately
+    // have no year. Interpolating e.year regardless put the literal word
+    // "undefined" in front of all six of Caleb's events, in the ACCOUNT block
+    // the model is told to follow, and threw the chapter-and-verse away.
     const events = (hero.keyEvents ?? [])
-      .map((e) => `${e.year}: ${e.description}`)
+      .map((e) => {
+        const when = e.year || e.reference;
+        return when ? `${when}: ${e.description}` : e.description;
+      })
       .join("; ");
     sourceMaterial = {
       kind: "hero-of-faith",
@@ -434,7 +474,9 @@ export function buildStoryBrief(
       account: [
         hero.description,
         hero.contribution,
-        events && `Key events -- ${events}`,
+        // The events list has no terminator of its own, so without this the
+        // account read "...the springs she asks for In their own words:".
+        events && `Key events -- ${events}.`.replace(/\.\.$/, "."),
         hero.famousQuote && `In their own words: "${hero.famousQuote}"`,
       ]
         .filter(Boolean)
@@ -451,7 +493,40 @@ export function buildStoryBrief(
   // A retelling has its own cast. When the form supplied a placeholder name
   // there is no child in this story, and saying there is one hands the model a
   // protagonist to displace Noah with.
-  const anonymous = isPlaceholderName(name) && Boolean(sourceMaterial);
+  /**
+   * Is the child IN the account, or is this a straight retelling?
+   *
+   * Time travel is the only thing that puts them there. It already exists and
+   * already works -- "Lucy's feet were dancing when the time-step began" -- so
+   * with it off, a retelling is about the person it is about and the child is
+   * not in the scene.
+   *
+   * A placeholder name is never in the scene whatever the flag says: the form
+   * writes the literal string "Character" for the historical tab, and
+   * "Character travels back in time" is not a sentence anyone meant.
+   */
+  const placeholder = isPlaceholderName(name);
+  const childInScene = Boolean(request.useTimeTravel) && !placeholder;
+
+  /**
+   * The child is not a participant, so the prompt is about the account.
+   *
+   * THIS USED TO TEST THE NAME, and that is the bug it now fixes. The condition
+   * was isPlaceholderName(name) && sourceMaterial, so a retelling requested with
+   * a REAL child's name fell through: the brief named her as the subject, the
+   * chapter projection told every chapter to keep the story about her, and the
+   * model did as it was told and wrote her into the wilderness of Paran.
+   *
+   * It went unnoticed because the app's own hero stories pass the literal
+   * "Character", which took the placeholder branch and looked correct. It
+   * surfaced when a child called Esther was given a story about Caleb -- and
+   * because her name is itself a major biblical figure, an inserted child read
+   * as the app confusing two people in Scripture. It was not: the account was
+   * accurate throughout. She had simply been put inside it.
+   *
+   * Keyed on participation, not on what the name looks like.
+   */
+  const anonymous = Boolean(sourceMaterial) && !childInScene;
   const who = [name];
   if (age) who.push(`aged ${age}`);
   // WHAT THEY ARE goes in the identity slot, not in colour. "Is a dragon" is a
@@ -521,7 +596,7 @@ export function buildStoryBrief(
     premise.push(`Feature this hero of faith: ${request.heroOfFaith}.`);
   }
   if (isSet(request.biblePassage)) premise.push(`Draw on this passage: ${request.biblePassage}.`);
-  if (request.useTimeTravel && !anonymous) {
+  if (childInScene) {
     premise.push(`${name} travels back in time and witnesses this first-hand.`);
   }
 
@@ -637,6 +712,7 @@ export function buildStoryBrief(
 
   return {
     cast,
+    soloRetelling: anonymous,
     premise,
     craft,
     userInstructions: isSet(request.customPrompt) ? request.customPrompt : undefined,
@@ -788,6 +864,18 @@ function renderAbilities(cast: BriefCharacter[]): string {
   ].join("\n    ");
 }
 
+/**
+ * Is this a retelling with nobody invented to walk through it?
+ *
+ * One reader of one recorded fact. Both the full brief and the per-chapter
+ * prompt ask this, and they MUST agree -- they disagreed before, and the
+ * chapter prompt is the one repeated once per chapter, so it is the one the
+ * story followed.
+ */
+function noInventedChild(brief: StoryBrief): boolean {
+  return brief.soloRetelling === true;
+}
+
 export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
   // Index 0 is the protagonist; every projection below leans on that.
   const lead = brief.cast[0];
@@ -844,7 +932,21 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     // renders exactly as it did before.
     const holds = others.map((c) => c.mustHold).filter(Boolean);
     const holdLine = holds.length ? ` These must stay true: ${holds.join(" ")}` : "";
-    return `The story is about ${lead.identity} Keep this consistent.${alsoLine}${holdLine}${sourceLine}${canonLine}`;
+    // THE LINE THIS PROJECTION WAS MISSING.
+    //
+    // The full brief said "There is no invented child in this story"; this one
+    // said "The story is about Esther, aged 8, a girl. Keep this consistent."
+    // A medium story is the multi-chapter path, so both were sent -- and the
+    // chapter prompt is the one repeated for every chapter. The model kept
+    // Esther consistent, as instructed, by putting her in the wilderness of
+    // Paran with Caleb.
+    //
+    // Two prompts in one generation must not contradict each other. They now
+    // read the same predicate.
+    const soloLine = noInventedChild(brief)
+      ? ` ${SOLO_RETELLING_GUARD}`
+      : "";
+    return `The story is about ${lead.identity} Keep this consistent.${soloLine}${alsoLine}${holdLine}${sourceLine}${canonLine}`;
   }
 
   const out: string[] = [];
@@ -861,12 +963,11 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     );
   }
   out.push(lead.identity);
-  if (brief.sourceMaterial && !lead.colour) {
+  if (noInventedChild(brief)) {
     // No invented protagonist was supplied, so say so explicitly. Left silent,
     // a model asked for a children's story reaches for a child to put in it.
     out.push(
-      "There is no invented child in this story. Do not add a modern character, " +
-        "a narrator-child, or a framing device where someone is told the story.",
+      SOLO_RETELLING_GUARD,
     );
   }
   if (lead.colour) out.push(lead.colour);
@@ -903,7 +1004,9 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     );
     out.push(
       "Everyone in this story is named above. Do not rename them, do not merge " +
-        "two of them into one, and do not add extra children of your own.",
+        // "children" for the same reason as above: a cast may be a dragon and
+        // an owl, and "do not add extra children" does not forbid a third owl.
+        "two of them into one, and do not add extra characters of your own.",
     );
     if (n >= 4) {
       out.push(
@@ -1164,7 +1267,18 @@ export function deserialiseBrief(raw: string): StoryBrief {
   try {
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") {
-      if (Array.isArray(parsed.cast)) return parsed as StoryBrief;
+      if (Array.isArray(parsed.cast)) {
+        // soloRetelling arrived after some briefs were frozen. For those, fall
+        // back to what the old code did -- an empty lead colour alongside
+        // source material meant the child had been anonymised -- rather than
+        // defaulting to false, which would put the invented-child guard back to
+        // silent for every job already queued when this deployed.
+        if (typeof parsed.soloRetelling !== "boolean") {
+          parsed.soloRetelling =
+            Boolean(parsed.sourceMaterial) && !parsed.cast[0]?.colour;
+        }
+        return parsed as StoryBrief;
+      }
       // A brief frozen before the cast became plural. These are IN FLIGHT
       // ACROSS EVERY DEPLOY -- story_jobs.brief is frozen text written at
       // enqueue and never rewritten -- so a brief written five minutes before
@@ -1179,6 +1293,9 @@ export function deserialiseBrief(raw: string): StoryBrief {
         const identity = String(parsed.identity ?? "");
         return {
           ...parsed,
+          soloRetelling:
+            Boolean(parsed.sourceMaterial) &&
+            !(typeof parsed.colour === "string" && parsed.colour),
           cast: [
             {
               // The identity sentence is "Mia, aged 8, a girl." -- the name is
@@ -1196,6 +1313,9 @@ export function deserialiseBrief(raw: string): StoryBrief {
   }
   return {
     cast: [{ name: "the main character", identity: "the main character", colour: "" }],
+    // An unparseable brief carries no source material, so there is no retelling
+    // for an invented child to be absent from.
+    soloRetelling: false,
     premise: [raw],
     craft: [],
   };
