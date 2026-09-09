@@ -711,7 +711,24 @@ export const savedStorySchema = z.object({
   createdAt: z.string(), // ISO date string
   isFavorite: z.boolean().default(false),
   expiresAt: z.string().optional(), // ISO date string
-  
+
+  /**
+   * The chapter plan this story was written from, one string per chapter.
+   *
+   * Copied here from `story_jobs.outline`, where it is written as a resume
+   * checkpoint. It is on the STORY as well because that job row is described in
+   * this file as "prunable operational state" -- a permanent, user-facing
+   * feature reading from a table whose own schema invites deletion breaks
+   * silently the day someone adds the pruning it invites.
+   *
+   * Absent for anything generated in one call: `targetWordCount < 1000`, which
+   * is very-short prose and EVERY poem. Those have no outline and never will,
+   * so a reader must handle its absence rather than assume it.
+   *
+   * The plan, not a transcript. Chapters can drift from it.
+   */
+  outline: z.array(z.string()).optional(),
+
   // Search and relationship metadata
   heroId: z.string().optional(), // ID of the Hero of Faith if story is related to one
   searchMetadata: z.object({

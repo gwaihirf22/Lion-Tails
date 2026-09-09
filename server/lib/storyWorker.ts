@@ -571,7 +571,22 @@ async function runJob(job: JobRow): Promise<void> {
     // The worker saves, so "Story generated but not saved" ceases to exist as
     // a state -- and the canned error stories the client used to auto-save
     // cannot be written at all.
-    const saved = await storage.saveStory(story, job.request, job.user_id);
+    //
+    // The outline rides on the story object, the way generationId already does,
+    // rather than becoming another parameter. db-storage.ts records why: the
+    // optional heroId parameter "is exactly why hero_id is NULL on nearly every
+    // row: DbStorage.saveStory silently omits it and the caller cannot tell."
+    // A second optional parameter would fail the same way, and this one has no
+    // loud symptom -- a missing outline just renders as a story with no recap.
+    //
+    // Reached only on the kind === "story" path. `outline` on a SUMMARY job is
+    // the list of story ids the window covers (see shrinkSummaryWindow), which
+    // is a different fact wearing the same column.
+    const saved = await storage.saveStory(
+      { ...story, outline: job.outline ?? undefined },
+      job.request,
+      job.user_id,
+    );
     await finishSucceeded(job, saved.id);
   } catch (error) {
     const code = error instanceof StoryGenerationError ? error.code : "generation_failed";

@@ -36,6 +36,13 @@
       "when": 1788844121980,
       "tag": "0004_typical_menace",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788938556752,
+      "tag": "0005_backfill_story_outlines",
+      "breakpoints": true
     }
   ]
 }

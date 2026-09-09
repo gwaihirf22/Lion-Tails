@@ -7,6 +7,26 @@ import createMemoryStore from 'memorystore';
 
 const MemoryStore = createMemoryStore(session);
 
+/**
+ * A story as handed to saveStory.
+ *
+ * Two facts ride on the story object rather than becoming extra parameters:
+ * `generationId`, and the chapter `outline`. That is deliberate and the
+ * reason is recorded in db-storage.saveStory -- the optional `heroId`
+ * parameter "is exactly why hero_id is NULL on nearly every row:
+ * DbStorage.saveStory silently omits it and the caller cannot tell."
+ *
+ * Naming them here rather than reaching for them through a cast at each site
+ * means the signature says what it accepts, and a future carried field has an
+ * obvious place to be declared.
+ */
+export type StoryToSave = StoryResponse & {
+  generationId?: string;
+  /** The chapter plan. Absent for single-call generations: very-short prose
+   *  and every poem. */
+  outline?: string[];
+};
+
 export interface IStorage {
   // Session store for authentication
   sessionStore: session.Store;
@@ -42,7 +62,7 @@ export interface IStorage {
   // Story related methods
   getAllStories(userId?: number): Promise<SavedStory[]>;
   getStoryById(id: string, userId?: number): Promise<SavedStory | undefined>;
-  saveStory(story: StoryResponse, request: StoryRequest, userId: number, heroId?: string): Promise<SavedStory>;
+  saveStory(story: StoryToSave, request: StoryRequest, userId: number, heroId?: string): Promise<SavedStory>;
   toggleFavorite(id: string, isFavorite: boolean, userId: number): Promise<SavedStory | undefined>;
   deleteStory(id: string, userId: number): Promise<boolean>;
   updateStoryHeroId(storyId: string, heroId: string, userId: number): Promise<SavedStory | undefined>;
@@ -411,7 +431,7 @@ export class MemStorage implements IStorage {
     return story;
   }
 
-  async saveStory(story: StoryResponse, request: StoryRequest, userId: number, heroId?: string): Promise<SavedStory> {
+  async saveStory(story: StoryToSave, request: StoryRequest, userId: number, heroId?: string): Promise<SavedStory> {
     const id = uuidv4();
     const now = new Date();
 
@@ -487,6 +507,11 @@ export class MemStorage implements IStorage {
       isFavorite: false,
       expiresAt: expiryDate.toISOString(),
       heroId, // Link to Hero of Faith if provided
+      // Read off the story object, exactly as DbStorage does, so the two
+      // implementations cannot disagree about where this fact lives. They have
+      // already diverged once -- searchMetadata is populated here and written
+      // as five empty arrays by DbStorage.
+      ...(story.outline ? { outline: story.outline } : {}),
       searchMetadata: {
         keywords,
         tags,

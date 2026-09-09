@@ -12,6 +12,7 @@ import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import type { StoryRequest, StoryResponse } from "@shared/schema";
 import { useStoryJobs, describeJob } from "@/hooks/use-story-jobs";
+import ContinuationContext from "@/components/ContinuationContext";
 
 export default function GenerateStory() {
   const { toast } = useToast();
@@ -210,15 +211,7 @@ export default function GenerateStory() {
         )}
       </div>
 
-      {continuesStoryId && (
-        <div className="mb-4 rounded-lg border-2 border-primary/30 bg-primary/5 p-4">
-          <p className="text-sm">
-            <strong>Continuing an earlier story.</strong> This one joins the same
-            universe, and is written against what has already happened there —
-            as a new episode, not a retelling.
-          </p>
-        </div>
-      )}
+      {continuesStoryId && <ContinuationContext storyId={continuesStoryId} />}
 
       <div className="grid grid-cols-1 gap-8">
         <div className="relative">
