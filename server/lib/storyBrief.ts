@@ -303,6 +303,8 @@ export type BriefCharacter = {
    * spent a point, which is what keeps this free for everyone who has not.
    */
   stats?: CharacterStats;
+  /** False when this character opted out of stats entirely. */
+  statsEnabled?: boolean;
 };
 
 export type StoryBrief = {
@@ -580,7 +582,7 @@ export function buildStoryBrief(
   // the companion animal goes because "give it a name and a personality" eight
   // times is a menagerie, not a cast.
   const cast: BriefCharacter[] = [
-    { name, identity, colour, stats: details?.stats },
+    { name, identity, colour, stats: details?.stats, statsEnabled: details?.statsEnabled },
     ...supporting.map((c): BriefCharacter => {
       const who = [c.name];
       if (c.age) who.push(`aged ${c.age}`);
@@ -611,6 +613,7 @@ export function buildStoryBrief(
       return {
         name: c.name,
         stats: c.stats,
+        statsEnabled: c.statsEnabled,
         identity: isSet(c.mustBeTrue)
           ? `${sentence([who.join(", ")])} ${sentence([c.mustBeTrue])}`
           : sentence([who.join(", ")]),
@@ -724,7 +727,9 @@ function renderAbilities(cast: BriefCharacter[]): string {
   // character the model cannot place: is Mia stronger than Ember or not? The
   // whole reason for giving numbers rather than prose is that the comparison
   // is answerable, and a partial table is not.
-  const sheets = cast.map((c) => ({ name: c.name, stats: statsOf(c) }));
+  const sheets = cast
+    .filter((c) => c.statsEnabled !== false)
+    .map((c) => ({ name: c.name, stats: statsOf(c) }));
   const touched = sheets.filter((c) =>
     CHARACTER_STATS.some((s) => c.stats[s] !== STAT_BASE),
   );

@@ -1091,6 +1091,7 @@ export default function StoryForm({
         {selectedCharacter && (
           <CharacterForm
             initialCharacter={selectedCharacter}
+            saved={selectedCharacter}
             onSubmit={handleCharacterUpdated}
             loading={false}
           />

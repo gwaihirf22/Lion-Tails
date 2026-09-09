@@ -3,7 +3,21 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Pencil, Search, Undo2 } from "lucide-react";
-import { characterSchema } from "@shared/schema";
+import {
+  characterSchema,
+  baseStats,
+  statsOf,
+  pointsEarned,
+  pointsSpent,
+  CHARACTER_STATS,
+  STAT_BASE,
+  STAT_FLOOR,
+  STAT_CAP,
+  STARTING_POINTS,
+  virtueLevels,
+  type Character,
+  type CharacterStat,
+} from "@shared/schema";
 import {
   CHARACTER_CATEGORIES,
   categoryOf,
@@ -25,12 +39,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import CharacterAvatar from "./CharacterAvatar";
 import {
   Select,
   SelectContent,
@@ -162,12 +174,18 @@ type CharacterFormProps = {
   onSubmit: (data: CharacterFormValues, custom: boolean) => void;
   loading?: boolean;
   initialCharacter?: Partial<CharacterFormValues>;
+  /**
+   * The saved row, when editing. Carries the two things the form shows but
+   * never writes -- adventures and therefore virtues, which are the server's.
+   */
+  saved?: Pick<Character, "adventures">;
 };
 
 export default function CharacterForm({
   onSubmit,
   loading = false,
   initialCharacter,
+  saved,
 }: CharacterFormProps) {
   const { isActive: parentMode } = useParentMode();
   const [kindSearch, setKindSearch] = useState("");
@@ -193,12 +211,28 @@ export default function CharacterForm({
       notes: initialCharacter?.notes,
       mustBeTrue: initialCharacter?.mustBeTrue,
       canonicalLook: initialCharacter?.canonicalLook,
+      avatarUrl: initialCharacter?.avatarUrl,
+      statsEnabled: initialCharacter?.statsEnabled,
+      stats: initialCharacter?.stats,
     },
   });
 
   const kind = form.watch("kind") ?? initialCharacter?.gender;
   const category = form.watch("category");
   const covering = coveringNoun(category, kind);
+
+  // Stats live in form state like everything else; these are just the readouts.
+  // earned comes from the SAVED row, never the form -- how many stories a
+  // character has been in is not something the form gets an opinion about.
+  const statValues = statsOf({ stats: form.watch("stats") });
+  const earned = pointsEarned(saved);
+  const available = earned + STARTING_POINTS - pointsSpent(statValues);
+  const levels = virtueLevels(saved);
+
+  const setStat = (stat: CharacterStat, value: number) => {
+    if (value < STAT_FLOOR || value > STAT_CAP) return;
+    form.setValue("stats", { ...statValues, [stat]: value }, { shouldDirty: true });
+  };
 
   /** Choosing what they are also fixes which vocabulary the rest of the form offers. */
   const chooseKind = (k: string) => {
@@ -290,7 +324,42 @@ export default function CharacterForm({
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-5">
+          <CardContent>
+            {/*
+              Tabs rather than one long scroll. The sheet has grown past what
+              fits in a dialog, and the sections answer genuinely different
+              questions -- what they are, what they look like, what they are
+              like, what they can do, where they have been. Every tab shares ONE
+              form state, so nothing is lost by switching between them
+              mid-edit.
+            */}
+            <Tabs defaultValue="basics" className="w-full">
+              <TabsList className="w-full justify-start flex-wrap h-auto">
+                <TabsTrigger value="basics">Basics</TabsTrigger>
+                <TabsTrigger value="appearance">Appearance</TabsTrigger>
+                <TabsTrigger value="personality">Personality</TabsTrigger>
+                <TabsTrigger value="stats">Statistics</TabsTrigger>
+                <TabsTrigger value="virtues">Virtues</TabsTrigger>
+                {parentMode && <TabsTrigger value="grown-ups">Grown-ups</TabsTrigger>}
+              </TabsList>
+
+            <TabsContent value="basics" className="space-y-5 pt-4">
+              {/* Their picture, or a stand-in for one until the avatar work
+                  lands. Here and on the card, which is the minimum. */}
+              <div className="flex items-center gap-4">
+                <CharacterAvatar
+                  size="lg"
+                  character={{
+                    name: form.watch("name") || "This character",
+                    kind, category, gender: form.watch("gender"),
+                    avatarUrl: form.watch("avatarUrl"),
+                  }}
+                />
+                <p className="text-sm text-muted-foreground">
+                  No picture yet — you will be able to make one soon.
+                </p>
+              </div>
+
             {/* ---- What are they? The one question worth asking first. ---- */}
             <FormField
               control={form.control}
@@ -482,18 +551,44 @@ export default function CharacterForm({
             </div>
 
             {/* ---- Everything else, folded away until it is wanted ---- */}
-            <Accordion type="multiple" className="w-full">
-              <AccordionItem value="look">
-                <AccordionTrigger>What they look like</AccordionTrigger>
-                <AccordionContent className="grid md:grid-cols-2 gap-4 pt-1">
+            </TabsContent>
+
+            <TabsContent value="appearance" className="space-y-4 pt-4">
+              <div className="grid md:grid-cols-2 gap-4">
                   {vocabField("hair", `${title(covering)} colour`)}
                   {vocabField("eyes", "Eye colour")}
-                </AccordionContent>
-              </AccordionItem>
+              </div>
+                <FormField
+                  control={form.control}
+                  name="canonicalLook"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>How they look, for pictures</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          rows={2}
+                          maxLength={300}
+                          placeholder="Copper scales, a torn left wing, a green scarf."
+                          value={field.value ?? ""}
+                          onChange={(e) => field.onChange(e.target.value || undefined)}
+                        />
+                      </FormControl>
+                      {/*
+                        Said plainly, because otherwise this looks broken: it
+                        is saved for drawings and changes nothing about the
+                        words of the story.
+                      */}
+                      <FormDescription>
+                        Saved for drawing them. It does not change the story text.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+            </TabsContent>
 
-              <AccordionItem value="likes">
-                <AccordionTrigger>What they like</AccordionTrigger>
-                <AccordionContent className="grid md:grid-cols-2 gap-4 pt-1">
+            <TabsContent value="personality" className="space-y-4 pt-4">
+              <div className="grid md:grid-cols-2 gap-4">
                   {vocabField("favoriteColor", "Favourite colour")}
                   {vocabField("hobby", "Favourite thing to do")}
                   {vocabField("personality", "What they are like")}
@@ -514,12 +609,7 @@ export default function CharacterForm({
                       </FormItem>
                     )}
                   />
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem value="more">
-                <AccordionTrigger>Anything else</AccordionTrigger>
-                <AccordionContent className="space-y-4 pt-1">
+              </div>
                   {category === "machine" && (
                     <FormField
                       control={form.control}
@@ -566,44 +656,129 @@ export default function CharacterForm({
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="canonicalLook"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>How they look, for pictures</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            rows={2}
-                            maxLength={300}
-                            placeholder="Copper scales, a torn left wing, a green scarf."
-                            value={field.value ?? ""}
-                            onChange={(e) => field.onChange(e.target.value || undefined)}
-                          />
-                        </FormControl>
-                        {/*
-                          Said plainly, because otherwise this looks broken: it
-                          is saved for drawings and changes nothing about the
-                          words of the story.
-                        */}
-                        <FormDescription>
-                          Saved for drawing them. It does not change the story text.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </AccordionContent>
-              </AccordionItem>
+            </TabsContent>
 
-              {parentMode && (
-                <AccordionItem value="parent">
-                  <AccordionTrigger>
-                    <span className="flex items-center gap-2">
-                      Grown-ups only <Badge variant="secondary">Parent Mode</Badge>
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent className="pt-1">
+            <TabsContent value="stats" className="space-y-4 pt-4">
+              {/*
+                Points, not sliders you can drag to the top. Everyone starts
+                ordinary on everything; the only way to be good at something is
+                to have earned it, or to have accepted being worse at something
+                else. Spending is free to undo -- a child will mis-click, and an
+                irreversible dial on a character they love is a bad afternoon.
+              */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">
+                    {available} point{available === 1 ? "" : "s"} left to spend
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {earned === 0
+                      ? `Everyone starts with ${STARTING_POINTS}. One more for every story they finish.`
+                      : `${STARTING_POINTS} to start, and ${earned} from ${earned === 1 ? "a story" : "stories"} they have been in.`}
+                  </p>
+                </div>
+                {parentMode && (
+                  <Badge variant="secondary" title="Parent Mode ignores the points budget">
+                    Spending unlimited
+                  </Badge>
+                )}
+              </div>
+
+              {CHARACTER_STATS.map((stat) => {
+                const value = statValues[stat];
+                const canRaise = value < STAT_CAP && (available > 0 || parentMode);
+                return (
+                  <div key={stat} className="flex items-center gap-3">
+                    <span className="w-28 text-sm capitalize">{stat}</span>
+                    <Button
+                      type="button" variant="outline" size="icon" className="h-7 w-7"
+                      disabled={value <= STAT_FLOOR}
+                      onClick={() => setStat(stat, value - 1)}
+                      aria-label={`Lower ${stat}`}
+                    >
+                      −
+                    </Button>
+                    <span className="w-6 text-center text-sm tabular-nums">{value}</span>
+                    <Button
+                      type="button" variant="outline" size="icon" className="h-7 w-7"
+                      disabled={!canRaise}
+                      onClick={() => setStat(stat, value + 1)}
+                      aria-label={`Raise ${stat}`}
+                    >
+                      +
+                    </Button>
+                    <Progress value={(value / STAT_CAP) * 100} className="h-2 flex-1" />
+                  </div>
+                );
+              })}
+
+              <p className="text-xs text-muted-foreground">
+                Dropping one below {STAT_BASE} gives the point back, so a character can be
+                very good at one thing by being poor at another.
+              </p>
+
+              {/*
+                Off altogether. Distinct from "all threes": an untouched sheet
+                is a character who happens to be ordinary, and this is a
+                character the story is never told about in these terms at all.
+              */}
+              <FormField
+                control={form.control}
+                name="statsEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2 pt-2 border-t">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value !== false}
+                        onCheckedChange={(v) => field.onChange(v === true)}
+                      />
+                    </FormControl>
+                    <FormLabel className="!mt-0 font-normal">
+                      Use statistics for this character
+                    </FormLabel>
+                  </FormItem>
+                )}
+              />
+            </TabsContent>
+
+            <TabsContent value="virtues" className="space-y-3 pt-4">
+              {/*
+                A record, not a setting: nothing here is editable and none of it
+                is ever sent to the model. The seventeen story themes ARE the
+                virtues, so a level is simply how many finished stories carried
+                that theme -- there is no mapping table to fall out of step with
+                the themes the story form offers.
+              */}
+              <p className="text-sm text-muted-foreground">
+                What {form.watch("name") || "this character"} has learned along the way. A story
+                with a theme adds a level to that virtue.
+              </p>
+              {Object.keys(levels).length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">
+                  No stories yet. Virtues appear here after they have been in one.
+                </p>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {Object.entries(levels)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([virtue, level]) => (
+                      <div key={virtue} className="flex items-center gap-2">
+                        <span className="w-28 text-sm capitalize">{virtue}</span>
+                        <Badge variant="secondary">Level {level}</Badge>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {parentMode && (
+              <TabsContent value="grown-ups" className="space-y-4 pt-4">
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">Parent Mode</Badge>
+                  <span className="text-sm text-muted-foreground">
+                    Only visible while Parent Mode is unlocked.
+                  </span>
+                </div>
                     <FormField
                       control={form.control}
                       name="mustBeTrue"
@@ -627,10 +802,9 @@ export default function CharacterForm({
                         </FormItem>
                       )}
                     />
-                  </AccordionContent>
-                </AccordionItem>
-              )}
-            </Accordion>
+              </TabsContent>
+            )}
+            </Tabs>
           </CardContent>
 
           <CardFooter>

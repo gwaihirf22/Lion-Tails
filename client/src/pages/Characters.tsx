@@ -223,6 +223,7 @@ export default function Characters() {
               onSubmit={handleUpdateCharacter}
               loading={updateMutation.isPending}
               initialCharacter={editingCharacter}
+              saved={editingCharacter}
             />
           )}
         </DialogContent>

@@ -889,3 +889,32 @@ describe("statLeakage", () => {
     expect(statLeakage("She heaved at the beam until it shifted.")).toEqual([]);
   });
 });
+
+describe("stats can be switched off for a character", () => {
+  const on = { id: "c1", name: "Ember", kind: "dragon", createdAt: "x",
+    stats: { ...baseStats(), strength: 7 } } as Character;
+  const off = { id: "c2", name: "Quiet", kind: "dog", createdAt: "x", statsEnabled: false,
+    stats: { strength: 9, agility: 9, constitution: 9, wisdom: 9, heart: 9 } } as Character;
+  const render = (cs: Character[]) =>
+    renderBrief(buildStoryBrief({ ...base, characterIds: cs.map((c) => c.id) } as StoryRequest, cs), "single");
+
+  it("leaves a disabled character out of the table entirely", () => {
+    // Not a gap: "we do not describe Quiet this way" and "Quiet is
+    // unremarkable" are the same instruction, and the baseline already says
+    // the second. Their stored nines must not reach the model.
+    const t = render([on, off]);
+    expect(t).toContain("Ember");
+    expect(t).not.toMatch(/Quiet\s+9/);
+    expect(t).not.toContain("9  9  9");
+  });
+
+  it("says nothing at all when every character has it off", () => {
+    expect(render([off])).not.toContain("WHAT EACH OF THEM CAN DO");
+  });
+
+  it("treats a character saved before the checkbox existed as enabled", () => {
+    // statsEnabled is absent on every existing row; only an explicit false
+    // turns it off.
+    expect(render([on])).toContain("WHAT EACH OF THEM CAN DO");
+  });
+});

@@ -693,6 +693,20 @@ export const characterSchema = z.object({
     .optional(),
 
   /**
+   * Whether this character uses the stat system at all.
+   *
+   * Absent means yes, so no existing character needs rewriting and the common
+   * case stores nothing. Only an explicit false turns it off -- see
+   * statsEnabledFor(), which is the single place that knows that.
+   *
+   * A disabled character is left out of the table the model is shown, which is
+   * the honest thing rather than a gap: "we do not track this for Mia" and "Mia
+   * is unremarkable" amount to the same instruction, and the second is what the
+   * baseline already says.
+   */
+  statsEnabled: z.boolean().optional(),
+
+  /**
    * The stories they have been through: one entry per finished story.
    *
    * A SET KEYED ON storyId, not a counter. That is what makes it safe against
@@ -789,6 +803,16 @@ export function statsOf(c?: { stats?: CharacterStats } | null): CharacterStats {
  */
 export function pointsSpent(stats: CharacterStats): number {
   return CHARACTER_STATS.reduce((n, s) => n + (stats[s] - STAT_BASE), 0);
+}
+
+/**
+ * Whether the stat system applies to this character.
+ *
+ * Absent means enabled. Only an explicit false disables, so a character saved
+ * before the checkbox existed keeps working and nothing had to be backfilled.
+ */
+export function statsEnabledFor(c?: { statsEnabled?: boolean } | null): boolean {
+  return c?.statsEnabled !== false;
 }
 
 /** One point per finished story. */

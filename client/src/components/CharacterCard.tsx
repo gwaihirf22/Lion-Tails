@@ -1,5 +1,6 @@
 import { type Character, characterKind } from "@shared/schema";
 import { coveringNoun } from "@shared/characterVocab";
+import CharacterAvatar from "./CharacterAvatar";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,12 +39,15 @@ export default function CharacterCard({
   return (
     <Card className={`transition-all duration-200 ${selected ? 'ring-2 ring-primary' : ''}`}>
       <CardHeader className="pb-2">
-        <div className="flex justify-between items-start">
-          <CardTitle className="text-xl">{character.name}</CardTitle>
+        <div className="flex justify-between items-start gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <CharacterAvatar character={character} size="md" />
+            <CardTitle className="text-xl truncate">{character.name}</CardTitle>
+          </div>
           {/* Whatever they are. The badge used to read the gender and print
               "Girl" for anything that was not the string "boy" -- which, once a
               character could be a dragon, was most of them. */}
-          {kind && <Badge variant="secondary">{title(kind)}</Badge>}
+          {kind && <Badge variant="secondary" className="shrink-0">{title(kind)}</Badge>}
         </div>
         {character.age != null && (
           <CardDescription className="flex items-center gap-1">
