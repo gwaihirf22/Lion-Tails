@@ -14,7 +14,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MAX_STORY_CHARACTERS, type Character } from "@shared/schema";
+import {
+  MAX_STORY_CHARACTERS,
+  characterKind,
+  characterSearchText,
+  type Character,
+} from "@shared/schema";
 
 /**
  * Choose the cast of a story, in order.
@@ -71,13 +76,10 @@ export function CharacterPicker({
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const matches = characters.filter((c) => {
-      if (!q) return true;
-      return [
-        c.name, c.gender, String(c.age), c.hair, c.eyes,
-        c.favoriteColor, c.favoriteAnimal ?? "", c.hobby ?? "", c.personality ?? "",
-      ].join(" ").toLowerCase().includes(q);
-    });
+    // characterSearchText() lives beside the schema. This list used to be
+    // written out here, field by field, which is a promise to forget one --
+    // `notes` and `kind` would both have been missing the day they shipped.
+    const matches = characters.filter((c) => !q || characterSearchText(c).includes(q));
     return {
       inStory: matches.filter((c) => value.includes(c.id)),
       notInStory: matches.filter((c) => !value.includes(c.id)),
@@ -184,7 +186,9 @@ export function CharacterPicker({
                         <span className="min-w-0">
                           <span className="block truncate text-sm">{c.name}</span>
                           <span className="block truncate text-xs text-muted-foreground">
-                            {c.gender}, {c.age}
+                            {/* filter(Boolean), or an ageless dragon reads
+                                "undefined, undefined". */}
+                            {[characterKind(c), c.age].filter((v) => v != null && v !== "").join(", ")}
                             {c.personality ? ` · ${c.personality}` : ""}
                           </span>
                         </span>
