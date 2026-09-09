@@ -10,6 +10,8 @@ interface StoryGeneratorTabsProps {
   inheritedCharacterIds?: string[];
   /** Title of the story being continued, for the confirm-to-remove copy. */
   parentStoryTitle?: string;
+  /** This story continues another. */
+  isContinuation?: boolean;
 }
 
 export default function StoryGeneratorTabs({
@@ -17,6 +19,7 @@ export default function StoryGeneratorTabs({
   loading = false,
   inheritedCharacterIds,
   parentStoryTitle,
+  isContinuation,
 }: StoryGeneratorTabsProps) {
   const [activeTab, setActiveTab] = useState<string>("children");
 
@@ -62,6 +65,7 @@ export default function StoryGeneratorTabs({
               loading={loading} 
               inheritedCharacterIds={inheritedCharacterIds}
               parentStoryTitle={parentStoryTitle}
+              isContinuation={isContinuation}
               formType="children"
               showChildFields={true}
               showTimeTravel={true}
@@ -95,6 +99,7 @@ export default function StoryGeneratorTabs({
               loading={loading} 
               inheritedCharacterIds={inheritedCharacterIds}
               parentStoryTitle={parentStoryTitle}
+              isContinuation={isContinuation}
               formType="historical"
               showChildFields={false}
               showTimeTravel={false}

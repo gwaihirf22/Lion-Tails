@@ -28,7 +28,7 @@ const RECENTLY_FINISHED_MS = 60 * 60 * 1000;
  * is wrong and confusing when the blocker is a summary -- the user did not
  * start a story, and telling them they did sends them looking for one.
  */
-function conflictCode(wanted: "story" | "summary", active: Array<{ kind: string }>): string {
+function conflictCode(wanted: "story" | "summary" | "extract", active: Array<{ kind: string }>): string {
   const blocker = active[0]?.kind ?? "story";
   if (blocker === "summary" && wanted === "story") return "summary_in_progress";
   if (blocker === "story" && wanted === "summary") return "story_in_progress";
@@ -36,7 +36,7 @@ function conflictCode(wanted: "story" | "summary", active: Array<{ kind: string 
 }
 
 function conflictMessage(
-  wanted: "story" | "summary",
+  wanted: "story" | "summary" | "extract",
   active: Array<{ kind: string }>,
   limit: number,
 ): string {
@@ -61,8 +61,10 @@ export async function enqueueStoryJob(opts: {
   brief: string;
   systemPrompt: string;
   targetWordCount: number;
-  kind?: "story" | "summary";
+  kind?: "story" | "summary" | "extract";
   universeId?: string;
+  /** For an extraction: the story it reads. */
+  storyId?: string;
   /** For a summary: the ordered story ids the window contains. */
   outline?: string[];
 }): Promise<EnqueueResult> {
@@ -99,9 +101,15 @@ export async function enqueueStoryJob(opts: {
     await client.query("SELECT pg_advisory_xact_lock($1)", [opts.userId]);
 
     const { rows: activeRows } = await client.query(
+      // 'extract' is deliberately absent. The limit exists to stop one person
+      // queueing five generations at once; an extraction is background work
+      // they never asked for, so counting it would let a job they cannot see
+      // refuse the story they are trying to write. The worker claims one job
+      // at a time globally, so the model is still never asked to do two things
+      // at once -- which is what the limit is actually protecting.
       `SELECT job_id, kind, universe_id, status, step, created_at
          FROM story_jobs
-        WHERE user_id = $1 AND status IN ('queued','running')
+        WHERE user_id = $1 AND kind <> 'extract' AND status IN ('queued','running')
         ORDER BY created_at`,
       [opts.userId],
     );
@@ -123,8 +131,8 @@ export async function enqueueStoryJob(opts: {
     await client.query(
       `INSERT INTO story_jobs
          (job_id, user_id, kind, universe_id, status, request, brief, system_prompt,
-          target_word_count, model, step, outline)
-       VALUES ($1, $2, $8, $9, 'queued', $3, $4, $5, $6, $7, 'queued', $10::jsonb)`,
+          target_word_count, model, step, outline, story_id)
+       VALUES ($1, $2, $8, $9, 'queued', $3, $4, $5, $6, $7, 'queued', $10::jsonb, $11)`,
       [
         jobId,
         opts.userId,
@@ -140,6 +148,7 @@ export async function enqueueStoryJob(opts: {
         opts.kind ?? "story",
         opts.universeId ?? null,
         opts.outline ? JSON.stringify(opts.outline) : null,
+        opts.storyId ?? null,
       ],
     );
     await client.query("COMMIT");

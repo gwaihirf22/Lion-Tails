@@ -142,6 +142,77 @@ Vision and image generation have separate allowlists, so a chat-only model
 cannot leak into an image call. Illustration is skipped with a logged reason,
 rather than failing the story, when the user is not entitled to it.
 
+## Series and continuity
+
+A story can be one of a set. Two flags on Create Story:
+
+- **"I might write more stories in this world"** — opt-in, because it buys one
+  extra model call after the story is written. A continuation implies it without
+  the box, since a story continued once is likely to be continued again.
+- **"Leave it on a cliffhanger"** — ends without resolving. It has to *suppress*
+  `moralOutcome`, which is picked at random when the user does not choose one and
+  instructs the story to resolve; a retelling already suppresses it for the same
+  reason. It still insists the scene finishes: an unresolved story is not an
+  unfinished sentence.
+
+### What a world remembers
+
+After a series story, a background job reads it and asks **"suppose someone
+writes the next story — what must be noted so they do not contradict this one?"**
+It records three kinds of thing in `story_universes.world_state`, and refreshes
+the universe summary in the same call.
+
+The three kinds are **graded**, and that grading is the whole design — see
+`docs/decisions.md` §24:
+
+```
+People who exist … but none of them has to appear:   identity, not obligation
+Already true. Do not contradict any of this:         hard
+Threads left open. You MAY pick ONE up, or ignore    explicitly optional
+  all of them — possibilities, not instructions:
+```
+
+A model handed one undifferentiated list treats it as a checklist and writes the
+same story again. Saying out loud which parts it may ignore is what lets the next
+story be different — and it is measurably model-dependent: the economy OpenAI
+model honours it, `gpt-oss:20b` does not.
+
+Entries are **revised**, not only appended: someone falls ill, someone leaves. A
+closed entry is kept rather than deleted, so a later extraction can see a thread
+was already tied off instead of proposing it again.
+
+There is no "make summary" button any more, and no staleness badge. Every story
+in a series rewrites both, so there is nothing to press and nothing that can fall
+behind.
+
+## Characters
+
+Up to **8 per story**, ordered — index 0 is the protagonist and gets the full
+description in the prompt; everyone else gets a name and at most two facts. Eight
+characters at parity would be ~48 facts, which is the character-sheet tour at
+scale.
+
+`characterIds` is the field; `characterId` is legacy and read **only** through
+`characterIdsOf()`, which is the one place that knows the two are the same fact.
+A test asserts the legacy name appears nowhere else in the codebase.
+
+On a continuation the cast carries over from the parent, and removing an
+inherited character asks first.
+
+## Aiming a historical story
+
+A Hero of Faith is a whole life, and asked for "a story about Corrie ten Boom" a
+model returns a summary of all of it. Picking a hero reveals a **focus** select
+built from that hero's own `keyEvents` — which every hero already carries and
+`/api/heroes` already returns, so it costs no model call and no new content.
+"Surprise me" is settled server-side at enqueue and written onto the request, so
+the same request replays to the same story.
+
+Biblical *events* deliberately have no focus control: a `biblicalEvents` entry is
+one account with no sub-events, and only 8 of the 15 slugs have a matching hero
+to borrow from — the rest are `creation`, `nativity`, `crucifixion`, where "which
+part of their life" is not a sensible question.
+
 ## Heroes of Faith
 
 Eighty hand-written profiles in `server/data/heroes/`, split into **two
@@ -223,6 +294,8 @@ deliberately narrow: the pure functions with a history of shipping bugs.
 | `tests/heroes.test.ts` | Eighty hand-written profiles: duplicate slugs (which make the seed silently drop a person), groups from the wrong collection's list, a Wikipedia URL where an article title belongs, a biblical date written as settled fact. |
 | `tests/theme.test.ts` | Contrast, computed from `theme.css` itself, for every token pair in all four palettes — plus that every element painting `bg-accent` also sets `text-accent-foreground`. Both failures it guards were invisible in Paper and unreadable in Night. |
 | `tests/focusMode.test.ts` | What may interrupt the reader's focus mode. Mouse movement across the page and taps must not; reaching the top strip and scrolling up must. |
+| `tests/storyBrief.test.ts` | The prompt. 25 **golden strings** assert that a request with no cast renders byte-identically to before multi-character shipped — which is what makes "backward compatible" a check rather than a claim. Plus the cast weighting, the cliffhanger, the three continuity tiers, and that the legacy `characterId` appears nowhere it should not. |
+| `tests/worldState.test.ts` | What a world remembers: superseding an entry rather than duplicating it, closing rather than deleting, and staying inside the cap by dropping closed entries first. |
 
 `vitest.config.ts` is separate from `vite.config.ts` on purpose —
 `vite.config.ts` sets `root: client/`, which would hide every test under
@@ -473,7 +546,8 @@ this app has any business reaching it.
   browser.
 - Every story route uses an inline auth check rather than `requireAuth` in the
   signature, which is how eight unguarded write routes once shipped.
-- The zod 3 → 4 migration blocks `drizzle-zod` 0.8, which is the only thing
-  holding back a 54-package Dependabot update. It does **not** block
-  `zod-validation-error` 5, which needed one import specifier — see
-  `docs/decisions.md`.
+- The zod 3 → 4 migration blocks `drizzle-zod` 0.8, which is the only failure in
+  the 54-package Dependabot update. It does **not** block `zod-validation-error`
+  5, which needed one import specifier — see `docs/decisions.md`.
+- There is no way to grant an account premium models without making it an admin.
+  `users.is_upgraded` is designed but not built — see `docs/roadmap.md`.

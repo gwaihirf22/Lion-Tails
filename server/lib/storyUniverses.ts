@@ -9,6 +9,7 @@
  */
 import { randomUUID } from "crypto";
 import { pool } from "../db";
+import type { WorldEntry } from "./worldState";
 
 /** An uncapped canon list is a second summary that nothing compresses. */
 export const MAX_CANON_ITEMS = 20;
@@ -35,6 +36,8 @@ export type Universe = {
   summaryCoveredCount: number | null;
   summaryDroppedCount: number | null;
   pinnedCanon: CanonItem[];
+  /** Extracted after each story in a series. See lib/worldState.ts. */
+  worldState: WorldEntry[];
   isStale: boolean;
   canMakeSummary: boolean;
   activeSummaryJobId: string | null;
@@ -58,7 +61,7 @@ const CURRENT_HASH_SQL = `
 
 const UNIVERSE_SELECT = `
   SELECT
-    u.universe_id, u.name, u.created_at, u.summary, u.summary_updated_at,
+    u.universe_id, u.name, u.created_at, u.summary, u.summary_updated_at, u.world_state,
     u.summary_edited_at, u.summary_model, u.summary_covered_count,
     u.summary_dropped_count, u.pinned_canon,
     (SELECT count(*)::int FROM user_stories s WHERE s.universe_id = u.universe_id) AS story_count,
@@ -85,6 +88,7 @@ function toUniverse(r: any): Universe {
     summaryCoveredCount: r.summary_covered_count,
     summaryDroppedCount: r.summary_dropped_count,
     pinnedCanon: Array.isArray(r.pinned_canon) ? r.pinned_canon : [],
+    worldState: Array.isArray(r.world_state) ? r.world_state : [],
     isStale,
     // Blake's rule: stale is the only unlock. A summary that is already current
     // cannot be rebuilt, which is both the "no redo" cap on cost and the same

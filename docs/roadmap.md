@@ -61,34 +61,69 @@ path to a mailer or remove the dead module and the config that implies it works
 Every one needs `npx tsx scripts/verify-heroes.ts <id>` to pass before commit.
 Verses are fetched, never recalled — `decisions.md` §20.
 
-### Two open questions, unanswered
+### One open question, answered; one still open
 
-1. **Should the Heroes page default to `Through History`, or remember the
-   last-used tab?** Remembering is friendlier for repeat visits and worse for a
-   first-time visitor who lands on whichever tab someone else last opened.
-2. **Should `server/data/biblicalEvents.ts` and `server/data/heroes/bible.ts`
-   stay separate for the figures they share** (Noah, Abraham, Moses, Daniel)?
-   They do different jobs — one anchors a retelling, the other describes a
-   person — but the duplication is real and this repo has a history of parallel
-   definitions drifting apart.
+**Answered:** `biblicalEvents.ts` and `heroes/bible.ts` stay separate. They do
+different jobs -- one anchors a retelling, the other describes a person -- and
+the focus picker made the difference concrete: heroes carry `keyEvents` a story
+can be aimed at, biblical events are single accounts with no sub-structure.
+
+**Still open:** should the Heroes page default to `Through History`, or remember
+the last-used tab? Remembering is friendlier for repeat visits and worse for a
+first-time visitor who lands on whichever tab someone else last opened.
+
 
 ---
 
 ## Features
 
-### Phase C — story arcs
+### Phase C — story arcs: DONE
 
-`seriesRole: standalone | opening | middle | finale`: an option telling the
-model this is the first of a series so it leaves the story open, and later the
-ability to close the arc. `finale` is the half that needs the existing summary
-and canon to know what is outstanding.
+Shipped as the series flag and the cliffhanger option. The tension recorded here
+-- that `moralOutcome` says resolve while an opening says do not -- was real, and
+is resolved the way a retelling already resolved it: the cliffhanger suppresses
+`moralOutcome` entirely rather than arguing with it.
 
-Two interactions to **design rather than discover**:
 
-- `moralOutcome` is in tension with `opening` — one says resolve, the other says
-  do not.
-- An opening story must still hit its word target, so "leave it open" cannot
-  become "stop early".
+### `users.is_upgraded` — grant an account premium access without making it an admin
+
+**The one piece of the continuity work that was designed and not built.**
+
+Today there are exactly two ways to get premium models and skip the free quota:
+be an admin, or supply your own OpenAI key. Neither fits "let my brother test
+it" — admin also unlocks `/admin/stats` and write access to shared reference
+data (heroes, songs), and expecting a family member to create an OpenAI account
+is not realistic.
+
+`resolveModel` already falls back to `process.env.OPENAI_API_KEY` when a user has
+no key of their own, so an upgraded account transparently spends the owner's key.
+The flag therefore only has to do three things: allow premium models, skip the
+quota charge, and be readable by one `isEntitled()` helper — so the three
+existing restatements of "own key or admin" (`isModelAllowedFor`,
+`concurrencyLimitFor`, `shouldChargeQuota`) do not become six.
+
+It also needs somewhere to be toggled from. The only admin route today is
+`GET /api/admin/generation-stats`; there is no user list, so this currently means
+hand-written SQL against production. A `PATCH /api/admin/users/:id` guarded by
+`requireAdmin` **in the signature** is the minimum.
+
+Deliberately not a subscription system. Blake: "I won't want to depart that
+until/when we actually do want to create a subscribe function."
+
+### Promote an invented character
+
+The extraction records characters the model invented, which is what makes this
+possible: a "save to my characters" button on a world entry would turn a
+character the AI created into a reusable one. Blake raised it and left it open —
+"I don't know what to do about that yet." The data exists; the UI does not.
+
+### Retire the old summary path
+
+The extraction now writes the summary, so `POST /api/universes/:id/summary`, the
+8-story window in `universeSummary.ts`, the staleness fingerprint and the
+window-shrinking retry are all superseded for universes maintained this way.
+They are still there deliberately — the extraction shipped first so any
+regression is attributable — and removing them is its own change.
 
 ### Focus mode on a hybrid device
 

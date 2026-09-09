@@ -38,6 +38,16 @@ import {
 import { newGenerationId, recordGeneration } from "./generationRecords";
 import type { ResolvedModel } from "./modelPolicy";
 import { storage } from "../storage";
+import { enqueueStoryJob } from "./storyJobs";
+import { createUniverse, setStoryUniverse } from "./storyUniverses";
+import {
+  extractionSystemPrompt,
+  extractionUserPrompt,
+  mergeWorldState,
+  parseWorldPatch,
+  type WorldEntry,
+  type WorldPatch,
+} from "./worldState";
 
 /**
  * Lease 90s, heartbeat 20s, reaper 60s.
@@ -78,6 +88,8 @@ export type JobRow = {
   error_count: number;
   outline: string[] | null;
   chapters: string[] | null;
+  /** Set on an extraction job: the story it reads. Set on a story job when it succeeds. */
+  story_id: string | null;
   cancel_requested: boolean;
 };
 
@@ -340,6 +352,131 @@ async function shrinkSummaryWindow(job: JobRow): Promise<boolean> {
   return true;
 }
 
+/**
+ * Read one finished story and record what a LATER story must not contradict.
+ *
+ * Runs after a story that is part of a series -- the user ticked "I might write
+ * more", or the story continues another. Never after a one-off, which is what
+ * keeps this from being a call per story forever.
+ *
+ * Charges NO quota, for the same structural reason the summary does not: there
+ * is simply no user_usage write on this path, rather than a flag someone can
+ * forget to set.
+ *
+ * A failure here is not a failed story. The story is already written and saved;
+ * losing its extraction costs continuity in a later story, not this one. So
+ * this never retries and never surfaces an error to the user.
+ */
+async function runExtractJob(job: JobRow, resolved: ResolvedModel): Promise<void> {
+  if (!job.universe_id || !job.story_id) {
+    await finishFailed(job, "generation_failed", "Extraction job has no universe or story.", false);
+    return;
+  }
+  if (!(await checkpoint(job.job_id, { step: "extracting" }))) return;
+
+  const client = createClient(resolved);
+  const debugData: any[] = [];
+  const generationId = newGenerationId();
+  const startedAt = Date.now();
+
+  try {
+    const { rows } = await pool!.query(
+      "SELECT world_state FROM story_universes WHERE universe_id = $1",
+      [job.universe_id],
+    );
+    const existing: WorldEntry[] = Array.isArray(rows[0]?.world_state) ? rows[0].world_state : [];
+    // job.brief carries the story text, the way it carries the window for a
+    // summary. Rebuilt here rather than read from the row so the prompt sees
+    // the world as it is NOW -- two stories finishing close together would
+    // otherwise both extract against the same stale world.
+    const story = JSON.parse(job.brief) as { title: string; content: string };
+    const prompt = extractionUserPrompt(story, existing);
+
+    const patch = await requestModelJson<WorldPatch>({
+      step: "extractWorld",
+      model: resolved.model,
+      debugData,
+      maxTokens: TOKEN_BUDGET.json,
+      prompt,
+      validate: (v: unknown) => parseWorldPatch(v),
+      call: async (maxTokens: number) => {
+        const response = await client.chat.completions.create({
+          model: resolved.model,
+          messages: [
+            { role: "system", content: extractionSystemPrompt() },
+            { role: "user", content: prompt },
+          ],
+          response_format: { type: "json_object" },
+          ...temperatureFor(resolved.model, 0.2),
+          ...tokenLimitFor(resolved.model, maxTokens),
+        });
+        return {
+          content: response.choices[0].message.content || "",
+          finishReason: response.choices[0].finish_reason,
+          usage: response.usage,
+        };
+      },
+    });
+
+    const merged = mergeWorldState(existing, patch, { sourceStoryId: job.story_id });
+
+    await recordGeneration({
+      generationId,
+      jobId: job.job_id,
+      kind: "summary",
+      userId: job.user_id,
+      resolved,
+      request: {},
+      targetWordCount: 0,
+      startedAt,
+      debugData,
+      outcome: "succeeded",
+    }).catch(() => {});
+
+    // No quota write on this path. See the note above.
+    const { rowCount } = await pool!.query(
+      `UPDATE story_jobs
+          SET status = 'succeeded', finished_at = now(), updated_at = now(),
+              worker_id = NULL, lease_expires_at = NULL, step = 'done'
+        WHERE job_id = $1 AND worker_id = $2 AND status = 'running'`,
+      [job.job_id, WORKER_ID],
+    );
+    if ((rowCount ?? 0) === 0) return; // evicted; the other worker owns this
+    // The summary rides on the SAME call and the same write. It can never be
+    // stale, because the only thing that changes a world is a story, and every
+    // story in a series rewrites it. That is what retires the separate
+    // summarise job, its 8-story window and its staleness fingerprint.
+    //
+    // summary_inputs_hash is set to the current fingerprint so the OLD
+    // staleness rule reports "current" rather than permanently "out of date"
+    // for universes maintained this way.
+    await pool!.query(
+      `UPDATE story_universes u
+          SET world_state = $1::jsonb,
+              summary = COALESCE($2, u.summary),
+              summary_updated_at = CASE WHEN $2 IS NULL THEN u.summary_updated_at ELSE now() END,
+              summary_model = CASE WHEN $2 IS NULL THEN u.summary_model ELSE $3 END,
+              summary_inputs_hash = md5(
+                coalesce((SELECT string_agg(s.story_id, ',' ORDER BY s.story_id)
+                            FROM user_stories s WHERE s.universe_id = u.universe_id), '')
+                || '|' || u.pinned_canon::text
+              ),
+              updated_at = now()
+        WHERE u.universe_id = $4`,
+      [JSON.stringify(merged), patch.summary ?? null, resolved.model, job.universe_id],
+    );
+    console.log(
+      `[worker] extracted ${patch.add?.length ?? 0} new and ${patch.update?.length ?? 0} revised for universe ${job.universe_id}`,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[worker] extraction ${job.job_id} failed:`, message);
+    // Not retryable. The story is safe; a missing extraction costs continuity
+    // later, and a retry loop on a background job the user cannot see is worse.
+    await finishFailed(job, "generation_failed", message, false).catch(() => {});
+  }
+}
+
 async function runSummaryJob(job: JobRow, resolved: ResolvedModel): Promise<void> {
   if (!job.universe_id) {
     await finishFailed(job, "generation_failed", "Summary job has no universe.", false);
@@ -542,6 +679,11 @@ async function runJob(job: JobRow): Promise<void> {
       return;
     }
 
+    if (job.kind === "extract") {
+      await runExtractJob(job, resolved);
+      return;
+    }
+
     /**
      * The outline as GENERATION produced it -- not as the job row had it.
      *
@@ -606,6 +748,74 @@ async function runJob(job: JobRow): Promise<void> {
       job.user_id,
     );
     await finishSucceeded(job, saved.id);
+
+    // EVERYTHING BELOW IS PAST THE POINT OF NO RETURN. The story is written,
+    // saved, and marked succeeded; the user is finished. Its own try/catch
+    // because a throw here would fall into the handler below and call
+    // finishFailed on a job that already succeeded -- harmless, since that
+    // UPDATE is guarded on status='running', but it would log a failure for a
+    // story that worked and re-queue nothing. Remembering a story is strictly
+    // less important than having written it.
+    try {
+      // Remember this story, if there is likely to be a next one.
+      //
+      // Two triggers, both meaning a sequel is plausible: the user ticked "I
+      // might write more stories in this world", or this story continues another
+      // (a story continued once is very likely to be continued again). A one-off
+      // extracts nothing and costs nothing, which is what keeps this from being
+      // an extra call on every story forever.
+      //
+      // Deliberately after finishSucceeded and deliberately not awaited for its
+      // result: the story is saved and the user is done. A failure to enqueue the
+      // extraction must not fail a story that already exists.
+      const wantsMemory =
+        Boolean(job.request?.mayContinue) || Boolean(job.request?.continuesStoryId);
+
+      // A FIRST story that opts into a series has no universe yet.
+      // resolveUniverseForRequest only creates one when continuing -- it needs a
+      // parent to name the universe after -- so without this the flag silently
+      // did nothing at all: no universe, therefore no extraction, therefore no
+      // memory, and no error anywhere to say so.
+      //
+      // Done here rather than at enqueue because the name comes from the story's
+      // title, and at enqueue the story has not been written yet.
+      let universeId: string | undefined = job.request?.universeId;
+      if (wantsMemory && !universeId) {
+        const created = await createUniverse(job.user_id, story.title.slice(0, 100));
+        if ("error" in created) {
+          // Almost always a name collision with an existing universe of the same
+          // title. Not worth failing a saved story over; the next story in this
+          // world can be attached by hand.
+          console.warn(`[worker] could not open a universe for ${saved.id}: ${created.error}`);
+        } else {
+          universeId = created.universeId;
+          await setStoryUniverse(job.user_id, saved.id, universeId).catch((e) =>
+            console.error(`[worker] could not place ${saved.id} in its universe:`, e),
+          );
+        }
+      }
+
+      if (wantsMemory && universeId) {
+        await enqueueStoryJob({
+          userId: job.user_id,
+          kind: "extract",
+          universeId,
+          storyId: saved.id,
+          request: job.request,
+          // The story text, the way a summary job carries its window.
+          brief: JSON.stringify({ title: story.title, content: story.content }),
+          systemPrompt: extractionSystemPrompt(),
+          targetWordCount: 0,
+        }).catch((e) =>
+          console.error(`[worker] could not queue extraction for ${saved.id}:`, e),
+        );
+      }
+    } catch (memoryError) {
+      console.error(
+        `[worker] story ${job.job_id} is saved; remembering it failed:`,
+        memoryError instanceof Error ? memoryError.message : memoryError,
+      );
+    }
   } catch (error) {
     const code = error instanceof StoryGenerationError ? error.code : "generation_failed";
     const message = error instanceof Error ? error.message : String(error);

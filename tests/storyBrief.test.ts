@@ -523,3 +523,106 @@ describe("a retelling needs no protagonist", () => {
     expect(brief.cast[0].colour).toBe("");
   });
 });
+
+describe("a cliffhanger stops the story resolving itself", () => {
+  const render = (over: Record<string, unknown>) =>
+    renderBrief(buildStoryBrief({ ...base, ...over } as StoryRequest, []), "outline");
+
+  it("suppresses the moral-outcome instruction", () => {
+    // moralOutcome is picked at RANDOM when the user does not choose one, and
+    // it tells the story to resolve. Left in, the two instructions contradict
+    // and the model picks one -- which looks like the flag doing nothing.
+    const resolved = render({ moralOutcome: "consequences", cliffhanger: false });
+    const open = render({ moralOutcome: "consequences", cliffhanger: true });
+    expect(resolved).not.toBe(open);
+    expect(open).not.toContain("consequence");
+  });
+
+  it("says what to do instead, not only what not to do", () => {
+    const text = render({ cliffhanger: true });
+    expect(text).toContain("Do NOT resolve this story");
+    expect(text).toContain("want the next one");
+  });
+
+  it("still asks for a finished scene", () => {
+    // An unresolved story is not an unfinished sentence. Without this a model
+    // stops mid-paragraph and a child thinks the app broke.
+    const text = render({ cliffhanger: true });
+    expect(text).toContain("finish the SCENE properly");
+    expect(text).toContain('Do not write "to be continued"');
+  });
+
+  it("changes nothing when it is off", () => {
+    // The default path must be untouched -- the golden strings above are the
+    // real guard, this is the statement of intent.
+    expect(render({ cliffhanger: false })).toBe(render({}));
+  });
+
+  it("does not double up on a retelling, which already suppressed the ending", () => {
+    const a = render({ biblicalEvent: "noah", cliffhanger: false });
+    const b = render({ biblicalEvent: "noah", cliffhanger: true });
+    // The retelling already dropped moralOutcome; the cliffhanger adds only its
+    // own instruction rather than re-suppressing something already gone.
+    expect(b).toContain("Do NOT resolve this story");
+    expect(a).not.toContain("Do NOT resolve this story");
+  });
+});
+
+describe("the three continuity tiers carry different force", () => {
+  const world = {
+    characters: ["Lily, 7, lives next door and is afraid of the dark"],
+    facts: ["The brass lantern is empty"],
+    threads: ["The treehouse was never finished"],
+  };
+  const render = (c: unknown) =>
+    renderBrief(buildStoryBrief({ ...base } as StoryRequest, [], c as never), "outline");
+
+  it("says a named character does not have to appear", () => {
+    // A cast list read as a cast call puts everyone on the page. Identity, not
+    // obligation.
+    const t = render({ canon: [], world });
+    expect(t).toContain("none of them has to appear");
+    expect(t).toContain("Lily, 7, lives next door");
+  });
+
+  it("states facts as hard constraints", () => {
+    expect(render({ canon: [], world })).toContain("Do not contradict any of this");
+  });
+
+  it("states threads as explicitly optional", () => {
+    // THE mechanism. Without permission to ignore them, open threads read as a
+    // to-do list and the next story is a sequel-by-checklist.
+    const t = render({ canon: [], world });
+    expect(t).toContain("You MAY pick ONE of these up");
+    expect(t).toContain("or ignore all of them");
+    expect(t).toContain("possibilities, not instructions");
+  });
+
+  it("keeps the three tiers apart", () => {
+    const t = render({ canon: [], world });
+    expect(t.indexOf("none of them has to appear")).toBeLessThan(t.indexOf("Do not contradict"));
+    expect(t.indexOf("Do not contradict")).toBeLessThan(t.indexOf("You MAY pick ONE"));
+  });
+
+  it("omits a tier that is empty rather than heading nothing", () => {
+    const t = render({ canon: [], world: { characters: [], facts: ["A fact"], threads: [] } });
+    expect(t).toContain("Do not contradict");
+    expect(t).not.toContain("has to appear");
+    expect(t).not.toContain("You MAY pick ONE");
+  });
+
+  it("still emits the background guard alongside them", () => {
+    // The line that stops the whole block becoming the plot.
+    expect(render({ canon: [], world })).toContain("This is BACKGROUND, not the plot");
+  });
+
+  it("does not drop a universe that has only a world", () => {
+    // The emptiness test predates the world tier; missing it here would make a
+    // universe with extractions but no summary look empty.
+    expect(render({ canon: [], world })).toContain("ALREADY TRUE IN THIS WORLD");
+  });
+
+  it("adds nothing when there is no world at all", () => {
+    expect(render(undefined)).not.toContain("ALREADY TRUE IN THIS WORLD");
+  });
+});

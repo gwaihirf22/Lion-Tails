@@ -82,31 +82,50 @@ export default function UniverseCard({
                 <Loader2 className="h-3 w-3 animate-spin" /> summarising
               </Badge>
             )}
-            {!busy && universe.isStale && (
-              <Badge variant="outline" className="bg-warning-surface border-warning text-warning">
-                summary out of date
-              </Badge>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy || !universe.canMakeSummary}
-              onClick={() => onMakeSummary(false)}
-              title={
-                universe.canMakeSummary
-                  ? "Read the stories and update this universe's summary"
-                  : storyCount < 2
-                    ? "A universe needs at least two stories"
-                    : "Already up to date — it unlocks again when a story is added"
-              }
-            >
-              {universe.summary ? "Update summary" : "Make summary"}
-            </Button>
+            {/* The "Make summary" button used to sit here with a stale badge
+                beside it. Both are gone: every story in a series refreshes
+                the summary and the world as it is written, so there is
+                nothing to press and nothing that can fall out of date. */}
           </div>
         </div>
 
         {open && (
           <div className="mt-4 space-y-4">
+            {/* What the stories established, kept current as each is written.
+                Grouped the way the PROMPT grades them -- who exists, what is
+                fixed, what is still open -- so what a reader sees here is what
+                the next story will actually be told. */}
+            {(universe.worldState ?? []).some((e) => e.status === "current") && (
+              <div className="space-y-3">
+                {([
+                  ["character", "Who is in this world"],
+                  ["fact", "What is already true"],
+                  ["thread", "Left open"],
+                ] as const).map(([kind, heading]) => {
+                  const items = (universe.worldState ?? []).filter(
+                    (e) => e.kind === kind && e.status === "current",
+                  );
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={kind}>
+                      <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        {heading}
+                      </h4>
+                      <ul className="mt-1 space-y-0.5">
+                        {items.map((e) => (
+                          <li key={e.id} className="text-sm">{e.text}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+                <p className="text-xs text-muted-foreground">
+                  Updated automatically as stories are added. &ldquo;Left open&rdquo; is
+                  offered to a later story as a possibility, never as an instruction.
+                </p>
+              </div>
+            )}
+
             {/* Summary */}
             <div>
               <div className="flex items-center justify-between mb-1">

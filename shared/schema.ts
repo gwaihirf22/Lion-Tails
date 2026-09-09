@@ -128,6 +128,22 @@ export const storyUniverses = pgTable(
      * canon together should be one UPDATE rather than a transaction.
      */
     pinnedCanon: jsonb("pinned_canon").default([]).notNull(),
+
+    /**
+     * What the world remembers, extracted after each story in a series.
+     *
+     * WorldEntry[] -- see server/lib/worldState.ts for the shape and the merge
+     * rules. Separate from pinned_canon on purpose: canon is human-curated and
+     * capped at 20 because "an uncapped canon list is a second summary that
+     * nothing compresses", while this is machine-maintained, larger, and its
+     * entries are revised rather than only added -- a character falls ill, a
+     * thread is resolved.
+     *
+     * jsonb because it is always read and written whole with its universe, and
+     * because entries carry a kind and a status that a column set would have
+     * to model as a second table for no benefit.
+     */
+    worldState: jsonb("world_state").default([]).notNull(),
   },
   (table) => ({
     userIdx: index("idx_story_universes_user_id").on(table.userId),
@@ -665,6 +681,28 @@ export const storyRequestSchema = z.object({
       reference: z.string().optional(),
     })
     .optional(),
+  /**
+   * The user expects to write more stories in this world.
+   *
+   * What it buys is one extra model call after the story is written, which
+   * extracts what a later story would need to know -- who appeared, what is now
+   * true, what was left open. That is not worth paying for on a one-off, so it
+   * is opt-in rather than automatic.
+   *
+   * A CONTINUATION implies it without the box being ticked: a story that has
+   * already been continued once is very likely to be continued again.
+   */
+  mayContinue: z.boolean().default(false),
+  /**
+   * End without resolving.
+   *
+   * moralOutcome is picked at random when the user does not choose one, and it
+   * instructs the story to resolve -- so a cliffhanger has to suppress it, in
+   * exactly the way a retelling already does. See the `ending` line in
+   * buildStoryBrief: "the account already has an ending; it is not ours to
+   * assign." The same is true of a story the user has said is not over.
+   */
+  cliffhanger: z.boolean().default(false),
   useTimeTravel: z.boolean().default(false),
   /**
    * The cast, in order. Index 0 is the protagonist, and that ordering is

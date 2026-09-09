@@ -754,6 +754,75 @@ Both are gone and every element in the header names its own token. Inheritance
 that broad is how a dependency gets hidden: it makes an unrelated rule
 load-bearing without saying so anywhere.
 
+
+---
+
+## 24. A world that remembers must be told which parts it may ignore
+
+A story continuing another needs to know what is already true, or the villain's
+name changes between episodes. But a model handed a list of facts treats it as a
+checklist and writes the same story again. So the naive version of continuity
+produces *either* inconsistency *or* a sequel-by-numbers, and the second is
+harder to notice because it is a perfectly valid HTTP 200 story.
+
+The fix is not more facts, it is **graded** facts. Three kinds, three renderings:
+
+| kind | rendered as | force |
+|---|---|---|
+| `character` | "these are their names — but none of them has to appear" | identity |
+| `fact` | "already true. Do not contradict any of this" | hard |
+| `thread` | "you MAY pick ONE up, or ignore all of them" | explicitly optional |
+
+**The third tier is the entire mechanism.** Everything else constrains; that one
+says out loud that it does not, and that permission is what lets the next story
+be different. It is measurable:
+
+| | `gpt-oss:20b` | `gpt-5.6-luna` |
+|---|---|---|
+| open threads taken up | **all three** | the loaded one left alone |
+| characters | forced in | used selectively |
+| result | sequel-by-checklist | a new episode in the same world |
+
+Both runs were the same universe, same threads, same unsteered request. **The
+local model ignores the permission and the economy model honours it** — so this
+prompt must not be tuned against the 20B, or it will be optimised for a model
+production does not use. (A first comparison was run with a `customPrompt` that
+steered the story away from the threads by itself; that was a confound and the
+table above is from the re-run without it.)
+
+### Why entries and not prose
+
+Worlds change: someone falls ill, someone leaves. Prose can only be rewritten
+wholesale, which costs a re-read of every story — the original summariser read up
+to eight. Entries are superseded one at a time by the extraction that noticed the
+change, so the world stays current for the price of reading the newest story, and
+the summary it writes alongside them can never be stale.
+
+`mergeWorldState` is deliberately total and forgiving because it consumes MODEL
+output: an unknown id, a bad kind or an over-long line is dropped or truncated
+rather than thrown. The alternative is losing a whole story's continuity to one
+malformed row in a background job nobody is watching.
+
+### The question the extraction asks
+
+Not "summarise this story" but **"suppose someone writes the next story — what
+must be noted so they do not contradict this one"**. Those produce different
+output: the first gives a plot recap, the second gives the things it would be
+wrong to change. On the economy model it recorded a lie as a world fact —
+*"Mia told Counselor Ruth she had only stayed on the beach, though she had been
+near the dock and had the key"* — which a plot summary would have flattened into
+"Mia learned about honesty".
+
+### When it runs, and why nothing gates it
+
+Only when a sequel is plausible: the user ticked "I might write more", or the
+story continues another. A one-off extracts nothing. It charges no quota
+structurally — there is no `user_usage` write on the path — and it is excluded
+from the user's concurrency limit, because that limit exists to stop one person
+queueing five generations and an extraction is work they never asked for.
+Counting it would let an invisible background job refuse the story they are
+trying to write.
+
 ---
 
 ## Recurring failure shape

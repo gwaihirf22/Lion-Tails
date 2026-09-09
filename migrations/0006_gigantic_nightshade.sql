@@ -1,0 +1,1 @@
+ALTER TABLE "story_universes" ADD COLUMN "world_state" jsonb DEFAULT '[]'::jsonb NOT NULL;

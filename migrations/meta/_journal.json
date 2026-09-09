@@ -43,6 +43,13 @@
       "when": 1788938556752,
       "tag": "0005_backfill_story_outlines",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788945183556,
+      "tag": "0006_gigantic_nightshade",
+      "breakpoints": true
     }
   ]
 }

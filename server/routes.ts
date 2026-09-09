@@ -9,7 +9,9 @@ import {
   cancelStoryJob,
   countInFlight,
 } from "./lib/storyJobs";
+import { activeWorld } from "./lib/worldState";
 import {
+  type StoryBrief,
   buildStoryBrief,
   buildSystemPrompt,
   resolveStoryCharacters,
@@ -279,7 +281,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       validatedData.universeId = universeId;
 
-      let continuity: { canon: string[]; summary?: string } | undefined;
+      // Typed from the brief rather than restated, so a new tier cannot be
+      // added there and silently dropped here.
+      let continuity: StoryBrief["continuity"];
       if (universeId) {
         const universe = await getUniverse(userId, universeId);
         if (universe) {
@@ -288,6 +292,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // does not get to write permanent world-facts.
             canon: universe.pinnedCanon.filter((c) => c.status === "active").map((c) => c.text),
             summary: universe.summary ?? undefined,
+            // Graded rather than merged: renderBrief gives characters, facts
+            // and threads three different degrees of force, and the third being
+            // optional is what stops a remembered world becoming a repeated one.
+            world: activeWorld(universe.worldState ?? []),
           };
         }
       }

@@ -267,8 +267,23 @@ export type StoryBrief = {
   craft: string[];
   /** Free-text steering from the user. Deliberately last and unqualified. */
   userInstructions?: string;
-  /** Universe continuity: what is already true. Never the plot of this story. */
-  continuity?: { canon: string[]; summary?: string };
+  /**
+   * Universe continuity: what is already true. Never the plot of this story.
+   *
+   * THREE TIERS, and the grading is the point. Handed one undifferentiated list
+   * of facts a model treats it as a checklist and writes the same story again,
+   * so a world that remembers becomes a world that repeats. Each tier is
+   * rendered with its own force -- identity, constraint, invitation -- and the
+   * third being explicitly optional is what lets the next story be different.
+   */
+  continuity?: {
+    /** Human-pinned. Hardest of all: never forget. */
+    canon: string[];
+    /** Prose background for the reader of the prompt. */
+    summary?: string;
+    /** Extracted after each story. See lib/worldState.ts. */
+    world?: { characters: string[]; facts: string[]; threads: string[] };
+  };
   /**
    * A real account the story must be FAITHFUL to rather than invent around.
    *
@@ -298,7 +313,7 @@ export function buildStoryBrief(
    * produces a perfectly valid story about nobody in particular.
    */
   characters: Character[],
-  continuity?: { canon: string[]; summary?: string },
+  continuity?: StoryBrief["continuity"],
   hero?: HeroOfFaith,
 ): StoryBrief {
   // The LEAD. Everything below this line that builds identity and colour is
@@ -441,10 +456,26 @@ export function buildStoryBrief(
   // not soften it into a happy ending" is a direct instruction to change how the
   // account of Noah ends. The account already has an ending; it is not ours to
   // assign. This is the same class of conflict as "invent the events yourself".
-  const ending = sourceMaterial
-    ? undefined
-    : moralOutcomeInstruction(request.moralOutcome);
+  //
+  // A cliffhanger is the SECOND case on this line, for the same reason. The
+  // user has said the story is not over; moralOutcome would tell it to resolve.
+  // Two instructions that contradict, and the model picks one -- which is how
+  // "leave it open" produced a tidy ending and looked like the flag doing
+  // nothing.
+  const ending =
+    sourceMaterial || request.cliffhanger
+      ? undefined
+      : moralOutcomeInstruction(request.moralOutcome);
   if (ending) premise.push(ending);
+  if (request.cliffhanger) {
+    premise.push(
+      "Do NOT resolve this story. End it at a moment that makes the reader " +
+        "want the next one -- a decision not yet made, a door not yet opened, " +
+        "a question just asked. Still finish the SCENE properly: an unresolved " +
+        "story is not an unfinished sentence, and a child should not feel the " +
+        "story broke off. Do not write \"to be continued\".",
+    );
+  }
 
   // ---- HOW ------------------------------------------------------------------
   const craft: string[] = [];
@@ -485,7 +516,14 @@ export function buildStoryBrief(
     craft,
     userInstructions: isSet(request.customPrompt) ? request.customPrompt : undefined,
     continuity:
-      continuity && (continuity.canon.length > 0 || continuity.summary)
+      continuity &&
+      (continuity.canon.length > 0 ||
+        continuity.summary ||
+        (continuity.world &&
+          continuity.world.characters.length +
+            continuity.world.facts.length +
+            continuity.world.threads.length >
+            0))
         ? continuity
         : undefined,
     sourceMaterial,
@@ -717,14 +755,47 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
   if (brief.continuity) {
     out.push("");
     out.push("ALREADY TRUE IN THIS WORLD");
-    if (brief.continuity.canon.length) {
-      out.push("Facts that must not be contradicted:");
-      brief.continuity.canon.forEach((c, i) => out.push(`  ${i + 1}. ${c}`));
-    }
+    const world = brief.continuity.world;
+
     if (brief.continuity.summary) {
       out.push("What has happened so far:");
       out.push(brief.continuity.summary);
     }
+
+    if (world?.characters.length) {
+      // Identity, not obligation. A cast list read as a cast call puts all of
+      // them on the page, so the permission not to use them is explicit.
+      out.push(
+        "People who exist in this world. If one of them appears, these are " +
+          "their names and who they are -- but none of them has to appear:",
+      );
+      world.characters.forEach((c) => out.push(`  - ${c}`));
+    }
+
+    // ONE list of hard constraints, not two. Pinned canon and extracted facts
+    // differ in where they came from and not at all in what the model must do
+    // with them, and two headings that both mean "do not contradict" invite it
+    // to weigh one above the other. Canon goes first because a human chose it.
+    const mustHold = [...brief.continuity.canon, ...(world?.facts ?? [])];
+    if (mustHold.length) {
+      out.push("Already true. Do not contradict any of this:");
+      mustHold.forEach((f, i) => out.push(`  ${i + 1}. ${f}`));
+    }
+
+    if (world?.threads.length) {
+      // THE tier that makes this work. Everything above constrains; this one
+      // explicitly does not, and saying so is the whole mechanism. Without the
+      // permission to ignore them, open threads read as a to-do list and the
+      // next story becomes a sequel-by-checklist.
+      out.push(
+        "Threads left open. You MAY pick ONE of these up if it fits the story " +
+          "you are writing, or ignore all of them -- they are possibilities, " +
+          "not instructions, and a story that services every one of them is a " +
+          "list rather than a story:",
+      );
+      world.threads.forEach((t) => out.push(`  - ${t}`));
+    }
+
     // The single most important line in this block. A summary handed to a
     // model without it becomes the plot of the next story -- and that failure
     // looks like a perfectly valid HTTP 200 story, so nothing catches it but
