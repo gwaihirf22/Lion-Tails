@@ -57,7 +57,7 @@ export default function StoryGeneratorTabs({
           <div className="relative z-10">
             <div className="mb-4 text-center">
               <h3 className="text-xl font-heading font-bold text-secondary">Personalized Children's Stories</h3>
-              <p className="text-sm text-muted-foreground">Create fictional stories with your child as the main character</p>
+              <p className="text-sm text-muted-foreground">Invented stories, with characters you choose</p>
             </div>
             
             <StoryForm 

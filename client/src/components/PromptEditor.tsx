@@ -121,7 +121,7 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
         prompt += `Characters: ${names[0]} (main)${names.length > 1 ? ", " + names.slice(1).join(", ") : ""}\n`;
       }
       if (storyRequest.childName) prompt += `Child's Name: ${storyRequest.childName}\n`;
-      if (storyRequest.characterDetails?.age) prompt += `Child's Age: ${storyRequest.characterDetails.age}\n`;
+      if (storyRequest.characterDetails?.age) prompt += `Age: ${storyRequest.characterDetails.age}\n`;
       if (storyRequest.theme) prompt += `Theme/Lesson: ${storyRequest.theme}\n`;
       // "none" is what the form writes to mean no animal, and it is truthy --
       // so this preview showed "Animal Friend: none".

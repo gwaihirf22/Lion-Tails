@@ -14,7 +14,7 @@ export default function Home() {
       <section className="mb-8 text-center">
         <div className="max-w-5xl mx-auto rounded-2xl shadow-xl p-6 relative overflow-hidden content-container">
           <h1 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-secondary drop-shadow-sm">Lion Tails: Christian Stories</h1>
-          <p className="text-lg md:text-xl mb-6 max-w-3xl mx-auto">Faith-based stories written around the children you know, the people you want them to meet, and the accounts you want told properly.</p>
+          <p className="text-lg md:text-xl mb-6 max-w-3xl mx-auto">Learn the key events and people of Scripture and church history the way children actually remember them &mdash; as stories worth staying awake for, with the characters you choose in them.</p>
           <div className="flex flex-col md:flex-row justify-center items-center gap-8">
             <div className="flex-1 p-4">
               <div className="animate-[float_6s_ease-in-out_infinite] w-64 h-64 md:w-80 md:h-80 mx-auto">
@@ -27,7 +27,7 @@ export default function Home() {
                 <ul className="text-left space-y-3">
                   <li className="flex items-center">
                     <span className="text-primary mr-3 bg-primary/10 p-1 rounded-full"><Book size={18} /></span>
-                    <span>Save your children as characters and put up to eight in one story</span>
+                    <span>Save characters once, then put up to eight of them in one story</span>
                   </li>
                   <li className="flex items-center">
                     <span className="text-primary mr-3 bg-primary/10 p-1 rounded-full"><BookOpen size={18} /></span>
@@ -35,11 +35,11 @@ export default function Home() {
                   </li>
                   <li className="flex items-center">
                     <span className="text-primary mr-3 bg-primary/10 p-1 rounded-full"><CalendarDays size={18} /></span>
-                    <span>80 Heroes of Faith, from Scripture and from church history</span>
+                    <span>Heroes of Faith, from Scripture and from church history</span>
                   </li>
                   <li className="flex items-center">
                     <span className="text-primary mr-3 bg-primary/10 p-1 rounded-full"><History size={18} /></span>
-                    <span>Retell a biblical account, or one moment from a real life</span>
+                    <span>Real accounts told faithfully &mdash; or one moment from a real life, so you learn it properly instead of skimming a whole biography</span>
                   </li>
                   <li className="flex items-center">
                     <span className="text-primary mr-3 bg-primary/10 p-1 rounded-full"><Music size={18} /></span>
@@ -97,7 +97,7 @@ export default function Home() {
                 <CalendarDays className="h-8 w-8 text-warning" />
               </div>
               <h3 className="text-xl font-heading font-bold mb-2">Heroes of Faith</h3>
-              <p className="mb-4">Eighty people, from Scripture and from church history, each with a written profile checked against real sources.</p>
+              <p className="mb-4">People from Scripture and from church history, each with a written profile you can read without the AI &mdash; every date and passage checked against real sources.</p>
               <Button 
                 className="bg-warning hover:bg-warning/90 text-warning-foreground border-none shadow-md"
                 onClick={() => navigate("/heroes-of-faith")}
