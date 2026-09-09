@@ -730,57 +730,71 @@ async function runJob(job: JobRow): Promise<void> {
     );
     await finishSucceeded(job, saved.id);
 
-    // Remember this story, if there is likely to be a next one.
-    //
-    // Two triggers, both meaning a sequel is plausible: the user ticked "I
-    // might write more stories in this world", or this story continues another
-    // (a story continued once is very likely to be continued again). A one-off
-    // extracts nothing and costs nothing, which is what keeps this from being
-    // an extra call on every story forever.
-    //
-    // Deliberately after finishSucceeded and deliberately not awaited for its
-    // result: the story is saved and the user is done. A failure to enqueue the
-    // extraction must not fail a story that already exists.
-    const wantsMemory =
-      Boolean(job.request?.mayContinue) || Boolean(job.request?.continuesStoryId);
+    // EVERYTHING BELOW IS PAST THE POINT OF NO RETURN. The story is written,
+    // saved, and marked succeeded; the user is finished. Its own try/catch
+    // because a throw here would fall into the handler below and call
+    // finishFailed on a job that already succeeded -- harmless, since that
+    // UPDATE is guarded on status='running', but it would log a failure for a
+    // story that worked and re-queue nothing. Remembering a story is strictly
+    // less important than having written it.
+    try {
+      // Remember this story, if there is likely to be a next one.
+      //
+      // Two triggers, both meaning a sequel is plausible: the user ticked "I
+      // might write more stories in this world", or this story continues another
+      // (a story continued once is very likely to be continued again). A one-off
+      // extracts nothing and costs nothing, which is what keeps this from being
+      // an extra call on every story forever.
+      //
+      // Deliberately after finishSucceeded and deliberately not awaited for its
+      // result: the story is saved and the user is done. A failure to enqueue the
+      // extraction must not fail a story that already exists.
+      const wantsMemory =
+        Boolean(job.request?.mayContinue) || Boolean(job.request?.continuesStoryId);
 
-    // A FIRST story that opts into a series has no universe yet.
-    // resolveUniverseForRequest only creates one when continuing -- it needs a
-    // parent to name the universe after -- so without this the flag silently
-    // did nothing at all: no universe, therefore no extraction, therefore no
-    // memory, and no error anywhere to say so.
-    //
-    // Done here rather than at enqueue because the name comes from the story's
-    // title, and at enqueue the story has not been written yet.
-    let universeId: string | undefined = job.request?.universeId;
-    if (wantsMemory && !universeId) {
-      const created = await createUniverse(job.user_id, story.title.slice(0, 100));
-      if ("error" in created) {
-        // Almost always a name collision with an existing universe of the same
-        // title. Not worth failing a saved story over; the next story in this
-        // world can be attached by hand.
-        console.warn(`[worker] could not open a universe for ${saved.id}: ${created.error}`);
-      } else {
-        universeId = created.universeId;
-        await setStoryUniverse(job.user_id, saved.id, universeId).catch((e) =>
-          console.error(`[worker] could not place ${saved.id} in its universe:`, e),
+      // A FIRST story that opts into a series has no universe yet.
+      // resolveUniverseForRequest only creates one when continuing -- it needs a
+      // parent to name the universe after -- so without this the flag silently
+      // did nothing at all: no universe, therefore no extraction, therefore no
+      // memory, and no error anywhere to say so.
+      //
+      // Done here rather than at enqueue because the name comes from the story's
+      // title, and at enqueue the story has not been written yet.
+      let universeId: string | undefined = job.request?.universeId;
+      if (wantsMemory && !universeId) {
+        const created = await createUniverse(job.user_id, story.title.slice(0, 100));
+        if ("error" in created) {
+          // Almost always a name collision with an existing universe of the same
+          // title. Not worth failing a saved story over; the next story in this
+          // world can be attached by hand.
+          console.warn(`[worker] could not open a universe for ${saved.id}: ${created.error}`);
+        } else {
+          universeId = created.universeId;
+          await setStoryUniverse(job.user_id, saved.id, universeId).catch((e) =>
+            console.error(`[worker] could not place ${saved.id} in its universe:`, e),
+          );
+        }
+      }
+
+      if (wantsMemory && universeId) {
+        await enqueueStoryJob({
+          userId: job.user_id,
+          kind: "extract",
+          universeId,
+          storyId: saved.id,
+          request: job.request,
+          // The story text, the way a summary job carries its window.
+          brief: JSON.stringify({ title: story.title, content: story.content }),
+          systemPrompt: extractionSystemPrompt(),
+          targetWordCount: 0,
+        }).catch((e) =>
+          console.error(`[worker] could not queue extraction for ${saved.id}:`, e),
         );
       }
-    }
-
-    if (wantsMemory && universeId) {
-      await enqueueStoryJob({
-        userId: job.user_id,
-        kind: "extract",
-        universeId,
-        storyId: saved.id,
-        request: job.request,
-        // The story text, the way a summary job carries its window.
-        brief: JSON.stringify({ title: story.title, content: story.content }),
-        systemPrompt: extractionSystemPrompt(),
-        targetWordCount: 0,
-      }).catch((e) =>
-        console.error(`[worker] could not queue extraction for ${saved.id}:`, e),
+    } catch (memoryError) {
+      console.error(
+        `[worker] story ${job.job_id} is saved; remembering it failed:`,
+        memoryError instanceof Error ? memoryError.message : memoryError,
       );
     }
   } catch (error) {
