@@ -86,7 +86,7 @@ export default function Story() {
               Continue this story
             </Button>
           )}
-          <Button variant="outline" onClick={() => navigate("/")}>
+          <Button variant="outline" onClick={() => navigate("/generate-story")}>
             Create New Story
           </Button>
           <Button variant="outline" onClick={() => navigate("/music")}>
