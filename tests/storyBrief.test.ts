@@ -41,6 +41,19 @@ const mia: Character = {
   personality: "curious", createdAt: "2026-01-01",
 };
 
+/** A character who is not a person, and not a "boy" or a "girl". */
+const ember: Character = {
+  id: "c2", name: "Ember", kind: "dragon", category: "mythical", sex: "female",
+  age: 300, hair: "emerald", eyes: "gold", personality: "patient",
+  createdAt: "2026-01-01",
+};
+
+/** A made thing: the only sort of character that may be an "it". */
+const bolt: Character = {
+  id: "c3", name: "Bolt", kind: "robot", category: "machine", sex: "it",
+  hair: "copper", hobby: "inventing", createdAt: "2026-01-01",
+};
+
 const base = {
   storyLength: "medium", storyType: "regular", useAnimal: true, theme: "kindness",
 } as unknown as StoryRequest;
@@ -60,6 +73,20 @@ const cases: Record<string, () => ReturnType<typeof buildStoryBrief>> = {
       { canon: ["The lantern is empty."], summary: "Mia found a lantern." }),
   "time travel": () =>
     buildStoryBrief({ ...base, useTimeTravel: true, characterId: "c1" } as StoryRequest, [mia]),
+
+  // Added when a character stopped having to be a child. Everything above this
+  // line predates it and MUST NOT MOVE -- those six are the compatibility
+  // assertion, and these four are what the widening is supposed to produce.
+  "non-human lead": () =>
+    buildStoryBrief({ ...base, characterIds: ["c2"] } as StoryRequest, [ember]),
+  "mixed cast": () =>
+    buildStoryBrief({ ...base, characterIds: ["c1", "c2", "c3"] } as StoryRequest, [mia, ember, bolt]),
+  "lead with notes": () =>
+    buildStoryBrief({ ...base, characterIds: ["c1"] } as StoryRequest,
+      [{ ...mia, notes: "She keeps a pebble from the riverbank in her pocket." }]),
+  "lead with parent notes": () =>
+    buildStoryBrief({ ...base, characterIds: ["c1"] } as StoryRequest,
+      [{ ...mia, mustBeTrue: "Mia uses a wheelchair." }]),
 };
 
 describe("a brief with no cast renders exactly as it always has", () => {
@@ -624,5 +651,96 @@ describe("the three continuity tiers carry different force", () => {
 
   it("adds nothing when there is no world at all", () => {
     expect(render(undefined)).not.toContain("ALREADY TRUE IN THIS WORLD");
+  });
+});
+
+/**
+ * A character can now be a dragon, and can carry text somebody typed.
+ *
+ * The rules being asserted are about FORCE, not wording. Three fields reach the
+ * prompt with three different weights, and the whole design of the brief is
+ * that those weights stay different:
+ *
+ *   kind / mustBeTrue  identity -- reprinted every chapter, "keep consistent"
+ *   notes              colour   -- "only where a scene naturally calls for it"
+ *   canonicalLook      nowhere  -- it is for pictures, in a later slice
+ */
+describe("a character who is not a child", () => {
+  const of = (c: Partial<Character>, p: BriefPurpose = "single") =>
+    renderBrief(
+      buildStoryBrief({ ...base, characterIds: ["c9"] } as StoryRequest, [
+        { id: "c9", name: "Ember", createdAt: "2026-01-01", ...c } as Character,
+      ]),
+      p,
+    );
+
+  it("says what they are, in the slot a gender used to fill", () => {
+    expect(of({ kind: "dragon" })).toContain("Ember, a dragon.");
+  });
+
+  it("keeps that in every chapter, because it is not decoration", () => {
+    // A supporting dragon whose species is dropped becomes a person with a
+    // strange name. This is identity, so it survives the tightest projection.
+    expect(of({ kind: "dragon" }, "chapter")).toContain("a dragon");
+  });
+
+  it("names the covering after what they are", () => {
+    expect(of({ kind: "dragon", category: "mythical", hair: "emerald" })).toContain("emerald scales");
+    expect(of({ kind: "owl", category: "bird", hair: "brown" })).toContain("brown feathers");
+    expect(of({ kind: "robot", category: "machine", hair: "copper" })).toContain("copper plating");
+  });
+
+  it("still calls it hair when the character predates categories", () => {
+    // The compatibility path: every character saved before this has no
+    // category, and "Mia has brown hair" is asserted byte-for-byte above.
+    expect(of({ gender: "girl", hair: "brown" })).toContain("brown hair");
+  });
+
+  it("refers to a machine as an it, and a creature as a he or a she", () => {
+    expect(of({ kind: "robot", sex: "it" })).toContain("a robot (it)");
+    expect(of({ kind: "dragon", sex: "female" })).toContain("a dragon (she)");
+  });
+
+  it("says a, or an, for whatever noun it was given", () => {
+    // The companion-animal line already paid for this once: ungrammatical input
+    // made a model stop naming the animal and repeat the bare noun instead.
+    expect(of({ kind: "owl" })).toContain("Ember, an owl.");
+    expect(of({ kind: "elephant" })).toContain("an elephant");
+  });
+});
+
+describe("text somebody typed", () => {
+  const brief = (c: Partial<Character>) =>
+    buildStoryBrief({ ...base, characterIds: ["c9"] } as StoryRequest, [
+      { id: "c9", name: "Ember", createdAt: "2026-01-01", kind: "dragon", ...c } as Character,
+    ]);
+
+  it("carries a parent's must-be-true into every chapter", () => {
+    const t = renderBrief(brief({ mustBeTrue: "Ember cannot fly." }), "chapter");
+    expect(t).toContain("Ember cannot fly.");
+  });
+
+  it("punctuates it as its own sentence", () => {
+    // "a dragon Ember cannot fly." is the failure this guards.
+    expect(renderBrief(brief({ mustBeTrue: "Ember cannot fly." }), "chapter"))
+      .toContain("a dragon. Ember cannot fly.");
+  });
+
+  it("keeps the open notes box out of the chapter prompt", () => {
+    // notes is the one field a child types freely, so it is colour: usable,
+    // never required, and never repeated as a per-chapter constant.
+    const b = brief({ notes: "She hums when she is thinking." });
+    expect(renderBrief(b, "single")).toContain("She hums when she is thinking.");
+    expect(renderBrief(b, "chapter")).not.toContain("hums");
+  });
+
+  it("never puts canonicalLook into any prompt", () => {
+    // Stored for the avatar slice, which will use it for image prompts only.
+    // Keeping appearance out of the story prompt is what lets it be as long as
+    // anyone likes without competing for the cast's few facts.
+    const b = brief({ canonicalLook: "Copper scales with a torn left wing." });
+    for (const p of ["single", "outline", "chapter", "image"] as BriefPurpose[]) {
+      expect(renderBrief(b, p), p).not.toContain("torn left wing");
+    }
   });
 });

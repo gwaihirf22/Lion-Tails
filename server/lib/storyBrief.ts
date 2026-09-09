@@ -1,10 +1,12 @@
 import {
   characterIdsOf,
+  characterKind,
   MAX_STORY_CHARACTERS,
   type StoryRequest,
   type Character,
   type HeroOfFaith,
 } from "@shared/schema";
+import { coveringNoun } from "@shared/characterVocab";
 import { storage } from "../storage";
 import { getBiblicalEvent } from "../data/biblicalEvents";
 
@@ -34,6 +36,34 @@ export type CustomPrompts = {
  * still work when the database is unavailable and storage has fallen back to
  * memory -- and an empty array is harder for a caller to forget than undefined.
  */
+/**
+ * "a" or "an", for a noun the user chose.
+ *
+ * Extracted from the companion-animal line, which had it inline. That comment
+ * is worth keeping in view: "There is rabbit in Mia's life" is ungrammatical,
+ * and a model handed ungrammatical input stopped naming the animal and repeated
+ * the bare noun instead -- one prompt produced a companion called Benny, the
+ * other produced "the rabbit" fifteen times. A cast that can contain an owl, an
+ * elephant and an android needs the same care the rabbit got.
+ */
+function article(noun: string): string {
+  return /^[aeiou]/i.test(noun.trim()) ? "an" : "a";
+}
+
+/**
+ * How to refer to them, in two words, inside the clause that already exists.
+ *
+ * Derived from `sex` rather than stored as a pronoun. Absent for every
+ * character saved before this, and for "boy" and "girl", where the noun carries
+ * it already and a tag would be noise.
+ */
+function sexTag(sex?: Character["sex"]): string {
+  if (sex === "male") return " (he)";
+  if (sex === "female") return " (she)";
+  if (sex === "it") return " (it)";
+  return "";
+}
+
 export async function resolveStoryCharacters(
   request: StoryRequest,
   userId: number,
@@ -328,10 +358,23 @@ export function buildStoryBrief(
   // tests/storyBrief.test.ts asserts exactly that against captured strings.
   const details = characters[0];
   const supporting = characters.slice(1);
-  const d = request.characterDetails;
+
+  /**
+   * The inline character the form collects when nobody picked a saved one.
+   *
+   * ALL OR NOTHING against `details`, not merged field by field. The old code
+   * took each field from the saved character "or" this shape, which meant a
+   * saved character who had left a field blank silently inherited a stranger's
+   * value from a form section that was not even on screen. Once a field can be
+   * genuinely unset -- which is the point of removing the defaults -- that stops
+   * being theoretical.
+   */
+  const d = details ? undefined : request.characterDetails;
 
   const name = details?.name || request.childName || "A child";
-  const gender = details?.gender || request.gender;
+  // What they ARE. characterKind() is the one place that knows the widened
+  // `kind` and the legacy `gender` are the same fact.
+  const kind = characterKind(details) || request.gender;
   const age = details?.age ?? d?.age;
   const hair = details?.hair || d?.hair;
   const eyes = details?.eyes || d?.eyes;
@@ -391,16 +434,36 @@ export function buildStoryBrief(
   const anonymous = isPlaceholderName(name) && Boolean(sourceMaterial);
   const who = [name];
   if (age) who.push(`aged ${age}`);
-  if (isSet(gender)) who.push(`a ${gender}`);
+  // WHAT THEY ARE goes in the identity slot, not in colour. "Is a dragon" is a
+  // hard fact a story must not contradict, unlike brown fur, and it occupies
+  // exactly the slot "a girl" already filled -- so a cast of eight non-humans
+  // costs one clause each rather than a share of the colour ration below.
+  if (isSet(kind)) who.push(`${article(kind!)} ${kind}${sexTag(details?.sex)}`);
   const identity = anonymous
     ? sourceMaterial!.kind === "hero-of-faith"
       ? `${sourceMaterial!.label}, and the people around them.`
       : `the people in the account of ${sourceMaterial!.label}.`
-    : sentence([who.join(", ")]);
+    // mustBeTrue rides in identity because identity is what the chapter
+    // projection reprints with "Keep this consistent." As colour it would be
+    // followed by "use these details only where a scene naturally calls for
+    // them", which is the wrong thing to say about a wheelchair.
+    //
+    // Punctuated as two sentences rather than passed to sentence() as two
+    // parts: that helper terminates only the LAST part, so a single call
+    // produced "Mia, aged 8, a girl Mia uses a wheelchair." -- the same
+    // ungrammatical input the companion-animal comment above records a model
+    // reacting badly to. Written this way, the no-notes case is character for
+    // character the expression it has always been.
+    : isSet(details?.mustBeTrue)
+      ? `${sentence([who.join(", ")])} ${sentence([details!.mustBeTrue])}`
+      : sentence([who.join(", ")]);
 
   // ---- Colour: usable if it fits, never required ---------------------------
   const traits: string[] = [];
-  if (isSet(hair)) traits.push(`${hair} hair`);
+  // The noun follows what they are: hair, fur, feathers, scales, plating. The
+  // stored field is `hair` whatever the answer, and a character with no
+  // category -- which is every character saved before this -- gets "hair".
+  if (isSet(hair)) traits.push(`${hair} ${coveringNoun(details?.category, kind)}`);
   if (isSet(eyes)) traits.push(`${eyes} eyes`);
   if (isSet(personality)) traits.push(`a ${personality} nature`);
   const colourParts: string[] = [];
@@ -408,15 +471,15 @@ export function buildStoryBrief(
   if (isSet(hobby)) colourParts.push(`${name} likes ${hobby}.`);
   if (isSet(favoriteColor)) colourParts.push(`Favourite colour: ${favoriteColor}.`);
   if (animal) {
-    // Article matters more than it looks. "There is rabbit in Mia's life" is
-    // ungrammatical, and a model handed ungrammatical input stopped naming the
-    // animal and repeated the bare noun instead -- the previous prompt produced
-    // a companion called Benny, this one produced "the rabbit" fifteen times.
-    const article = /^[aeiou]/i.test(animal) ? "an" : "a";
     colourParts.push(
-      `${name} has ${article} ${animal} as a companion; give it a name and a personality.`,
+      `${name} has ${article(animal)} ${animal} as a companion; give it a name and a personality.`,
     );
   }
+  // Whatever the user wrote about them, LAST and SOFT. It is the one field a
+  // child can type into freely, so it must not be able to act as an
+  // instruction: colour is followed by "use these details only where a scene
+  // naturally calls for them", and it never goes near userInstructions.
+  if (isSet(details?.notes)) colourParts.push(sentence([details!.notes]));
   const colour = anonymous ? "" : colourParts.join(" ");
 
   // ---- WHAT: the thing to invent around ------------------------------------
@@ -503,11 +566,16 @@ export function buildStoryBrief(
     ...supporting.map((c): BriefCharacter => {
       const who = [c.name];
       if (c.age) who.push(`aged ${c.age}`);
-      if (isSet(c.gender)) who.push(`a ${c.gender}`);
+      // The same widening as the lead, and it has to be here too: a supporting
+      // dragon read through the old line rendered "Ember, aged 300." -- the
+      // hard fact about her silently gone, because `gender` was empty and
+      // nothing else was consulted.
+      const ckind = characterKind(c);
+      if (isSet(ckind)) who.push(`${article(ckind!)} ${ckind}${sexTag(c.sex)}`);
       const trait = isSet(c.personality)
         ? `a ${c.personality} nature`
         : isSet(c.hair)
-          ? `${c.hair} hair`
+          ? `${c.hair} ${coveringNoun(c.category, ckind)}`
           : undefined;
       const likes = isSet(c.hobby) ? `likes ${c.hobby}` : undefined;
       const both = trait && likes ? `${c.name} has ${trait} and ${likes}.` : undefined;
