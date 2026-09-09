@@ -52,7 +52,13 @@ import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, hero
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { ZodError } from "zod";
-import { fromZodError } from "zod-validation-error";
+// The /v3 entry point, deliberately. zod-validation-error 5 defaults to
+// zod 4's $ZodError type, and this app defines its schemas with zod 3's
+// classic API -- so the default export rejects every ZodError we pass it with
+// "missing the following properties: type, _zod". zod 3.25 ships both APIs
+// side by side and this package ships a matching entry for each. Switch this
+// to the bare specifier as part of the zod 4 migration, not before.
+import { fromZodError } from "zod-validation-error/v3";
 import { v4 as uuidv4 } from "uuid";
 import { setupAuth } from "./auth";
 import { registerSongRoutes } from "./songs";
