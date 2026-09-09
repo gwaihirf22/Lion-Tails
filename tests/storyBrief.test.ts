@@ -7,14 +7,17 @@ import {
   deserialiseBrief,
   renderBrief,
   resolveStoryFocus,
+  statLeakage,
   type BriefPurpose,
 } from "../server/lib/storyBrief";
 import {
   characterIdsOf,
+  baseStats,
   MAX_STORY_CHARACTERS,
   storyRequestSchema,
   type StoryRequest,
   type Character,
+  type CharacterStats,
 } from "../shared/schema";
 
 /**
@@ -804,5 +807,85 @@ describe("a must-be-true belongs to whoever has one, not to whoever is first", (
     const t = renderBrief(buildStoryBrief(req(["c1", "c2", "c3"]), [mia, ella, bolt]), "chapter");
     expect(t).toContain("cannot climb stairs");
     expect(t).toContain("Bolt cannot speak.");
+  });
+});
+
+/**
+ * The stat sheet, and whether the model was told about it correctly.
+ *
+ * The design question this encodes: five numbers per character is the most
+ * list-shaped thing in the brief, and decisions.md §24 measured a model using
+ * every item of a list it was told was optional. So the block is guarded on
+ * somebody having actually spent a point, it names every cast member so the
+ * comparison it exists to enable is answerable, and it never reaches the
+ * chapter prompt, which runs seven times.
+ */
+describe("what each of them can do", () => {
+  const withStats = (name: string, stats: Partial<CharacterStats>, id = "c1") =>
+    ({ id, name, kind: "girl", createdAt: "x", stats: { ...baseStats(), ...stats } }) as Character;
+  const plain = (name: string, id: string) =>
+    ({ id, name, kind: "girl", createdAt: "x" }) as Character;
+  const render = (cs: Character[], p: BriefPurpose = "single") =>
+    renderBrief(
+      buildStoryBrief({ ...base, characterIds: cs.map((c) => c.id) } as StoryRequest, cs),
+      p,
+    );
+
+  it("says nothing at all when nobody has spent a point", () => {
+    // Every character starts at the baseline, so this is the common case for a
+    // long time. It must cost nothing.
+    expect(render([plain("Mia", "c1"), plain("Sam", "c2")])).not.toContain("WHAT EACH OF THEM CAN DO");
+  });
+
+  it("names every character once anyone has spent one", () => {
+    // A cast member missing from the table is one the model cannot place. The
+    // entire reason for numbers over prose is that "who is strongest" has an
+    // answer, and a partial table does not give it one.
+    const t = render([withStats("Ember", { strength: 7 }), plain("Mia", "c2")]);
+    expect(t).toContain("WHAT EACH OF THEM CAN DO");
+    expect(t).toMatch(/Ember\s+7/);
+    expect(t).toMatch(/Mia\s+3/);
+  });
+
+  it("anchors the scale, because a bare 7 means nothing", () => {
+    expect(render([withStats("Ember", { strength: 7 })])).toContain("3 is ordinary");
+  });
+
+  it("forbids the vocabulary, not just the emphasis", () => {
+    // "Do not focus on this" still permits "with her great strength, Ember
+    // lifted the beam". Forbidding the words is what stops a bedtime story
+    // reading like a game manual.
+    const t = render([withStats("Ember", { strength: 7 })]);
+    expect(t).toContain("Never write a number");
+    expect(t).toContain("never name a stat");
+  });
+
+  it("lets a weakness cost them something", () => {
+    // Without this line every stat becomes a triumph and the one who cannot
+    // lift the beam stops being the reason somebody else has to -- which is
+    // usually where the lesson is.
+    expect(render([withStats("Ember", { agility: 1 })])).toContain("AGAINST them");
+  });
+
+  it("stays out of the chapter prompt", () => {
+    // Seven chapters times a five-column table is the character-sheet tour at
+    // scale. The outline has already decided who does what.
+    expect(render([withStats("Ember", { strength: 7 })], "chapter")).not.toContain("Str");
+  });
+});
+
+describe("statLeakage", () => {
+  it("catches the sheet's own vocabulary", () => {
+    expect(statLeakage("With her Strength 7, Ember lifted the beam.")).toHaveLength(1);
+    expect(statLeakage("Ember was a 7 out of 10 in strength.")).toHaveLength(1);
+    expect(statLeakage("Her stats made her the obvious choice.")).toHaveLength(1);
+    expect(statLeakage("Ember gained +1 courage.")).toHaveLength(1);
+  });
+
+  it("leaves ordinary prose alone", () => {
+    // "strong" is a normal English word and a story about a strong character is
+    // the point. A check that fires on it would be useless.
+    expect(statLeakage("Ember was strong enough, and the strong wind did not stop her.")).toEqual([]);
+    expect(statLeakage("She heaved at the beam until it shifted.")).toEqual([]);
   });
 });

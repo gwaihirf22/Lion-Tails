@@ -5,6 +5,7 @@ import {
   buildUserInstruction,
   deserialiseBrief,
   renderBrief,
+  statLeakage,
   storyFormFor,
   WORDS_PER_VERSE_LINE,
   type StoryBrief,
@@ -899,6 +900,17 @@ async function runGeneration(
       targetWordCount,
       ratio: Number(lengthRatio.toFixed(2)),
     });
+
+    // Did the character sheet leak into the prose? Logged, never fatal: a
+    // stray "Strength 7" is a quality problem and failing a finished story
+    // over one would be worse than the leak. See statLeakage().
+    const leaks = statLeakage(finalDetails.content || "");
+    if (leaks.length) {
+      console.warn(
+        `[stats] sheet vocabulary reached the story (${ctx.resolved.model}): ${leaks.join(" | ")}`,
+      );
+      debugData.push({ step: "statLeak", model: ctx.resolved.model, leaks });
+    }
 
     if (lengthRatio < MINIMUM_LENGTH_RATIO) {
       throw new StoryGenerationError(

@@ -1,7 +1,14 @@
 import {
   characterIdsOf,
   characterKind,
+  statsOf,
+  CHARACTER_STATS,
+  STAT_BASE,
+  STAT_NOTABLE_HIGH,
+  STAT_NOTABLE_LOW,
   MAX_STORY_CHARACTERS,
+  type CharacterStat,
+  type CharacterStats,
   type StoryRequest,
   type Character,
   type HeroOfFaith,
@@ -15,27 +22,6 @@ export type CustomPrompts = {
   userPrompt?: string;
 };
 
-/**
- * Resolves the saved characters a request refers to, in the requested order.
- *
- * ONE user-scoped read, then an index. The request supplies nothing but the
- * ORDER.
- *
- * This used to be the only thing standing between a request and another user's
- * characters: getCharacterById took an id alone, Character carries no userId,
- * and a loop of it would have starred anyone's character in anyone's story.
- * That is no longer true -- every storage method now REQUIRES the owner and
- * scopes in the SQL, so an unscoped fetch cannot be written. The reason to keep
- * one read is now ordinary: it is a single round trip instead of N, and it
- * gives the warning below somewhere to live.
- *
- * Left explicit because a comment that still described a fixed hole would
- * eventually be read as licence to re-open it.
- *
- * Returns [] rather than undefined on any failure -- story generation must
- * still work when the database is unavailable and storage has fallen back to
- * memory -- and an empty array is harder for a caller to forget than undefined.
- */
 /**
  * "a" or "an", for a noun the user chose.
  *
@@ -64,6 +50,27 @@ function sexTag(sex?: Character["sex"]): string {
   return "";
 }
 
+/**
+ * Resolves the saved characters a request refers to, in the requested order.
+ *
+ * ONE user-scoped read, then an index. The request supplies nothing but the
+ * ORDER.
+ *
+ * This used to be the only thing standing between a request and another user's
+ * characters: getCharacterById took an id alone, Character carries no userId,
+ * and a loop of it would have starred anyone's character in anyone's story.
+ * That is no longer true -- every storage method now REQUIRES the owner and
+ * scopes in the SQL, so an unscoped fetch cannot be written. The reason to keep
+ * one read is now ordinary: it is a single round trip instead of N, and it
+ * gives the warning below somewhere to live.
+ *
+ * Left explicit because a comment that still described a fixed hole would
+ * eventually be read as licence to re-open it.
+ *
+ * Returns [] rather than undefined on any failure -- story generation must
+ * still work when the database is unavailable and storage has fallen back to
+ * memory -- and an empty array is harder for a caller to forget than undefined.
+ */
 export async function resolveStoryCharacters(
   request: StoryRequest,
   userId: number,
@@ -291,6 +298,11 @@ export type BriefCharacter = {
   mustHold?: string;
   /** Appearance, hobbies, companions. Colour, not requirements. */
   colour: string;
+  /**
+   * What they can do, as five numbers. Absent for a character who has never
+   * spent a point, which is what keeps this free for everyone who has not.
+   */
+  stats?: CharacterStats;
 };
 
 export type StoryBrief = {
@@ -568,7 +580,7 @@ export function buildStoryBrief(
   // the companion animal goes because "give it a name and a personality" eight
   // times is a menagerie, not a cast.
   const cast: BriefCharacter[] = [
-    { name, identity, colour },
+    { name, identity, colour, stats: details?.stats },
     ...supporting.map((c): BriefCharacter => {
       const who = [c.name];
       if (c.age) who.push(`aged ${c.age}`);
@@ -598,6 +610,7 @@ export function buildStoryBrief(
       // at 200 characters, so a cast without one pays nothing.
       return {
         name: c.name,
+        stats: c.stats,
         identity: isSet(c.mustBeTrue)
           ? `${sentence([who.join(", ")])} ${sentence([c.mustBeTrue])}`
           : sentence([who.join(", ")]),
@@ -637,6 +650,126 @@ export function buildStoryBrief(
  * time as a mandatory constant.
  */
 export type BriefPurpose = "single" | "outline" | "chapter" | "image";
+
+/**
+ * How the stat sheet is written into the prompt.
+ *
+ * "table" gives the model every number, which is the only form that can answer
+ * "who here is strongest" -- eight separate prose clauses cannot. "prose"
+ * mentions only the notable ones and is the fallback if numbers turn out to
+ * leak into stories. "off" removes the block entirely.
+ *
+ * An env var rather than a constant because the answer is empirical and we do
+ * not have it yet: the risk is that a five-number block is the most list-shaped
+ * thing in the brief, and decisions.md §24 measured a model taking up all three
+ * "optional" threads it was handed. Switching this costs a restart rather than
+ * a deploy, which is what makes an A/B on the dev rig cheap.
+ */
+export const ABILITY_STYLE = (process.env.CHARACTER_STATS_STYLE ?? "table") as
+  | "table"
+  | "prose"
+  | "off";
+
+const STAT_LABELS: Record<CharacterStat, string> = {
+  strength: "Str",
+  agility: "Agi",
+  constitution: "Con",
+  wisdom: "Wis",
+  heart: "Hrt",
+};
+
+/** How a single notable stat reads, when written out rather than tabulated. */
+const HIGH_PHRASE: Record<CharacterStat, string> = {
+  strength: "stronger than most",
+  agility: "quick on their feet",
+  constitution: "able to keep going long after others stop",
+  wisdom: "quick to notice and work things out",
+  heart: "steady when things are frightening",
+};
+const LOW_PHRASE: Record<CharacterStat, string> = {
+  strength: "not strong",
+  agility: "slow and easily out-paced",
+  constitution: "tires quickly",
+  wisdom: "slow to notice what is going on",
+  heart: "easily frightened",
+};
+
+/**
+ * WHAT EACH OF THEM CAN DO.
+ *
+ * The fourth force in this brief, after identity (hard), colour (soft) and
+ * threads (explicitly optional). This one is CONSULTED, NOT NARRATED: it exists
+ * to settle moments the story has already created, and the instruction has to
+ * say so, because a model handed a trait writes a scene to display it -- which
+ * is the same failure colour needed its own disclaimer for.
+ *
+ * Two lines are load-bearing and should not be trimmed as padding:
+ *
+ *   "Never write a number, never name a stat" -- forbids the VOCABULARY, not
+ *   just the emphasis. Without it you get "with her great strength, Ember
+ *   lifted the beam", which is a game manual, not a bedtime story.
+ *
+ *   "let it decide AGAINST them" -- without it every stat becomes a triumph,
+ *   weakness never costs anybody anything, and the one who cannot lift the beam
+ *   stops being the reason somebody else has to. That is usually where the
+ *   lesson of the story lives.
+ *
+ * Renders NOTHING when every character is untouched, so a cast that has never
+ * spent a point costs zero tokens and reads exactly as it did before.
+ */
+function renderAbilities(cast: BriefCharacter[]): string {
+  if (ABILITY_STYLE === "off") return "";
+  // EVERYONE is in the table, including characters who have never spent a
+  // point -- they show the baseline. A cast member missing from it is a
+  // character the model cannot place: is Mia stronger than Ember or not? The
+  // whole reason for giving numbers rather than prose is that the comparison
+  // is answerable, and a partial table is not.
+  const sheets = cast.map((c) => ({ name: c.name, stats: statsOf(c) }));
+  const touched = sheets.filter((c) =>
+    CHARACTER_STATS.some((s) => c.stats[s] !== STAT_BASE),
+  );
+  // Nobody has spent anything, so there is nothing to say and a cast of
+  // untouched characters costs no tokens at all.
+  if (touched.length === 0) return "";
+
+  const guidance =
+    "Reference, not content. Never write a number, never name a stat, and never " +
+    "call anyone strong or weak. Do not build a scene to show any of it off. It " +
+    "is here only for moments the story reaches on its own -- who gets the door " +
+    "open, who spots the crack in the wall, who is still going at the end -- and " +
+    "it should decide those AGAINST them as readily as for them: the one who " +
+    "cannot lift the beam is why somebody else has to.";
+
+  if (ABILITY_STYLE === "prose") {
+    const lines = touched.map((c) => {
+      const high = CHARACTER_STATS.filter((s) => c.stats[s] >= STAT_NOTABLE_HIGH).map((s) => HIGH_PHRASE[s]);
+      const low = CHARACTER_STATS.filter((s) => c.stats[s] <= STAT_NOTABLE_LOW).map((s) => LOW_PHRASE[s]);
+      const both = [...high, ...low];
+      return both.length ? `  ${c.name} is ${both.join(", and ")}.` : "";
+    }).filter(Boolean);
+    if (!lines.length) return "";
+    return ["WHAT EACH OF THEM CAN DO", ...lines, guidance].join("\n    ");
+  }
+
+  // The whole sheet, for everyone, so "who here is strongest" is answerable.
+  // The baseline is stated because a bare 7 means nothing: models compare
+  // reliably and read absolute numbers badly, so anchor the scale and let them
+  // compare.
+  const width = Math.max(...sheets.map((c) => c.name.length));
+  const header = `  ${"".padEnd(width)}  ${CHARACTER_STATS.map((s) => STAT_LABELS[s]).join("  ")}`;
+  const rows = sheets.map(
+    (c) =>
+      `  ${c.name.padEnd(width)}  ` +
+      CHARACTER_STATS.map((s) => String(c.stats[s]).padStart(STAT_LABELS[s].length)).join("  "),
+  );
+  return [
+    "WHAT EACH OF THEM CAN DO",
+    `  Scale 1-10. ${STAT_BASE} is ordinary for their age; ${STAT_NOTABLE_HIGH} is notable; 9 is rare.`,
+    header,
+    ...rows,
+    guidance,
+  ].join("\n    ");
+}
 
 export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
   // Index 0 is the protagonist; every projection below leans on that.
@@ -735,6 +868,8 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
         "subject of what happens.",
     );
   }
+  const abilities = renderAbilities(brief.cast);
+  if (abilities) out.push(abilities);
   if (others.length > 0) {
     // The multi-character analogue of the line above, and the failure it names
     // is specific: handed N equal entities a model round-robins them, giving
@@ -1047,4 +1182,42 @@ export function deserialiseBrief(raw: string): StoryBrief {
     premise: [raw],
     craft: [],
   };
+}
+
+/**
+ * Did the stat sheet leak into the story?
+ *
+ * The block above tells the model never to write a number, name a stat, or call
+ * anyone strong or weak. Whether it obeys is an empirical question, and the one
+ * thing we know for certain is that obedience differs by model: decisions.md
+ * §24 measured gpt-oss:20b taking up all three "optional" threads it was handed
+ * while gpt-5.6-luna left the loaded one alone.
+ *
+ * So rather than assume, count. This does not fail a story -- a leak is a
+ * quality problem, not a broken one, and failing a finished story over a
+ * stray "strong" would be worse than the leak. It logs, so that "the stat block
+ * is too finicky" becomes a thing we know rather than a thing we suspect, and
+ * CHARACTER_STATS_STYLE can be switched to prose on evidence.
+ *
+ * Deliberately narrow. "strong" appears in ordinary prose all the time, so this
+ * looks for the sheet's OWN vocabulary -- the stat names and the scale -- which
+ * is the shape a leak actually takes.
+ */
+const LEAK_PATTERNS: ReadonlyArray<[string, RegExp]> = [
+  ["stat name", /\b(strength|agility|constitution|wisdom|heart)\s+(?:of\s+)?(?:is\s+)?\d/gi],
+  ["scale", /\b\d\s*(?:\/|out of)\s*10\b/gi],
+  ["sheet word", /\b(stat|stats|statistic|attribute|ability score|character sheet)\b/gi],
+  // No \b before the +: it is not a word character, so \b\+ can only match
+  // after one, and "gained +1" has a space there. The pattern would have been
+  // dead in exactly the case it was written for.
+  ["level talk", /(\blevel \d|\bpoints? in\b|\+\d\b)/gi],
+];
+
+export function statLeakage(story: string): string[] {
+  const found: string[] = [];
+  for (const [label, re] of LEAK_PATTERNS) {
+    const hits = story.match(re);
+    if (hits?.length) found.push(`${label}: ${[...new Set(hits)].slice(0, 5).join(", ")}`);
+  }
+  return found;
 }

@@ -55,6 +55,7 @@ import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, hero
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
+import { statsAreAffordable } from "@shared/schema";
 import { ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
 // zod 4's $ZodError type, and this app defines its schemas with zod 3's
@@ -101,6 +102,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // create-then-never-edit a way around the gate.
     mustBeTrue: true,
     customFields: true,
+    // The server's, not the client's. A body that could add an adventure could
+    // award itself unlimited stat points.
+    adventures: true,
     // Derived from `kind` below, never taken from the client: a body claiming
     // {kind: "dragon", category: "human"} would otherwise pick the human
     // colour lists to validate against.
@@ -150,6 +154,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (problems.length) {
         return res.status(400).json({ message: problems.join(" ") });
       }
+      // A new character has earned nothing, so this allows exactly the starting
+      // points and no more.
+      if (parsed.stats && !statsAreAffordable(parsed.stats, undefined)) {
+        return res.status(400).json({ message: "That character has spent more points than they have." });
+      }
 
       const character = await storage.createCharacter({ ...parsed, category }, userId);
       res.status(201).json(character);
@@ -174,7 +183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any).id;
       const parsed = characterSchema
-        .omit({ id: true, createdAt: true, customFields: true })
+        .omit({ id: true, createdAt: true, customFields: true, adventures: true })
         .parse(req.body);
 
       const customFields = Object.keys(parsed).filter((k) => k !== "category");
@@ -209,6 +218,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: problems.join(" ") });
       }
 
+      // Against the adventures THIS character has been through -- read from the
+      // stored row, never from the request, which cannot be trusted to say how
+      // many stories it has earned.
+      if (updates.stats && !statsAreAffordable(updates.stats, existing)) {
+        return res.status(400).json({ message: "That is more points than this character has." });
+      }
+
       const patch = "kind" in updates ? { ...updates, category } : updates;
       const character = await storage.updateCharacter(req.params.id, userId, patch);
       if (!character) {
@@ -241,8 +257,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Character not found" });
       }
 
+      // Stats are deliberately NOT budget-checked here: a parent may hand their
+      // child an already-remarkable character rather than making them earn it
+      // over twenty stories. adventures stays server-owned even so -- it is a
+      // record of what happened, not a setting.
       const updates = characterSchema
-        .omit({ id: true, createdAt: true, customFields: true })
+        .omit({ id: true, createdAt: true, customFields: true, adventures: true })
         .partial()
         .parse(req.body);
 

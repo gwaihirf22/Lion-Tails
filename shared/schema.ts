@@ -669,6 +669,69 @@ export const characterSchema = z.object({
   canonicalLook: optionalText(300),
 
   /**
+   * What they can do well. Five numbers, 1-10, or nothing at all.
+   *
+   * Absent means untouched: every stat is STAT_BASE. That is the whole
+   * migration story -- no backfill, and a character saved before any of this
+   * reads as a perfectly ordinary one.
+   *
+   * NOTHING ELSE ABOUT POINTS IS STORED. Spent points are the distance these
+   * numbers sit from the baseline, and earned points are the number of finished
+   * stories this character was in. Both are therefore derived, and a story
+   * worker that retries, resumes after a lease expiry, or re-queues a
+   * story_too_short cannot inflate either -- there is no counter to increment
+   * twice. It also self-corrects if a story is deleted.
+   */
+  stats: z
+    .object({
+      strength: z.number().int().min(1).max(10),
+      agility: z.number().int().min(1).max(10),
+      constitution: z.number().int().min(1).max(10),
+      wisdom: z.number().int().min(1).max(10),
+      heart: z.number().int().min(1).max(10),
+    })
+    .optional(),
+
+  /**
+   * The stories they have been through: one entry per finished story.
+   *
+   * A SET KEYED ON storyId, not a counter. That is what makes it safe against
+   * the worker, which retries, resumes after a lease expires, and re-queues a
+   * story_too_short with a fresh draw -- any of which can reach the finishing
+   * path twice. Adding an id that is already present is a no-op, so a retry
+   * cannot award a second point, and a character with one extra point would
+   * otherwise be invisible forever.
+   *
+   * NOT derived by counting user_stories, which was the first design. Saved
+   * stories expire after a year unless favourited, and getUserStories filters
+   * expired ones out -- so a child's character would quietly lose a stat point
+   * on the anniversary of an adventure, and their spent points would then
+   * exceed what they had earned. This outlives the story it came from.
+   *
+   * The theme rides along because it is the virtue: the seventeen story themes
+   * and the virtues are the same list, so a virtue level is just how many
+   * entries here carry that theme. No matching, and nothing to drift.
+   */
+  adventures: z
+    .array(
+      z.object({
+        storyId: z.string(),
+        theme: z.string().optional(),
+        at: z.string().optional(),
+      }),
+    )
+    .optional(),
+
+  /**
+   * Their picture. Stored now, generated in the avatar slice.
+   *
+   * Declared early so the card and the Basics tab are laid out once rather than
+   * twice; until something writes it, both fall back to a silhouette chosen by
+   * category.
+   */
+  avatarUrl: optionalText(500),
+
+  /**
    * Field names holding a value a parent typed rather than picked.
    *
    * The strict path validates only the fields in the request, so a custom value
@@ -681,6 +744,94 @@ export const characterSchema = z.object({
 });
 
 export type Character = z.infer<typeof characterSchema>;
+
+/**
+ * The five things a character can be good at.
+ *
+ * Deliberately capabilities, not virtues. The seventeen story themes ARE the
+ * virtues, and they are a record of what a character has been through; these
+ * are what they can do. A little overlap between "heart" and courage is fine —
+ * one is a level and one is a stat.
+ */
+export const CHARACTER_STATS = [
+  "strength", "agility", "constitution", "wisdom", "heart",
+] as const;
+export type CharacterStat = (typeof CHARACTER_STATS)[number];
+export type CharacterStats = NonNullable<Character["stats"]>;
+
+/** Ordinary for a child their age. Everyone starts here, on everything. */
+export const STAT_BASE = 3;
+/** Never 0: "cannot at all" invites a model to treat it as absolute. */
+export const STAT_FLOOR = 1;
+export const STAT_CAP = 10;
+/** Spare points a brand-new character has to spend. */
+export const STARTING_POINTS = 2;
+/** At or above this a stat is worth the model knowing about. */
+export const STAT_NOTABLE_HIGH = 6;
+/** At or below this it is a real weakness, and may cost them something. */
+export const STAT_NOTABLE_LOW = 2;
+
+/** Every stat at the baseline. What an untouched character is. */
+export function baseStats(): CharacterStats {
+  return { strength: STAT_BASE, agility: STAT_BASE, constitution: STAT_BASE, wisdom: STAT_BASE, heart: STAT_BASE };
+}
+
+export function statsOf(c?: { stats?: CharacterStats } | null): CharacterStats {
+  return c?.stats ?? baseStats();
+}
+
+/**
+ * Points already committed: how far the sheet sits above the baseline.
+ *
+ * Dropping a stat BELOW the baseline refunds, which is what makes a weakness a
+ * real trade rather than a penalty — a child buys Strength 6 by accepting
+ * Agility 1. Nobody starts weak; they choose it.
+ */
+export function pointsSpent(stats: CharacterStats): number {
+  return CHARACTER_STATS.reduce((n, s) => n + (stats[s] - STAT_BASE), 0);
+}
+
+/** One point per finished story. */
+export function pointsEarned(c?: { adventures?: Character["adventures"] } | null): number {
+  return c?.adventures?.length ?? 0;
+}
+
+/** Spare points left to spend. May be negative only if a sheet was written by Parent Mode. */
+export function pointsAvailable(c: { stats?: CharacterStats; adventures?: Character["adventures"] }): number {
+  return pointsEarned(c) + STARTING_POINTS - pointsSpent(statsOf(c));
+}
+
+/**
+ * Whether a sheet is reachable with the points this character has earned.
+ *
+ * Enforced on the strict path only. Parent Mode writes stats without spending
+ * anything, on purpose: a parent may want to hand their child a character who
+ * is already remarkable, rather than making them earn it over twenty stories.
+ */
+export function statsAreAffordable(
+  stats: CharacterStats,
+  c?: { adventures?: Character["adventures"] } | null,
+): boolean {
+  return pointsSpent(stats) <= pointsEarned(c) + STARTING_POINTS;
+}
+
+/**
+ * How far along they are in each virtue.
+ *
+ * The seventeen story themes ARE the virtues, so this is a count rather than a
+ * mapping -- there is no theme-to-virtue table to fall out of step with the
+ * themes the form offers. Never reaches the model: it is a record of what a
+ * character has been through, which is for the child to look at.
+ */
+export function virtueLevels(c?: { adventures?: Character["adventures"] } | null): Record<string, number> {
+  const levels: Record<string, number> = {};
+  for (const a of c?.adventures ?? []) {
+    const theme = a.theme?.trim().toLowerCase();
+    if (!theme || theme === "none") continue;
+    levels[theme] = (levels[theme] ?? 0) + 1;
+  }
+  return levels;
+}
 
 /**
  * The noun the story uses for what this character is.
