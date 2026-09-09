@@ -114,7 +114,6 @@ export default function CharacterForm({
       // one. Defaulting it put a lion in every story nobody asked for.
       favoriteAnimal: initialCharacter?.favoriteAnimal || "",
       hobby: initialCharacter?.hobby || "reading",
-      timeTravelExperience: initialCharacter?.timeTravelExperience || 0,
       personality: initialCharacter?.personality || "kind",
     },
   });
@@ -190,17 +189,25 @@ export default function CharacterForm({
               name="age"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Age: {field.value}</FormLabel>
+                  <FormLabel>Age</FormLabel>
                   <FormControl>
-                    <Slider
-                      min={5}
-                      max={12}
-                      step={1}
-                      value={[field.value]}
-                      onValueChange={(value) => field.onChange(value[0])}
+                    {/*
+                      A number, not a slider. A slider cannot express "no age in
+                      particular", and it cannot reach three hundred -- both of
+                      which a cast that includes dragons needs.
+                    */}
+                    <Input
+                      type="number"
+                      min={0}
+                      max={9999}
+                      placeholder="Leave blank if it doesn't matter"
+                      value={field.value ?? ""}
+                      onChange={(e) =>
+                        field.onChange(e.target.value === "" ? undefined : e.target.valueAsNumber)
+                      }
                     />
                   </FormControl>
-                  <FormDescription>Choose an age between 5 and 12</FormDescription>
+                  <FormDescription>Optional</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -357,28 +364,6 @@ export default function CharacterForm({
             </div>
 
 
-            <FormField
-              control={form.control}
-              name="timeTravelExperience"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Time Travel Experience: {field.value}</FormLabel>
-                  <FormControl>
-                    <Slider
-                      min={0}
-                      max={10}
-                      step={1}
-                      value={[field.value]}
-                      onValueChange={(value) => field.onChange(value[0])}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    How many time travel adventures your character has been on (0 for beginners)
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </CardContent>
           <CardFooter>
             <Button type="submit" disabled={loading} className="w-full">

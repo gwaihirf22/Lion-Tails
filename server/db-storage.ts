@@ -296,20 +296,17 @@ export class DbStorage implements IStorage {
           return JSON.parse(row.character_data);
         } catch (parseError) {
           console.error("Error parsing character data:", parseError);
-          // Return a default object to prevent app crashes
+          // A placeholder so one corrupt row does not empty the whole page.
+          //
+          // It asserts NOTHING it does not know. The version before this one
+          // filled in gender "boy", age 0 and six fields from a schema that had
+          // not existed for months (hairColor, outfit, specialAbility,
+          // backstory) -- invented facts about a character whose real data
+          // could not be read. Only the three fields the row itself supplies.
           return {
             id: row.character_id || "unknown",
             name: "Unknown Character",
-            gender: "boy" as "boy" | "girl", // Default to boy to match schema
-            age: 0,
-            hairColor: "",
-            eyeColor: "",
-            outfit: "",
-            favoriteActivity: "",
-            specialAbility: "",
-            personality: "",
-            backstory: "",
-            createdAt: new Date(row.created_at) || new Date()
+            createdAt: new Date(row.created_at ?? Date.now()).toISOString(),
           };
         }
       });
@@ -337,22 +334,17 @@ export class DbStorage implements IStorage {
         return JSON.parse(rows[0].character_data);
       } catch (parseError) {
         console.error("Error parsing character data:", parseError);
-        // Return a default object to prevent app crashes.
+        // A placeholder so one corrupt row does not crash the page.
         //
-        // This previously used hairColor/eyeColor/outfit/favoriteActivity/
-        // specialAbility/backstory -- field names from an older schema that no
-        // longer exist on Character. It only runs when stored JSON fails to
-        // parse, so nothing exercised it and the drift went unnoticed.
+        // It asserts NOTHING it does not know. This drifted once already --
+        // it carried hairColor/outfit/specialAbility/backstory from a schema
+        // long gone -- because nothing exercises a branch that only runs on
+        // unparseable JSON. Naming fewer fields is what stops it drifting
+        // again: there is nothing here left to go stale.
         return {
-          id: id,
+          id,
           name: "Unknown Character",
-          gender: "boy" as "boy" | "girl", // Default to boy to match schema
-          age: 8,
-          hair: "brown",
-          eyes: "brown",
-          favoriteColor: "blue",
-          timeTravelExperience: 0,
-          createdAt: (new Date(rows[0].created_at) || new Date()).toISOString()
+          createdAt: new Date(rows[0].created_at ?? Date.now()).toISOString(),
         };
       }
     } catch (error) {

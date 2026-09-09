@@ -56,11 +56,6 @@ export default function CharacterCard({
               <span className="font-medium">Personality:</span> {character.personality || "None"}
             </div>
           </div>
-
-          <div className="flex items-center gap-1 mt-2">
-            <BookOpenIcon className="h-4 w-4" />
-            <span className="font-medium">Time travel experience:</span> {character.timeTravelExperience}/10
-          </div>
         </div>
       </CardContent>
       

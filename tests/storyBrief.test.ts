@@ -38,7 +38,7 @@ const golden: Record<string, Record<string, string>> = JSON.parse(
 const mia: Character = {
   id: "c1", name: "Mia", gender: "girl", age: 8, hair: "brown", eyes: "blue",
   favoriteColor: "purple", favoriteAnimal: "rabbit", hobby: "drawing",
-  timeTravelExperience: 0, personality: "curious", createdAt: "2026-01-01",
+  personality: "curious", createdAt: "2026-01-01",
 };
 
 const base = {

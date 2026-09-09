@@ -15,6 +15,7 @@ import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { v4 as uuidv4 } from 'uuid';
+import { CHARACTER_CATEGORIES } from "./characterVocab";
 
 // Enhanced user table with email verification
 export const users = pgTable("users", {
@@ -550,26 +551,181 @@ export type VerifyEmail = z.infer<typeof verifyEmailSchema>;
 export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
 export type ResetPassword = z.infer<typeof resetPasswordSchema>;
 
-// Schema for character creation
+/**
+ * Text a user chose, or nothing at all.
+ *
+ * An empty box is not a value. Storing "" makes isSet() checks throughout the
+ * brief guard against two things instead of one, and a present-but-blank key
+ * reads as "they answered" when they did not.
+ */
+const optionalText = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .optional()
+    .transform((v) => v?.trim() || undefined);
+
+/**
+ * A character: a child, an animal, a dragon, a robot.
+ *
+ * VALIDATED ON WRITE ONLY. Reads return the stored blob untouched
+ * (db-storage.ts getAllCharacters/getCharacterById), which is the whole
+ * backward-compatibility mechanism: a row written before any field below
+ * existed cannot fail. Do NOT add .parse() to a read path -- the first row that
+ * predates a future field would 500 the Characters page for that user.
+ *
+ * NOTHING HERE IS DEFAULTED except by explicit user choice. CharacterForm once
+ * defaulted hair to brown, eyes to brown and hobby to reading, so every
+ * character silently claimed them and every story dutifully mentioned them.
+ * The comment that survived beside favoriteAnimal -- "defaulting it put a lion
+ * in every story nobody asked for" -- was right about all of them.
+ */
 export const characterSchema = z.object({
   id: z.string(),
-  name: z.string().min(1, "Character name is required"),
-  gender: z.enum(["boy", "girl"], {
-    required_error: "Please select a gender",
-    invalid_type_error: "Gender must be 'boy' or 'girl'",
-  }),
-  age: z.number().int().min(5).max(12).default(8),
-  hair: z.string().default("brown"),
-  eyes: z.string().default("brown"),
-  favoriteColor: z.string().default("blue"),
-  favoriteAnimal: z.string().optional(),
-  hobby: z.string().optional(),
-  timeTravelExperience: z.number().int().min(0).max(10).default(0),
-  personality: z.string().optional(),
+  name: z.string().min(1, "Character name is required").max(60),
+
+  /**
+   * The noun the story uses for what they ARE: "girl", "dragon", "robot".
+   *
+   * Supersedes `gender`. Read it only through characterKind(), the single place
+   * that knows the two are the same fact -- the characterIdsOf() precedent.
+   * Chosen from shared/characterVocab.ts on the strict write path; free text
+   * only through the Parent Mode route, so a stored kind that is not in the
+   * catalogue is normal and must never be treated as corrupt.
+   */
+  kind: optionalText(60),
+
+  /**
+   * What sort of thing they are. NEVER reaches a prompt.
+   *
+   * It selects the form's vocabulary and the covering noun -- fur, feathers,
+   * scales -- so the story sees only `kind` and a girl renders "a girl" rather
+   * than "a human". Absent on every row written before this shipped.
+   */
+  category: z.enum(CHARACTER_CATEGORIES).optional(),
+
+  /**
+   * LEGACY. Superseded by `kind`; nothing new writes it.
+   *
+   * Kept, and kept optional, solely so a character saved before `kind` existed
+   * survives being edited and re-serialised.
+   */
+  gender: z.enum(["boy", "girl"]).optional(),
+
+  /**
+   * Male or female; `it` for a machine.
+   *
+   * Rendered as a short pronoun tag, never stored as a pronoun. `it` is offered
+   * only when category is "machine" -- a robot is reasonably an it, and a
+   * living creature is not.
+   */
+  sex: z.enum(["male", "female", "it"]).optional(),
+
+  /** Optional, and unbounded upward: a dragon may be three hundred. */
+  age: z.number().int().min(0).max(9999).optional(),
+
+  /**
+   * The COLOUR of whatever covers them. The noun comes from the category, so
+   * this one field serves hair, fur, feathers, scales and plating.
+   *
+   * Not renamed to something category-neutral: every row written so far stores
+   * it as `hair`, and the rendered sentence "Mia has brown hair" is asserted
+   * byte-for-byte by tests/fixtures/brief-golden.json.
+   */
+  hair: optionalText(40),
+  eyes: optionalText(40),
+  favoriteColor: optionalText(40),
+  favoriteAnimal: optionalText(60),
+  hobby: optionalText(60),
+  personality: optionalText(60),
+
+  /**
+   * Anything the user wants said about them. Free text, and the only free field
+   * besides the name.
+   *
+   * SOFT. Rendered as colour, which the brief follows with "use these details
+   * only where a scene naturally calls for them". It must never reach
+   * userInstructions: that slot is a directive channel and this box is
+   * child-writable.
+   */
+  notes: optionalText(200),
+
+  /**
+   * What must stay true of them, whatever the story does. PARENT MODE ONLY.
+   *
+   * HARD. Rendered into identity, which the chapter projection reprints with
+   * "Keep this consistent." -- the right force for "Ella uses a wheelchair",
+   * which as colour would be explicitly downgraded to optional set-dressing.
+   */
+  mustBeTrue: optionalText(200),
+
+  /**
+   * How they look, for pictures. Stored now; rendered nowhere yet.
+   *
+   * The avatar slice will use it for image prompts ONLY. Keeping appearance out
+   * of the story prompt is what lets this be as detailed as someone likes
+   * without competing for the six-facts-per-character budget the brief rations.
+   */
+  canonicalLook: optionalText(300),
+
+  /**
+   * Field names holding a value a parent typed rather than picked.
+   *
+   * The strict path validates only the fields in the request, so a custom value
+   * elsewhere never blocks an ordinary edit; this is how the form knows to show
+   * such a value as chosen rather than blanking it for being off-list.
+   */
+  customFields: z.array(z.string()).optional(),
+
   createdAt: z.string(), // ISO date string
 });
 
 export type Character = z.infer<typeof characterSchema>;
+
+/**
+ * The noun the story uses for what this character is.
+ *
+ * THE ONLY place that knows `kind` and `gender` are the same fact. Every
+ * character saved before the cast could be anything carries the singular
+ * `gender`, and those blobs are never rewritten, so the compatibility read
+ * lives here rather than in a migration -- exactly as characterIdsOf() does for
+ * characterId. Confining it to one function is the point: the alternative
+ * leaves every read site to compute a fallback, and this repo has already paid
+ * for that shape once.
+ *
+ * Structurally typed so the client can call it on a character read back out of
+ * a saved story.
+ */
+export function characterKind(
+  c?: { kind?: string | null; gender?: string | null } | null,
+): string | undefined {
+  return c?.kind?.trim() || c?.gender?.trim() || undefined;
+}
+
+/**
+ * Everything about a character worth matching a search box against.
+ *
+ * Lives here rather than in CharacterPicker because the picker's own comment
+ * admitted its field list was hand-maintained, which is a promise to forget a
+ * field. One list, next to the schema it mirrors.
+ */
+export function characterSearchText(c: Character): string {
+  return [
+    c.name,
+    characterKind(c),
+    c.age != null ? String(c.age) : undefined,
+    c.hair,
+    c.eyes,
+    c.favoriteColor,
+    c.favoriteAnimal,
+    c.hobby,
+    c.personality,
+    c.notes,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
 
 // Schema for story generation with optional fields
 /** The most characters one story can hold. */
