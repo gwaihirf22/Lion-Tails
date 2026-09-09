@@ -128,6 +128,22 @@ export const storyUniverses = pgTable(
      * canon together should be one UPDATE rather than a transaction.
      */
     pinnedCanon: jsonb("pinned_canon").default([]).notNull(),
+
+    /**
+     * What the world remembers, extracted after each story in a series.
+     *
+     * WorldEntry[] -- see server/lib/worldState.ts for the shape and the merge
+     * rules. Separate from pinned_canon on purpose: canon is human-curated and
+     * capped at 20 because "an uncapped canon list is a second summary that
+     * nothing compresses", while this is machine-maintained, larger, and its
+     * entries are revised rather than only added -- a character falls ill, a
+     * thread is resolved.
+     *
+     * jsonb because it is always read and written whole with its universe, and
+     * because entries carry a kind and a status that a column set would have
+     * to model as a second table for no benefit.
+     */
+    worldState: jsonb("world_state").default([]).notNull(),
   },
   (table) => ({
     userIdx: index("idx_story_universes_user_id").on(table.userId),

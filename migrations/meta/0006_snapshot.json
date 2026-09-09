@@ -1,6 +1,6 @@
 {
-  "id": "b135a375-9048-4232-b761-97913eaaae99",
-  "prevId": "58d92315-0e8d-4f87-8695-43f1bf9b7248",
+  "id": "a5db8040-1d84-439a-abb3-1d5fe12d6eba",
+  "prevId": "b135a375-9048-4232-b761-97913eaaae99",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -826,6 +826,13 @@
         },
         "pinned_canon": {
           "name": "pinned_canon",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "world_state": {
+          "name": "world_state",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
