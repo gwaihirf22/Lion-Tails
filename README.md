@@ -1,7 +1,16 @@
 # Lion Tails
 
-Personalized Christian bedtime stories for children, with a Christian song/chord
-library, "Heroes of Faith" content, character management, and image analysis.
+**A way to learn the key events and people of Scripture and church history by
+reading good stories about them.** That is the point of the app: a child
+remembers Corrie ten Boom hiding her neighbours far longer than they remember a
+paragraph about her, and the same is true of the flood, the exodus and the
+resurrection.
+
+So the stories are personalised — the reader picks the characters, and can put
+themselves or their children in — but the accounts underneath are real, anchored
+to written source material rather than to whatever the model recalls. Alongside
+them: profiles of eighty people that can be read with the AI switched off, a
+song/chord library, character management, and image analysis.
 
 Stories are generated with an OpenAI or self-hosted model depending on the
 user's tier (see [Model tiers](#model-tiers)); illustrations with `gpt-image-2`.
@@ -52,6 +61,7 @@ npm run db:migrate        # applies migrations to create the tables
 | `npm run test:watch` | The same, in watch mode |
 | `npm run lint` | ESLint — React Rules of Hooks only, deliberately narrow |
 | `npx tsx scripts/verify-heroes.ts [name]` | Check the Heroes of Faith against Wikipedia, Wikidata and bible-api.com. **Needs network**, so it is run by hand, not in CI |
+| `./scripts/dev-stack.sh up` | The whole dev stack: database, migrations, app, seeded account. See [The dev server](#the-dev-server) |
 
 ### Why there are two server entrypoints
 
@@ -64,6 +74,51 @@ CI enforces this with a grep over `dist/prod.js`.
 
 Shared setup lives in `server/index.ts` (`createApp()` / `startServer()`);
 `server/static.ts` holds the Vite-free static file serving.
+
+## The dev server
+
+```bash
+./scripts/dev-stack.sh up       # database + migrations + app + a usable account
+./scripts/dev-stack.sh status
+./scripts/dev-stack.sh down     # stop; data is kept
+./scripts/dev-stack.sh reset    # throw the world away
+```
+
+Serves on **http://192.168.1.9:5250**, account `blake` / `LionTails-Dev-6a0cff`.
+
+**It is a throwaway database, and it persists.** Those are not in tension: the
+data is disposable, but it survives a stop and a host reboot, because a dev box
+that forgets your account and your characters every morning is one you stop
+using. A named volume (`lion-tails-dev-db-data`), `--restart unless-stopped`,
+and no `--rm`. Verified by restarting the container: 18 stories and 2 populated
+universes still there.
+
+It is deliberately NOT production's database. This is where schema changes and
+the story pipeline get tried, so a half-finished migration must not touch real
+stories, and generation must not write real rows.
+
+### The OpenAI key
+
+`up` borrows it from the **running production container** over ssh and puts it in
+the dev server's environment. Nothing is stored at rest — there is no `.env` to
+leak, commit, or forget to rotate — and it is gone when the process stops.
+
+`up` says which mode it is in:
+
+```
+openai:   key loaded from production (164 chars, not stored)
+openai:   NO KEY -- local models only.
+```
+
+Without it the app still runs and the Ollama models still work, **but an account
+whose stored model is an OpenAI one gets `503 no_model_available`** rather than a
+story. That is the failure to expect if ssh to the host is unavailable. Export
+`OPENAI_API_KEY` yourself and `up` will use that instead of reaching for
+production's.
+
+Model choice matters for judging output: `gpt-oss:20b` and the economy OpenAI
+models behave measurably differently on continuity — see `docs/decisions.md` §24.
+Do not tune a prompt against the local model.
 
 ## Environment variables
 

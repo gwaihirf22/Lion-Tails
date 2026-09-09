@@ -43,6 +43,51 @@ test, and no headless browser here. `verify-heroes.ts` is deliberately not in
 CI: it depends on two free APIs that throttle, and a gate that fails for
 reasons unrelated to the change is a gate people learn to ignore.
 
+## The dev server
+
+```bash
+./scripts/dev-stack.sh up       # database + migrations + app + a usable account
+./scripts/dev-stack.sh status
+./scripts/dev-stack.sh down     # stop; data is kept
+./scripts/dev-stack.sh reset    # throw the world away
+```
+
+Serves on **http://192.168.1.9:5250**, account `blake` / `LionTails-Dev-6a0cff`.
+
+**It is a throwaway database, and it persists.** Those are not in tension: the
+data is disposable, but it survives a stop and a host reboot, because a dev box
+that forgets your account and your characters every morning is one you stop
+using. A named volume (`lion-tails-dev-db-data`), `--restart unless-stopped`,
+and no `--rm`. Verified by restarting the container: 18 stories and 2 populated
+universes still there.
+
+It is deliberately NOT production's database. This is where schema changes and
+the story pipeline get tried, so a half-finished migration must not touch real
+stories, and generation must not write real rows.
+
+### The OpenAI key
+
+`up` borrows it from the **running production container** over ssh and puts it in
+the dev server's environment. Nothing is stored at rest — there is no `.env` to
+leak, commit, or forget to rotate — and it is gone when the process stops.
+
+`up` says which mode it is in:
+
+```
+openai:   key loaded from production (164 chars, not stored)
+openai:   NO KEY -- local models only.
+```
+
+Without it the app still runs and the Ollama models still work, **but an account
+whose stored model is an OpenAI one gets `503 no_model_available`** rather than a
+story. That is the failure to expect if ssh to the host is unavailable. Export
+`OPENAI_API_KEY` yourself and `up` will use that instead of reaching for
+production's.
+
+Model choice matters for judging output: `gpt-oss:20b` and the economy OpenAI
+models behave measurably differently on continuity — see `docs/decisions.md` §24.
+Do not tune a prompt against the local model.
+
 ## Architecture
 
 ```

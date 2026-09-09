@@ -147,9 +147,10 @@ export default function Characters() {
     <div className="container py-8 max-w-7xl">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Your Time Travelers</h1>
+          <h1 className="text-3xl font-bold">Your Characters</h1>
           <p className="text-muted-foreground mt-1">
-            Create characters who can explore biblical times in your stories
+            Anyone you want stories written about. Save them once and reuse them
+            across stories — a child you know, or someone invented.
           </p>
         </div>
         

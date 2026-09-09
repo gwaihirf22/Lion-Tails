@@ -264,7 +264,7 @@ export default function AuthPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-card rounded-lg p-4 shadow-sm">
               <h3 className="font-semibold">Faith-Based Stories</h3>
-              <p className="text-sm">Biblical adventures customized for your child</p>
+              <p className="text-sm">Biblical adventures, with the characters you choose</p>
             </div>
             <div className="bg-card rounded-lg p-4 shadow-sm">
               <h3 className="font-semibold">Christian Songs</h3>
