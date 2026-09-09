@@ -581,6 +581,10 @@ export const MAX_STORY_CHARACTERS = 8;
  * above the schema that infers it, and so the CLIENT can call it on a request
  * read back out of a saved story.
  */
+/** Present and not one of the form's "no value" sentinels. */
+const isSet = (v: unknown): boolean =>
+  typeof v === "string" && v.trim() !== "" && v.trim().toLowerCase() !== "none";
+
 export function characterIdsOf(
   request?: { characterIds?: string[] | null; characterId?: string | null } | null,
 ): string[] {
@@ -637,6 +641,30 @@ export const storyRequestSchema = z.object({
   // for the reason documented in db-storage.saveStory: the optional-parameter
   // version is why hero_id is NULL on essentially every existing row.
   heroId: z.string().optional(),
+  /**
+   * Which part of a life or an account this story covers.
+   *
+   * A Hero of Faith is a whole life, and asked for "a story about Corrie ten
+   * Boom" a model gives you a summary of all of it -- born here, did this,
+   * died there. One episode, told properly, is a better story and teaches
+   * more, so the user picks a moment or asks to be surprised by one.
+   *
+   * ONE field, not a mode plus a text: "surprise" is a request that the SERVER
+   * chooses, and the choice it makes is written into `text` at enqueue. So the
+   * frozen request records what was actually used, the debug panel can show
+   * it, and the same request replays to the same story rather than a different
+   * one each time -- which is the difference between a bug you can chase and
+   * one you cannot.
+   */
+  storyFocus: z
+    .object({
+      mode: z.enum(["whole", "chosen", "surprise"]).default("whole"),
+      /** The moment, verbatim. Empty for "whole"; filled by the server for "surprise". */
+      text: z.string().default(""),
+      /** Chapter and verse, where the moment came from a key event that had one. */
+      reference: z.string().optional(),
+    })
+    .optional(),
   useTimeTravel: z.boolean().default(false),
   /**
    * The cast, in order. Index 0 is the protagonist, and that ordering is
@@ -717,6 +745,16 @@ export const storyRequestSchema = z.object({
 
   // Any chosen character overrides the need for childName and gender.
   if (cast.length > 0) {
+    return true;
+  }
+
+  // A retelling supplies its own cast. Asked for the account of Noah, the
+  // story is about Noah -- there is no child to name, and demanding one is why
+  // the form wrote childName: "Biblical Character" to get past this rule, a
+  // value that then reached the prompt as a protagonist and had to be stripped
+  // back out by PLACEHOLDER_NAMES. Stating the rule here removes the need for
+  // the workaround rather than the need to undo it.
+  if (isSet(data.biblicalEvent) || isSet(data.heroOfFaith)) {
     return true;
   }
 

@@ -29,6 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import AnimalAutocomplete from "./AnimalAutocomplete";
 import HeroPicker from "./HeroPicker";
+import type { HeroOfFaith } from "@shared/schema";
 import CharacterForm from "./CharacterForm";
 import PromptEditor from "./PromptEditor";
 
@@ -103,7 +104,9 @@ export default function StoryForm({
     enabled: true,
   });
   
-  // The heroes query moved into HeroPicker, which owns the search over it.
+  // HeroPicker owns the SEARCH over heroes; this reads the same cached list
+  // (same query key, so no second request) purely to offer the selected hero's
+  // key events as focus options.
   
   // Which model will write this story. Needed only so the accuracy note below
   // can be honest: the factual anchors ship with the app and help every model,
@@ -157,6 +160,22 @@ export default function StoryForm({
       },
     },
   });
+
+  /**
+   * The chosen hero's key events, which are the focus options.
+   *
+   * Shares HeroPicker's query key, so the list is fetched once and this costs
+   * nothing. heroOfFaith holds an id, but resolveHeroOfFaith accepts an id OR a
+   * name, and a story loaded from localStorage can carry either -- so match on
+   * both rather than assume.
+   */
+  const { data: allHeroes = [] } = useQuery<HeroOfFaith[]>({ queryKey: ["/api/heroes"] });
+  const watchedHero = form.watch("heroOfFaith");
+  const selectedHeroEvents =
+    (watchedHero && watchedHero !== "none"
+      ? allHeroes.find((h) => h.id === watchedHero || h.name === watchedHero)?.keyEvents
+      : undefined) ?? [];
+
   
   // Effect to set hasSelectedHeroOfFaith based on selectedHeroFromStorage
   useEffect(() => {
@@ -198,9 +217,11 @@ export default function StoryForm({
       // In historical mode, child's name, gender, and animal are not needed
       form.clearErrors(['childName', 'gender', 'animal']);
       
-      // Set default values for these fields that satisfy type constraints
-      form.setValue("childName", "Biblical Character");
-      form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
+      // The childName: "Biblical Character" write that used to be here is GONE.
+      // It existed only to satisfy the old refine, went into the prompt as a
+      // protagonist, and PLACEHOLDER_NAMES had to strip it out again. The refine
+      // now accepts a biblical event or a hero on its own, so there is nothing
+      // to work around.
       form.setValue("animal", "");
       
       // Keep character selection even for historical mode
@@ -235,6 +256,16 @@ export default function StoryForm({
         {/* Only show child fields when needed */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {/* Said once, up front. Before this the ONLY signal about what was
+                required was the refine's error message, which appears after
+                you press the button -- and on the historical tab, where nothing
+                is required at all, there was no signal in either direction. */}
+            <p className="text-sm text-muted-foreground">
+              {formType === "historical"
+                ? "Everything here is optional. Pick a biblical event or a hero of the faith, or just describe what you want."
+                : "All you need is a character, or a name. Everything else is optional."}
+            </p>
+
             {/* Character Selection - Moved to the top and available for all story types, including biblical narratives */}
             {(formType === "children" || formType === "historical") && (
               <FormField
@@ -373,7 +404,10 @@ export default function StoryForm({
                   name="animal"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">Favorite Animal</FormLabel>
+                      <FormLabel className="text-sm font-medium">
+                        Favorite Animal
+                        <span className="ml-2 font-normal text-muted-foreground">(optional)</span>
+                      </FormLabel>
                       <FormControl>
                         <AnimalAutocomplete
                           value={field.value}
@@ -421,7 +455,10 @@ export default function StoryForm({
                 name="theme"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">Theme/Message</FormLabel>
+                    <FormLabel className="text-sm font-medium">
+                      Theme/Message
+                      <span className="ml-2 font-normal text-muted-foreground">(optional)</span>
+                    </FormLabel>
                     <FormControl>
                       <div className="relative">
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
@@ -483,6 +520,9 @@ export default function StoryForm({
                 <FormItem className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4">
                   <FormLabel className="text-base font-semibold text-secondary">
                     What should happen in this story?
+                    <span className="ml-2 text-sm font-normal text-muted-foreground">
+                      (optional)
+                    </span>
                   </FormLabel>
                   <FormDescription className="mb-2">
                     The best way to get a story that feels like yours rather than
@@ -683,6 +723,73 @@ export default function StoryForm({
                 )}
               />
             )}
+
+            {/* WHICH PART of that life. A Hero of Faith is a whole life, and
+                asked for "a story about Corrie ten Boom" a model returns a
+                summary of all of it. One episode told properly is a better
+                story and teaches more.
+                
+                The options are the hero's own keyEvents, which every hero
+                already carries and /api/heroes already returns -- so this costs
+                no model call and no new content. */}
+            {selectedHeroEvents.length > 0 && (
+              <FormField
+                control={form.control}
+                name="storyFocus"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      What part of their life?
+                    </FormLabel>
+                    <FormControl>
+                      <Select
+                        value={
+                          field.value?.mode === "surprise"
+                            ? "__surprise__"
+                            : field.value?.mode === "chosen"
+                              ? field.value.text
+                              : "__whole__"
+                        }
+                        onValueChange={(v) => {
+                          if (v === "__whole__") field.onChange({ mode: "whole", text: "" });
+                          else if (v === "__surprise__") field.onChange({ mode: "surprise", text: "" });
+                          else {
+                            const e = selectedHeroEvents.find((k) => k.description === v);
+                            field.onChange({
+                              mode: "chosen",
+                              text: v,
+                              reference: e?.reference || e?.year || undefined,
+                            });
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Their whole life" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__whole__">Their whole life</SelectItem>
+                          <SelectItem value="__surprise__">
+                            Surprise me — pick a moment for me
+                          </SelectItem>
+                          {selectedHeroEvents.map((e, i) => (
+                            <SelectItem key={i} value={e.description}>
+                              {e.year || e.reference ? `${e.year || e.reference} — ` : ""}
+                              {e.description}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormDescription>
+                      One episode, told properly, beats a summary of a whole
+                      life. "Surprise me" picks one when the story is written.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             
             {showBiblePassageField && (
               <FormField
