@@ -182,6 +182,9 @@ Rules that are easy to break without noticing:
 
 - ESM throughout (`"type": "module"`). `require()` is not available in the
   production bundle; a stray one throws `ReferenceError` at runtime only.
+- Never hardcode a text colour on something that moves between surfaces.
+  `.nav-text` was `text-white` and shipped white-on-white in the active nav
+  pill, the "More" menu and the whole mobile sheet. See docs/decisions.md 23.
 - A design token is a surface colour OR a text colour, not both. --secondary
   and --accent were each mapped one way and used the other, and both produced
   text that was invisible in some palettes and fine in the one being looked at.

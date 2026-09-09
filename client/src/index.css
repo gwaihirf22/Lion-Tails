@@ -26,9 +26,57 @@
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7);
   }
   
-  /* Text on dark backgrounds often needs stronger shadows */
+  /*
+   * Text on the branded top bar.
+   *
+   * Was `text-white font-medium text-shadow-md`, and both halves were wrong.
+   *
+   * text-white is a guess about the background. It is right on a dark blue bar
+   * and wrong twice over: on the ACTIVE pill, which is a light surface, it left
+   * white text on near-white and only the drop shadow was visible -- and in
+   * Night, where the bar is light, it was white on light. The token knows.
+   *
+   * text-shadow-md is a 2px black shadow from when the header sat on a
+   * photograph. On a flat bar it renders as a grey smudge around every letter,
+   * which is most of what made the nav look unprofessional.
+   *
+   * It belongs ONLY on the bar. The dropdown and the mobile sheet are light
+   * surfaces and use --popover-foreground / --foreground instead.
+   */
   .nav-text {
-    @apply text-white font-medium text-shadow-md;
+    @apply font-medium;
+    color: hsl(var(--header-foreground));
+  }
+
+  /*
+   * The wordmark.
+   *
+   * font-heading is applied to it and emits NOTHING -- tailwind.config.ts has
+   * no fontFamily extension, so the class has never produced a rule and the
+   * title has always rendered in the body sans. That is the "boring".
+   *
+   * EB Garamond is already declared in fonts.css for the reader, so this is a
+   * family the app already ships. The trade-off is real and worth stating: the
+   * reader's fonts are fetched lazily, and using one here means this single
+   * face (~45 KB, latin roman only) is now fetched on every page rather than
+   * only when someone picks it to read in. That is the cost of the app having
+   * a typeface at all. Revert by dropping the font-family line; the sizing and
+   * spacing below stand on their own.
+   */
+  .brand-wordmark {
+    font-family: "EB Garamond Variable", ui-serif, Georgia, serif;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    line-height: 1.05;
+    white-space: nowrap;
+  }
+  /* "Tails" lighter than "Lion" so the two words read as one mark rather than
+     two words that happen to be adjacent.
+     WEIGHT, not italic. Both weights come out of the same variable file, so
+     the contrast is free; an italic would have pulled the separate italic face
+     and doubled the wordmark cost to ~90 KB on every page load. */
+  .brand-wordmark .brand-accent {
+    font-weight: 400;
   }
 }
 

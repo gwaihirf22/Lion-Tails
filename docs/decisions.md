@@ -689,6 +689,71 @@ be actively wrong — white text on a half-strength tint over a white page is
 invisible. So the pairing rule applies only to opaque backgrounds, and the
 tint case is checked by compositing the colours and measuring instead.
 
+
+---
+
+## 23. A hardcoded colour is a guess about the background
+
+`.nav-text` was `@apply text-white font-medium text-shadow-md`, and it was
+applied to the nav links, the "More" trigger, the dropdown items, the username
+and every item in the mobile sheet.
+
+`text-white` is correct on exactly one of those. The active pill is a light
+surface, the dropdown is a popover, and the mobile sheet is `bg-card` — all
+three rendered **white text on near-white**. Hover appeared to "fix" it only
+because hover added a dark colour. And in Night the bar itself is light, so
+even the bar was wrong.
+
+`text-shadow-md` is a 2px black shadow from when the header sat on a
+photograph. On a flat bar it renders as a grey smudge around every glyph, and
+on the active pill the shadow was the only thing still visible — the letters
+themselves were white on white. A user reads that as "blurry", not as "wrong
+colour", which is why it survived so long.
+
+The rule: **a colour utility that names a literal is asserting what is behind
+it.** Put the colour on the state that knows — the active pill inverts the bar,
+so the active branch sets both halves — and let everything else take a token.
+
+### The corollary: --header is not --primary
+
+The bar was `bg-primary/80`. Two problems, one of which no amount of care
+would have caught by eye:
+
+- White on that blend measured **4.12:1 in Paper**, under AA. And because the
+  bar was translucent, the number depended on whatever was scrolling behind
+  it, so the contrast was not a fixed quantity that could be checked at all.
+- Night's `--primary` is a **light** blue (75.7% lightness). A bar painted with
+  it is the brightest thing on screen in the palette whose entire purpose is
+  not being bright at bedtime.
+
+`--header` / `--header-foreground` are their own tokens per palette. All four
+clear AAA both ways round, because the active item inverts the bar and both
+directions are real text. `tests/theme.test.ts` checks the pair, the hover
+wash, and that Night's bar never becomes bright.
+
+### And a dead override that was load-bearing anyway
+
+`theme.css` carried this:
+
+```css
+header, footer { background: hsl(var(--card)); color: hsl(var(--foreground)); }
+header :not(svg):not(path) { color: inherit; }
+```
+
+The first rule never applied. `header` is specificity 0,0,1 and
+`.bg-primary\/80` is 0,1,0, so the class won and the bar stayed blue in every
+palette — the rule had been dead since it was written.
+
+The second rule was doing real work **by accident**. The settings and logout
+buttons carry `text-foreground`, which is near-black; `color: inherit` was the
+only thing stopping them from rendering near-black on a dark blue bar. Deleting
+the "dead" block would have broken two buttons for a reason nothing in the
+diff would explain.
+
+Both are gone and every element in the header names its own token. Inheritance
+that broad is how a dependency gets hidden: it makes an unrelated rule
+load-bearing without saying so anywhere.
+
 ---
 
 ## Recurring failure shape
