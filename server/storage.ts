@@ -127,6 +127,18 @@ export interface IStorage {
   getStoryGenerationCount(userId: number): Promise<number>;
   incrementStoryGenerationCount(userId: number): Promise<number>;
   resetStoryGenerationCount(userId: number): Promise<void>;
+  /** Avatars this account has ever generated. Lifetime; nothing resets it. */
+  getAvatarCount(userId: number): Promise<number>;
+  /**
+   * Spend one avatar generation, but only if there is one left.
+   *
+   * Returns false when the cap is already reached. The check and the charge
+   * are ONE statement on purpose: two requests arriving together would both
+   * pass a separate "are they under the cap" read and both then increment,
+   * which is how a hard cap becomes a soft one. Pass Infinity for a user who
+   * is not capped.
+   */
+  chargeAvatarGeneration(userId: number, limit: number): Promise<boolean>;
   getLastResetDate(userId: number): Promise<Date | null>;
   setLastResetDate(userId: number, date: Date): Promise<void>;
 
@@ -156,6 +168,8 @@ export class MemStorage implements IStorage {
   private heroStories: Map<string, HeroStory>;
   private verificationTokens: Map<string, {userId: number, type: string, expiresAt: Date}>;
   private userStoryGenerationCounts: Map<number, number>;
+  /** Lifetime, unlike the story counter above: resetStoryGenerationCount does not touch it. */
+  private userAvatarCounts: Map<number, number> = new Map();
   private userLastResetDates: Map<number, Date>;
   private userOpenAIKeys: Map<number, string>;
   private userOpenAIModels: Map<number, string>;
@@ -857,6 +871,17 @@ export class MemStorage implements IStorage {
   async resetStoryGenerationCount(userId: number): Promise<void> {
     this.userStoryGenerationCounts.set(userId, 0);
     this.userLastResetDates.set(userId, new Date());
+  }
+
+  async getAvatarCount(userId: number): Promise<number> {
+    return this.userAvatarCounts.get(userId) || 0;
+  }
+
+  async chargeAvatarGeneration(userId: number, limit: number): Promise<boolean> {
+    const used = this.userAvatarCounts.get(userId) || 0;
+    if (used >= limit) return false;
+    this.userAvatarCounts.set(userId, used + 1);
+    return true;
   }
 
   async getLastResetDate(userId: number): Promise<Date | null> {

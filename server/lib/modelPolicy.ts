@@ -178,6 +178,55 @@ export type ResolvedModel = {
 };
 
 /**
+ * Who gets things without the owner paying for them.
+ *
+ * Own key or admin. This was written out three times -- the premium gate in
+ * isModelAllowedFor, the concurrency gate below, and shouldChargeQuota in
+ * storyWorker -- and the second of those carried a comment saying it was
+ * "verbatim the premium gate ... a second definition of entitled is how this
+ * codebase produced six model lists and four schema sources". It was right,
+ * and the avatar allowance would have made it a fifth. So it is one function
+ * now, and the callers name their fields differently on purpose: resolveModel
+ * calls it usingOwnKey, the request path calls it hasOwnKey, and they are the
+ * same fact.
+ */
+export function hasUnlimitedUse(opts: { isAdmin: boolean; hasOwnKey: boolean }): boolean {
+  return opts.isAdmin || opts.hasOwnKey;
+}
+
+/**
+ * Free avatar generations, for the lifetime of an account.
+ *
+ * LIFETIME, never "live characters". The cost is in generating the image, so a
+ * cap on how many a user currently HAS is farmable: delete a character,
+ * generate another, repeat, and the owner pays every time. Counting
+ * generations makes the number mean what it says.
+ *
+ * This is a NEW owner-billed path. decisions.md 16 records the rule that there
+ * is no automatic fallback to a paid model, because it spends the owner's
+ * credits unasked -- and gpt-image-2 is premium, so without a cap a free
+ * account would do exactly that on every character it made. The cap is the
+ * feature, not a detail, which is why it is enforced where the spend happens
+ * rather than only shown in the UI.
+ */
+export const MAX_FREE_AVATARS = 8;
+
+/**
+ * How many more avatars this user may generate. Infinity when they pay.
+ *
+ * Takes the count rather than reading it, so the caller does its database work
+ * inside whatever transaction it already holds -- and so this stays testable
+ * without one.
+ */
+export function avatarsRemaining(
+  used: number,
+  opts: { isAdmin: boolean; hasOwnKey: boolean },
+): number {
+  if (hasUnlimitedUse(opts)) return Infinity;
+  return Math.max(0, MAX_FREE_AVATARS - Math.max(0, used));
+}
+
+/**
  * How many generations this user may have in flight at once.
  *
  * One, unless they are paying for it themselves AND using OpenAI. Local
@@ -191,7 +240,7 @@ export type ResolvedModel = {
  */
 export function concurrencyLimitFor(resolved: ResolvedModel): number {
   if (resolved.provider !== "openai") return 1;
-  return resolved.usingOwnKey || resolved.isAdmin ? 3 : 1;
+  return hasUnlimitedUse({ isAdmin: resolved.isAdmin, hasOwnKey: resolved.usingOwnKey }) ? 3 : 1;
 }
 
 export function isModelAllowedFor(
@@ -202,7 +251,7 @@ export function isModelAllowedFor(
   const spec = MODEL_CATALOG[model];
   if (!spec) return false;
   if (!spec.kinds.includes(kind)) return false;
-  if (spec.tier === "premium") return opts.isAdmin || opts.hasOwnKey;
+  if (spec.tier === "premium") return hasUnlimitedUse(opts);
   return true;
 }
 

@@ -21,7 +21,9 @@
  */
 import { randomUUID } from "crypto";
 import { pool, databaseReady } from "../db";
-import { resolveModel, createClient, tokenLimitFor, temperatureFor } from "./modelPolicy";
+import { resolveModel, createClient, tokenLimitFor, temperatureFor,
+  hasUnlimitedUse,
+} from "./modelPolicy";
 import { StoryGenerationError } from "./storyErrors";
 import {
   generateStoryFromJob,
@@ -271,7 +273,10 @@ async function shouldChargeQuota(userId: number): Promise<boolean> {
   const resolved = await resolveModel(userId, "chat").catch(() => null);
   if (!resolved) return false;
   if (resolved.provider !== "openai") return false;
-  return !resolved.usingOwnKey && !resolved.isAdmin;
+  // The third restatement of "own key or admin", now the same function as the
+  // other two. Negated here because this asks the opposite question: the people
+  // who are NOT charged are exactly the people who pay for their own use.
+  return !hasUnlimitedUse({ isAdmin: resolved.isAdmin, hasOwnKey: resolved.usingOwnKey });
 }
 
 /**

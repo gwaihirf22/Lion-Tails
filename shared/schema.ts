@@ -220,6 +220,21 @@ export const userUsage = pgTable("user_usage", {
     .references(() => users.id, { onDelete: "cascade" }),
   count: integer("count").default(0),
   lastResetDate: timestamp("last_reset_date", { withTimezone: true }),
+  /**
+   * Avatar images this account has ever generated. NEVER reset.
+   *
+   * It sits in this table because this is where per-user counters live, but it
+   * is a different kind of number from the one above it: `count` is a monthly
+   * story allowance that resetStoryGenerationCount() zeroes, and this is a
+   * lifetime total that nothing zeroes. Adding it here rather than as a jsonb
+   * blob follows the argument already made in this file for named columns --
+   * and it survives the reset for free, because that statement sets `count`
+   * by name and never touches anything else.
+   *
+   * Lifetime, not live: see MAX_FREE_AVATARS in modelPolicy for why a cap on
+   * how many a user currently has would be farmable.
+   */
+  avatarCount: integer("avatar_count").default(0).notNull(),
 });
 
 export const userSettings = pgTable("user_settings", {

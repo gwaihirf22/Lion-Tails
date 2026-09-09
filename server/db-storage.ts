@@ -1446,6 +1446,64 @@ export class DbStorage implements IStorage {
     }
   }
   
+  async getAvatarCount(userId: number): Promise<number> {
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in getAvatarCount(${userId}). Reporting 0.`);
+      return 0;
+    }
+    try {
+      const { rows } = await pool!.query(
+        `SELECT avatar_count FROM user_usage WHERE user_id = $1`,
+        [userId],
+      );
+      return rows.length ? Number(rows[0].avatar_count) : 0;
+    } catch (error) {
+      console.error(`Error getting avatar count for user ${userId}:`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Spend one avatar generation if the account has one left.
+   *
+   * ONE statement, deliberately. The obvious shape -- read the count, compare
+   * it to the cap, then increment -- has a window between the read and the
+   * write in which a second request reads the same number, and a cap that can
+   * be exceeded by pressing a button twice is not a cap. The WHERE clause is
+   * the check, so the row is only ever incremented from a value that was still
+   * under the limit when the write happened.
+   *
+   * Returns false rather than throwing: the caller is deciding whether to spend
+   * the owner's money, and "no" is an ordinary answer to that question.
+   *
+   * On a database failure it returns FALSE, not true. Every other read in this
+   * file degrades towards letting the user carry on, because the alternative
+   * was refusing to show them a story they already own. This one degrades the
+   * other way: the failure mode of guessing wrong here is an uncapped bill.
+   */
+  async chargeAvatarGeneration(userId: number, limit: number): Promise<boolean> {
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in chargeAvatarGeneration(${userId}). Refusing.`);
+      return false;
+    }
+    // Infinity has no integer to compare against in SQL; an unlimited user is
+    // still counted, so the number stays true, but never blocked.
+    const capped = Number.isFinite(limit);
+    try {
+      const { rows } = await pool!.query(
+        `INSERT INTO user_usage (user_id, avatar_count) VALUES ($1, 1)
+         ON CONFLICT (user_id) DO UPDATE SET avatar_count = user_usage.avatar_count + 1
+         WHERE $2::boolean IS FALSE OR user_usage.avatar_count < $3::integer
+         RETURNING avatar_count`,
+        [userId, capped, capped ? limit : 0],
+      );
+      return rows.length > 0;
+    } catch (error) {
+      console.error(`Error charging avatar generation for user ${userId}:`, error);
+      return false;
+    }
+  }
+
   async getLastResetDate(userId: number): Promise<Date | null> {
     if (!isDatabaseAvailable()) {
       console.warn(`Database unavailable in getLastResetDate(${userId}). Using current date as fallback.`);
