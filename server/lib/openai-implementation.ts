@@ -1,5 +1,6 @@
 import OpenAI from "openai";
-import { StoryRequest, StoryResponse } from "@shared/schema";
+import {
+  characterRoleOf, StoryRequest, StoryResponse } from "@shared/schema";
 import {
   buildSystemPrompt,
   buildUserInstruction,
@@ -961,6 +962,29 @@ async function runGeneration(
       console.error("Error generating story image:", imageError);
     }
 
+    /**
+     * Say plainly that the meeting was invented.
+     *
+     * APPENDED HERE, not asked of the model. A disclaimer the model writes is
+     * one it can forget, soften, or put in the middle -- and this one has to be
+     * exactly right and always present, because it is the difference between a
+     * fun story about Caleb and a child believing they read Scripture. It costs
+     * nothing and it cannot be dropped.
+     *
+     * Only for a retelling the character was written INTO. A straight retelling
+     * invents nobody and needs no note; an ordinary made-up story is not
+     * claiming to be anything.
+     */
+    const meets = characterRoleOf(request) === "meets";
+    const account = ctx.brief.sourceMaterial;
+    if (meets && account && !finalDetails.content.includes(MEETING_NOTE_HEADING)) {
+      const who = ctx.brief.cast[0]?.name;
+      finalDetails.content +=
+        `\n\n${MEETING_NOTE_HEADING} ${account.label} really lived, and what happens ` +
+        `in this story is what the account records.` +
+        (who ? ` ${who} was added so it could be told as an adventure -- that meeting is made up.` : "");
+    }
+
     if (!finalDetails.content.includes("For Further Learning")) {
       finalDetails.content +=
         "\n\n**For Further Learning:**\n\n- **BibleGateway.com** - Read Bible stories.\n- **GotQuestions.org** - Find answers about faith.";
@@ -1125,6 +1149,9 @@ function buildDebugHeader(
 // =========================================================================
 // OTHER EXPORTED FUNCTIONS (Image Generation, etc.)
 // =========================================================================
+
+/** Matched before appending, so a regenerated story cannot collect two. */
+const MEETING_NOTE_HEADING = "**About this story:**";
 
 export async function generateStoryImage(
   imagePrompt: string,

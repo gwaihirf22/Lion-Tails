@@ -1,4 +1,5 @@
 import {
+  characterRoleOf,
   characterIdsOf,
   characterKind,
   statsOf,
@@ -506,7 +507,7 @@ export function buildStoryBrief(
    * "Character travels back in time" is not a sentence anyone meant.
    */
   const placeholder = isPlaceholderName(name);
-  const childInScene = Boolean(request.useTimeTravel) && !placeholder;
+  const childInScene = characterRoleOf(request) === "meets" && !placeholder;
 
   /**
    * The child is not a participant, so the prompt is about the account.
@@ -597,7 +598,37 @@ export function buildStoryBrief(
   }
   if (isSet(request.biblePassage)) premise.push(`Draw on this passage: ${request.biblePassage}.`);
   if (childInScene) {
-    premise.push(`${name} travels back in time and witnesses this first-hand.`);
+    if (sourceMaterial) {
+      /**
+       * The character MEETS the figure, and the story is allowed to be fun.
+       *
+       * Blake's framing, and the balance is the whole instruction: wacky, but
+       * the real events still happen and still land. Left as the bare "travels
+       * back in time and witnesses this first-hand", a model writes a polite
+       * tour -- the character stands and watches, nothing is at stake, and the
+       * account is narrated at them. That is the dullest possible use of the
+       * mode and it was what the sentence asked for.
+       *
+       * The invention is bounded to the MEETING. Everything that actually
+       * happened still has to happen, in order, with the right names and the
+       * right outcome -- the cautions and the account block are unchanged and
+       * still apply. What is licensed is how the character gets there and what
+       * they do while they are, not the history.
+       */
+      premise.push(
+        `${name} meets them and is part of the adventure -- not a visitor ` +
+          "watching it happen. Let it be fun, surprising, even a little silly " +
+          "in how they arrive and how they help.",
+      );
+      premise.push(
+        "The real events still happen exactly as the account gives them, in " +
+          "that order, with those names and that outcome. Invent the meeting " +
+          "and the fun around it; do not invent history, do not let them " +
+          "change what happened, and do not have them rescue anyone from it.",
+      );
+    } else {
+      premise.push(`${name} travels back in time and witnesses this first-hand.`);
+    }
   }
 
   // Scope. Without it, "a story about Corrie ten Boom" gets a life summary --

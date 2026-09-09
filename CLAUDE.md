@@ -266,6 +266,33 @@ deliberate, read the diff before regenerating — that diff is the prompt every
 existing story would now be written from. There is no regeneration script, which
 makes it easy to regenerate first and "verify" against your own output.
 
+## A character in a real account
+
+Attaching a character to a hero or a biblical event is an explicit choice, not
+an inference. `characterRole` is the field; `useTimeTravel` is LEGACY and both
+are read only through `characterRoleOf()` — the `characterIdsOf()` precedent.
+
+- `"absent"` — a straight retelling. Nobody is written into the account. The
+  default, because being wrong this way gives a plainer story, and being wrong
+  the other way puts a child into Scripture.
+- `"meets"` — they meet the figure and join in. Fun and a little silly in how
+  they arrive and help; the real events still happen in order, with the right
+  names and outcome. The story gets a short appended note saying the meeting
+  was invented.
+
+**The note is appended by the server, never asked of the model** — a disclaimer
+the model writes is one it can forget, soften, or bury mid-story, and this one
+has to be exactly right and always present.
+
+This exists because the two used to contradict each other with nothing making
+anyone choose. The historical tab force-sets `useTimeTravel: false`, and the
+brief then wrote the character into the account regardless: a story about Caleb
+came back with a child called Esther in the wilderness of Paran, and because her
+name is itself a figure in Scripture it read as the app confusing two people. It
+was not — the account was accurate throughout. `soloRetelling` is carried on the
+brief as a fact rather than inferred, because the full brief and the per-chapter
+prompt must agree and once did not.
+
 ## Avatars
 
 `POST /api/characters/:id/avatar` generates a portrait with `gpt-image-2` and

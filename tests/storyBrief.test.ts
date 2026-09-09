@@ -13,6 +13,7 @@ import {
 } from "../server/lib/storyBrief";
 import {
   characterIdsOf,
+  characterRoleOf,
   baseStats,
   MAX_STORY_CHARACTERS,
   storyRequestSchema,
@@ -975,8 +976,8 @@ describe("a retelling requested with a real character's name", () => {
     // The opposite failure, and just as bad: a chapter prompt that says the
     // story is about Esther and that nobody was invented is incoherent, and a
     // first attempt at this fix produced exactly that.
-    const t = brief({ useTimeTravel: true });
-    expect(renderBrief(t, "single")).toContain("travels back in time");
+    const t = brief({ characterRole: "meets" });
+    expect(renderBrief(t, "single")).toContain("meets them and is part of the adventure");
     expect(renderBrief(t, "chapter")).toContain("Esther");
     expect(renderBrief(t, "chapter")).not.toContain(SOLO_RETELLING_GUARD);
   });
@@ -984,8 +985,8 @@ describe("a retelling requested with a real character's name", () => {
   it("keeps the placeholder name out of the scene however the flag is set", () => {
     // "Character travels back in time and witnesses this first-hand" is not a
     // sentence anyone meant, and the form sends that literal string.
-    const t = brief({ childName: "Character", useTimeTravel: true });
-    expect(renderBrief(t, "single")).not.toContain("travels back in time");
+    const t = brief({ childName: "Character", characterRole: "meets" });
+    expect(renderBrief(t, "single")).not.toContain("part of the adventure");
     expect(renderBrief(t, "chapter")).toContain(SOLO_RETELLING_GUARD);
   });
 
@@ -1008,5 +1009,40 @@ describe("a retelling requested with a real character's name", () => {
     const t = renderBrief(withQuote, "single");
     expect(t).not.toContain("Quiets the people In their own words");
     expect(t).toContain("Numbers 13:30: Quiets the people. In their own words:");
+  });
+});
+
+/**
+ * The explicit choice, and the one reader that knows the old flag.
+ *
+ * The two used to be able to contradict each other with nothing making the
+ * user decide, which is how a character ended up in Numbers 13 with the flag
+ * turned off. characterRoleOf is the characterIdsOf/characterKind precedent:
+ * one function, so a request frozen before the field existed still answers.
+ */
+describe("how a character appears in a retelling", () => {
+  it("defaults to absent, which is the safe way to be wrong", () => {
+    expect(characterRoleOf({})).toBe("absent");
+    expect(characterRoleOf(null)).toBe("absent");
+    expect(characterRoleOf(undefined)).toBe("absent");
+  });
+
+  it("reads the legacy flag for requests frozen before the field existed", () => {
+    // story_jobs.request is written at enqueue and never rewritten, so these
+    // are in flight across the deploy that adds characterRole.
+    expect(characterRoleOf({ useTimeTravel: true })).toBe("meets");
+    expect(characterRoleOf({ useTimeTravel: false })).toBe("absent");
+  });
+
+  it("lets the explicit choice win over the legacy flag", () => {
+    // The historical tab force-sets useTimeTravel to false, so without this
+    // precedence the new control could not turn the mode on at all.
+    expect(characterRoleOf({ characterRole: "meets", useTimeTravel: false })).toBe("meets");
+    expect(characterRoleOf({ characterRole: "absent", useTimeTravel: true })).toBe("absent");
+  });
+
+  it("ignores a value that is not one of the two", () => {
+    expect(characterRoleOf({ characterRole: "sidekick", useTimeTravel: true })).toBe("meets");
+    expect(characterRoleOf({ characterRole: "", useTimeTravel: false })).toBe("absent");
   });
 });

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   StoryRequest,
   storyRequestSchema,
@@ -164,6 +165,10 @@ export default function StoryForm({
       storyType: "regular" as const,
       useTimeTravel: false,
       characterIds: [],
+      // "absent" is the safe default: a retelling is about the person it is
+      // about, and getting it wrong this way gives a plainer story rather than
+      // a child written into Scripture.
+      characterRole: "absent" as const,
       customPrompt: "", // Empty custom prompt by default
       biblePassage: "", // New field for Bible passage study
       learningFocus: "", // No default learning focus
@@ -625,6 +630,66 @@ export default function StoryForm({
                         Enable this to create a time travel adventure where your character visits Biblical times. This only affects the story theme, not character selection.
                       </FormDescription>
                     </div>
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {/* HOW THE CHARACTER APPEARS -- the choice that did not exist.
+                
+                A character attached to a real account is ambiguous, and the app
+                used to resolve the ambiguity silently: this tab force-sets
+                useTimeTravel to false, and the brief then wrote the character
+                into the account anyway. A story about Caleb came back with a
+                child called Esther standing in the wilderness of Paran, which
+                read as the app confusing two figures in Scripture.
+                
+                So it is asked, not inferred, and only when there is actually a
+                character to ask about. */}
+            {formType === "historical" && characterIdsOf(form.watch()).length > 0 && (
+              <FormField
+                control={form.control}
+                name="characterRole"
+                render={({ field }) => (
+                  <FormItem className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
+                    <FormLabel className="text-sm font-semibold">
+                      How should your character appear?
+                    </FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        value={field.value ?? "absent"}
+                        className="space-y-2"
+                      >
+                        <FormItem className="flex items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="absent" className="mt-1" />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel className="font-medium">Not in the story</FormLabel>
+                            <FormDescription>
+                              A straight retelling of what actually happened. Your
+                              character is not written into it.
+                            </FormDescription>
+                          </div>
+                        </FormItem>
+                        <FormItem className="flex items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="meets" className="mt-1" />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel className="font-medium">They meet — an adventure</FormLabel>
+                            <FormDescription>
+                              Your character meets them and joins in. Fun, and a
+                              little silly, but the real events still happen the
+                              way they really did. The story ends with a short
+                              note saying the meeting was made up.
+                            </FormDescription>
+                          </div>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />

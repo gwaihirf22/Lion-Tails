@@ -962,6 +962,29 @@ export const MAX_STORY_CHARACTERS = 8;
 const isSet = (v: unknown): boolean =>
   typeof v === "string" && v.trim() !== "" && v.trim().toLowerCase() !== "none";
 
+export type CharacterRole = "absent" | "meets";
+
+/**
+ * Is the chosen character IN the account, or is this a straight retelling?
+ *
+ * The ONE place that knows characterRole and useTimeTravel are the same fact.
+ * A request frozen before characterRole existed still answers correctly, which
+ * matters because story_jobs.request is written at enqueue and never rewritten.
+ *
+ * Defaults to "absent". A retelling is about the person it is about, and being
+ * wrong that way produces a story that is merely plainer than intended --
+ * whereas defaulting to "meets" would put a child in Scripture because a form
+ * field was left alone.
+ */
+export function characterRoleOf(
+  request?: { characterRole?: string | null; useTimeTravel?: boolean | null } | null,
+): CharacterRole {
+  if (request?.characterRole === "meets" || request?.characterRole === "absent") {
+    return request.characterRole;
+  }
+  return request?.useTimeTravel ? "meets" : "absent";
+}
+
 export function characterIdsOf(
   request?: { characterIds?: string[] | null; characterId?: string | null } | null,
 ): string[] {
@@ -1064,6 +1087,25 @@ export const storyRequestSchema = z.object({
    * assign." The same is true of a story the user has said is not over.
    */
   cliffhanger: z.boolean().default(false),
+  /**
+   * What the chosen character is DOING in a retelling. The explicit choice.
+   *
+   *   "absent"  a straight retelling. The character is not in the account.
+   *   "meets"   they meet the figure and the story is an adventure -- wacky,
+   *             but the real events still happen and still land. Ends with a
+   *             short note saying the meeting was invented.
+   *
+   * LEGACY: useTimeTravel below is the old spelling of "meets". Read them only
+   * through characterRoleOf(), the one place that knows they are the same fact
+   * -- the characterIdsOf() and characterKind() precedent.
+   *
+   * It exists because the two used to be able to contradict each other and
+   * nothing made the user choose. A character attached to an account with time
+   * travel off was silently written into it anyway; see the Caleb/Esther case
+   * in storyBrief.ts.
+   */
+  characterRole: z.enum(["absent", "meets"]).optional(),
+  /** LEGACY. Superseded by characterRole; read via characterRoleOf(). */
   useTimeTravel: z.boolean().default(false),
   /**
    * The cast, in order. Index 0 is the protagonist, and that ordering is
@@ -1132,9 +1174,10 @@ export const storyRequestSchema = z.object({
   // satisfies these rules exactly as it did before.
   const cast = characterIdsOf(data);
 
-  // Time travel needs somebody to do the travelling.
-  if (data.useTimeTravel) {
-    return cast.length > 0;
+  // Meeting the figure needs somebody to do the meeting. Asked through the
+  // reader so the old flag and the new field are one rule, not two.
+  if (characterRoleOf(data) === "meets") {
+    return cast.length > 0 || Boolean(data.childName?.trim());
   }
 
   // If custom character is enabled for any story type, characterDetails is required
