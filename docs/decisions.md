@@ -835,6 +835,50 @@ trying to write.
 
 ---
 
+## 25. Children select, parents type — and that is two routes, not a flag
+
+`server/routes.ts`, `shared/characterVocab.ts`
+
+A character used to be a boy or a girl aged 5-12. Widening it to "anything"
+raises a question the schema cannot answer: a seven-year-old should not be
+typing free text into six boxes that reach an image model and a story prompt,
+but the catalogue cannot anticipate everything a family wants either.
+
+So the vocabulary is a list, and Parent Mode is the escape hatch. The list lives
+in one file that is **both** the form's option source and the server's validator
+— a second copy of "what may a dragon's scales be" is the four-schema-sources
+failure in a new costume, and a form offering what the server refuses is the
+same bug wearing a friendlier face.
+
+**The permissive path is a separate route, not a flag on the strict one.**
+`requireParentMode` is middleware: it reads the session, and it cannot look
+inside a body to decide whether this particular request may be permissive.
+Deciding that inside the handler is exactly the invisible-guard shape
+`requireAuth.ts` was written against, and how eight unguarded write routes once
+shipped. `PUT /api/universes/:id/summary` is the same arrangement for the same
+reason.
+
+### The patch is validated, not the merged character
+
+The subtle one. A parent may have typed `kind: "space whale"`, which the
+catalogue does not contain. Validating the merged document on the strict path
+would then reject a **child's later edit to some unrelated field**, because the
+merge still contains the custom value. The bug would appear only for families
+who had used Parent Mode, and only on their next ordinary edit.
+
+So the strict path checks only the keys present in the request, and
+`customFields` records which values were typed so the form shows them as chosen
+rather than blanking them for being off-list.
+
+### Category is derived, never accepted
+
+`category` picks which colour list a value is judged against. Taking it from the
+request would let `{kind: "dragon", category: "human"}` be validated against the
+human palette. The server derives it from `kind` on the strict path; on the
+custom path a parent sets it, because an off-catalogue kind has none to derive.
+
+---
+
 ## Recurring failure shape
 
 Most incidents here have had the same form: **a check that reported success

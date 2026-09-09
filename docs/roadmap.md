@@ -33,6 +33,9 @@ unguarded write routes once shipped: a missing check is invisible when it is
 supposed to be in the body, and obvious when it is supposed to be in the
 signature. Fix is mechanical but touches many routes, so it wants its own PR.
 
+The five character routes were converted when the character model widened,
+since that change rewrote those handlers anyway. The rest are untouched.
+
 ### Email is wired to nothing
 
 Password reset generates a valid token and discards it (`server/auth.ts:185`,
@@ -109,6 +112,18 @@ hand-written SQL against production. A `PATCH /api/admin/users/:id` guarded by
 
 Deliberately not a subscription system. Blake: "I won't want to depart that
 until/when we actually do want to create a subscribe function."
+
+### `canonicalLook` is stored and rendered nowhere
+
+The character sheet collects "how they look, for pictures" and saves it. Nothing
+reads it yet, and a test asserts it appears in none of the four brief
+projections.
+
+That is deliberate rather than unfinished: keeping appearance out of the story
+prompt is what lets it be as detailed as anyone likes without competing for the
+few facts per character the brief rations. The avatar work will use it for image
+prompts only — and will want to store the exact prompt an avatar was generated
+from, or story illustrations will not match the portrait.
 
 ### Promote an invented character
 

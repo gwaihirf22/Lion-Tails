@@ -110,7 +110,7 @@ server/        Express API + SPA serving
   data/biblicalEvents.ts  scripture anchors for story generation (NOT the same
                job as data/heroes/bible.ts — one anchors a retelling, the other
                describes a person; overlapping figures are deliberate)
-shared/schema.ts  single source of truth for all 13 tables + Zod schemas
+shared/schema.ts  single source of truth for every table + Zod schemas
 migrations/    generated SQL, applied at container start
 tests/         vitest — pure functions only, no network, no database
 scripts/verify-heroes.ts  hero facts vs Wikipedia/Wikidata/bible-api (network)
@@ -135,7 +135,7 @@ when a configured database is unreachable or its schema has drifted.
 
 ## Database
 
-`shared/schema.ts` is the single source of truth for all ten tables, including
+`shared/schema.ts` is the single source of truth for every table, including
 `session` (owned by connect-pg-simple, which runs with
 `createTableIfMissing: false`).
 
@@ -232,11 +232,39 @@ concurrency limit: background work must not refuse the story they are writing.
 asserts the legacy name appears nowhere else in `server/`, `client/src` or
 `shared/`.
 
+A character may be a person, an animal, a dragon or a robot. **`kind` is the
+noun the story uses, and `gender` is LEGACY** — read them only through
+`characterKind()`, which is `characterIdsOf()`'s counterpart and the one place
+that knows they are the same fact. `category` never reaches a prompt: it chooses
+the form's vocabulary and the covering noun (`coveringNoun()` → hair, fur,
+feathers, scales, plating), so the story sees only `kind` and a girl renders "a
+girl" rather than "a human". A row saved before any of this has no category and
+falls through to "hair", which is what keeps the golden briefs identical.
+
+**Nothing on a character is defaulted.** Every field is optional, and the form
+starts empty except the name. Six defaults — brown hair, brown eyes, blue,
+reading, kind, age 8 — used to reach every story.
+
+Three fields carry text, with three different forces: `mustBeTrue` (Parent Mode
+only) is identity, reprinted every chapter under "keep this consistent";
+`notes` (anyone) is colour, "only where a scene naturally calls for it", and
+must never reach `userInstructions`, which is a directive channel; and
+`canonicalLook` renders **nowhere** — it is stored for the avatar work.
+
+**Children select, parents type.** `shared/characterVocab.ts` is one list serving
+both the form's options and the server's validation. `POST/PUT /api/characters`
+refuse anything off-catalogue; `POST /api/characters/custom` and
+`PUT /api/characters/:id/custom` carry `requireParentMode` and accept anything.
+The strict path validates **the patch, not the merged character**, or a parent's
+custom value would block a child's unrelated edit.
+
 Before changing `storyBrief.ts`, know that `tests/fixtures/brief-golden.json`
-holds 25 captured strings asserting a 0/1-character brief renders
-BYTE-IDENTICALLY to before multi-character shipped. If a change is deliberate,
-read the diff before regenerating — that diff is the prompt every existing story
-would now be written from.
+holds 44 captured strings (11 cases × 4 projections) asserting the rendered
+brief. The first six are the compatibility set and **must not move**: they are
+what a 0/1-character request rendered before any of this. If a change is
+deliberate, read the diff before regenerating — that diff is the prompt every
+existing story would now be written from. There is no regeneration script, which
+makes it easy to regenerate first and "verify" against your own output.
 
 ## Heroes of Faith data
 
