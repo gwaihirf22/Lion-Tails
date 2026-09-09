@@ -156,6 +156,43 @@ email`), so the endpoints answer 200 and look functional while the delivery half
 does not exist. The token is returned in the response body only when
 `NODE_ENV=development`.
 
+## Story continuity
+
+A story can belong to a series. After a series story, a background job extracts
+what a LATER story must not contradict into `story_universes.world_state` and
+refreshes the summary in the same call. `server/lib/worldState.ts` is pure and
+holds the merge rules.
+
+Three things here are load-bearing and easy to undo by tidying:
+
+- **The three kinds are graded on purpose** — characters are identity ("none of
+  them has to appear"), facts are hard, threads are explicitly OPTIONAL. Flatten
+  them into one list and the next story becomes a sequel-by-checklist. This is
+  measurably model-dependent; see `docs/decisions.md` §24.
+- **Entries are revised, not only appended.** A closed entry is kept, not
+  deleted, so a later extraction does not re-propose a thread already tied off.
+- **`mergeWorldState` is total.** It consumes model output; a bad row is dropped,
+  never thrown, because the alternative is losing a story's continuity inside a
+  background job nobody is watching.
+
+The extraction runs only when a sequel is plausible — the user opted in, or the
+story continues another. It charges no quota, and is excluded from the user's
+concurrency limit: background work must not refuse the story they are writing.
+
+## Characters
+
+`characterIds` is the field, capped at `MAX_STORY_CHARACTERS` (8), ordered, index
+0 is the protagonist. `characterId` is LEGACY: read it only through
+`characterIdsOf()`, the single place that knows the two are the same fact. A test
+asserts the legacy name appears nowhere else in `server/`, `client/src` or
+`shared/`.
+
+Before changing `storyBrief.ts`, know that `tests/fixtures/brief-golden.json`
+holds 25 captured strings asserting a 0/1-character brief renders
+BYTE-IDENTICALLY to before multi-character shipped. If a change is deliberate,
+read the diff before regenerating — that diff is the prompt every existing story
+would now be written from.
+
 ## Heroes of Faith data
 
 Eighty hand-written profiles in `server/data/heroes/`, one file per era, two
