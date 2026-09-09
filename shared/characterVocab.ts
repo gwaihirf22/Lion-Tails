@@ -449,3 +449,83 @@ export function vocabularyErrors(
 
   return errors;
 }
+
+/**
+ * Names for the Random button.
+ *
+ * It used to offer fifteen boy names and fifteen girl names, all biblical, and
+ * only appeared for a boy or a girl -- so the button was both repetitive and
+ * absent from most of the catalogue. A dragon is not called Noah.
+ *
+ * Three pools rather than one: a person's name suits a person, and "Ember" or
+ * "Cog" would read oddly on a child. Categories that are neither map to the
+ * creature pool, which is deliberately the widest.
+ */
+const HUMAN_NAMES = [
+  // Scripture
+  "Noah", "Elijah", "Daniel", "Matthew", "David", "Joseph", "Benjamin", "Samuel",
+  "John", "Isaac", "Jacob", "Joshua", "Luke", "Caleb", "Micah", "Silas", "Levi",
+  "Asa", "Ezra", "Gideon", "Jonah", "Nathan", "Simon", "Titus", "Amos", "Boaz",
+  "Eli", "Enoch", "Job", "Reuben", "Seth", "Solomon", "Stephen", "Timothy", "Tobias",
+  "Sarah", "Hannah", "Ruth", "Esther", "Mary", "Naomi", "Rachel", "Deborah",
+  "Elizabeth", "Anna", "Leah", "Abigail", "Rebecca", "Miriam", "Priscilla",
+  "Tabitha", "Lydia", "Phoebe", "Damaris", "Eunice", "Keziah", "Salome", "Susanna",
+  // Classic
+  "Arthur", "Edmund", "Edward", "Felix", "George", "Henry", "Hugh", "Oliver",
+  "Oscar", "Peter", "Philip", "Rupert", "Theodore", "Thomas", "Walter", "William",
+  "Alice", "Beatrice", "Charlotte", "Clara", "Constance", "Eleanor", "Emily",
+  "Florence", "Harriet", "Josephine", "Louisa", "Margaret", "Martha", "Rose",
+  "Susannah", "Violet", "Winifred", "Agnes", "Cecily", "Dorothy", "Edith",
+  // Modern
+  "Aidan", "Archie", "Beau", "Cody", "Dexter", "Elliot", "Ethan", "Finn", "Gus",
+  "Harvey", "Isaac", "Jasper", "Kai", "Leo", "Louie", "Max", "Milo", "Nico",
+  "Otis", "Reuben", "Rory", "Sonny", "Toby", "Wesley", "Zach", "Arlo", "Bodhi",
+  "Ada", "Amelia", "Aria", "Astrid", "Bonnie", "Clara", "Daisy", "Eden", "Elsie",
+  "Esme", "Freya", "Hazel", "Imogen", "Iris", "Ivy", "Juniper", "Lark", "Maeve",
+  "Marlow", "Nell", "Nova", "Olive", "Opal", "Pearl", "Poppy", "Quinn", "Sadie",
+  "Sage", "Tessa", "Thea", "Willa", "Wren", "Zara",
+];
+
+const CREATURE_NAMES = [
+  // Fire, sky and stone -- suits dragons, griffins, big animals
+  "Ember", "Cinder", "Ash", "Blaze", "Flint", "Basalt", "Boulder", "Granite",
+  "Storm", "Thunder", "Gale", "Zephyr", "Cirrus", "Comet", "Nimbus", "Aurora",
+  "Frost", "Glacier", "Snowdrop", "Icicle", "Midnight", "Dusk", "Twilight",
+  "Shadow", "Echo", "Whisper", "Rumble", "Bramble", "Thistle", "Nettle",
+  // Small and warm -- suits pets, birds, bugs
+  "Pip", "Pippin", "Nibbles", "Scamp", "Scruffy", "Biscuit", "Muffin", "Pickle",
+  "Peanut", "Pumpkin", "Marmalade", "Ginger", "Nutmeg", "Cinnamon", "Clover",
+  "Buttercup", "Daisy", "Willow", "Hazel", "Juniper", "Fern", "Moss", "Acorn",
+  "Chestnut", "Pebble", "Puddle", "Bubbles", "Doodle", "Waffles", "Noodle",
+  // Bold and old -- suits horses, lions, mythical beasts
+  "Valiant", "Bravery", "Banner", "Beacon", "Lantern", "Compass", "Anchor",
+  "Rudder", "Mariner", "Wanderer", "Pilgrim", "Journey", "Quest", "Herald",
+  "Sable", "Onyx", "Amber", "Jade", "Coral", "Ivory", "Copper", "Sterling",
+  "Duke", "Baron", "Captain", "Marigold", "Saffron", "Indigo", "Cobalt", "Rusty",
+];
+
+const MACHINE_NAMES = [
+  "Bolt", "Cog", "Sprocket", "Gizmo", "Widget", "Gadget", "Rivet", "Piston",
+  "Circuit", "Pixel", "Byte", "Bit", "Chip", "Watt", "Volt", "Ampere", "Dynamo",
+  "Turbine", "Spanner", "Ratchet", "Lever", "Pulley", "Clank", "Whirr", "Ticker",
+  "Springs", "Gears", "Buttons", "Dial", "Beacon", "Lumen", "Tally", "Abacus",
+  "Domino", "Marbles", "Wheels", "Tinker", "Patch", "Scrap", "Nuts",
+];
+
+/**
+ * A name that suits what they are.
+ *
+ * `avoid` is the name already in the box, so pressing the button twice cannot
+ * hand back what it just gave -- which is what makes a random button feel
+ * broken on a list this size.
+ */
+export function randomName(category?: CharacterCategory | null, avoid?: string): string {
+  const pool =
+    category === "human" || category === undefined || category === null
+      ? HUMAN_NAMES
+      : category === "machine"
+        ? MACHINE_NAMES
+        : CREATURE_NAMES;
+  const choices = avoid ? pool.filter((n) => n !== avoid) : pool;
+  return choices[Math.floor(Math.random() * choices.length)];
+}

@@ -10,6 +10,7 @@ import {
   coveringNoun,
   optionsFor,
   popularKinds,
+  randomName,
   searchKinds,
   type CharacterCategory,
   type VocabField,
@@ -98,15 +99,6 @@ const CATEGORY_LABELS: Record<CharacterCategory, string> = {
   mythical: "Make-believe",
   machine: "Machines",
 };
-
-const boyNames = [
-  "Noah", "Elijah", "Daniel", "Matthew", "David", "Joseph", "Benjamin",
-  "Samuel", "John", "Isaac", "Jacob", "Ethan", "James", "Joshua", "Luke",
-];
-const girlNames = [
-  "Sarah", "Hannah", "Ruth", "Esther", "Mary", "Naomi", "Rachel",
-  "Deborah", "Elizabeth", "Grace", "Faith", "Anna", "Leah", "Abigail", "Rebecca",
-];
 
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -224,10 +216,11 @@ export default function CharacterForm({
     setKindSearch("");
   };
 
-  const randomName = () => {
-    const names = kind === "girl" ? girlNames : boyNames;
-    form.setValue("name", names[Math.floor(Math.random() * names.length)], { shouldDirty: true });
-  };
+  // Suited to what they are, and never the name already in the box -- pressing
+  // it twice and getting the same answer is what makes a random button feel
+  // broken. The pools live beside the catalogue, not here.
+  const pickRandomName = () =>
+    form.setValue("name", randomName(category, form.getValues("name")), { shouldDirty: true });
 
   /** A value that is not in the list it came from was typed by a parent. */
   const isCustom = (values: CharacterFormValues) => {
@@ -318,7 +311,23 @@ export default function CharacterForm({
                       </Button>
                     ))}
 
-                    <Popover open={kindOpen} onOpenChange={setKindOpen}>
+                    {/*
+                      `modal` is load-bearing, and only here.
+
+                      This form is the only one rendered inside a Dialog, and
+                      Radix's Dialog is modal by default: it traps focus and
+                      puts pointer-events: none on the body. PopoverContent
+                      portals to document.body, i.e. outside the trapped
+                      subtree, so the search box could not be clicked or typed
+                      in at all. Marking the popover modal makes Radix layer it
+                      as its own dismissable layer above the dialog.
+
+                      HeroPicker and CharacterPicker use the same pattern and
+                      work, because they live in StoryForm, which is not in a
+                      dialog. Fixed here rather than in ui/popover.tsx, which
+                      four other components depend on behaving as it does.
+                    */}
+                    <Popover modal open={kindOpen} onOpenChange={setKindOpen}>
                       <PopoverTrigger asChild>
                         <Button
                           type="button"
@@ -431,12 +440,13 @@ export default function CharacterForm({
                       <FormControl>
                         <Input placeholder="What are they called?" {...field} />
                       </FormControl>
-                      {/* A dragon is not called Noah. */}
-                      {(kind === "boy" || kind === "girl") && (
-                        <Button type="button" variant="outline" onClick={randomName} className="whitespace-nowrap">
-                          Random
-                        </Button>
-                      )}
+                      {/* Shown for everyone now. It used to appear only for a
+                          boy or a girl, because the only names it had were
+                          fifteen biblical ones -- so most of the catalogue got
+                          no button at all rather than a name that suited it. */}
+                      <Button type="button" variant="outline" onClick={pickRandomName} className="whitespace-nowrap">
+                        Random
+                      </Button>
                     </div>
                     <FormMessage />
                   </FormItem>

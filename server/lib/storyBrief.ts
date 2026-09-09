@@ -283,6 +283,12 @@ export type BriefCharacter = {
   name: string;
   /** "Mia, aged 8, a girl." */
   identity: string;
+  /**
+   * What must stay true of them, if a parent said so. Carried apart from
+   * `identity` because the chapter projection reduces the supporting cast to
+   * names, and this is the one thing about them that must survive that.
+   */
+  mustHold?: string;
   /** Appearance, hobbies, companions. Colour, not requirements. */
   colour: string;
 };
@@ -580,7 +586,24 @@ export function buildStoryBrief(
       const likes = isSet(c.hobby) ? `likes ${c.hobby}` : undefined;
       const both = trait && likes ? `${c.name} has ${trait} and ${likes}.` : undefined;
       const one = trait ? `${c.name} has ${trait}.` : likes ? `${c.name} ${likes}.` : "";
-      return { name: c.name, identity: sentence([who.join(", ")]), colour: both ?? one };
+      // mustBeTrue rides along even here, where everything else is rationed.
+      //
+      // It was lead-only, so the SAME character moved from first to second in
+      // the cast lost her wheelchair from all four projections -- and silently,
+      // which is the worst way to lose it. The two-fact ration is an argument
+      // about COLOUR: six decorative facts times eight characters is a
+      // character-sheet tour. This is not colour. It is the one field a parent
+      // typed because it must not be got wrong, so it should be the last thing
+      // cut at eight characters rather than the first. It is opt-in and capped
+      // at 200 characters, so a cast without one pays nothing.
+      return {
+        name: c.name,
+        identity: isSet(c.mustBeTrue)
+          ? `${sentence([who.join(", ")])} ${sentence([c.mustBeTrue])}`
+          : sentence([who.join(", ")]),
+        mustHold: isSet(c.mustBeTrue) ? c.mustBeTrue : undefined,
+        colour: both ?? one,
+      };
     }),
   ];
 
@@ -664,7 +687,14 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     const alsoLine = otherNames.length
       ? ` Also in this story: ${otherNames.join(", ")} -- use them only where this chapter's instruction calls for them, and do not add anyone who is not named here.`
       : "";
-    return `The story is about ${lead.identity} Keep this consistent.${alsoLine}${sourceLine}${canonLine}`;
+    // The ONE exception to names-only. Everything else about a supporting
+    // character is decoration that a chapter can do without; a must-be-true is
+    // the opposite -- it is what a parent wrote down precisely so that chapter 5
+    // does not have her climb the stairs. Guarded, so a cast with none of these
+    // renders exactly as it did before.
+    const holds = others.map((c) => c.mustHold).filter(Boolean);
+    const holdLine = holds.length ? ` These must stay true: ${holds.join(" ")}` : "";
+    return `The story is about ${lead.identity} Keep this consistent.${alsoLine}${holdLine}${sourceLine}${canonLine}`;
   }
 
   const out: string[] = [];

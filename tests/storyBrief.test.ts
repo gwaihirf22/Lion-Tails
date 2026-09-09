@@ -763,3 +763,46 @@ describe("text somebody typed", () => {
     }
   });
 });
+
+describe("a must-be-true belongs to whoever has one, not to whoever is first", () => {
+  const mia = { id: "c1", name: "Mia", gender: "girl", age: 8, createdAt: "x" } as Character;
+  const ella = {
+    id: "c2", name: "Ella", kind: "space whale", category: "creature", sex: "female",
+    mustBeTrue: "Ella uses a wheelchair and cannot climb stairs.", createdAt: "x",
+  } as Character;
+  const req = (ids: string[]) =>
+    ({ ...base, characterIds: ids }) as unknown as StoryRequest;
+
+  it("survives being moved out of the lead position", () => {
+    // The bug this replaces: the SAME character, second in the cast rather than
+    // first, lost her wheelchair from all four projections -- silently, which
+    // is the worst way to lose it.
+    const supporting = buildStoryBrief(req(["c1", "c2"]), [mia, ella]);
+    expect(supporting.cast[1].identity).toContain("wheelchair");
+  });
+
+  it("reaches every chapter, where nothing else about a supporting character does", () => {
+    // The two-fact ration is an argument about colour. This is not colour: it
+    // is what a parent wrote down so that chapter 5 does not have her climb the
+    // stairs, so it is the last thing cut at eight characters, not the first.
+    const t = renderBrief(buildStoryBrief(req(["c1", "c2"]), [mia, ella]), "chapter");
+    expect(t).toContain("These must stay true:");
+    expect(t).toContain("cannot climb stairs");
+  });
+
+  it("costs a cast without one exactly nothing", () => {
+    const plain = renderBrief(
+      buildStoryBrief(req(["c1", "c2"]), [mia, { ...ella, mustBeTrue: undefined }]),
+      "chapter",
+    );
+    expect(plain).not.toContain("These must stay true");
+    expect(plain).toContain("Also in this story: Ella");
+  });
+
+  it("carries one for every character who has one", () => {
+    const bolt = { id: "c3", name: "Bolt", kind: "robot", mustBeTrue: "Bolt cannot speak.", createdAt: "x" } as Character;
+    const t = renderBrief(buildStoryBrief(req(["c1", "c2", "c3"]), [mia, ella, bolt]), "chapter");
+    expect(t).toContain("cannot climb stairs");
+    expect(t).toContain("Bolt cannot speak.");
+  });
+});
