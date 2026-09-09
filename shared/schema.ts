@@ -604,7 +604,22 @@ export function characterIdsOf(
 
 export const storyRequestSchema = z.object({
   // Fields that are conditionally required based on useTimeTravel
-  childName: z.string().min(1, "Character name is required").optional(),
+  /**
+   * The protagonist name, when no saved character is chosen.
+   *
+   * NO .min(1). The form defaults this to "" and an empty string is PRESENT,
+   * so .optional() never applied and .min(1) rejected the default -- which
+   * only ever passed because the form force-wrote childName: "Character"
+   * whenever a character was selected. That write is gone (it reached the
+   * prompt as a protagonist, which is why PLACEHOLDER_NAMES exists to strip
+   * it), so the rule has to be stated where it is actually decided.
+   *
+   * The refine below is the single authority on whether a name is needed:
+   * a cast, or a name and a gender. Duplicating it here as .min(1) put the
+   * error on a field that is HIDDEN once a character is chosen, so submit
+   * failed silently and the page did nothing at all.
+   */
+  childName: z.string().optional(),
   gender: z.enum(["boy", "girl"], {
     invalid_type_error: "Gender must be 'boy' or 'girl'",
   }).optional(),

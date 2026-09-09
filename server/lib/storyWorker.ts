@@ -542,6 +542,21 @@ async function runJob(job: JobRow): Promise<void> {
       return;
     }
 
+    /**
+     * The outline as GENERATION produced it -- not as the job row had it.
+     *
+     * `job` is the row as it was CLAIMED, and on a fresh job its outline is
+     * null: the outline is written to the database by the checkpoint below and
+     * this in-memory object is never re-read. Saving `job.outline` therefore
+     * stored nothing for every new story while looking entirely correct, and
+     * the symptom -- a continuation with no recap -- appears somewhere else
+     * entirely, days later.
+     *
+     * Seeded from the row so a RESUMED job keeps the outline it already paid
+     * for, then overwritten the moment a fresh one is checkpointed.
+     */
+    let producedOutline: string[] | undefined = job.outline ?? undefined;
+
     const story = await generateStoryFromJob({
       jobId: job.job_id,
       userId: job.user_id,
@@ -553,7 +568,10 @@ async function runJob(job: JobRow): Promise<void> {
       client: createClient(resolved),
       resumeOutline: job.outline ?? undefined,
       resumeChapters: job.chapters ?? undefined,
-      checkpoint: (patch) => checkpoint(job.job_id, patch),
+      checkpoint: (patch) => {
+        if (patch.outline) producedOutline = patch.outline;
+        return checkpoint(job.job_id, patch);
+      },
       isCancelled: () => isCancelled(job.job_id),
     });
 
@@ -583,7 +601,7 @@ async function runJob(job: JobRow): Promise<void> {
     // the list of story ids the window covers (see shrinkSummaryWindow), which
     // is a different fact wearing the same column.
     const saved = await storage.saveStory(
-      { ...story, outline: job.outline ?? undefined },
+      { ...story, outline: producedOutline },
       job.request,
       job.user_id,
     );

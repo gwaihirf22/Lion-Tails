@@ -13,7 +13,7 @@ export default function Home() {
       {/* Hero Section */}
       <section className="mb-8 text-center">
         <div className="max-w-5xl mx-auto rounded-2xl shadow-xl p-6 relative overflow-hidden content-container">
-          <h1 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-secondary drop-shadow-sm">Lion Tails: Christian Bedtime Stories</h1>
+          <h1 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-secondary drop-shadow-sm">Lion Tails: Christian Stories</h1>
           <p className="text-lg md:text-xl mb-6 max-w-3xl mx-auto">Create beautiful faith-based stories for your little ones, filled with Biblical wisdom and heartwarming lessons.</p>
           <div className="flex flex-col md:flex-row justify-center items-center gap-8">
             <div className="flex-1 p-4">
@@ -27,7 +27,7 @@ export default function Home() {
                 <ul className="text-left space-y-3">
                   <li className="flex items-center">
                     <span className="text-primary mr-3 bg-primary/10 p-1 rounded-full"><Book size={18} /></span> 
-                    <span>Personalized bedtime stories with your child's name</span>
+                    <span>Personalized stories with your child's name</span>
                   </li>
                   <li className="flex items-center">
                     <span className="text-primary mr-3 bg-primary/10 p-1 rounded-full"><BookOpen size={18} /></span> 
@@ -83,7 +83,7 @@ export default function Home() {
                 <PenTool className="h-8 w-8 text-foreground" />
               </div>
               <h3 className="text-xl font-heading font-bold mb-2">Create Stories</h3>
-              <p className="mb-4">Generate personalized Christian bedtime stories with moral lessons and Scripture.</p>
+              <p className="mb-4">Generate personalized Christian stories with moral lessons and Scripture.</p>
               <Button 
                 className="bg-primary hover:bg-primary/90 text-primary-foreground border-none shadow-md"
                 onClick={() => navigate("/generate-story")}

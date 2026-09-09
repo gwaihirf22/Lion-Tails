@@ -335,3 +335,66 @@ describe("the legacy field stays legacy", () => {
     expect(/\bcharacterId\b/.test(sample.replace(/\/\/.*$/, ""))).toBe(true);
   });
 });
+
+describe("the form's own default shape validates", () => {
+  /**
+   * A regression test for a bug that shipped as "nothing happens".
+   *
+   * childName was `.min(1).optional()` while the form defaults it to "". An
+   * empty string is PRESENT, so .optional() never applied and .min(1) rejected
+   * it. That only ever passed because the form force-wrote
+   * childName: "Character" whenever a character was chosen -- and when that
+   * write was removed, picking a character made submit fail on childName, a
+   * field that is HIDDEN once a character is chosen. No request, no error, no
+   * symptom.
+   *
+   * So: exercise the schema with the object the form actually holds, not with
+   * a hand-made minimal one. The two diverged and that was the whole bug.
+   */
+  const formDefaults = {
+    childName: "", gender: "boy", animal: "", useAnimal: true, theme: "",
+    biblicalEvent: "", heroOfFaith: "", storyType: "regular", useTimeTravel: false,
+    characterIds: [], customPrompt: "", biblePassage: "", learningFocus: "",
+    readingLevel: "early-elementary", storyLength: "medium", useCharacter: false,
+    customSystemPrompt: "", customUserPrompt: "", useCustomPrompts: false,
+    characterDetails: { age: 8, hair: "", eyes: "", favoriteColor: "", hobby: "", personality: "", favoriteAnimal: "" },
+  };
+  const parse = (over: Record<string, unknown>) =>
+    storyRequestSchema.safeParse({ ...formDefaults, ...over });
+
+  it("accepts a character picked and the name left empty", () => {
+    // THE BUG. This is what a user does: choose someone, press the button.
+    expect(parse({ characterIds: ["c1"] }).success).toBe(true);
+  });
+
+  it("accepts a whole cast with the name left empty", () => {
+    expect(parse({ characterIds: ["c1", "c2", "c3"] }).success).toBe(true);
+  });
+
+  it("accepts a typed name and no character", () => {
+    expect(parse({ childName: "Mia" }).success).toBe(true);
+  });
+
+  it("still refuses untouched defaults", () => {
+    // Nobody chosen and nothing typed is genuinely incomplete.
+    expect(parse({}).success).toBe(false);
+  });
+
+  it("reports that refusal against a field the form is showing", () => {
+    // The error must land where the user can see it. With no character chosen
+    // the picker is on screen, so characterIds is the right home for it.
+    const r = parse({});
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues.map((i) => i.path.join("."))).toEqual(["characterIds"]);
+    }
+  });
+
+  it("accepts the historical tab's defaults", () => {
+    expect(parse({ childName: "Biblical Character", biblicalEvent: "noah" }).success).toBe(true);
+  });
+
+  it("accepts a legacy request carrying only characterId", () => {
+    expect(parse({ characterId: "c1", characterIds: [] }).success).toBe(true);
+  });
+});

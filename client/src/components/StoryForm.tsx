@@ -263,15 +263,20 @@ export default function StoryForm({
                     <FormDescription>
                       {formType === "historical"
                         ? "A historical or biblical story does not need a character. Add one only if you want somebody to witness the account, or to be written into it."
-                        : `Up to ${MAX_STORY_CHARACTERS}. The first one is the main character.`}
+                        : `Saved characters, reusable across stories. Up to ${MAX_STORY_CHARACTERS}; the first one is the main character.`}
                     </FormDescription>
-                    {characters.length === 0 && (
-                      <p className="text-xs text-secondary/70">
-                        <a href="/characters" className="font-medium text-secondary underline">
-                          Create a character first
-                        </a>
-                      </p>
-                    )}
+                    {/* Always, not only when the list is empty. The picker is
+                        the door to persistent characters, and a user with two
+                        saved has no other signal that more can be made. */}
+                    <p className="text-xs text-muted-foreground">
+                      {characters.length === 0
+                        ? "You have no saved characters yet — "
+                        : "Want another? "}
+                      <a href="/characters" className="font-medium text-secondary underline">
+                        {characters.length === 0 ? "create one" : "manage your characters"}
+                      </a>
+                      .
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -283,8 +288,29 @@ export default function StoryForm({
                 and gender fields on screen until something else re-rendered the
                 form. With a cast it would be wrong more often, because the
                 selection changes more often. */}
+            {/* QUICK CHARACTER -- a one-off protagonist, for a story you do not
+                want to save anyone for.
+                
+                Bracketed so it reads as an ALTERNATIVE to the picker above
+                rather than as three more fields to fill in. The two are
+                mutually exclusive by construction: this whole block disappears
+                the moment a saved character is chosen, which is what the gate
+                below does. Loose in the form, as it was, it looked like part of
+                the same question and there was nothing to say that a name typed
+                here is thrown away when the story is written. */}
             {formType === "children" && showChildFields && characterIdsOf(form.watch()).length === 0 && (
-              <>
+              <div className="space-y-4 rounded-lg border border-border bg-muted/40 p-4">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold">Quick Character</h3>
+                  <p className="text-xs text-muted-foreground">
+                    For a one-off story. Nothing here is kept — to reuse someone
+                    across stories, create them on the{" "}
+                    <a href="/characters" className="font-medium text-secondary underline">
+                      Characters page
+                    </a>{" "}
+                    and pick them above.
+                  </p>
+                </div>
                 <FormField
                   control={form.control}
                   name="childName"
@@ -386,7 +412,7 @@ export default function StoryForm({
                     )}
                   />
                 )}
-              </>
+              </div>
             )}
             
             {formType === "children" && (
@@ -497,9 +523,9 @@ export default function StoryForm({
                             <SelectValue placeholder="Select story type" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="regular">Regular Bedtime Story</SelectItem>
-                            <SelectItem value="poem">Bedtime Poem</SelectItem>
-                            <SelectItem value="moral">Moral Bedtime Story</SelectItem>
+                            <SelectItem value="regular">Regular Story</SelectItem>
+                            <SelectItem value="poem">Poem</SelectItem>
+                            <SelectItem value="moral">Moral Story</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -847,9 +873,9 @@ export default function StoryForm({
                       <path d="M5 3v4" /><path d="M19 17v4" /><path d="M3 5h4" /><path d="M17 19h4" />
                     </svg> 
                     {formType === "historical" ? "Create Historical Story" : 
-                      form.watch("storyType") === "poem" ? "Create Bedtime Poem" : 
-                      form.watch("storyType") === "moral" ? "Create Moral Bedtime Story" :
-                      "Create Bedtime Story"}
+                      form.watch("storyType") === "poem" ? "Create Poem" :
+                      form.watch("storyType") === "moral" ? "Create Moral Story" :
+                      "Create Story"}
                   </>
                 )}
               </Button>
