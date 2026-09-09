@@ -556,6 +556,52 @@ export const characterSchema = z.object({
 export type Character = z.infer<typeof characterSchema>;
 
 // Schema for story generation with optional fields
+/** The most characters one story can hold. */
+export const MAX_STORY_CHARACTERS = 8;
+
+/**
+ * The characters a request asks for, in order, protagonist first.
+ *
+ * THE ONLY place that knows `characterId` and `characterIds` are the same
+ * fact. Every request frozen before multi-character shipped carries the
+ * singular field -- thousands of rows inside story_jobs.request and
+ * user_stories.story_data.request -- and those blobs are never rewritten, so
+ * the compatibility read lives here rather than in a migration.
+ *
+ * Confining it to one function is the point. The alternative considered was
+ * keeping `characterId` as the protagonist and adding a second live array:
+ * that leaves every read site to compute a union, makes "who is the lead" a
+ * property of which field a value happens to sit in, and turns promoting a
+ * character into a two-field mutation that can leave an id in both. This repo
+ * has already paid for that shape once -- four schema sources, six model
+ * lists. `resolveHeroOfFaith` is the precedent: absorb the duality in one
+ * function rather than teach every caller about both.
+ *
+ * Structurally typed rather than taking StoryRequest, so it can be declared
+ * above the schema that infers it, and so the CLIENT can call it on a request
+ * read back out of a saved story.
+ */
+export function characterIdsOf(
+  request?: { characterIds?: string[] | null; characterId?: string | null } | null,
+): string[] {
+  const raw = request?.characterIds?.length
+    ? request.characterIds
+    : request?.characterId
+      ? [request.characterId]
+      : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of raw) {
+    const trimmed = typeof id === "string" ? id.trim() : "";
+    // The same person twice reads as "Mia and Mia" in the prompt, and costs a
+    // cast slot. A duplicate is a mistake in every case, never a request.
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out.slice(0, MAX_STORY_CHARACTERS);
+}
+
 export const storyRequestSchema = z.object({
   // Fields that are conditionally required based on useTimeTravel
   childName: z.string().min(1, "Character name is required").optional(),
@@ -577,6 +623,17 @@ export const storyRequestSchema = z.object({
   // version is why hero_id is NULL on essentially every existing row.
   heroId: z.string().optional(),
   useTimeTravel: z.boolean().default(false),
+  /**
+   * The cast, in order. Index 0 is the protagonist, and that ordering is
+   * load-bearing -- it decides who gets full description and who gets a name.
+   *
+   * Never read directly. Call characterIdsOf(request).
+   */
+  characterIds: z.array(z.string().min(1)).max(MAX_STORY_CHARACTERS).optional(),
+  /**
+   * LEGACY. Read only through characterIdsOf(). Declared because every request
+   * frozen before the cast became plural carries it; nothing new writes it.
+   */
   characterId: z.string().optional(),
   storyType: z.enum(["regular", "poem", "moral"]).default("regular"),
   customPrompt: z.string().default("").optional(),
@@ -629,26 +686,32 @@ export const storyRequestSchema = z.object({
     favoriteAnimal: z.string().optional(),
   }).optional(),
 }).refine((data) => {
-  // If time travel is enabled, characterId is required
+  // Through characterIdsOf, so a request frozen with the singular field
+  // satisfies these rules exactly as it did before.
+  const cast = characterIdsOf(data);
+
+  // Time travel needs somebody to do the travelling.
   if (data.useTimeTravel) {
-    return !!data.characterId;
+    return cast.length > 0;
   }
-  
+
   // If custom character is enabled for any story type, characterDetails is required
   if (data.useCharacter) {
     return !!data.characterDetails;
   }
-  
-  // If characterId is provided, it overrides the need for childName and gender
-  if (data.characterId) {
+
+  // Any chosen character overrides the need for childName and gender.
+  if (cast.length > 0) {
     return true;
   }
-  
+
   // Otherwise a name and gender are required.
   return !!data.childName && !!data.gender;
 }, {
-  message: "Select a character, or give the child's name and gender.",
-  path: ["characterId"]
+  message: "Select at least one character, or give the child's name and gender.",
+  // Must name the field the FORM renders, or the error attaches to a control
+  // that no longer exists and the user sees nothing.
+  path: ["characterIds"],
 });
 
 export type StoryRequest = z.infer<typeof storyRequestSchema>;
