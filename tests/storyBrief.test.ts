@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import fs from "fs";
 import { readFileSync } from "fs";
 import path from "path";
 import { buildStoryBrief, deserialiseBrief, renderBrief, type BriefPurpose } from "../server/lib/storyBrief";
@@ -283,5 +284,54 @@ describe("deserialiseBrief upgrades a brief frozen before the cast", () => {
   it("passes a current brief straight through", () => {
     const current = buildStoryBrief({ ...base, characterIds: ["c1"] } as StoryRequest, [mia]);
     expect(deserialiseBrief(JSON.stringify(current)).cast).toHaveLength(1);
+  });
+});
+
+describe("the legacy field stays legacy", () => {
+  /**
+   * `characterId` is declared so that requests frozen before multi-character
+   * still parse, and is read ONLY through characterIdsOf. Nothing new may write
+   * it or branch on it: code that does works for a single character and
+   * silently ignores the other seven.
+   *
+   * A source scan rather than a CI grep, so it runs with `npm test` and can
+   * state its own exemptions instead of a shell pipeline carrying them.
+   */
+  const roots = ["server", "client/src", "shared"];
+
+  const walk = (dir: string, out: string[] = []): string[] => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) walk(full, out);
+      else if (/\.(ts|tsx)$/.test(e.name)) out.push(full);
+    }
+    return out;
+  };
+
+  it("appears nowhere outside the schema that declares it", () => {
+    const repo = path.resolve(__dirname, "..");
+    const offenders: string[] = [];
+
+    for (const root of roots) {
+      for (const file of walk(path.join(repo, root))) {
+        const rel = path.relative(repo, file);
+        // shared/schema.ts declares the field and the drizzle column, and is
+        // the one place characterIdsOf may read it.
+        if (rel === path.join("shared", "schema.ts")) continue;
+        fs.readFileSync(file, "utf8").split("\n").forEach((line, i) => {
+          // Comments explaining the history are fine; code is not.
+          const code = line.replace(/\/\/.*$/, "").replace(/^\s*\*.*$/, "");
+          if (/\bcharacterId\b/.test(code)) offenders.push(`${rel}:${i + 1}: ${line.trim()}`);
+        });
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("would notice if it came back", () => {
+    // Proving the check can fail, which is the only thing that makes the
+    // assertion above worth reading.
+    const sample = 'const id = request.characterId;';
+    expect(/\bcharacterId\b/.test(sample.replace(/\/\/.*$/, ""))).toBe(true);
   });
 });

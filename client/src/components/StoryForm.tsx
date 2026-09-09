@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
@@ -17,7 +17,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { StoryRequest, storyRequestSchema, type Character } from "@shared/schema";
+import {
+  StoryRequest,
+  storyRequestSchema,
+  MAX_STORY_CHARACTERS,
+  characterIdsOf,
+  type Character,
+} from "@shared/schema";
+import CharacterPicker from "@/components/CharacterPicker";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import AnimalAutocomplete from "./AnimalAutocomplete";
@@ -40,6 +47,14 @@ interface StoryFormProps {
   showReadingLevel?: boolean;
   showStoryLength?: boolean;
   showCustomCharacter?: boolean;
+  /**
+   * Characters carried over from a story being continued. Removing one of these
+   * asks for confirmation -- they are here because they were in the last story,
+   * not because the user picked them this time.
+   */
+  inheritedCharacterIds?: string[];
+  /** Title of the story being continued, for the confirmation copy. */
+  parentStoryTitle?: string;
 }
 
 export default function StoryForm({ 
@@ -56,7 +71,9 @@ export default function StoryForm({
   showLearningFocus = false,
   showReadingLevel = true,
   showStoryLength = true,
-  showCustomCharacter = true
+  showCustomCharacter = true,
+  inheritedCharacterIds = [],
+  parentStoryTitle,
 }: StoryFormProps) {
   const [useTimeTravel, setUseTimeTravel] = useState(false);
   const [hasSelectedBiblicalEvent, setHasSelectedBiblicalEvent] = useState(false);
@@ -64,17 +81,9 @@ export default function StoryForm({
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState<Character | undefined>();
   
-  // Function to handle editing a character
-  const handleEditCharacter = () => {
-    const characterId = form.getValues("characterId");
-    if (characterId) {
-      const character = characters.find(c => c.id === characterId);
-      if (character) {
-        setSelectedCharacter(character);
-        setEditDialogOpen(true);
-      }
-    }
-  };
+  // handleEditCharacter() used to live here. It read form.getValues("characterId")
+  // to work out which of the one selected characters to edit; with a cast the
+  // chip knows which one it is and passes it, so there is nothing left to look up.
 
   // Function to handle character update completion
   const handleCharacterUpdated = (updatedCharacterData: any) => {
@@ -125,7 +134,7 @@ export default function StoryForm({
       // faithful to a text nobody supplied.
       storyType: "regular" as const,
       useTimeTravel: false,
-      characterId: undefined,
+      characterIds: [],
       customPrompt: "", // Empty custom prompt by default
       biblePassage: "", // New field for Bible passage study
       learningFocus: "", // No default learning focus
@@ -165,6 +174,22 @@ export default function StoryForm({
     }
   }, [selectedHeroFromStorage, form, formType]);
 
+  /**
+   * Seed the cast from the story being continued -- ONCE.
+   *
+   * Guarded twice on purpose. seededRef stops a re-render from re-applying it,
+   * and dirtyFields stops the slow half of a race: the parent story is fetched
+   * over the network, so without this a user who picks their cast quickly would
+   * watch it be replaced by the inherited one when the request landed.
+   */
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current || inheritedCharacterIds.length === 0) return;
+    if (form.formState.dirtyFields.characterIds) return;
+    seededRef.current = true;
+    form.setValue("characterIds", inheritedCharacterIds);
+  }, [inheritedCharacterIds, form]);
+
   // Update the form when the time travel checkbox or biblical narrative option changes
   useEffect(() => {
     form.setValue("useTimeTravel", useTimeTravel);
@@ -184,22 +209,18 @@ export default function StoryForm({
       
     } 
     else if (useTimeTravel) {
-      // In time travel mode, child's name, gender, and animal are not needed
-      // (they will be handled by the character's details)
+      // In time travel mode the chosen characters carry name, gender and animal.
       form.clearErrors(['childName', 'gender', 'animal']);
-      
-      // Set default values for these fields so they don't get sent to the server
-      form.setValue("childName", "Character");
-      form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
       form.setValue("animal", "");
-      
-      // Set focus on character selection dropdown
-      setTimeout(() => {
-        const characterDropdown = document.querySelector('[name="characterId"]');
-        if (characterDropdown) {
-          (characterDropdown as HTMLElement).focus();
-        }
-      }, 100);
+
+      // The childName: "Character" write that used to be here is GONE. It only
+      // ever existed to satisfy childName.min(1) while the field was hidden,
+      // and it went straight into the prompt as a protagonist -- which is the
+      // entire reason PLACEHOLDER_NAMES exists to strip it back out. The refine
+      // accepts a non-empty cast now, so the workaround has no job.
+      //
+      // The focus hack that followed is gone with it: it queried
+      // [name="characterId"], a control the picker does not render.
     } 
     // Keep character selection even when time travel is not enabled
     // This allows using the character in regular stories too
@@ -218,97 +239,51 @@ export default function StoryForm({
             {(formType === "children" || formType === "historical") && (
               <FormField
                 control={form.control}
-                name="characterId"
+                name="characterIds"
                 render={({ field }) => (
                   <FormItem className="mb-4">
-                    <FormLabel className="text-sm font-medium">Select Character</FormLabel>
+                    <FormLabel className="text-sm font-medium">
+                      Characters
+                      {formType === "historical" && (
+                        <span className="ml-2 font-normal text-muted-foreground">(optional)</span>
+                      )}
+                    </FormLabel>
                     <FormControl>
-                      <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-user">
-                            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-                          </svg>
-                        </span>
-                        <Select
-                          onValueChange={(value) => {
-                            // When a character is selected, ensure character info is used properly for all story types
-                            if (value) {
-                              // Set default values for these fields so they don't get in the way
-                              form.setValue("childName", "Character"); 
-                              form.setValue("gender", "boy");  // Must be "boy" or "girl", not empty string
-                              form.setValue("animal", "");
-                              form.clearErrors(['childName', 'gender', 'animal']);
-                            }
-                            field.onChange(value);
-                          }}
-                          value={field.value}
-                          disabled={charactersLoading}
-                        >
-                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                            <SelectValue placeholder={charactersLoading ? "Loading characters..." : "Select a character for your story"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {characters.length === 0 ? (
-                              <SelectItem value="create-new" disabled>
-                                Create a character in the Character Creator first
-                              </SelectItem>
-                            ) : (
-                              characters.map((character) => (
-                                <SelectItem key={character.id} value={character.id}>
-                                  {character.name} ({character.gender}, {character.age} years old)
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      <CharacterPicker
+                        value={field.value ?? []}
+                        onChange={field.onChange}
+                        confirmRemoveIds={inheritedCharacterIds}
+                        parentStoryTitle={parentStoryTitle}
+                        onEdit={(c) => {
+                          setSelectedCharacter(c);
+                          setEditDialogOpen(true);
+                        }}
+                      />
                     </FormControl>
                     <FormDescription>
-                      Select an existing character to use in your story. Characters can be used with any story type (Regular Bedtime Story, Moral Bedtime Story, Biblical Narrative, or even with Time Travel).
+                      {formType === "historical"
+                        ? "A historical or biblical story does not need a character. Add one only if you want somebody to witness the account, or to be written into it."
+                        : `Up to ${MAX_STORY_CHARACTERS}. The first one is the main character.`}
                     </FormDescription>
+                    {characters.length === 0 && (
+                      <p className="text-xs text-secondary/70">
+                        <a href="/characters" className="font-medium text-secondary underline">
+                          Create a character first
+                        </a>
+                      </p>
+                    )}
                     <FormMessage />
-                    <div className="flex justify-between items-center mt-1">
-                      {characters.length === 0 && (
-                        <div className="text-xs text-secondary/70">
-                          <a href="/characters" className="text-secondary font-medium underline">
-                            Click here to create a character for stories
-                          </a>
-                        </div>
-                      )}
-                      {field.value && (
-                        <div className="flex gap-2">
-                          <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="sm" 
-                            className="text-xs"
-                            onClick={handleEditCharacter}
-                          >
-                            Edit
-                          </Button>
-                          <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="sm" 
-                            className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
-                            onClick={() => {
-                              field.onChange(undefined); 
-                              // Clear the placeholder values when character is removed
-                              form.setValue("childName", "");
-                              form.setValue("gender", "boy");
-                            }}
-                          >
-                            Reset Selection
-                          </Button>
-                        </div>
-                      )}
-                    </div>
                   </FormItem>
                 )}
               />
             )}
 
-            {formType === "children" && showChildFields && !form.getValues("characterId") && (
+            {/* form.watch(), not form.getValues(). getValues does not subscribe, so
+                this gate was one render stale: picking a character left the name
+                and gender fields on screen until something else re-rendered the
+                form. With a cast it would be wrong more often, because the
+                selection changes more often. */}
+            {formType === "children" && showChildFields && characterIdsOf(form.watch()).length === 0 && (
               <>
                 <FormField
                   control={form.control}
