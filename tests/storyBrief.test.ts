@@ -2,7 +2,13 @@ import { describe, it, expect } from "vitest";
 import fs from "fs";
 import { readFileSync } from "fs";
 import path from "path";
-import { buildStoryBrief, deserialiseBrief, renderBrief, type BriefPurpose } from "../server/lib/storyBrief";
+import {
+  buildStoryBrief,
+  deserialiseBrief,
+  renderBrief,
+  resolveStoryFocus,
+  type BriefPurpose,
+} from "../server/lib/storyBrief";
 import {
   characterIdsOf,
   MAX_STORY_CHARACTERS,
@@ -396,5 +402,124 @@ describe("the form's own default shape validates", () => {
 
   it("accepts a legacy request carrying only characterId", () => {
     expect(parse({ characterId: "c1", characterIds: [] }).success).toBe(true);
+  });
+});
+
+describe("story focus aims a life at one episode", () => {
+  const hero = {
+    id: "h1", name: "Corrie ten Boom", description: "d", contribution: "c",
+    timePeriod: "1892-1983", group: "modern", collection: "historical",
+    keyEvents: [
+      { year: "1942", description: "Hides Jewish neighbours behind a false wall" },
+      { year: "1944", description: "Arrested and sent to Ravensbruck" },
+      { year: "1947", description: "Meets a former guard and forgives him" },
+    ],
+    tags: [], sources: [], createdAt: new Date(),
+  } as never;
+
+  const withFocus = (focus: unknown) =>
+    renderBrief(
+      buildStoryBrief({ ...base, heroOfFaith: "Corrie ten Boom", storyFocus: focus } as StoryRequest, [], undefined, hero),
+      "outline",
+    );
+
+  it("says nothing at all when the whole life is wanted", () => {
+    // The default must not add scope instructions to every existing story.
+    expect(withFocus({ mode: "whole", text: "" })).not.toContain("ONE episode");
+    expect(withFocus(undefined)).not.toContain("ONE episode");
+  });
+
+  it("scopes the story to a chosen moment", () => {
+    const text = withFocus({ mode: "chosen", text: "Arrested and sent to Ravensbruck", reference: "1944" });
+    expect(text).toContain("This story covers ONE episode (1944): Arrested and sent to Ravensbruck");
+    // The instruction that actually prevents a life summary.
+    expect(text).toContain("do not open with where they were born");
+  });
+
+  it("ignores a mode with no text", () => {
+    // An empty scope line would read as "cover nothing".
+    expect(withFocus({ mode: "chosen", text: "" })).not.toContain("ONE episode");
+  });
+});
+
+describe("resolveStoryFocus settles surprise on the server", () => {
+  const hero = {
+    id: "h1", name: "H", description: "d", contribution: "c", timePeriod: "t",
+    group: "modern", collection: "historical",
+    keyEvents: [
+      { year: "1942", description: "First" },
+      { year: "1944", description: "Second" },
+    ],
+    tags: [], sources: [], createdAt: new Date(),
+  } as never;
+
+  it("replaces the request for a surprise with the moment chosen", () => {
+    // The request is frozen straight after this, so what it holds is the only
+    // record of what the story was asked for.
+    const req = { ...base, storyFocus: { mode: "surprise" as const, text: "" } } as StoryRequest;
+    resolveStoryFocus(req, hero);
+    expect(req.storyFocus?.mode).toBe("surprise");
+    expect(["First", "Second"]).toContain(req.storyFocus?.text);
+    expect(req.storyFocus?.reference).toBeTruthy();
+  });
+
+  it("can choose either of them", () => {
+    // Guards against a "random" pick that always returns index 0 -- which
+    // would look correct in every single-run test.
+    const seen = new Set<string>();
+    for (let i = 0; i < 60; i++) {
+      const req = { ...base, storyFocus: { mode: "surprise" as const, text: "" } } as StoryRequest;
+      resolveStoryFocus(req, hero);
+      seen.add(req.storyFocus!.text);
+    }
+    expect(seen.size).toBe(2);
+  });
+
+  it("falls back to the whole life when there is nothing to choose from", () => {
+    // A hero with no key events, or no hero at all. Emitting an empty scope
+    // line would tell the model to cover nothing.
+    const req = { ...base, storyFocus: { mode: "surprise" as const, text: "" } } as StoryRequest;
+    resolveStoryFocus(req, undefined);
+    expect(req.storyFocus).toEqual({ mode: "whole", text: "" });
+  });
+
+  it("leaves a chosen moment alone", () => {
+    const req = { ...base, storyFocus: { mode: "chosen" as const, text: "Mine" } } as StoryRequest;
+    resolveStoryFocus(req, hero);
+    expect(req.storyFocus?.text).toBe("Mine");
+  });
+});
+
+describe("a retelling needs no protagonist", () => {
+  const parse = (over: Record<string, unknown>) =>
+    storyRequestSchema.safeParse({ storyLength: "medium", ...over });
+
+  it("accepts a biblical event with nobody named", () => {
+    // What the form now actually sends on the historical tab. It used to fail,
+    // which is why the form wrote childName: "Biblical Character" to get past
+    // it -- a value that then had to be stripped back out of the prompt.
+    expect(parse({ biblicalEvent: "noah", childName: "" }).success).toBe(true);
+  });
+
+  it("accepts a hero of the faith with nobody named", () => {
+    expect(parse({ heroOfFaith: "bible-ruth", childName: "" }).success).toBe(true);
+  });
+
+  it("is not fooled by the form's no-value sentinels", () => {
+    // The selects write "" and "none" to mean "nothing chosen". Treating either
+    // as a source would let a completely empty request through.
+    expect(parse({ biblicalEvent: "none", heroOfFaith: "" }).success).toBe(false);
+    expect(parse({ biblicalEvent: "", heroOfFaith: "  " }).success).toBe(false);
+  });
+
+  it("still renders the retelling as having no invented child", () => {
+    // With no name supplied, buildStoryBrief falls back to "A child", which is
+    // in PLACEHOLDER_NAMES -- so the anonymous branch still fires and the
+    // account keeps its own cast.
+    const brief = buildStoryBrief(
+      { ...base, biblicalEvent: "noah", childName: "" } as StoryRequest, []);
+    const text = renderBrief(brief, "single");
+    expect(text).toContain("There is no invented child in this story");
+    expect(brief.cast[0].colour).toBe("");
   });
 });

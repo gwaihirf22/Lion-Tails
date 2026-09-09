@@ -13,6 +13,7 @@ import {
   buildStoryBrief,
   buildSystemPrompt,
   resolveStoryCharacters,
+  resolveStoryFocus,
   resolveHeroOfFaith,
   serialiseBrief,
 } from "./lib/storyBrief";
@@ -299,6 +300,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Frozen onto the request so the worker's saveStory finds it without a
       // caller having to remember to pass it.
       if (hero) validatedData.heroId = hero.id;
+      // "Surprise me" is settled HERE, before the request is frozen, so the
+      // stored request records the moment that was actually chosen rather than
+      // an instruction to choose one. Same reasoning as heroId above.
+      resolveStoryFocus(validatedData, hero);
       const result = await enqueueStoryJob({
         userId,
         request: validatedData,

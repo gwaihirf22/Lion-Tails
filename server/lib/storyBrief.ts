@@ -56,6 +56,39 @@ export async function resolveStoryCharacters(
 }
 
 /**
+ * Settle "surprise me" into an actual moment, once.
+ *
+ * Chosen on the SERVER at enqueue rather than in the browser, and written back
+ * onto the request before it is frozen. Choosing in the client would make the
+ * same request produce a different story every time it was replayed, which is
+ * the kind of thing that is impossible to debug six weeks later -- and the
+ * frozen request is the only record of what the story was actually asked for.
+ *
+ * Mutates the request deliberately: routes.ts freezes it immediately after, and
+ * heroId is already set the same way a few lines above.
+ */
+export function resolveStoryFocus(request: StoryRequest, hero?: HeroOfFaith): void {
+  const focus = request.storyFocus;
+  if (!focus || focus.mode !== "surprise") return;
+
+  const events = (hero?.keyEvents ?? []).filter((e) => e.description);
+  if (events.length === 0) {
+    // Nothing to choose from -- a hero with no key events, or no hero at all.
+    // Downgrade to the whole life rather than emit an empty scope instruction
+    // that would read as "cover nothing".
+    request.storyFocus = { mode: "whole", text: "" };
+    return;
+  }
+
+  const pick = events[Math.floor(Math.random() * events.length)];
+  request.storyFocus = {
+    mode: "surprise",
+    text: pick.description,
+    reference: pick.reference || pick.year || undefined,
+  };
+}
+
+/**
  * Sentinel values the form writes to mean "no animal".
  *
  * StoryForm sets `animal` to the literal string "none" in four places, and
@@ -386,6 +419,22 @@ export function buildStoryBrief(
   if (isSet(request.biblePassage)) premise.push(`Draw on this passage: ${request.biblePassage}.`);
   if (request.useTimeTravel && !anonymous) {
     premise.push(`${name} travels back in time and witnesses this first-hand.`);
+  }
+
+  // Scope. Without it, "a story about Corrie ten Boom" gets a life summary --
+  // born here, did this, died there -- which is the failure this exists to fix.
+  // Placed in premise rather than craft because it is WHAT the story is about,
+  // not how it is written, and premise is what the outline is planned from.
+  const focus = request.storyFocus;
+  if (focus && focus.mode !== "whole" && isSet(focus.text)) {
+    premise.push(
+      `This story covers ONE episode${focus.reference ? ` (${focus.reference})` : ""}: ${focus.text}`,
+    );
+    premise.push(
+      "Tell that episode properly -- the lead-up, what happened, and what it " +
+        "cost. Do not summarise the rest of their life around it, and do not " +
+        "open with where they were born or close with how they died.",
+    );
   }
   // Suppressed for a retelling. moralOutcome is chosen at random when the user
   // does not pick one, and "a poor choice should lead to a real consequence, do
