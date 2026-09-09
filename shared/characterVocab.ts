@@ -296,6 +296,11 @@ const HOBBIES = [
   "gardening", "hiking", "camping", "fishing", "building", "inventing",
   "puzzles", "chess", "collecting", "writing", "photography", "astronomy",
   "birdwatching", "sewing", "woodwork", "juggling", "storytelling",
+  // Phrasings a child reaches for, which the one-word list above did not
+  // cover. scripts/dev-seed.ts had all three and was silently refused by the
+  // strict route, which is how they were noticed.
+  "building things", "climbing trees", "collecting rocks", "looking after animals",
+  "making up songs", "exploring", "helping in the kitchen",
 ] as const;
 
 const PERSONALITY = [
@@ -478,9 +483,9 @@ const HUMAN_NAMES = [
   "Susannah", "Violet", "Winifred", "Agnes", "Cecily", "Dorothy", "Edith",
   // Modern
   "Aidan", "Archie", "Beau", "Cody", "Dexter", "Elliot", "Ethan", "Finn", "Gus",
-  "Harvey", "Isaac", "Jasper", "Kai", "Leo", "Louie", "Max", "Milo", "Nico",
-  "Otis", "Reuben", "Rory", "Sonny", "Toby", "Wesley", "Zach", "Arlo", "Bodhi",
-  "Ada", "Amelia", "Aria", "Astrid", "Bonnie", "Clara", "Daisy", "Eden", "Elsie",
+  "Harvey", "Jasper", "Kai", "Leo", "Louie", "Max", "Milo", "Nico",
+  "Otis", "Rory", "Sonny", "Toby", "Wesley", "Zach", "Arlo", "Bodhi",
+  "Ada", "Amelia", "Aria", "Astrid", "Bonnie", "Daisy", "Eden", "Elsie",
   "Esme", "Freya", "Hazel", "Imogen", "Iris", "Ivy", "Juniper", "Lark", "Maeve",
   "Marlow", "Nell", "Nova", "Olive", "Opal", "Pearl", "Poppy", "Quinn", "Sadie",
   "Sage", "Tessa", "Thea", "Willa", "Wren", "Zara",
@@ -511,6 +516,20 @@ const MACHINE_NAMES = [
   "Springs", "Gears", "Buttons", "Dial", "Beacon", "Lumen", "Tally", "Abacus",
   "Domino", "Marbles", "Wheels", "Tinker", "Patch", "Scrap", "Nuts",
 ];
+
+/**
+ * The pools themselves, for the test that asserts they hold no duplicates.
+ *
+ * A duplicate cannot be found by drawing: it does not change what CAN come
+ * out, only how often, so it makes one name quietly twice as likely as its
+ * neighbours. The only way to catch it is to look at the array, so the array
+ * has to be reachable.
+ */
+export const NAME_POOLS = {
+  human: HUMAN_NAMES,
+  creature: CREATURE_NAMES,
+  machine: MACHINE_NAMES,
+} as const;
 
 /**
  * A name that suits what they are.

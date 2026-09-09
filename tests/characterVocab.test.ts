@@ -7,6 +7,8 @@ import {
   isKnownKind,
   optionsFor,
   popularKinds,
+  NAME_POOLS,
+  randomName,
   searchKinds,
   type CharacterCategory,
   type VocabField,
@@ -160,5 +162,46 @@ describe("content rules", () => {
     for (const k of ["banshee", "wendigo", "kelpie", "selkie", "nymph", "satyr", "faun"]) {
       expect(isKnownKind(k), k).toBe(false);
     }
+  });
+});
+
+describe("names", () => {
+  it("has no duplicates in any pool", () => {
+    // Checked against the ARRAY, not by drawing. A duplicate does not change
+    // what can come out, only how often -- it makes one name quietly twice as
+    // likely as its neighbours -- so sampling cannot see it. Three had crept
+    // into the human list: Clara, Isaac and Reuben.
+    for (const [pool, names] of Object.entries(NAME_POOLS)) {
+      const dupes = names.filter((n, i) => names.indexOf(n) !== i);
+      expect(dupes, pool).toEqual([]);
+    }
+  });
+
+  it("never hands back the name already in the box", () => {
+    // Press twice, get the same answer, and it reads as broken.
+    for (let i = 0; i < 200; i++) {
+      expect(randomName("human", "Noah")).not.toBe("Noah");
+    }
+  });
+
+  it("suits what they are", () => {
+    const machine = new Set(Array.from({ length: 200 }, () => randomName("machine")));
+    const human = new Set(Array.from({ length: 200 }, () => randomName("human")));
+    // No overlap: a robot is not called Sarah and a child is not called Sprocket.
+    expect([...machine].some((n) => human.has(n))).toBe(false);
+  });
+});
+
+describe("hobbies a child would actually name", () => {
+  it("accepts the phrasings the dev fixtures use", () => {
+    // scripts/dev-seed.ts had all three and the strict route silently refused
+    // them, so the dev box came up with one character instead of four.
+    for (const hobby of ["building things", "climbing trees", "collecting rocks"]) {
+      expect(optionsFor("hobby", "human"), hobby).toContain(hobby);
+    }
+  });
+
+  it("spells blonde the way the seed does", () => {
+    expect(optionsFor("hair", "human")).toContain("blonde");
   });
 });

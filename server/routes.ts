@@ -105,6 +105,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // The server's, not the client's. A body that could add an adventure could
     // award itself unlimited stat points.
     adventures: true,
+    // Also the server's. This ends up in <img src> on the card, so accepting it
+    // from a request means any session can point a child's character at a
+    // third-party URL -- a tracking pixel that fires on every page view, with
+    // no UI ever having offered it. The avatar work will write it from the
+    // server after generating or storing an image; nothing else should.
+    avatarUrl: true,
     // Derived from `kind` below, never taken from the client: a body claiming
     // {kind: "dragon", category: "human"} would otherwise pick the human
     // colour lists to validate against.
@@ -183,7 +189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any).id;
       const parsed = characterSchema
-        .omit({ id: true, createdAt: true, customFields: true, adventures: true })
+        .omit({ id: true, createdAt: true, customFields: true, adventures: true, avatarUrl: true })
         .parse(req.body);
 
       const customFields = Object.keys(parsed).filter((k) => k !== "category");
@@ -261,8 +267,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // child an already-remarkable character rather than making them earn it
       // over twenty stories. adventures stays server-owned even so -- it is a
       // record of what happened, not a setting.
+      // avatarUrl is server-owned on this path too. Parent Mode is a licence to
+      // type anything into the STORY, not to choose which host the browser
+      // fetches a child's picture from.
       const updates = characterSchema
-        .omit({ id: true, createdAt: true, customFields: true, adventures: true })
+        .omit({ id: true, createdAt: true, customFields: true, adventures: true, avatarUrl: true })
         .partial()
         .parse(req.body);
 

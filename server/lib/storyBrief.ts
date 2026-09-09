@@ -599,7 +599,19 @@ export function buildStoryBrief(
           : undefined;
       const likes = isSet(c.hobby) ? `likes ${c.hobby}` : undefined;
       const both = trait && likes ? `${c.name} has ${trait} and ${likes}.` : undefined;
-      const one = trait ? `${c.name} has ${trait}.` : likes ? `${c.name} ${likes}.` : "";
+      // Their note fills the slot only when nothing else would. Notes are the
+      // lead's field by default, but a supporting character with no
+      // personality, hair or hobby renders an empty colour -- the two-fact
+      // ration spends nothing on them AND the one thing their owner actually
+      // wrote gets dropped. Using it here costs the budget nothing it was not
+      // already willing to spend, and it is still capped at one fact.
+      const one = trait
+        ? `${c.name} has ${trait}.`
+        : likes
+          ? `${c.name} ${likes}.`
+          : isSet(c.notes)
+            ? sentence([c.notes])
+            : "";
       // mustBeTrue rides along even here, where everything else is rationed.
       //
       // It was lead-only, so the SAME character moved from first to second in

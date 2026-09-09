@@ -777,6 +777,47 @@ export default function CharacterForm({
 
             {parentMode && (
               <TabsContent value="grown-ups" className="space-y-4 pt-4">
+                {/*
+                  What sort of thing a typed kind IS.
+                  
+                  Only Parent Mode needs this, and only Parent Mode can produce
+                  the situation: categoryOf() derives the category from the
+                  catalogue, and a kind typed here is off-catalogue by
+                  definition, so it derives nothing. The consequence is not
+                  cosmetic -- the covering noun falls back to "hair", and a
+                  space whale is described to the model as having nebula-blue
+                  HAIR. This is the path most likely to hold a non-human,
+                  because typing is what you do when the list has no word for it.
+                */}
+                {!categoryOf(kind ?? "") && (
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>What sort of thing is {form.watch("name") || "this"}?</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Not set — we will say hair" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {CHARACTER_CATEGORIES.map((c) => (
+                              <SelectItem key={c} value={c}>
+                                {CATEGORY_LABELS[c]} — {coveringNoun(c)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Sets the word used for what covers them, and which colours
+                          the Appearance tab offers.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">Parent Mode</Badge>
                   <span className="text-sm text-muted-foreground">
