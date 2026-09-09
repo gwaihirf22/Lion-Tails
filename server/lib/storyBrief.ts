@@ -16,13 +16,19 @@ export type CustomPrompts = {
 /**
  * Resolves the saved characters a request refers to, in the requested order.
  *
- * ONE user-scoped read, then an index. The tempting implementation -- a loop of
- * getCharacterById(id) -- is the vulnerability this function was written to
- * avoid: that lookup takes only an id, Character carries no userId, and so an
- * id-only fetch would let any user generate a story starring another user's
- * character. Going plural makes that mistake N times easier to commit and no
- * less severe, so ownership comes from getAllCharacters(userId) and the request
- * supplies nothing but the ORDER.
+ * ONE user-scoped read, then an index. The request supplies nothing but the
+ * ORDER.
+ *
+ * This used to be the only thing standing between a request and another user's
+ * characters: getCharacterById took an id alone, Character carries no userId,
+ * and a loop of it would have starred anyone's character in anyone's story.
+ * That is no longer true -- every storage method now REQUIRES the owner and
+ * scopes in the SQL, so an unscoped fetch cannot be written. The reason to keep
+ * one read is now ordinary: it is a single round trip instead of N, and it
+ * gives the warning below somewhere to live.
+ *
+ * Left explicit because a comment that still described a fixed hole would
+ * eventually be read as licence to re-open it.
  *
  * Returns [] rather than undefined on any failure -- story generation must
  * still work when the database is unavailable and storage has fallen back to

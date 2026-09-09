@@ -54,6 +54,7 @@ import { storage } from "./storage";
 import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
+import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
 import { ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
 // zod 4's $ZodError type, and this app defines its schemas with zod 3's
@@ -71,20 +72,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication with passport and session
   setupAuth(app);
 
-  // API routes for characters - all require authentication
-  
-  // Get all characters - requires authentication
-  app.get("/api/characters", async (req, res) => {
+  /**
+   * Characters. Two write paths, because two people write them.
+   *
+   * A CHILD SELECTS. Everything descriptive comes from shared/characterVocab.ts
+   * -- the same catalogue the form draws its options from -- so the strict path
+   * below refuses anything off-list. The only free text is the name and the
+   * notes box.
+   *
+   * A PARENT MAY TYPE ANYTHING, through PUT /api/characters/:id/custom, which
+   * carries requireParentMode. That is a separate route rather than a flag on
+   * this one because requireParentMode is middleware: it reads the session, and
+   * it cannot look inside a body to decide whether this particular request is
+   * allowed to be permissive. Deciding that inside the handler instead is the
+   * shape requireAuth.ts warns about, and how eight unguarded write routes once
+   * shipped. It also matches PUT /api/universes/:id/summary, which is the same
+   * arrangement for the same reason.
+   *
+   * Ownership is a required argument to every storage call rather than a check
+   * here, so an unscoped read or write cannot be written by accident.
+   */
+
+  /** What a child may send. id and createdAt are the server's to assign. */
+  const characterWriteSchema = characterSchema.omit({
+    id: true,
+    createdAt: true,
+    // Parent Mode's, both of them. Accepting either here would make
+    // create-then-never-edit a way around the gate.
+    mustBeTrue: true,
+    customFields: true,
+    // Derived from `kind` below, never taken from the client: a body claiming
+    // {kind: "dragon", category: "human"} would otherwise pick the human
+    // colour lists to validate against.
+    category: true,
+  });
+
+  app.get("/api/characters", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to view characters" });
-      }
-      
-      // Get user ID from authenticated user
       const userId = (req.user as any).id;
-      
-      // Get only characters belonging to this user
       const characters = await storage.getAllCharacters(userId);
       res.json(characters);
     } catch (error) {
@@ -92,139 +117,135 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch characters" });
     }
   });
-  
-  // Get a specific character - requires authentication
-  app.get("/api/characters/:id", async (req, res) => {
+
+  app.get("/api/characters/:id", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to view characters" });
-      }
-      
-      const character = await storage.getCharacterById(req.params.id);
+      const userId = (req.user as any).id;
+      const character = await storage.getCharacterById(req.params.id, userId);
+      // 404 rather than 403 for a character owned by someone else. A 403 would
+      // confirm the id names a real character, which is an oracle for anyone
+      // guessing ids.
       if (!character) {
         return res.status(404).json({ message: "Character not found" });
       }
-      
-      // In the future, we should check if the character belongs to the user
-      // const userId = (req.user as any).id;
-      // if (character.userId !== userId) {
-      //   return res.status(403).json({ message: "Not authorized to access this character" });
-      // }
-      
       res.json(character);
     } catch (error) {
       console.error("Error fetching character:", error);
       res.status(500).json({ message: "Failed to fetch character" });
     }
   });
-  
-  // Create a new character - requires authentication
-  app.post("/api/characters", async (req, res) => {
+
+  app.post("/api/characters", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to create characters" });
-      }
-      
-      // Get user ID from authenticated user
       const userId = (req.user as any).id;
-      
-      // The id and createdAt fields will be added by the storage method
-      const { id, createdAt, ...characterData } = req.body;
-      
-      // Create the character associated with the authenticated user
-      const character = await storage.createCharacter(characterData, userId);
+
+      // characterSchema was imported and never called, so this handler used to
+      // spread req.body straight into the jsonb column and the catch below was
+      // unreachable. Parsing also strips unknown keys, which is what the manual
+      // destructure of id and createdAt was standing in for.
+      const parsed = characterWriteSchema.parse(req.body);
+      const category = categoryOf(parsed.kind);
+
+      const problems = vocabularyErrors(parsed, category);
+      if (problems.length) {
+        return res.status(400).json({ message: problems.join(" ") });
+      }
+
+      const character = await storage.createCharacter({ ...parsed, category }, userId);
       res.status(201).json(character);
     } catch (error) {
-      console.error("Error creating character:", error);
-      
       if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ message: validationError.message });
+        return res.status(400).json({ message: fromZodError(error).message });
       }
-      
+      console.error("Error creating character:", error);
       res.status(500).json({ message: "Failed to create character" });
     }
   });
-  
-  // Update a character - requires authentication
-  app.put("/api/characters/:id", async (req, res) => {
+
+  app.put("/api/characters/:id", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to update characters" });
-      }
-      
-      // Get user ID from authenticated user
       const userId = (req.user as any).id;
-      
-      // Remove fields that should not be updated directly
-      const { id: bodyId, createdAt, ...updates } = req.body;
-      
-      // Get the character to check ownership
-      const existingCharacter = await storage.getCharacterById(req.params.id);
-      
-      // Check if character exists and belongs to the user
-      if (!existingCharacter) {
+      const existing = await storage.getCharacterById(req.params.id, userId);
+      if (!existing) {
         return res.status(404).json({ message: "Character not found" });
       }
-      
-      // In the future, we should check ownership
-      // if (existingCharacter.userId !== userId) {
-      //   return res.status(403).json({ message: "Not authorized to update this character" });
-      // }
-      
-      // Update the character
-      const character = await storage.updateCharacter(req.params.id, updates);
-      
+
+      const updates = characterWriteSchema.partial().parse(req.body);
+
+      // THE PATCH IS VALIDATED, NOT THE MERGED CHARACTER. A parent may have
+      // typed a value this catalogue does not contain; checking the whole
+      // merged document would then reject a child's unrelated edit to some
+      // other field, and only for the families who used Parent Mode.
+      const category = "kind" in updates ? categoryOf(updates.kind) : existing.category;
+      const problems = vocabularyErrors(updates, category);
+      if (problems.length) {
+        return res.status(400).json({ message: problems.join(" ") });
+      }
+
+      const patch = "kind" in updates ? { ...updates, category } : updates;
+      const character = await storage.updateCharacter(req.params.id, userId, patch);
       if (!character) {
         return res.status(404).json({ message: "Character not found" });
       }
-      
       res.json(character);
     } catch (error) {
-      console.error("Error updating character:", error);
-      
       if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ message: validationError.message });
+        return res.status(400).json({ message: fromZodError(error).message });
       }
-      
+      console.error("Error updating character:", error);
       res.status(500).json({ message: "Failed to update character" });
     }
   });
-  
-  // Delete a character - requires authentication
-  app.delete("/api/characters/:id", async (req, res) => {
+
+  /**
+   * The Parent Mode escape hatch: any field, any value.
+   *
+   * The catalogue cannot anticipate everything, and a parent should not be held
+   * to a list a child needs. Nothing here is checked against the vocabulary --
+   * only lengths, so a field cannot become a document. Whatever they typed is
+   * recorded in customFields so the form shows it as chosen rather than
+   * blanking it for being off-list.
+   */
+  app.put("/api/characters/:id/custom", requireAuth, requireParentMode, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to delete characters" });
-      }
-      
-      // Get user ID from authenticated user
       const userId = (req.user as any).id;
-      
-      // Get the character to check ownership
-      const existingCharacter = await storage.getCharacterById(req.params.id);
-      
-      // Check if character exists
-      if (!existingCharacter) {
+      const existing = await storage.getCharacterById(req.params.id, userId);
+      if (!existing) {
         return res.status(404).json({ message: "Character not found" });
       }
-      
-      // In the future, we should check ownership
-      // if (existingCharacter.userId !== userId) {
-      //   return res.status(403).json({ message: "Not authorized to delete this character" });
-      // }
-      
-      const success = await storage.deleteCharacter(req.params.id);
-      
+
+      const updates = characterSchema
+        .omit({ id: true, createdAt: true, customFields: true })
+        .partial()
+        .parse(req.body);
+
+      const touched = Object.keys(updates).filter((k) => k !== "category");
+      const customFields = Array.from(new Set([...(existing.customFields ?? []), ...touched]));
+
+      const character = await storage.updateCharacter(req.params.id, userId, {
+        ...updates,
+        customFields,
+      });
+      if (!character) {
+        return res.status(404).json({ message: "Character not found" });
+      }
+      res.json(character);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: fromZodError(error).message });
+      }
+      console.error("Error customising character:", error);
+      res.status(500).json({ message: "Failed to update character" });
+    }
+  });
+
+  app.delete("/api/characters/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const success = await storage.deleteCharacter(req.params.id, userId);
       if (!success) {
         return res.status(404).json({ message: "Character not found" });
       }
-      
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting character:", error);

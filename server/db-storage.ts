@@ -267,23 +267,20 @@ export class DbStorage implements IStorage {
   }
 
   // Character related methods - implementing temporary JSON storage
-  async getAllCharacters(userId?: number): Promise<Character[]> {
+  async getAllCharacters(userId: number): Promise<Character[]> {
     try {
-      let rows: any[];
-      if (userId) {
-        const result = await pool!.query(
-          `SELECT * FROM user_characters WHERE user_id = $1 ORDER BY created_at DESC`,
-          [userId]
-        );
-        rows = result.rows;
-      } else {
-        // Admin function to get all characters
-        const result = await pool!.query(
-          `SELECT * FROM user_characters ORDER BY created_at DESC`
-        );
-        rows = result.rows;
-      }
-      
+      // One statement, always scoped. There used to be a second branch here
+      // that selected every character in the database when userId was falsy,
+      // described as an admin function and called by nobody. It was reachable
+      // only if a caller passed 0 or undefined -- and 0 IS falsy, so the only
+      // thing standing between it and every user's characters was that
+      // Postgres serial ids happen to start at 1. That is not a guard, it is a
+      // coincidence, and it is the kind that survives review forever.
+      const { rows } = await pool!.query(
+        `SELECT * FROM user_characters WHERE user_id = $1 ORDER BY created_at DESC`,
+        [userId]
+      );
+
       if (!rows.length) return [];
       
       return rows.map(row => {
@@ -316,11 +313,15 @@ export class DbStorage implements IStorage {
     }
   }
 
-  async getCharacterById(id: string): Promise<Character | undefined> {
+  async getCharacterById(id: string, userId: number): Promise<Character | undefined> {
     try {
+      // Scoped in the statement, not by the caller. A character that is not
+      // this user's is indistinguishable from one that does not exist, which is
+      // what lets the route answer 404 rather than 403 -- a 403 would confirm
+      // the id is real to anyone guessing.
       const { rows } = await pool!.query(
-        `SELECT * FROM user_characters WHERE character_id = $1`,
-        [id]
+        `SELECT * FROM user_characters WHERE character_id = $1 AND user_id = $2`,
+        [id, userId]
       );
       
       if (!rows.length) return undefined;
@@ -372,30 +373,40 @@ export class DbStorage implements IStorage {
     return character;
   }
 
-  async updateCharacter(id: string, updates: Partial<Character>): Promise<Character | undefined> {
-    // First get the current character
-    const character = await this.getCharacterById(id);
+  async updateCharacter(
+    id: string,
+    userId: number,
+    updates: Partial<Character>,
+  ): Promise<Character | undefined> {
+    const character = await this.getCharacterById(id, userId);
     if (!character) return undefined;
-    
+
     const updatedCharacter: Character = {
       ...character,
       ...updates
     };
-    
-    await pool!.query(
-      `UPDATE user_characters SET character_data = $1 WHERE character_id = $2`,
-      [JSON.stringify(updatedCharacter), id]
+
+    // user_id repeated on the write even though the read above already checked
+    // it. The read and the write are two statements, and between them the row
+    // can change owner or be deleted; a WHERE that only trusts the earlier
+    // check is trusting a fact that has since expired.
+    const result = await pool!.query(
+      `UPDATE user_characters SET character_data = $1
+        WHERE character_id = $2 AND user_id = $3`,
+      [JSON.stringify(updatedCharacter), id, userId]
     );
-    
+    if (!result.rowCount) return undefined;
+
     return updatedCharacter;
   }
 
-  async deleteCharacter(id: string): Promise<boolean> {
+  async deleteCharacter(id: string, userId: number): Promise<boolean> {
     const result = await pool!.query(
-      `DELETE FROM user_characters WHERE character_id = $1 RETURNING character_id`,
-      [id]
+      `DELETE FROM user_characters
+        WHERE character_id = $1 AND user_id = $2 RETURNING character_id`,
+      [id, userId]
     );
-    
+
     return (result.rowCount || 0) > 0;
   }
 

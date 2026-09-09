@@ -109,9 +109,19 @@ site. Adding a field to `storyRequestSchema` means touching one place.
 
 `resolveStoryCharacter()` scopes the lookup to the requesting user via
 `getAllCharacters(userId)`. `Character` carries no `userId` and
-`getCharacterById()` takes only an id, so looking one up by id alone would let
-any user generate a story starring **another user's character**. The branch
+`getCharacterById()` once took only an id, so looking one up by id alone would
+let any user generate a story starring **another user's character**. The branch
 version did exactly that.
+
+**Since the character model widened, every storage method requires the owner
+and scopes in the SQL**, so an id-only fetch no longer exists to be tempted by.
+The three by-id routes had carried a commented-out ownership check —
+*"in the future, we should check ownership"* — for as long as they had existed,
+and that comment was accurate about why: `Character` had no `userId` to compare
+against, so the check had nothing to say and was left as a note instead of a
+guard. Putting the owner in the signature is what made it expressible. The
+lesson is the general one: a check that cannot be written is not a check, and a
+TODO beside it is a record of the gap, not a mitigation of it.
 
 ---
 

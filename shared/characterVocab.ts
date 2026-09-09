@@ -21,6 +21,8 @@
  * form shows popularKinds(category) and reaches the rest through searchKinds().
  */
 
+import { animalDatabase } from "./animalData";
+
 /**
  * What sort of thing a character is.
  *
@@ -395,4 +397,55 @@ export function searchKinds(query: string, limit = 20): string[] {
   prefix.sort(byLength);
   contains.sort(byLength);
   return [...exact, ...prefix, ...contains].slice(0, limit);
+}
+
+/** The fields a child picks from a list rather than types. */
+export const CONTROLLED_FIELDS: readonly VocabField[] = [
+  "hair", "eyes", "favoriteColor", "hobby", "personality",
+];
+
+/** Every animal the favourite-animal box may hold, as a set. */
+const ANIMALS = new Set(animalDatabase);
+
+/**
+ * What is wrong with a character write, from the catalogue's point of view.
+ *
+ * Takes the EFFECTIVE category rather than reading one off the patch: an edit
+ * that changes only the eye colour does not resend what the character is, and
+ * validating "amber" against the human list when the character is a robot would
+ * reject a value the form legitimately offered.
+ *
+ * Only fields PRESENT in the patch are checked. A character a parent has
+ * customised carries values that are deliberately off-list, and an ordinary
+ * edit to some other field must not trip over them.
+ */
+export function vocabularyErrors(
+  patch: Partial<Record<VocabField | "kind" | "favoriteAnimal" | "sex", unknown>>,
+  category?: CharacterCategory | null,
+): string[] {
+  const errors: string[] = [];
+
+  if (patch.kind !== undefined && !isKnownKind(String(patch.kind))) {
+    errors.push(`"${String(patch.kind)}" is not one of the characters to choose from.`);
+  }
+
+  for (const field of CONTROLLED_FIELDS) {
+    const value = patch[field];
+    if (value === undefined) continue;
+    const allowed = optionsFor(field, category);
+    if (!allowed.includes(String(value))) {
+      errors.push(`"${String(value)}" is not one of the choices for ${field}.`);
+    }
+  }
+
+  if (patch.favoriteAnimal !== undefined && !ANIMALS.has(String(patch.favoriteAnimal))) {
+    errors.push(`"${String(patch.favoriteAnimal)}" is not one of the animals to choose from.`);
+  }
+
+  // A living thing is a he or a she. Only a made thing is an it.
+  if (patch.sex === "it" && category !== "machine") {
+    errors.push("Only a machine can be an it.");
+  }
+
+  return errors;
 }

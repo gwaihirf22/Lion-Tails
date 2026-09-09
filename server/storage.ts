@@ -47,12 +47,25 @@ export interface IStorage {
   // User stories methods
   getUserStories(userId: number): Promise<SavedStory[]>;
 
-  // Character related methods
-  getAllCharacters(userId?: number): Promise<Character[]>;
-  getCharacterById(id: string): Promise<Character | undefined>;
+  /**
+   * Character methods. EVERY ONE TAKES THE OWNER.
+   *
+   * Not a convenience: an id alone is a uuid a user can hold from a previous
+   * session or read off a URL, and these rows belong to somebody. The three
+   * by-id routes carried a commented-out ownership check for months --
+   * "in the future, we should check ownership" -- because Character has no
+   * userId to compare against, so the check had nothing to say. Making the
+   * owner a required argument means an unscoped read or write cannot be
+   * expressed, rather than being possible and remembered against.
+   *
+   * The scoping is in the SQL, not only in the caller, which also removes the
+   * gap between reading a character to check it and writing it back.
+   */
+  getAllCharacters(userId: number): Promise<Character[]>;
+  getCharacterById(id: string, userId: number): Promise<Character | undefined>;
   createCharacter(character: Omit<Character, "id" | "createdAt">, userId: number): Promise<Character>;
-  updateCharacter(id: string, character: Partial<Character>): Promise<Character | undefined>;
-  deleteCharacter(id: string): Promise<boolean>;
+  updateCharacter(id: string, userId: number, character: Partial<Character>): Promise<Character | undefined>;
+  deleteCharacter(id: string, userId: number): Promise<boolean>;
 
   // Song related methods
   getAllSongs(): Promise<Song[]>;
@@ -329,7 +342,8 @@ export class MemStorage implements IStorage {
     }
   }
 
-  async getCharacterById(id: string): Promise<Character | undefined> {
+  async getCharacterById(id: string, userId: number): Promise<Character | undefined> {
+    if (!this.userCharacters.get(userId)?.has(id)) return undefined;
     return this.characters.get(id);
   }
 
@@ -353,7 +367,12 @@ export class MemStorage implements IStorage {
     return character;
   }
 
-  async updateCharacter(id: string, updates: Partial<Character>): Promise<Character | undefined> {
+  async updateCharacter(
+    id: string,
+    userId: number,
+    updates: Partial<Character>,
+  ): Promise<Character | undefined> {
+    if (!this.userCharacters.get(userId)?.has(id)) return undefined;
     const character = this.characters.get(id);
     if (!character) return undefined;
 
@@ -366,19 +385,12 @@ export class MemStorage implements IStorage {
     return updatedCharacter;
   }
 
-  async deleteCharacter(id: string): Promise<boolean> {
-    const deleted = this.characters.delete(id);
+  async deleteCharacter(id: string, userId: number): Promise<boolean> {
+    const owned = this.userCharacters.get(userId);
+    if (!owned?.has(id)) return false;
 
-    // Remove from all user's character collections
-    for (const userCharMap of this.userCharacters) {
-      const userId = userCharMap[0];
-      const characters = userCharMap[1];
-      if (characters.has(id)) {
-        characters.delete(id);
-      }
-    }
-
-    return deleted;
+    owned.delete(id);
+    return this.characters.delete(id);
   }
 
   // Song methods
