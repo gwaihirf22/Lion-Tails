@@ -298,6 +298,7 @@ export function listSelectableModels(opts: { isAdmin: boolean; hasOwnKey: boolea
 export async function resolveModel(
   userId: number,
   kind: ModelKind = "chat",
+  opts: { grantedByAllowance?: boolean } = {},
 ): Promise<ResolvedModel | null> {
   const [user, ownKey] = await Promise.all([
     storage.getUser(userId).catch(() => undefined),
@@ -306,6 +307,24 @@ export async function resolveModel(
 
   const isAdmin = Boolean(user?.isAdmin);
   const hasOwnKey = Boolean(ownKey);
+
+  /**
+   * Entitlement for THIS call, which is not always the account's entitlement.
+   *
+   * grantedByAllowance is how a free account reaches a premium image model: it
+   * has already spent one of its MAX_FREE_AVATARS, so the generation is paid
+   * for by a cap rather than by the account. Nothing else may pass it.
+   *
+   * It is deliberately not a property of the user. Making it one would create
+   * a fourth entitlement state and, worse, a durable one -- this is true of a
+   * single request that has already been counted, and false a moment later.
+   * The caller must charge FIRST and pass the result of having charged; see
+   * chargeAvatarGeneration, which is the only thing that can make this true.
+   */
+  const entitled = {
+    isAdmin: isAdmin || Boolean(opts.grantedByAllowance),
+    hasOwnKey,
+  };
 
   let requested = DEFAULTS[kind];
   if (kind === "chat") {
@@ -316,7 +335,7 @@ export async function resolveModel(
   let model = requested;
   let downgradedFrom: string | undefined;
 
-  if (!isModelAllowedFor(model, kind, { isAdmin, hasOwnKey })) {
+  if (!isModelAllowedFor(model, kind, entitled)) {
     const fallback = DEFAULTS[kind];
     if (model !== fallback) {
       console.warn(
@@ -328,7 +347,7 @@ export async function resolveModel(
     model = fallback;
 
     // The fallback itself may be premium (image generation has no cheap tier).
-    if (!isModelAllowedFor(model, kind, { isAdmin, hasOwnKey })) {
+    if (!isModelAllowedFor(model, kind, entitled)) {
       return null;
     }
   }
@@ -349,8 +368,9 @@ export async function resolveModel(
     };
   }
 
-  // Premium on the owner's key is only ever reached by an admin: a non-admin
-  // without their own key was downgraded above.
+  // Premium on the owner's key is reached by an admin, or by a caller that has
+  // already spent one of a capped allowance. A non-admin without their own key
+  // and without such a grant was downgraded above.
   const apiKey = ownKey || process.env.OPENAI_API_KEY;
   if (!apiKey) {
     // Typed, so the route answers 503 with something the user can act on

@@ -1504,6 +1504,21 @@ export class DbStorage implements IStorage {
     }
   }
 
+  async refundAvatarGeneration(userId: number): Promise<void> {
+    if (!isDatabaseAvailable()) return;
+    try {
+      // GREATEST(...,0) rather than a plain subtraction: a refund that could
+      // drive the count negative would hand out free generations, which is the
+      // exact thing the counter exists to prevent.
+      await pool!.query(
+        `UPDATE user_usage SET avatar_count = GREATEST(avatar_count - 1, 0) WHERE user_id = $1`,
+        [userId],
+      );
+    } catch (error) {
+      console.error(`Error refunding avatar generation for user ${userId}:`, error);
+    }
+  }
+
   async getLastResetDate(userId: number): Promise<Date | null> {
     if (!isDatabaseAvailable()) {
       console.warn(`Database unavailable in getLastResetDate(${userId}). Using current date as fallback.`);

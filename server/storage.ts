@@ -139,6 +139,13 @@ export interface IStorage {
    * is not capped.
    */
   chargeAvatarGeneration(userId: number, limit: number): Promise<boolean>;
+  /**
+   * Give back an avatar generation that was charged and then did not happen.
+   *
+   * Never below zero: a refund for something that was not charged would mint
+   * an allowance out of nothing.
+   */
+  refundAvatarGeneration(userId: number): Promise<void>;
   getLastResetDate(userId: number): Promise<Date | null>;
   setLastResetDate(userId: number, date: Date): Promise<void>;
 
@@ -882,6 +889,11 @@ export class MemStorage implements IStorage {
     if (used >= limit) return false;
     this.userAvatarCounts.set(userId, used + 1);
     return true;
+  }
+
+  async refundAvatarGeneration(userId: number): Promise<void> {
+    const used = this.userAvatarCounts.get(userId) || 0;
+    this.userAvatarCounts.set(userId, Math.max(0, used - 1));
   }
 
   async getLastResetDate(userId: number): Promise<Date | null> {

@@ -761,6 +761,21 @@ export const characterSchema = z.object({
   avatarUrl: optionalText(500),
 
   /**
+   * The EXACT string their portrait was generated from. Server-owned.
+   *
+   * Kept so a story illustration can be built on the same description rather
+   * than a fresh one. Image models do not reproduce a character from scratch --
+   * describe the same girl twice and you get two girls -- so reusing the
+   * literal prompt is the only thing that keeps a portrait and an illustration
+   * recognisably the same person.
+   *
+   * Reused verbatim, never summarised or regenerated: a "tidied" version of
+   * this string is a different prompt, and a different prompt is a different
+   * child. It reaches no STORY prompt, only image ones.
+   */
+  avatarPrompt: optionalText(1200),
+
+  /**
    * Field names holding a value a parent typed rather than picked.
    *
    * The strict path validates only the fields in the request, so a custom value

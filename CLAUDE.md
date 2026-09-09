@@ -266,6 +266,47 @@ deliberate, read the diff before regenerating — that diff is the prompt every
 existing story would now be written from. There is no regeneration script, which
 makes it easy to regenerate first and "verify" against your own output.
 
+## Avatars
+
+`POST /api/characters/:id/avatar` generates a portrait with `gpt-image-2` and
+stores two things on the character: `avatarUrl` and **`avatarPrompt`, the exact
+string it was generated from**. Both are server-owned — omitted from all four
+character write schemas, Parent Mode included, because the field ends up in
+`<img src>` and a request-supplied URL is a tracking pixel on a child's page.
+
+The stored prompt is the consistency mechanism. Image models do not reproduce a
+character from scratch: describe the same girl twice and you get two girls. So
+an illustration that has to show a character again is built on that literal
+string, never on a fresh or "tidied" description — a different prompt is a
+different child. `buildAvatarPrompt()` is pure and unit-tested for exactly what
+it must NOT contain: personality, hobby, notes, mustBeTrue and every stat.
+`canonicalLook` leads when set, which is what it was stored for.
+
+**This is a new owner-billed path**, and it runs against `decisions.md` §16
+("no automatic fallback to a paid model, because it spends his credits
+unasked"). `MAX_FREE_AVATARS` = 8 is what makes it acceptable, so the cap is the
+feature rather than a detail:
+
+- **Lifetime generations, never live characters.** A cap on how many a user
+  currently HAS is farmable — delete, regenerate, repeat, owner pays each time.
+- **Reserved before the call, refunded if nothing was generated.** Charging on
+  success (what storyWorker does for stories) leaves a window in which two
+  requests both read the same count and both increment. The two failure modes
+  are not symmetric: a crash costs a user one picture, the other way costs the
+  owner an unbounded bill. `chargeAvatarGeneration` is one statement for the
+  same reason, and refuses on a database error rather than allowing.
+- `user_usage.avatar_count` never resets. The monthly reset sets `count` by
+  name, so this survives for free — verified against a real Postgres.
+- A free account reaches the premium model only via
+  `resolveModel(..., { grantedByAllowance: true })`, which is true of a single
+  already-counted request and is not a property of the user. Charge first, then
+  pass the result of having charged.
+
+Files go to `public/images/stories/avatars`. That looks like the wrong
+directory and is the right path: the parent is the mount point of the
+`story_images` volume, so anything written there survives a redeploy and
+anything written beside it does not.
+
 ## Heroes of Faith data
 
 Eighty hand-written profiles in `server/data/heroes/`, one file per era, two

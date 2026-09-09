@@ -1,6 +1,10 @@
 import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
-import { isModelAllowedFor, listSelectableModels, MODEL_CATALOG, DEFAULTS } from "./lib/modelPolicy";
+import { isModelAllowedFor, listSelectableModels, MODEL_CATALOG, DEFAULTS,
+  hasUnlimitedUse,
+  avatarsRemaining,
+  MAX_FREE_AVATARS,
+} from "./lib/modelPolicy";
 import { StoryGenerationError } from "./lib/storyErrors";
 import {
   enqueueStoryJob,
@@ -55,6 +59,7 @@ import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, hero
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
+import { generateAvatar } from "./lib/avatar";
 import { statsAreAffordable } from "@shared/schema";
 import { ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
@@ -111,6 +116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // no UI ever having offered it. The avatar work will write it from the
     // server after generating or storing an image; nothing else should.
     avatarUrl: true,
+    avatarPrompt: true,
     // Derived from `kind` below, never taken from the client: a body claiming
     // {kind: "dragon", category: "human"} would otherwise pick the human
     // colour lists to validate against.
@@ -189,7 +195,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any).id;
       const parsed = characterSchema
-        .omit({ id: true, createdAt: true, customFields: true, adventures: true, avatarUrl: true })
+        .omit({ id: true, createdAt: true, customFields: true, adventures: true,
+                 avatarUrl: true, avatarPrompt: true })
         .parse(req.body);
 
       const customFields = Object.keys(parsed).filter((k) => k !== "category");
@@ -271,7 +278,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // type anything into the STORY, not to choose which host the browser
       // fetches a child's picture from.
       const updates = characterSchema
-        .omit({ id: true, createdAt: true, customFields: true, adventures: true, avatarUrl: true })
+        .omit({ id: true, createdAt: true, customFields: true, adventures: true,
+                 avatarUrl: true, avatarPrompt: true })
         .partial()
         .parse(req.body);
 
@@ -292,6 +300,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error customising character:", error);
       res.status(500).json({ message: "Failed to update character" });
+    }
+  });
+
+  /**
+   * Generate this character's portrait.
+   *
+   * NOT behind Parent Mode. Generating is the path we want people to take --
+   * it is the alternative to a child's photograph, not a privileged extra --
+   * and what governs it is the allowance, not a password. Uploading a photo is
+   * the one that needs a grown-up.
+   *
+   * CHARGED BEFORE THE CALL, REFUNDED IF IT FAILS. Charging on success is the
+   * pattern storyWorker uses and it is the wrong one here: between a "do they
+   * have one left" read and a later increment, a second request reads the same
+   * number, and a cap that can be beaten by pressing a button twice is not a
+   * cap. So the allowance is reserved by the same statement that checks it, and
+   * given back when nothing was generated. The two failure modes are not
+   * symmetric -- losing a generation to a crash costs a user one picture, and
+   * getting it wrong the other way costs the owner an unbounded image bill.
+   */
+  app.post("/api/characters/:id/avatar", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const character = await storage.getCharacterById(req.params.id, userId);
+      if (!character) {
+        return res.status(404).json({ message: "Character not found" });
+      }
+
+      const isAdmin = Boolean((req.user as any).isAdmin);
+      const hasOwnKey = Boolean(await storage.getUserOpenAIKey(userId).catch(() => null));
+      const unlimited = hasUnlimitedUse({ isAdmin, hasOwnKey });
+      const used = await storage.getAvatarCount(userId);
+      const remaining = avatarsRemaining(used, { isAdmin, hasOwnKey });
+
+      if (remaining <= 0) {
+        return res.status(403).json({
+          code: "avatar_allowance_spent",
+          message:
+            `You have used all ${MAX_FREE_AVATARS} of your free pictures. ` +
+            "Add your own OpenAI API key in Settings to make more.",
+          used,
+          limit: MAX_FREE_AVATARS,
+        });
+      }
+
+      // The check and the charge, in one statement. Unlimited users are still
+      // counted -- the number stays true -- but never blocked.
+      const charged = await storage.chargeAvatarGeneration(
+        userId,
+        unlimited ? Infinity : MAX_FREE_AVATARS,
+      );
+      if (!charged) {
+        return res.status(403).json({
+          code: "avatar_allowance_spent",
+          message: `You have used all ${MAX_FREE_AVATARS} of your free pictures.`,
+          used,
+          limit: MAX_FREE_AVATARS,
+        });
+      }
+
+      // grantedByAllowance ONLY for the capped user: an admin or own-key user
+      // already passes the premium gate on their own, and saying otherwise
+      // would hide which of the two actually paid for this call.
+      const result = await generateAvatar(character, userId, {
+        grantedByAllowance: !unlimited,
+      });
+
+      if (!result) {
+        await storage.refundAvatarGeneration(userId);
+        return res.status(502).json({
+          code: "avatar_generation_failed",
+          message: "The picture could not be made just now. Please try again.",
+        });
+      }
+
+      const updated = await storage.updateCharacter(req.params.id, userId, {
+        avatarUrl: result.url,
+        avatarPrompt: result.prompt,
+      });
+      if (!updated) {
+        // The image exists but its owner does not, which means the character
+        // was deleted mid-generation. Do not refund: the money was spent.
+        return res.status(404).json({ message: "Character not found" });
+      }
+
+      res.json({
+        character: updated,
+        remaining: unlimited ? null : avatarsRemaining(used + 1, { isAdmin, hasOwnKey }),
+      });
+    } catch (error) {
+      console.error("Error generating character avatar:", error);
+      res.status(500).json({ message: "Failed to generate a picture" });
     }
   });
 
