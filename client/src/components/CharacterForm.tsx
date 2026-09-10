@@ -4,6 +4,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Pencil, Search, Undo2 } from "lucide-react";
 import {
+  avatarsOf,
+  MAX_AVATARS,
   characterSchema,
   baseStats,
   statsOf,
@@ -56,7 +58,8 @@ import { Badge } from "@/components/ui/badge";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Loader2, Sparkles, RefreshCw, RotateCcw, ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -192,7 +195,7 @@ type CharacterFormProps = {
    * The saved row, when editing. Carries the two things the form shows but
    * never writes -- adventures and therefore virtues, which are the server's.
    */
-  saved?: Pick<Character, "adventures" | "id" | "avatarUrl">;
+  saved?: Pick<Character, "adventures" | "id" | "avatarUrl" | "avatarPrompt" | "avatars" | "createdAt">;
 };
 
 export default function CharacterForm({
@@ -345,10 +348,41 @@ export default function CharacterForm({
    * being bypassed, so it lives in the route, and this reads the count back
    * from the response rather than keeping its own tally that could drift.
    */
+  /**
+   * Their pictures, and which one is chosen.
+   *
+   * Held here rather than read from `saved` on every render because the routes
+   * return the updated character and this screen should show it immediately --
+   * waiting on a refetch would leave a picture the user just made missing for a
+   * beat. Seeded from the row, then only ever replaced by a server response.
+   */
+  const [gallery, setGallery] = useState(() => avatarsOf(saved));
+  const applyCharacter = (c?: Character) => {
+    if (!c) return;
+    setGallery(avatarsOf(c));
+    form.setValue("avatarUrl", c.avatarUrl);
+  };
+
   const [drawing, setDrawing] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const pickAvatar = async (avatarId: string) => {
+    if (!saved?.id) return;
+    const res = await apiRequestAllowingErrors("PUT", `/api/characters/${saved.id}/avatar/${avatarId}`);
+    if (!res.ok) return;
+    applyCharacter(await res.json().catch(() => undefined));
+    void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+  };
+
+  const removeAvatar = async (avatarId: string) => {
+    if (!saved?.id) return;
+    const res = await apiRequestAllowingErrors("DELETE", `/api/characters/${saved.id}/avatar/${avatarId}`);
+    if (!res.ok) return;
+    applyCharacter(await res.json().catch(() => undefined));
+    void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+  };
 
   const makeAvatar = async () => {
     if (!saved?.id || drawing) return;
@@ -358,7 +392,12 @@ export default function CharacterForm({
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast({
-          title: res.status === 403 ? "No free pictures left" : "That did not work",
+          title:
+            res.status === 409
+              ? "That is four pictures"
+              : res.status === 403
+                ? "No free pictures left"
+                : "That did not work",
           description: body?.message ?? "Please try again.",
           variant: "destructive",
         });
@@ -366,7 +405,7 @@ export default function CharacterForm({
       }
       // Straight onto the form, so the picture appears without a refetch, and
       // into the cache so the Characters list agrees with it.
-      form.setValue("avatarUrl", body.character?.avatarUrl);
+      applyCharacter(body.character);
       if (typeof body.remaining === "number") setRemaining(body.remaining);
       void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
     } catch {
@@ -453,10 +492,19 @@ export default function CharacterForm({
                 down a pixel over the strip's own border, which is what joins it
                 to the panel below and makes it read as the front folder.
               */}
-              <div className="flex items-stretch gap-1">
+              {/*
+                items-END, not items-stretch. Stretching made TabsList grow to
+                the height of the icon buttons beside it, so its bottom border
+                sat several pixels BELOW the tabs instead of under them -- the
+                selected tab's card-coloured border had nothing to cover, and
+                the line ran straight through the front folder. The arrows now
+                bottom-align with the strip instead of being nudged with a
+                margin.
+              */}
+              <div className="flex items-end gap-1">
                 <Button
                   type="button" variant="ghost" size="icon"
-                  className="shrink-0 self-end mb-[3px]"
+                  className="shrink-0"
                   onClick={() => step(-1)}
                   disabled={tabIndex === 0}
                   aria-label="Previous tab"
@@ -469,7 +517,7 @@ export default function CharacterForm({
                     <TabsTrigger
                       key={t.value}
                       value={t.value}
-                      className="relative -mb-px rounded-b-none rounded-t-md border border-border border-b-transparent bg-muted/60 px-3 py-1.5 text-muted-foreground data-[state=active]:border-b-card data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                      className="relative z-10 -mb-px rounded-b-none rounded-t-md border border-border border-b-transparent bg-muted/60 px-3 py-1.5 text-muted-foreground data-[state=active]:border-b-card data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-none"
                     >
                       {t.label}
                     </TabsTrigger>
@@ -478,7 +526,7 @@ export default function CharacterForm({
 
                 <Button
                   type="button" variant="ghost" size="icon"
-                  className="shrink-0 self-end mb-[3px]"
+                  className="shrink-0"
                   onClick={() => step(1)}
                   disabled={tabIndex >= TABS.length - 1}
                   aria-label="Next tab"
@@ -734,7 +782,8 @@ export default function CharacterForm({
                   {saved?.id ? (
                     <>
                       <Button type="button" variant="outline" size="sm"
-                              onClick={makeAvatar} disabled={drawing}>
+                              onClick={makeAvatar}
+                              disabled={drawing || gallery.length >= MAX_AVATARS}>
                         {drawing
                           ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Drawing…</>
                           : <><Sparkles className="mr-2 h-4 w-4" />
@@ -743,6 +792,8 @@ export default function CharacterForm({
                       <p className="text-xs text-muted-foreground">
                         {drawing
                           ? "This takes about half a minute."
+                          : gallery.length >= MAX_AVATARS
+                              ? `${MAX_AVATARS} pictures is the most one character can keep — delete one to draw another.`
                           : remaining === null
                             ? "Drawn from the fields below, or from how you describe them under Grown-ups."
                             : `${remaining} free ${remaining === 1 ? "picture" : "pictures"} left.`}
@@ -756,6 +807,44 @@ export default function CharacterForm({
                     </p>
                   )}
                 </div>
+
+              {/*
+                UP TO FOUR, ONE CHOSEN. The chosen one is what the card and any
+                story illustration use; the rest are alternatives kept so a new
+                one can be drawn to LOOK like them. Hidden entirely when there
+                is nothing to choose between -- a gallery of one is a picture.
+              */}
+              {gallery.length > 1 && (
+                <div className="flex flex-wrap gap-2">
+                  {gallery.map((a: { id: string; url: string }) => {
+                    const chosen = a.url === form.watch("avatarUrl");
+                    return (
+                      <div key={a.id} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => void pickAvatar(a.id)}
+                          aria-label={chosen ? "Chosen picture" : "Use this picture"}
+                          aria-pressed={chosen}
+                          className={cn(
+                            "block h-20 w-20 overflow-hidden rounded-lg border-2 transition-colors",
+                            chosen ? "border-primary" : "border-transparent hover:border-border",
+                          )}
+                        >
+                          <img src={a.url} alt="" className="h-full w-full object-cover" />
+                        </button>
+                        <Button
+                          type="button" variant="secondary" size="icon"
+                          className="absolute -right-2 -top-2 h-6 w-6 rounded-full"
+                          onClick={() => void removeAvatar(a.id)}
+                          aria-label="Delete this picture"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
@@ -1052,7 +1141,7 @@ export default function CharacterForm({
             </Tabs>
           </CardContent>
 
-          <CardFooter>
+          <CardFooter className="gap-2">
             <Button
               type="submit"
               disabled={loading || (Boolean(saved?.id) && !form.formState.isDirty)}
@@ -1066,6 +1155,36 @@ export default function CharacterForm({
                     ? "Save changes"
                     : "Saved"}
             </Button>
+            {/*
+              Reset, not cancel. It puts the form back to what is STORED, which
+              is why it is disabled when nothing is dirty -- there would be
+              nothing to undo, and a live button that does nothing teaches people
+              to distrust the ones that do.
+
+              form.reset() with no argument goes back to the values the form was
+              constructed with, and after a successful save those are the saved
+              ones, because submit() resets to what it just sent. So this always
+              means "back to the last save", never "back to when I opened this".
+            */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => form.reset()}
+                      disabled={loading || !form.formState.isDirty}
+                      aria-label="Reset character"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Reset character</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </CardFooter>
         </Card>
       </form>

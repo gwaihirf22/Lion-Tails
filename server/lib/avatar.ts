@@ -27,12 +27,31 @@ import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { coveringNoun } from "@shared/characterVocab";
 import { characterKind, type Character } from "@shared/schema";
+import { toFile } from "openai";
 import { resolveModel, createClient } from "./modelPolicy";
 
 /** Where portraits live. See the note above about why it is under `stories`. */
 export const AVATAR_DIR = path.join(process.cwd(), "public", "images", "stories", "avatars");
 /** The public path prefix, matching `app.use("/public", express.static(...))`. */
 const AVATAR_URL_PREFIX = "/public/images/stories/avatars";
+
+/**
+ * Load a stored avatar back off disk, by the public URL we handed out.
+ *
+ * The url is ours -- it was built here from a uuid -- but it arrives via the
+ * database, so the basename is taken and the directory is not: joining a stored
+ * string onto a path is how "../../etc" gets read. Anything that is not a plain
+ * file in AVATAR_DIR returns undefined and the caller generates fresh.
+ */
+async function readAvatarFile(url: string): Promise<Buffer | undefined> {
+  try {
+    const name = path.basename(url);
+    if (!/^avatar_[0-9a-f-]+\.png$/i.test(name)) return undefined;
+    return await fs.promises.readFile(path.join(AVATAR_DIR, name));
+  } catch {
+    return undefined;
+  }
+}
 
 const isSet = (v: unknown): v is string =>
   typeof v === "string" && v.trim().length > 0;
@@ -92,6 +111,7 @@ export function buildAvatarPrompt(character: Character): string {
 
 export type AvatarResult = { url: string; prompt: string };
 
+
 /**
  * Generate and store one portrait.
  *
@@ -106,7 +126,7 @@ export type AvatarResult = { url: string; prompt: string };
 export async function generateAvatar(
   character: Character,
   userId: number,
-  opts: { grantedByAllowance: boolean },
+  opts: { grantedByAllowance: boolean; likeUrl?: string },
 ): Promise<AvatarResult | undefined> {
   const prompt = buildAvatarPrompt(character);
   try {
@@ -124,12 +144,41 @@ export async function generateAvatar(
     const filename = `avatar_${uuidv4()}.png`;
     const filepath = path.join(AVATAR_DIR, filename);
 
-    const response = await createClient(resolved).images.generate({
-      model: resolved.model,
-      prompt,
-      n: 1,
-      size: "1024x1024",
-    });
+    const client = createClient(resolved);
+
+    /**
+     * A second picture of the same character has to LOOK like the first.
+     *
+     * Text alone will not do it. The stored prompt keeps the description
+     * stable, and two runs of the same description still produce two different
+     * dragons -- that is the property this whole feature works around. So when
+     * the character already has a picture, the existing image goes in with the
+     * prompt and the model edits rather than invents.
+     *
+     * With no pictures there is nothing to resemble, and a fresh generation is
+     * the right thing: that is the first one, and it defines the look the rest
+     * will follow.
+     *
+     * A missing or unreadable file falls back to a fresh generation rather than
+     * failing. The user asked for a picture; a slightly-off picture beats an
+     * error, and the file being gone is not something they can act on.
+     */
+    const reference = opts.likeUrl ? await readAvatarFile(opts.likeUrl) : undefined;
+
+    const response = reference
+      ? await client.images.edit({
+          model: resolved.model,
+          image: await toFile(reference, "reference.png", { type: "image/png" }),
+          prompt: `${prompt} Keep the same character: the same face, colouring and markings as the picture provided.`,
+          n: 1,
+          size: "1024x1024",
+        })
+      : await client.images.generate({
+          model: resolved.model,
+          prompt,
+          n: 1,
+          size: "1024x1024",
+        });
 
     // The GPT image models always return base64 and never a URL. `data` is
     // optional in the openai 7.x types and genuinely absent on some responses,

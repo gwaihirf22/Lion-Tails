@@ -595,6 +595,17 @@ const optionalText = (max: number) =>
  * The comment that survived beside favoriteAnimal -- "defaulting it put a lion
  * in every story nobody asked for" -- was right about all of them.
  */
+/**
+ * Pictures one character may keep at once.
+ *
+ * Not the same number as the free allowance: that counts generations for the
+ * lifetime of an ACCOUNT and is about money, this bounds what one character
+ * holds and is about the UI and the row size. Deleting a picture frees a slot
+ * here and refunds nothing there, which is the point -- otherwise
+ * delete-and-regenerate would be free.
+ */
+export const MAX_AVATARS = 4;
+
 export const characterSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Character name is required").max(60),
@@ -758,6 +769,28 @@ export const characterSchema = z.object({
    * twice; until something writes it, both fall back to a silhouette chosen by
    * category.
    */
+  /**
+   * Every picture this character has, newest last. Server-owned.
+   *
+   * avatarUrl below is the CHOSEN one and stays the field everything else
+   * reads -- the card, the form, and any story illustration. Keeping it rather
+   * than deriving it from this list is deliberate: every character saved
+   * before this has an avatarUrl and no list, and a derived field would have
+   * needed a backfill to keep them showing a picture.
+   */
+  avatars: z
+    .array(
+      z.object({
+        id: z.string(),
+        url: z.string(),
+        /** What made it. Reused verbatim, and shown to nobody. */
+        prompt: z.string(),
+        createdAt: z.string(),
+      }),
+    )
+    .max(MAX_AVATARS)
+    .optional(),
+
   avatarUrl: optionalText(500),
 
   /**
@@ -901,6 +934,33 @@ export function virtueLevels(c?: { adventures?: Character["adventures"] } | null
  * Structurally typed so the client can call it on a character read back out of
  * a saved story.
  */
+/**
+ * Every picture a character has, including one saved before galleries existed.
+ *
+ * A row written by the first version of this feature has avatarUrl and no
+ * avatars array. Reading the list straight off the row would show that person
+ * zero pictures while their portrait was on screen, and the next generation
+ * would quietly orphan the file. Folding it in here means no backfill and one
+ * answer to "what have they got".
+ */
+export function avatarsOf(
+  // Everything optional: callers hold anything from a full row to the empty
+  // object a form starts with, and demanding a whole Character here would only
+  // push casts out to every call site.
+  character?: Partial<Pick<Character, "avatars" | "avatarUrl" | "avatarPrompt" | "createdAt">> | null,
+): NonNullable<Character["avatars"]> {
+  if (character?.avatars?.length) return character.avatars;
+  if (!character?.avatarUrl) return [];
+  return [
+    {
+      id: "legacy",
+      url: character.avatarUrl,
+      prompt: character.avatarPrompt ?? "",
+      createdAt: character.createdAt ?? new Date().toISOString(),
+    },
+  ];
+}
+
 export function characterKind(
   c?: { kind?: string | null; gender?: string | null } | null,
 ): string | undefined {
@@ -935,6 +995,7 @@ export function characterSearchText(c: Character): string {
 // Schema for story generation with optional fields
 /** The most characters one story can hold. */
 export const MAX_STORY_CHARACTERS = 8;
+
 
 /**
  * The characters a request asks for, in order, protagonist first.

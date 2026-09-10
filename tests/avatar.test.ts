@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildAvatarPrompt } from "../server/lib/avatar";
+import { avatarsOf, MAX_AVATARS } from "../shared/schema";
 import type { Character } from "@shared/schema";
 
 /**
@@ -81,5 +82,41 @@ describe("the portrait prompt", () => {
     // between calls, storing it would buy nothing.
     const c = mk({ kind: "girl", age: 8, hair: "brown", eyes: "blue" });
     expect(buildAvatarPrompt(c)).toBe(buildAvatarPrompt(c));
+  });
+});
+
+/**
+ * What pictures a character has, counting the one saved before galleries.
+ *
+ * A row written by the first version of this feature has avatarUrl and no
+ * avatars array. Reading the list straight off the row would show that person
+ * zero pictures while their portrait was on screen, and the next generation
+ * would quietly orphan the file.
+ */
+describe("the picture list", () => {
+  it("is empty when there are no pictures", () => {
+    expect(avatarsOf({})).toEqual([]);
+    expect(avatarsOf(undefined)).toEqual([]);
+    expect(avatarsOf(null)).toEqual([]);
+  });
+
+  it("folds a pre-gallery avatarUrl in rather than losing it", () => {
+    const list = avatarsOf({ avatarUrl: "/p/a.png", avatarPrompt: "a dragon", createdAt: "2026-01-01" });
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ url: "/p/a.png", prompt: "a dragon" });
+  });
+
+  it("prefers a real gallery over the single field", () => {
+    const list = avatarsOf({
+      avatarUrl: "/p/old.png",
+      avatars: [{ id: "1", url: "/p/one.png", prompt: "x", createdAt: "2026-01-01" }],
+    });
+    expect(list.map((a) => a.url)).toEqual(["/p/one.png"]);
+  });
+
+  it("never exceeds what the schema allows", () => {
+    // The cap is enforced on the write path; this asserts the number the UI
+    // and the route both read is the same one.
+    expect(MAX_AVATARS).toBe(4);
   });
 });

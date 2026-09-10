@@ -55,11 +55,16 @@ import {
 } from "./lib/generationStats";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
+import {
+  MAX_AVATARS,
+  avatarsOf, storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
-import { generateAvatar } from "./lib/avatar";
+import { randomUUID } from "crypto";
+import { promises as fsp } from "fs";
+import path from "path";
+import { generateAvatar, AVATAR_DIR } from "./lib/avatar";
 import { statsAreAffordable } from "@shared/schema";
 import { ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
@@ -117,6 +122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // server after generating or storing an image; nothing else should.
     avatarUrl: true,
     avatarPrompt: true,
+    avatars: true,
     // Derived from `kind` below, never taken from the client: a body claiming
     // {kind: "dragon", category: "human"} would otherwise pick the human
     // colour lists to validate against.
@@ -196,7 +202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.user as any).id;
       const parsed = characterSchema
         .omit({ id: true, createdAt: true, customFields: true, adventures: true,
-                 avatarUrl: true, avatarPrompt: true })
+                 avatarUrl: true, avatarPrompt: true, avatars: true })
         .parse(req.body);
 
       const customFields = Object.keys(parsed).filter((k) => k !== "category");
@@ -279,7 +285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // fetches a child's picture from.
       const updates = characterSchema
         .omit({ id: true, createdAt: true, customFields: true, adventures: true,
-                 avatarUrl: true, avatarPrompt: true })
+                 avatarUrl: true, avatarPrompt: true, avatars: true })
         .partial()
         .parse(req.body);
 
@@ -345,6 +351,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Checked BEFORE the charge: a refusal must not spend an allowance.
+      // Separate from that allowance on purpose -- this bounds what one
+      // character holds, the allowance bounds what an account may spend, and
+      // deleting a picture frees a slot here while refunding nothing there.
+      if (avatarsOf(character).length >= MAX_AVATARS) {
+        return res.status(409).json({
+          code: "avatar_limit",
+          message: `${character.name} already has ${MAX_AVATARS} pictures. Delete one to make room.`,
+          limit: MAX_AVATARS,
+        });
+      }
+
       // The check and the charge, in one statement. Unlimited users are still
       // counted -- the number stays true -- but never blocked.
       const charged = await storage.chargeAvatarGeneration(
@@ -363,8 +381,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // grantedByAllowance ONLY for the capped user: an admin or own-key user
       // already passes the premium gate on their own, and saying otherwise
       // would hide which of the two actually paid for this call.
+      // Draw it to LOOK LIKE the one they already chose, when there is one.
+      const gallery = avatarsOf(character);
       const result = await generateAvatar(character, userId, {
         grantedByAllowance: !unlimited,
+        likeUrl: character.avatarUrl ?? gallery[gallery.length - 1]?.url,
       });
 
       if (!result) {
@@ -375,7 +396,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Appended AND selected. A picture you just asked for is the one you
+      // meant to look at; making it a two-step would be pedantry.
+      const entry = {
+        id: randomUUID(),
+        url: result.url,
+        prompt: result.prompt,
+        createdAt: new Date().toISOString(),
+      };
       const updated = await storage.updateCharacter(req.params.id, userId, {
+        avatars: [...avatarsOf(character), entry].slice(-MAX_AVATARS),
         avatarUrl: result.url,
         avatarPrompt: result.prompt,
       });
@@ -392,6 +422,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating character avatar:", error);
       res.status(500).json({ message: "Failed to generate a picture" });
+    }
+  });
+
+  /** Choose which of a character's pictures the stories and the card use. */
+  app.put("/api/characters/:id/avatar/:avatarId", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const character = await storage.getCharacterById(req.params.id, userId);
+      if (!character) return res.status(404).json({ message: "Character not found" });
+
+      const picked = avatarsOf(character).find((a) => a.id === req.params.avatarId);
+      if (!picked) return res.status(404).json({ message: "Picture not found" });
+
+      // avatarUrl and avatarPrompt ARE the selection. Everything downstream --
+      // the card, the form, a story illustration -- reads those two and knows
+      // nothing about the gallery, which is what keeps this a display change
+      // rather than a change to how a character is drawn into a story.
+      const updated = await storage.updateCharacter(req.params.id, userId, {
+        avatars: avatarsOf(character),
+        avatarUrl: picked.url,
+        avatarPrompt: picked.prompt,
+      });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error selecting avatar:", error);
+      res.status(500).json({ message: "Failed to choose that picture" });
+    }
+  });
+
+  /**
+   * Delete one picture.
+   *
+   * Frees a slot for this character and REFUNDS NOTHING against the account's
+   * lifetime allowance -- the money was spent when the image was made. If the
+   * two were connected, delete-and-regenerate would be a free image forever,
+   * which is the exact hole MAX_FREE_AVATARS counts generations to avoid.
+   */
+  app.delete("/api/characters/:id/avatar/:avatarId", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const character = await storage.getCharacterById(req.params.id, userId);
+      if (!character) return res.status(404).json({ message: "Character not found" });
+
+      const gallery = avatarsOf(character);
+      const gone = gallery.find((a) => a.id === req.params.avatarId);
+      if (!gone) return res.status(404).json({ message: "Picture not found" });
+
+      const kept = gallery.filter((a) => a.id !== req.params.avatarId);
+      // Deleting the chosen one has to choose again, or the character keeps an
+      // avatarUrl pointing at a file that is about to stop existing.
+      const stillChosen = kept.some((a) => a.url === character.avatarUrl);
+      const next = stillChosen ? undefined : kept[kept.length - 1];
+
+      const updated = await storage.updateCharacter(req.params.id, userId, {
+        avatars: kept,
+        ...(stillChosen
+          ? {}
+          : { avatarUrl: next?.url ?? undefined, avatarPrompt: next?.prompt ?? undefined }),
+      });
+
+      // The row is updated FIRST and the file removed after. The other order
+      // leaves a character pointing at a file that is already gone if the
+      // write fails, which shows a broken image; this order leaves an orphan
+      // file nobody references, which shows nothing.
+      const name = path.basename(gone.url);
+      if (/^avatar_[0-9a-f-]+\.png$/i.test(name)) {
+        await fsp.rm(path.join(AVATAR_DIR, name), { force: true }).catch((e) => {
+          console.warn(`[avatar] could not remove ${name}:`, e);
+        });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error deleting avatar:", error);
+      res.status(500).json({ message: "Failed to delete that picture" });
     }
   });
 
