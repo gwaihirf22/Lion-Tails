@@ -11,6 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Loader2 } from "lucide-react";
+import lantern from "@/assets/lantern.webp";
 
 // Extend the schemas from shared/schema.ts
 const loginSchema = z.object({
@@ -256,6 +257,28 @@ export default function AuthPage() {
       {/* Hero section */}
       <div className="w-full md:w-1/2 bg-primary/10 p-6 flex flex-col items-center justify-center">
         <div className="max-w-md mx-auto text-center">
+          {/*
+            The lantern, not the cover.
+
+            This column is the emptiest screen in the app and the one where a
+            first-time visitor decides whether to sign up, so it wants the
+            artwork. But the cover has text baked into it, and text over a busy
+            image needs a colour chosen against that image -- which
+            decisions.md §23 is explicit about: a hardcoded colour is a guess
+            about the background, and this app has four palettes. The lantern
+            arrived on transparency, so it sits on whatever the palette
+            provides and cannot guess wrong.
+
+            It also matches the copy directly below it, which now promises "a
+            lantern that opens onto the stories that must not be forgotten".
+          */}
+          <img
+            src={lantern}
+            alt=""
+            aria-hidden="true"
+            className="w-28 h-28 mx-auto mb-4 drop-shadow-lg motion-safe:animate-float"
+            loading="lazy"
+          />
           <h1 className="text-3xl font-bold tracking-tight mb-4">Welcome to Lion Tails</h1>
           <p className="mb-6">
             Create personalized Biblical stories that teach faith and Christian values. 

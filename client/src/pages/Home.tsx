@@ -1,8 +1,12 @@
 import { useLocation , Link } from "wouter";
+import { FREE_STORIES, FREE_STORIES_PER_MONTH } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import appIcon from "@/assets/app-icon.jpg";
+import cover from "@/assets/cover.webp";
+import coverSmall from "@/assets/cover-1024.webp";
+import coverFallback from "@/assets/cover.jpg";
+import barnabasSign from "@/assets/barnabas-sign.webp";
 import { useAuth } from "@/hooks/use-auth";
-import { Book, Music, PenTool, User, CalendarDays, History, BookOpen } from "lucide-react";
+import { Music, PenTool, User, CalendarDays } from "lucide-react";
 
 export default function Home() {
   const [, navigate] = useLocation();
@@ -10,47 +14,44 @@ export default function Home() {
 
   return (
     <div>
-      {/* Hero Section */}
-      <section className="mb-8 text-center">
-        <div className="max-w-5xl mx-auto rounded-2xl shadow-xl p-6 relative overflow-hidden content-container">
-          <h1 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-secondary drop-shadow-sm">Lion Tails: Christian Stories</h1>
-          <p className="text-lg md:text-xl mb-6 max-w-3xl mx-auto">Learn the key events and people of Scripture and church history the way anyone actually remembers them &mdash; as stories worth staying awake for, with the characters you choose in them.</p>
-          <div className="flex flex-col md:flex-row justify-center items-center gap-8">
-            <div className="flex-1 p-4">
-              <div className="animate-[float_6s_ease-in-out_infinite] w-64 h-64 md:w-80 md:h-80 mx-auto">
-                <img src={appIcon} alt="Lion Tails" className="w-full h-full object-cover rounded-full shadow-lg border-2 border-border" />
-              </div>
-            </div>
-            <div className="flex-1 p-4">
-              <div className="bg-card backdrop-blur-sm rounded-lg p-4 shadow-md">
-                <h3 className="text-xl font-heading font-bold mb-4">Features:</h3>
-                <ul className="text-left space-y-3">
-                  <li className="flex items-center">
-                    <span className="text-primary mr-3 bg-primary/10 p-1 rounded-full"><Book size={18} /></span>
-                    <span>Save characters once, then put up to eight of them in one story</span>
-                  </li>
-                  <li className="flex items-center">
-                    <span className="text-primary mr-3 bg-primary/10 p-1 rounded-full"><BookOpen size={18} /></span>
-                    <span>Continue a story: the cast and what happened carry over</span>
-                  </li>
-                  <li className="flex items-center">
-                    <span className="text-primary mr-3 bg-primary/10 p-1 rounded-full"><CalendarDays size={18} /></span>
-                    <span>Heroes of Faith, from Scripture and from church history</span>
-                  </li>
-                  <li className="flex items-center">
-                    <span className="text-primary mr-3 bg-primary/10 p-1 rounded-full"><History size={18} /></span>
-                    <span>Real accounts told faithfully &mdash; or one moment from a real life, so you learn it properly instead of skimming a whole biography</span>
-                  </li>
-                  <li className="flex items-center">
-                    <span className="text-primary mr-3 bg-primary/10 p-1 rounded-full"><Music size={18} /></span>
-                    <span>A reader built for bedtime, and songs with guitar chords</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-          <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <Button 
+      {/*
+        The cover carries its own wordmark, so there is no <h1> printed over
+        it -- two renderings of the name stacked on top of each other read as a
+        mistake rather than as branding. The heading is still here for screen
+        readers and for search results; it is just not drawn twice.
+
+        <picture> rather than <img>: the full-width file is 236KB and the phone
+        one 132KB, from a 2.5MB source. On a tablet over home wifi that is the
+        difference between the hero appearing and the hero arriving.
+
+        fetchpriority="high" because this is the largest thing above the fold
+        and the browser otherwise discovers it late.
+      */}
+      <section className="mb-8">
+        <div className="max-w-6xl mx-auto rounded-2xl shadow-xl overflow-hidden relative">
+          <h1 className="sr-only">Lion Tails — real stories, timeless truths</h1>
+          <picture>
+            <source srcSet={coverSmall} media="(max-width: 640px)" type="image/webp" />
+            <source srcSet={cover} type="image/webp" />
+            <img
+              src={coverFallback}
+              alt="A lion and a lantern-keeper outside Barnabas &amp; Co., with scenes from Scripture and church history winding away behind them"
+              className="w-full h-auto block"
+              width={1536}
+              height={1024}
+              fetchPriority="high"
+            />
+          </picture>
+        </div>
+
+        <div className="max-w-3xl mx-auto text-center mt-6 px-4">
+          <p className="text-lg md:text-xl mb-6">
+            Learn the key events and people of Scripture and church history the way
+            anyone actually remembers them &mdash; as stories worth staying awake for,
+            with the characters you choose in them.
+          </p>
+          <div className="flex flex-wrap justify-center gap-4">
+            <Button
               size="lg"
               className="bg-primary text-primary-foreground hover:bg-primary/90 border-none shadow-md font-bold"
               onClick={() => navigate("/generate-story")}
@@ -59,7 +60,7 @@ export default function Home() {
               Create a Story
             </Button>
             {!user && (
-              <Button 
+              <Button
                 variant="outline"
                 size="lg"
                 className="bg-card backdrop-blur-sm hover:bg-card shadow-md font-bold"
@@ -70,6 +71,29 @@ export default function Home() {
               </Button>
             )}
           </div>
+        </div>
+      </section>
+
+      {/*
+        The keeper's shop. Barnabas exists only in server/data/lionTails.ts
+        today -- he is lore the story prompts draw on, with no surface of his
+        own -- so this is the first place a reader meets the frame the stories
+        are told inside. The sign says TIMEKEEPER, which is the whole premise.
+      */}
+      <section className="mb-10 max-w-4xl mx-auto px-4">
+        <div className="content-container rounded-xl shadow-lg p-6 text-center">
+          <img
+            src={barnabasSign}
+            alt="A weathered hanging shop sign reading Barnabas &amp; Co., Timekeeper"
+            className="mx-auto w-full max-w-md h-auto mb-4"
+            loading="lazy"
+          />
+          <p className="text-lg max-w-2xl mx-auto">
+            Every story starts at the keeper&rsquo;s shop. Mr Barnabas knows what the
+            lantern does and never quite explains it &mdash; he just opens the door,
+            and the people you have made walk through it into something that really
+            happened.
+          </p>
         </div>
       </section>
 
@@ -129,9 +153,14 @@ export default function Home() {
           <div className="inline-block bg-secondary/20 px-4 py-2 rounded-full text-secondary font-medium text-sm mb-3">
             ✨ AI-Powered Stories
           </div>
-          <h3 className="text-2xl font-heading font-bold mb-2">Your First 50 Stories Are Free!</h3>
+          <h3 className="text-2xl font-heading font-bold mb-2">
+            Your First {FREE_STORIES} Stories Are Free!
+          </h3>
           <p className="text-foreground mb-2">
-            Enjoy 50 free AI-generated stories to start, plus 10 more each month. Want unlimited stories?
+            {/* Read, not restated. These were literals in the copy, which is how
+                a marketing sentence outlives the number it describes. */}
+            Enjoy {FREE_STORIES} free AI-generated stories to start, then {FREE_STORIES_PER_MONTH} more
+            each month up to {FREE_STORIES}. Want unlimited stories?
             Add your own OpenAI API key in the <Link href="/settings" className="text-secondary hover:underline font-medium">Settings</Link> page.
           </p>
         </div>

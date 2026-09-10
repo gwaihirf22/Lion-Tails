@@ -62,6 +62,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import {
   MAX_AVATARS,
+  FREE_STORIES_PER_MONTH,
+  storyAllowance,
   statsOf,
   virtueLevels,
   avatarsOf, storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
@@ -951,54 +953,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ cancelled: true });
   });
   
-  // Get user's story generation usage stats
-  app.get("/api/story/usage", async (req, res) => {
+  /**
+   * The ONE place the free story allowance is reported.
+   *
+   * There were two, and they were exact inverses: this one called the total 60
+   * when there was no reset date, /api/stats/story-generation called it 60 when
+   * there WAS one, and neither agreed with what the server enforced. Both the
+   * pill on Create Story and the card in Settings now read this, computed by
+   * the same function the enforcement path uses.
+   */
+  app.get("/api/story/usage", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to view usage stats" });
-      }
-      
-      // Get user ID from authenticated user
       const userId = (req.user as any).id;
-      
-      // Get the user's current generation count
-      const count = await storage.getStoryGenerationCount(userId);
-      
-      // Get the last reset date or use the current date if none exists
-      const lastReset = await storage.getLastResetDate(userId) || new Date();
-      
-      // Calculate next reset date (1st of next month)
-      const nextReset = new Date(lastReset);
-      nextReset.setMonth(nextReset.getMonth() + 1);
-      nextReset.setDate(1);
-      
-      // Set standard monthly limit (free tier)
-      const monthlyLimit = 10;
-      
-      // Add initial 50 stories for new users
-      const initialBonus = 50;
-      
-      // Calculate remaining generations
-      // If this is the first month (no reset date is set or it's the first time using the app)
-      const isNewUser = !await storage.getLastResetDate(userId);
-      const limit = isNewUser ? initialBonus + monthlyLimit : monthlyLimit;
-      const remaining = Math.max(0, limit - count);
-      
+      // Applied, not just computed: the top-up has to land in the row, or the
+      // next request recomputes it from the same stale count for ever.
+      const { count, lastResetDate } = await storage.applyStoryTopUp(userId);
+      const allowance = storyAllowance({ count, lastResetDate });
       res.json({
-        count,
-        remaining,
-        limit,
-        lastReset: lastReset.toISOString(),
-        nextReset: nextReset.toISOString(),
-        isNewUser
+        used: allowance.used,
+        remaining: allowance.remaining,
+        total: allowance.total,
+        perMonth: FREE_STORIES_PER_MONTH,
+        lastReset: lastResetDate ? new Date(lastResetDate).toISOString() : null,
+        nextTopUp: allowance.nextTopUp.toISOString(),
       });
     } catch (error) {
       console.error("Error fetching usage stats:", error);
       res.status(500).json({ message: "Failed to fetch usage statistics" });
     }
   });
-  
+
   // API endpoint to save a story after generation
   app.post("/api/story/save", async (req, res) => {
     try {
@@ -1888,49 +1872,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error analyzing attached image:", error);
       res.status(500).json({ message: "Failed to analyze image" });
-    }
-  });
-
-  // Get story generation statistics - requires authentication
-  app.get("/api/stats/story-generation", async (req, res) => {
-    try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to view statistics" });
-      }
-      
-      // Get the user ID from the authenticated user
-      const userId = (req.user as any).id;
-      const count = await storage.getStoryGenerationCount(userId);
-      const lastResetDate = await storage.getLastResetDate(userId);
-      
-      // Calculate quotas
-      const initialQuota = 50;
-      const monthlyQuota = 10;
-      const used = count;
-      let remaining = initialQuota - used;
-      
-      // Add monthly quotas if applicable
-      if (lastResetDate) {
-        const now = new Date();
-        const monthsSinceReset = Math.floor((now.getTime() - lastResetDate.getTime()) / (30 * 24 * 60 * 60 * 1000));
-        
-        if (monthsSinceReset > 0) {
-          remaining += monthsSinceReset * monthlyQuota;
-        }
-      }
-      
-      remaining = Math.max(0, remaining);
-      
-      res.json({
-        used,
-        remaining,
-        total: initialQuota + (lastResetDate ? monthlyQuota : 0),
-        lastResetDate
-      });
-    } catch (error) {
-      console.error("Error fetching story generation stats:", error);
-      res.status(500).json({ message: "Failed to fetch story statistics" });
     }
   });
 

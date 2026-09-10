@@ -128,10 +128,21 @@ export default {
             height: "0",
           },
         },
+        // Home.tsx used animate-[float_6s_ease-in-out_infinite] on the app
+        // icon for months and it never moved: no keyframe called "float" was
+        // ever defined, so Tailwind emitted an animation naming nothing. An
+        // arbitrary-value animation fails exactly this quietly -- see
+        // decisions.md §18 on the class built from a variable that does not
+        // exist.
+        float: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-8px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        float: "float 6s ease-in-out infinite",
       },
     },
   },

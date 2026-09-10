@@ -1,6 +1,7 @@
 
 import { db, pool } from './db';
-import { users, verificationTokens, readingPrefsSchema, storyRequestSchema, type ReadingPrefs, type User, type InsertUser, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
+import {
+  FREE_STORIES_PER_MONTH, users, verificationTokens, readingPrefsSchema, storyRequestSchema, type ReadingPrefs, type User, type InsertUser, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
 import { eq, and, desc, isNull, sql, or, like, ilike } from 'drizzle-orm';
@@ -1354,97 +1355,8 @@ export class DbStorage implements IStorage {
   }
   
   // Usage tracking methods
-  async getStoryGenerationCount(userId: number): Promise<number> {
-    if (!isDatabaseAvailable()) {
-      console.warn(`Database unavailable in getStoryGenerationCount(${userId}). Using default count 0.`);
-      return 0;
-    }
-    
-    try {
-      // Create the table if it doesn't exist (helpful for deployment)
-      await pool!.query(`
-        CREATE TABLE IF NOT EXISTS user_usage (
-          user_id INTEGER PRIMARY KEY,
-          count INTEGER DEFAULT 0,
-          last_reset_date TIMESTAMP WITH TIME ZONE
-        )
-      `);
-      
-      const { rows } = await pool!.query(
-        `SELECT count FROM user_usage WHERE user_id = $1`,
-        [userId]
-      );
-      
-      return rows.length ? rows[0].count : 0;
-    } catch (error) {
-      console.error(`Error getting story generation count for user ${userId}:`, error);
-      return 0; // Default to 0 on error
-    }
-  }
   
-  async incrementStoryGenerationCount(userId: number): Promise<number> {
-    if (!isDatabaseAvailable()) {
-      console.warn(`Database unavailable in incrementStoryGenerationCount(${userId}). Cannot increment count.`);
-      return 1; // Return 1 as a reasonable default
-    }
-    
-    try {
-      // Create the table if it doesn't exist (helpful for deployment)
-      await pool!.query(`
-        CREATE TABLE IF NOT EXISTS user_usage (
-          user_id INTEGER PRIMARY KEY,
-          count INTEGER DEFAULT 0,
-          last_reset_date TIMESTAMP WITH TIME ZONE
-        )
-      `);
-    
-      // Use upsert pattern
-      const { rows } = await pool!.query(
-        `INSERT INTO user_usage (user_id, count) 
-         VALUES ($1, 1) 
-         ON CONFLICT (user_id) 
-         DO UPDATE SET count = user_usage.count + 1 
-         RETURNING count`,
-        [userId]
-      );
-      
-      return rows[0].count;
-    } catch (error) {
-      console.error(`Error incrementing story generation count for user ${userId}:`, error);
-      return 1; // Return 1 as a fallback value
-    }
-  }
   
-  async resetStoryGenerationCount(userId: number): Promise<void> {
-    if (!isDatabaseAvailable()) {
-      console.warn(`Database unavailable in resetStoryGenerationCount(${userId}). Cannot reset count.`);
-      return; // Just return without doing anything
-    }
-    
-    try {
-      // Create the table if it doesn't exist (helpful for deployment)
-      await pool!.query(`
-        CREATE TABLE IF NOT EXISTS user_usage (
-          user_id INTEGER PRIMARY KEY,
-          count INTEGER DEFAULT 0,
-          last_reset_date TIMESTAMP WITH TIME ZONE
-        )
-      `);
-    
-      const now = new Date();
-      
-      await pool!.query(
-        `INSERT INTO user_usage (user_id, count, last_reset_date) 
-         VALUES ($1, 0, $2) 
-         ON CONFLICT (user_id) 
-         DO UPDATE SET count = 0, last_reset_date = $2`,
-        [userId, now]
-      );
-    } catch (error) {
-      console.error(`Error resetting story generation count for user ${userId}:`, error);
-      // No need to throw since this is a void function
-    }
-  }
   
   async getAvatarCount(userId: number): Promise<number> {
     if (!isDatabaseAvailable()) {
@@ -1519,53 +1431,68 @@ export class DbStorage implements IStorage {
     }
   }
 
-  async getLastResetDate(userId: number): Promise<Date | null> {
+  /**
+   * Forgive the months this account is owed, once.
+   *
+   * ONE STATEMENT, and the WHERE clause is the guard. The reset this replaces
+   * was a blind "count = 0, last_reset_date = now" with nothing stopping two
+   * concurrent calls from both firing -- and each one pushed the date forward
+   * again, granting a month that had not passed.
+   *
+   * Here the row is only touched when it is genuinely behind, and the date
+   * advances by exactly the number of months applied, computed in SQL from the
+   * stored value rather than from anything the caller passes. Run it twice for
+   * the same instant and the second finds nothing to do.
+   *
+   * date_trunc to the month on the way in, so the anniversary is the 1st and
+   * not whatever day of the month somebody first generated a story.
+   */
+  async applyStoryTopUp(userId: number, now: Date = new Date()) {
     if (!isDatabaseAvailable()) {
-      console.warn(`Database unavailable in getLastResetDate(${userId}). Using current date as fallback.`);
-      return new Date(); // Use current date as fallback to prevent unnecessary resets
+      console.warn(`Database unavailable in applyStoryTopUp(${userId}). Nothing forgiven.`);
+      return { count: 0, lastResetDate: null };
     }
-    
     try {
       const { rows } = await pool!.query(
-        `SELECT last_reset_date FROM user_usage WHERE user_id = $1`,
-        [userId]
+        `WITH owed AS (
+           SELECT user_id,
+                  GREATEST(
+                    0,
+                    (date_part('year',  $2::timestamptz) - date_part('year',  last_reset_date)) * 12
+                  + (date_part('month', $2::timestamptz) - date_part('month', last_reset_date))
+                  )::int AS months
+             FROM user_usage
+            WHERE user_id = $1 AND last_reset_date IS NOT NULL
+         )
+         UPDATE user_usage u
+            SET count = GREATEST(0, u.count - owed.months * $3::int),
+                last_reset_date = date_trunc('month', u.last_reset_date)
+                                  + make_interval(months => owed.months)
+           FROM owed
+          WHERE u.user_id = owed.user_id AND owed.months > 0
+        RETURNING u.count, u.last_reset_date`,
+        [userId, now, FREE_STORIES_PER_MONTH],
       );
-      
-      return rows.length && rows[0].last_reset_date ? rows[0].last_reset_date : null;
+      if (rows.length) {
+        return { count: Number(rows[0].count), lastResetDate: rows[0].last_reset_date as Date };
+      }
+      // Nothing owed. Report what is there.
+      const { rows: cur } = await pool!.query(
+        `SELECT count, last_reset_date FROM user_usage WHERE user_id = $1`,
+        [userId],
+      );
+      return cur.length
+        ? { count: Number(cur[0].count), lastResetDate: cur[0].last_reset_date as Date | null }
+        : { count: 0, lastResetDate: null };
     } catch (error) {
-      console.error(`Error getting last reset date for user ${userId}:`, error);
-      return new Date(); // Use current date as fallback
+      console.error(`Error applying story top-up for user ${userId}:`, error);
+      // Report nothing forgiven rather than guessing generously: the caller
+      // uses this to decide whether to spend the owner's credits.
+      return { count: 0, lastResetDate: null };
     }
   }
+
   
-  async setLastResetDate(userId: number, date: Date): Promise<void> {
-    if (!isDatabaseAvailable()) {
-      console.warn(`Database unavailable in setLastResetDate(${userId}). Cannot update reset date.`);
-      return;
-    }
-    
-    try {
-      // Create the table if it doesn't exist (helpful for deployment)
-      await pool!.query(`
-        CREATE TABLE IF NOT EXISTS user_usage (
-          user_id INTEGER PRIMARY KEY,
-          count INTEGER DEFAULT 0,
-          last_reset_date TIMESTAMP WITH TIME ZONE
-        )
-      `);
-    
-      await pool!.query(
-        `INSERT INTO user_usage (user_id, last_reset_date) 
-         VALUES ($1, $2) 
-         ON CONFLICT (user_id) 
-         DO UPDATE SET last_reset_date = $2`,
-        [userId, date]
-      );
-    } catch (error) {
-      console.error(`Error setting last reset date for user ${userId}:`, error);
-      // No need to throw since this is a void function
-    }
-  }
   
   // User settings methods
   async getUserOpenAIKey(userId: number): Promise<string | null> {

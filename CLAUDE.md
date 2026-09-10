@@ -165,6 +165,35 @@ Admin status is `users.is_admin`. Never key authorisation off a username —
 nothing reserves usernames, so a string comparison grants the privilege to
 anyone who registers that name.
 
+## The free story allowance
+
+`FREE_STORIES` (50) and `FREE_STORIES_PER_MONTH` (10) in `shared/schema.ts`,
+and **one pure function, `storyAllowance()`**, which every screen and the
+enforcement path call. It is a balance that TOPS UP, not an allowance that
+refills: each calendar month forgives ten of what has been used, stopping at
+zero. A heavy user gets ten a month after the first fifty; a light user sits at
+fifty. Expressed as forgiving `count` rather than as a stored balance, so the
+existing column keeps its meaning and nothing needed migrating.
+
+`applyStoryTopUp()` persists it in **one statement whose WHERE clause is the
+guard**, advancing `last_reset_date` by exactly the months applied — so running
+it twice is a no-op. The reset it replaces was a blind `count = 0` that two
+concurrent calls could both fire, each pushing the date forward again.
+
+**`GET /api/story/usage` is the only endpoint that reports it**, typed as
+`StoryUsage` so a renamed field breaks the build rather than rendering
+undefined, and both screens read it through the same query key.
+
+What this replaced, because the shape of the bug is worth remembering: five
+restatements of 50 and 10, four different meanings of "a month", two endpoints
+that were exact inverses (one called the total 60 when there was no reset date,
+the other when there was), a pill computing `max(0, 10 - count)` against a
+lifetime count so it read 0 for anyone past ten stories, and a `count < 50`
+early return that made the monthly top-up unreachable — the user got fifty
+more, not ten. Five storage methods that looked like the counter were all dead:
+the real increment is raw SQL inside the worker's finishing transaction, which
+is where it has to be to share that transaction.
+
 ## Model selection
 
 `server/lib/modelPolicy.ts` is the only place the model, provider base URL and
