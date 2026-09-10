@@ -13,6 +13,7 @@ import { apiRequestAllowingErrors } from "@/lib/queryClient";
 import { parseStoryContent } from "@/lib/storyContent";
 import StoryContent from "@/components/reader/StoryContent";
 import { useUniverses } from "@/hooks/use-universes";
+import { UniverseWorldItem } from "@/components/UniverseContext";
 import type { SavedStory } from "@shared/schema";
 
 /**
@@ -145,27 +146,7 @@ export function ContinuationContext({ storyId }: { storyId: string }) {
 
         {/* Only when one already exists. This panel never OFFERS to make one --
             that costs a model call and lives behind its own gate. */}
-        {universe?.summary && (
-          <AccordionItem value="world">
-            <AccordionTrigger className="text-sm">
-              What has happened in this world so far
-              {universe.isStale && (
-                <Badge variant="outline" className="ml-2 text-xs">
-                  out of date
-                </Badge>
-              )}
-            </AccordionTrigger>
-            <AccordionContent>
-              <p className="whitespace-pre-wrap text-sm">{universe.summary}</p>
-              {universe.isStale && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Stories have been added since this was written, so it does not
-                  cover all of them. You can update it from My Stories.
-                </p>
-              )}
-            </AccordionContent>
-          </AccordionItem>
-        )}
+        {universe && <UniverseWorldItem universe={universe} />}
       </Accordion>
 
       {outline.length === 0 && (

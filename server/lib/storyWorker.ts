@@ -818,8 +818,13 @@ async function runJob(job: JobRow): Promise<void> {
       // Deliberately after finishSucceeded and deliberately not awaited for its
       // result: the story is saved and the user is done. A failure to enqueue the
       // extraction must not fail a story that already exists.
+      // A story attached to a universe by "Add to this Universe" carries a
+      // resolved universeId and no parent. It is written AGAINST the world's
+      // memory; without this line it would never be added TO it.
       const wantsMemory =
-        Boolean(job.request?.mayContinue) || Boolean(job.request?.continuesStoryId);
+        Boolean(job.request?.mayContinue) ||
+        Boolean(job.request?.continuesStoryId) ||
+        Boolean(job.request?.universeId);
 
       // A FIRST story that opts into a series has no universe yet.
       // resolveUniverseForRequest only creates one when continuing -- it needs a
