@@ -21,9 +21,11 @@ interface StoryDisplayProps {
    * destroys it, and StoryResponse carried no way to tell them apart.
    */
   storyType?: StoryRequest["storyType"];
+  /** Ships with the app: no favourite, no expiry, nothing to change. */
+  builtIn?: boolean;
 }
 
-export default function StoryDisplay({ story, storyId, storyType }: StoryDisplayProps) {
+export default function StoryDisplay({ story, storyId, storyType, builtIn }: StoryDisplayProps) {
   const [isFavorite, setIsFavorite] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showExpiryAlert, setShowExpiryAlert] = useState(true);
@@ -130,17 +132,19 @@ export default function StoryDisplay({ story, storyId, storyType }: StoryDisplay
       )}
 
       <div className="reader-chrome mx-auto flex w-full max-w-3xl items-center gap-1 px-3">
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-8 gap-1 px-2 text-xs"
-          disabled={busy || !storyId}
-          onClick={handleToggleFavorite}
-          aria-pressed={isFavorite}
-        >
-          <Star className={`h-3.5 w-3.5 ${isFavorite ? "fill-current" : ""}`} aria-hidden="true" />
-          {isFavorite ? "Favourited" : "Favourite"}
-        </Button>
+        {!builtIn && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1 px-2 text-xs"
+            disabled={busy || !storyId}
+            onClick={handleToggleFavorite}
+            aria-pressed={isFavorite}
+          >
+            <Star className={`h-3.5 w-3.5 ${isFavorite ? "fill-current" : ""}`} aria-hidden="true" />
+            {isFavorite ? "Favourited" : "Favourite"}
+          </Button>
+        )}
         <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={handlePrint}>
           <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print
         </Button>
@@ -149,7 +153,7 @@ export default function StoryDisplay({ story, storyId, storyType }: StoryDisplay
         </Button>
       </div>
 
-      {showExpiryAlert && storyId && !isFavorite && (
+      {showExpiryAlert && storyId && !isFavorite && !builtIn && (
         <Alert
           className="reader-chrome mx-auto mt-2 w-full max-w-3xl"
           style={{ borderColor: "var(--reader-border)", background: "var(--reader-surface)" }}
@@ -165,7 +169,7 @@ export default function StoryDisplay({ story, storyId, storyType }: StoryDisplay
 
       <ReadingSurface title={story.title} doc={doc} />
 
-      <StoryExtras story={story} storyId={storyId} doc={doc} focusHidden={focus.hidden} />
+      <StoryExtras story={story} storyId={storyId} doc={doc} focusHidden={focus.hidden} builtIn={builtIn} />
     </div>
   );
 }

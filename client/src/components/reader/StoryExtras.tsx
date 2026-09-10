@@ -27,12 +27,15 @@ export function StoryExtras({
   storyId,
   doc,
   focusHidden,
+  builtIn,
 }: {
   story: StoryResponse;
   storyId?: string;
   doc: StoryDoc | null;
   /** True while focus mode has faded this block out. */
   focusHidden: boolean;
+  /** Ships with the app: the server refuses to illustrate or link it. */
+  builtIn?: boolean;
 }) {
   const { toast } = useToast();
   const ref = useRef<HTMLDivElement>(null);
@@ -192,7 +195,7 @@ export function StoryExtras({
                 This is the standard Lion Tails picture — this story does not have
                 one of its own.
               </p>
-              {modelInfo?.canIllustrate ? (
+              {modelInfo?.canIllustrate && !builtIn ? (
                 <div className="mt-4 flex justify-center">
                   <Button
                     size="sm"
@@ -251,7 +254,7 @@ export function StoryExtras({
           </AccordionItem>
         )}
 
-        {storyId && (
+        {storyId && !builtIn && (
           <AccordionItem value="hero" style={{ borderColor: "var(--reader-border)" }}>
             <AccordionTrigger className="text-base">Link to a Hero of Faith</AccordionTrigger>
             <AccordionContent>

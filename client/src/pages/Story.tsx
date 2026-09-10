@@ -10,6 +10,12 @@ export default function Story() {
   const [storyData, setStoryData] = useState<StoryResponse | null>(null);
   const [storyId, setStoryId] = useState<string | null>(null);
   const [storyType, setStoryType] = useState<StoryRequest["storyType"] | undefined>();
+  // A story the app ships with. Nothing about it can be changed, so nothing
+  // that changes a story is offered -- including "Continue this story", which
+  // would create a universe named after the NEW story with no memory of this
+  // one. The per-user quest universe is what will make continuing it mean
+  // something; until then the button would promise what it cannot do.
+  const [builtIn, setBuiltIn] = useState(false);
 
   useEffect(() => {
     // Scroll to the top of the page when component mounts
@@ -43,6 +49,7 @@ export default function Story() {
             const saved = await response.json();
             const s = saved.story ?? saved;
             setStoryData(s);
+            setBuiltIn(Boolean(saved.builtIn));
             // s.storyType is set on stories generated after this shipped;
             // saved.request.storyType is present on every row that already
             // exists, which is why no backfill is needed. The parser's own
@@ -81,7 +88,7 @@ export default function Story() {
         <div className="space-x-3">
           {/* Continuing is what creates a universe: the parent adopts one if it
               has none, so the user never has to set one up first. */}
-          {storyId && (
+          {storyId && !builtIn && (
             <Button onClick={() => navigate(`/generate-story?continues=${storyId}`)}>
               Continue this story
             </Button>
@@ -99,6 +106,7 @@ export default function Story() {
         story={storyData}
         storyId={storyId || undefined}
         storyType={storyType}
+        builtIn={builtIn}
       />
     </div>
   );

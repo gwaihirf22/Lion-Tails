@@ -39,34 +39,7 @@ import CharacterForm, { type CharacterFormValues } from "./CharacterForm";
 import { saveCharacter } from "@/lib/saveCharacter";
 import { useToast } from "@/hooks/use-toast";
 import PromptEditor from "./PromptEditor";
-
-/**
- * The three answers to "how is your character in this account", in words.
- *
- * ONE definition for both tabs. The historical tab offers all three; the
- * original tab offers the two ways IN, because getting there is the question
- * it just asked. Written twice they would drift, and the difference between
- * "they travel there" and "they were always there" is the whole feature -- a
- * user who reads two different descriptions of the same radio has been told
- * the app does not know either.
- */
-const ROLE_OPTIONS: Record<CharacterRole, { label: string; description: string }> = {
-  absent: {
-    label: "Not in the story",
-    description:
-      "A straight retelling of what actually happened. Your character is not written into it.",
-  },
-  travels: {
-    label: "They travel there",
-    description:
-      "Your character starts here and now, and goes. The story has a present as well as a past, and it opens somewhere before the journey.",
-  },
-  alongside: {
-    label: "They were always there",
-    description:
-      "Your character belongs to that time and place, and always did. No journey. They help, and they ask the hard questions — but everything still happens exactly as it really did.",
-  },
-};
+import { ROLE_OPTIONS } from "@/lib/characterRole";
 
 /**
  * The radio itself, so neither tab owns the markup.

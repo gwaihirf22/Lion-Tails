@@ -11,12 +11,18 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { SavedStory } from "@shared/schema";
+import { QUEST_SERIES_TITLE } from "@shared/quests";
 import { apiRequest } from "@/lib/queryClient";
 import { formatDistanceToNow } from "date-fns";
 
 export default function SavedStories() {
   const [, navigate] = useLocation();
   const [stories, setStories] = useState<SavedStory[]>([]);
+  // What the app ships with, kept apart from the user's own: it is pinned
+  // above the tabs, never counted, and has no favourite or delete. Unassigned
+  // stories render LAST, after the universes, so a list position would bury
+  // the one story every library begins with.
+  const [builtIn, setBuiltIn] = useState<SavedStory[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
   const { toast } = useToast();
@@ -47,8 +53,9 @@ export default function SavedStories() {
       try {
         setLoading(true);
         const response = await apiRequest('GET', '/api/stories');
-        const data = await response.json();
-        setStories(data);
+        const data: SavedStory[] = await response.json();
+        setBuiltIn(data.filter((s) => s.builtIn));
+        setStories(data.filter((s) => !s.builtIn));
       } catch (error) {
         console.error('Error fetching stories:', error);
         toast({
@@ -271,6 +278,32 @@ export default function SavedStories() {
           ))}
         </div>
       )}
+
+      {builtIn.map((s) => (
+        <Card
+          key={s.id}
+          className="mb-6 bg-card overflow-hidden transition-all duration-200 hover:shadow-md cursor-pointer"
+          onClick={() => navigate(`/story?id=${s.id}`)}
+        >
+          <CardContent className="p-5">
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {QUEST_SERIES_TITLE}
+            </p>
+            <h3 className="text-xl font-bold text-primary mb-1">
+              <Link
+                href={`/story?id=${s.id}`}
+                className="hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {s.story.title}
+              </Link>
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Where every library begins. It is always here.
+            </p>
+          </CardContent>
+        </Card>
+      ))}
 
       {stories.length === 0 && visibleJobs.length === 0 ? (
         <Card className="bg-card rounded-2xl shadow-lg">

@@ -24,10 +24,11 @@ import { coveringNoun } from "@shared/characterVocab";
 import { storage } from "../storage";
 import { getBiblicalEvent } from "../data/biblicalEvents";
 import {
-  DEVICE,
   KEEPER,
   framingApproachOf,
   pickFramingApproach,
+  worldAnchor,
+  worldCanon,
 } from "../data/lionTails";
 
 export type CustomPrompts = {
@@ -249,6 +250,51 @@ function clearStoryFocus(request: StoryRequest): void {
 }
 
 /**
+ * The load-bearing sentences of both modes, NAMED, because they are said twice.
+ *
+ * Once in the full brief, and once again in every chapter -- the chapter
+ * projection used to carry none of this, so a long story obeyed "does not die"
+ * in chapter 1 and was free of it by chapter 3. Two strings that must agree
+ * are one string.
+ */
+const HISTORY_FIXED =
+  "The real events still happen exactly as the account gives them, in that " +
+  "order, with those names and that outcome. Invent the journey and the " +
+  "arrival; do not invent history, do not let them change what happened, and " +
+  "do not have them rescue anyone from it.";
+
+/**
+ * The mission: given a sympathetic character who thinks the hero's choice is
+ * mad, the obvious scene is the one where they talk him out of it. That is
+ * the story this mode exists to NOT tell. He listens, and he goes anyway --
+ * that is the whole point of putting someone there to argue with him.
+ */
+const missionHolds = (name: string) =>
+  "The person the account is about stays on their mission. They are not " +
+  `talked out of it, and they do not change course because of ${name}. ` +
+  "They may listen, and they may answer.";
+
+/**
+ * The death: a character the reader made is going to be in accounts where
+ * people die, and some of them die badly. The reader has to be safe to ask the
+ * hard question. This is the one place either mode is allowed to be
+ * unrealistic, and it is worth it.
+ */
+const neverDies = (name: string) =>
+  `${name} does not die, whatever happens to anybody else in this account, ` +
+  "and is never the one standing in the way. They are never the villain of " +
+  "this story.";
+
+type Participation = {
+  /** Full-brief lines, into `premise`. */
+  lines: string[];
+  /** The load-bearing rules, for every chapter. */
+  anchor: string;
+  /** The Lion Tails world, for a quest. Absent for the other mode. */
+  world?: StoryBrief["world"];
+};
+
+/**
  * How the character came to be in this account, and what they may do in it.
  *
  * Two modes, and they say almost opposite things -- which is exactly why the
@@ -260,7 +306,7 @@ function participationPremise(
   name: string,
   hasSource: boolean,
   request: StoryRequest,
-): string[] {
+): Participation {
   const out: string[] = [];
 
   if (role === "travels") {
@@ -276,16 +322,17 @@ function participationPremise(
      * story can be traced back to the frame it was given.
      */
     const frame = framingApproachOf(request.travelFrame);
+    /**
+     * The world itself -- the shop, the man, the lantern, the rules -- is not
+     * pushed here any more. It is `world`, rendered under its own heading,
+     * because `premise` renders under "Also asked for:" and a universe is not
+     * something that was asked for. What stays here is the one line that is
+     * about THIS character rather than about the world.
+     */
     out.push(
-      `${name} lives in the present day. ${KEEPER.name} keeps ${KEEPER.place} ` +
-        `He is ${KEEPER.who} ${KEEPER.why}`,
+      `${name} lives in the present day, and this story is a quest with ` +
+        `${KEEPER.name}, ${KEEPER.title}.`,
     );
-    out.push(`What he keeps is ${DEVICE.brief} ${DEVICE.rules}`);
-    // The rules go LAST of the three, so the prohibitions are the most recent
-    // thing said about him rather than the whole of what was said.
-    out.push(KEEPER.never);
-    out.push(frame.opening);
-    out.push(frame.closing);
     if (hasSource) {
       /**
        * Blake's framing, and the balance is the whole instruction: let the
@@ -307,14 +354,15 @@ function participationPremise(
           "it happen. Let the journey itself be fun and surprising; let what " +
           "they find at the end of it be as serious as it actually was.",
       );
-      out.push(
-        "The real events still happen exactly as the account gives them, in " +
-          "that order, with those names and that outcome. Invent the journey " +
-          "and the arrival; do not invent history, do not let them change what " +
-          "happened, and do not have them rescue anyone from it.",
-      );
+      out.push(HISTORY_FIXED);
     }
-    return out;
+    return {
+      lines: out,
+      // "Does not die" was the alongside mode's alone. A traveller is in the
+      // same accounts, and a reader who made them has the same question.
+      anchor: [hasSource ? HISTORY_FIXED : "", neverDies(name)].filter(Boolean).join(" "),
+      world: { canon: worldCanon(frame), anchor: worldAnchor() },
+    };
   }
 
   // role === "alongside". They were always there.
@@ -324,7 +372,7 @@ function participationPremise(
       "give them anything from another century, and do not put a frame around " +
       "the story.",
   );
-  if (!hasSource) return out;
+  if (!hasSource) return { lines: out, anchor: neverDies(name) };
 
   out.push(
     `${name} matters to what happens. They are not a bystander and not a ` +
@@ -349,16 +397,8 @@ function participationPremise(
    * the hard question. This is the one place the mode is allowed to be
    * unrealistic, and it is worth it.
    */
-  out.push(
-    "The person the account is about stays on their mission. They are not " +
-      `talked out of it, and they do not change course because of ${name}. ` +
-      "They may listen, and they may answer.",
-  );
-  out.push(
-    `${name} does not die, whatever happens to anybody else in this account, ` +
-      "and is never the one standing in the way. They are never the villain of " +
-      "this story.",
-  );
+  out.push(missionHolds(name));
+  out.push(neverDies(name));
   /**
    * What the mode is FOR, said outright, because everything above it is a
    * constraint and constraints alone produce a careful, pointless story.
@@ -368,7 +408,7 @@ function participationPremise(
       `WHY that choice was made. Let ${name} ask the question the reader would ` +
       "ask, and let the answer be the story.",
   );
-  return out;
+  return { lines: out, anchor: `${missionHolds(name)} ${neverDies(name)}` };
 }
 
 /**
@@ -599,6 +639,20 @@ export type StoryBrief = {
   premise: string[];
   /** Constraints on how it is written. */
   craft: string[];
+  /**
+   * The Lion Tails world, for a quest. `canon` is the full section; `anchor`
+   * is the handful of rules repeated into every chapter. Absent for every
+   * other kind of story, and for every brief frozen before this existed --
+   * those render exactly as they did.
+   */
+  world?: { canon: string[]; anchor: string };
+  /**
+   * The per-chapter form of the rules a character in a real account lives by:
+   * stays on their mission, does not die, does not change history. The full
+   * brief says them at length; a chapter prompt used to say nothing, and a
+   * long story forgot them by chapter 3.
+   */
+  participationAnchor?: string;
   /** Free-text steering from the user. Deliberately last and unqualified. */
   userInstructions?: string;
   /**
@@ -875,8 +929,13 @@ export function buildStoryBrief(
     premise.push(`Feature this hero of faith: ${request.heroOfFaith}.`);
   }
   if (isSet(request.biblePassage)) premise.push(`Draw on this passage: ${request.biblePassage}.`);
+  let participationAnchor: string | undefined;
+  let world: StoryBrief["world"];
   if (childInScene) {
-    premise.push(...participationPremise(role, name, Boolean(sourceMaterial), request));
+    const p = participationPremise(role, name, Boolean(sourceMaterial), request);
+    premise.push(...p.lines);
+    participationAnchor = p.anchor;
+    world = p.world;
   }
 
   // Scope. Without it, "a story about Corrie ten Boom" gets a life summary --
@@ -999,6 +1058,8 @@ export function buildStoryBrief(
     soloRetelling: anonymous,
     premise,
     craft,
+    ...(world ? { world } : {}),
+    ...(participationAnchor ? { participationAnchor } : {}),
     userInstructions: isSet(request.customPrompt) ? request.customPrompt : undefined,
     continuity:
       continuity &&
@@ -1267,7 +1328,12 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     const soloLine = noInventedChild(brief)
       ? ` ${SOLO_RETELLING_GUARD}`
       : "";
-    return `The story is about ${lead.identity} Keep this consistent.${soloLine}${alsoLine}${holdLine}${sourceLine}${canonLine}`;
+    // The two anchors. Participation sits beside the cast facts it is about;
+    // the world sits beside the source, which is the account it frames.
+    // Continuity canon stays last. Both empty for every brief that has none.
+    const participationLine = brief.participationAnchor ? ` ${brief.participationAnchor}` : "";
+    const worldLine = brief.world ? ` ${brief.world.anchor}` : "";
+    return `The story is about ${lead.identity} Keep this consistent.${soloLine}${alsoLine}${holdLine}${participationLine}${sourceLine}${worldLine}${canonLine}`;
   }
 
   const out: string[] = [];
@@ -1351,6 +1417,16 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
           "the rest out of that part.",
       );
     }
+  }
+
+  if (brief.world) {
+    // Its own heading, between who and what. Before the account so the frame's
+    // opening precedes it; after the cast so the reader of the prompt knows
+    // who is standing in the shop. Guarded, and the blank line is inside the
+    // guard, so a brief with no world renders byte-for-byte as before.
+    out.push("");
+    out.push("THE WORLD THIS HAPPENS IN");
+    out.push(...brief.world.canon);
   }
 
   out.push("");
