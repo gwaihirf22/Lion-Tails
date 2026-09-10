@@ -1538,6 +1538,9 @@ describe("the world of a quest", () => {
     expect(t).toContain("THE WORLD THIS HAPPENS IN");
     expect(t).toContain(SHOP.sign);
     expect(t).toContain(KEEPER.title);
+    // A hint of the Lion, in his mouth -- and the rule that he does not appear.
+    expect(t).toContain("great Lion");
+    expect(t).toContain("does not appear");
     // The lore no longer rides under "Also asked for:" -- the heading a
     // universe does not belong under.
     expect(t.indexOf("THE WORLD THIS HAPPENS IN")).toBeLessThan(t.indexOf("Also asked for:"));
@@ -1570,6 +1573,7 @@ describe("the world of a quest", () => {
     // and chapters used to carry none of this.
     const travels = renderBrief(quest(), "chapter");
     expect(travels).toContain(worldAnchor());
+    expect(travels).toContain("the Lion does not appear");
     expect(travels).toContain("does not die");
     expect(travels).toContain("do not let them change what happened");
 
@@ -1590,7 +1594,7 @@ describe("the world of a quest", () => {
     // the biggest thing in the prompt. A ceiling, not a target.
     expect(words(b.world!.canon.join(" "))).toBeLessThanOrEqual(750);
     expect(words(Object.values(CANON).join(" "))).toBeLessThanOrEqual(350);
-    expect(words(b.world!.anchor)).toBeLessThanOrEqual(90);
+    expect(words(b.world!.anchor)).toBeLessThanOrEqual(110);
   });
 
   it("renders a brief frozen before the world existed exactly as it did", () => {

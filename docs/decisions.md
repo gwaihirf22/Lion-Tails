@@ -887,8 +887,9 @@ custom path a parent sets it, because an off-catalogue kind has none to derive.
 The universe underneath the quests has an arc: a forgotten story, a Lion, an
 ending. **None of that is given to the model.** A model told "the stories were
 never separate" says so in chapter two, and §24 measured a model acting on
-every optional thread it was handed — one Lion line in every brief is a lion
-in every story. So there are two documents with two audiences: the data
+every optional thread it was handed — one Lion in the scene of every brief is
+a lion in every story. So the Lion is a name Barnabas may say, once and
+mysteriously, and never a creature in the scene. So there are two documents with two audiences: the data
 module holds only what is TRUE and may show, phrased as fact and never as
 something coming; the doc holds the movements, the planted mysteries, and a
 table of what is withheld and until when. When a withheld thing becomes

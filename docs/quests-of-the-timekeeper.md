@@ -110,11 +110,16 @@ What he is not: Aslan. No "not a tame lion", no stone table, no wardrobe, no
 talking. He does nothing that explains him. He is never a character with
 lines.
 
-When he may appear: **Movement IV, on the Quests page, and nowhere else.** He
-is not in the model canon at all today — a Lion line in every brief is a lion
-in every story (`docs/decisions.md` §24 measured a model acting on every
-optional thread it was handed). The prologue's last lines are fixed text and
-keep him: a lion, not roaring, calling; and at the end, beginning to walk.
+When he may appear: **Movement IV, on the Quests page, and nowhere else.** A
+Lion in the scene of every brief is a lion in every story (`docs/decisions.md`
+§24 measured a model acting on every optional thread it was handed).
+
+What the model *is* given is the hint, in Barnabas's mouth: asked how he does
+any of this — "I have no control over this." Pressed — "The great Lion knows
+no bounds." Mysteriously, once, and no more. `CANON.lion` says exactly that,
+and in the same breath that the Lion does not appear: not seen, not heard, not
+described. The prologue's last lines are fixed text and keep him: a lion, not
+roaring, calling; and at the end, beginning to walk.
 
 ## Planted mysteries
 
@@ -137,7 +142,7 @@ keep him: a lion, not roaring, calling; and at the end, beginning to walk.
 | withheld | why | released when |
 |---|---|---|
 | That a specific story has been forgotten | it is Movement III's plot | the Quests page reaches III |
-| The Lion, at all | one line = a lion per story | the Quests page reaches IV |
+| The Lion in the scene | a Lion in every brief = a lion in every story; his NAME, in Barnabas's mouth, is allowed | the Quests page reaches IV |
 | Lion / Lamb, Revelation 5 | his identity is the reveal | IV, on the page, by design not by prompt |
 | "The stories were never separate" | the ending | V |
 | What is under the cloth | unwritten, deliberately | when it is written |

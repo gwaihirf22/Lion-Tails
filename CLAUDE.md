@@ -602,6 +602,8 @@ the reader renders it as a poem, and a test holds the shape. The series name
 is `QUEST_SERIES_TITLE` in `shared/quests.ts`, because the card and the
 prologue heading both print it.
 
-**The Lion is not in the model canon.** He belongs to the guided Quests page,
-which does not exist yet. The prologue's last lines are fixed text and keep
-him.
+**The Lion is a name, not a character, in the model canon.** `CANON.lion` lets
+Barnabas say "I have no control over this" and, pressed, "The great Lion knows
+no bounds" — once, mysteriously — and forbids the Lion appearing at all. He
+belongs to the guided Quests page, which does not exist yet. The prologue's
+last lines are fixed text and keep him.

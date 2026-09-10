@@ -18,7 +18,8 @@
  * TWO AUDIENCES, TWO HOMES. This file holds only what the model may let show.
  * The arc -- the five movements, the story that has been forgotten, who the
  * Lion is, how it ends -- lives in docs/quests-of-the-timekeeper.md, for
- * humans. A model told the ending says so in chapter two. So a rule below is
+ * humans. The Lion himself is the line: the model may put his NAME in
+ * Barnabas's mouth, once, mysteriously, and may never put HIM in the scene. A model told the ending says so in chapter two. So a rule below is
  * phrased as something that is TRUE, never as something that is COMING.
  *
  * WHAT ELSE IS DELIBERATELY NOT HERE. The universe's actual continuity: who
@@ -207,6 +208,17 @@ export const CANON = {
     "something -- and if the answer is too easy, he asks again. He may appear " +
     "before the journey, during it, or at its end, purposefully and never " +
     "conveniently, and he is not omniscient.",
+  /**
+   * A HINT, in his mouth, and never in the scene. Blake's line. The model
+   * gets the allusion; who the Lion is, and the Lion himself, are withheld --
+   * one Lion in the scene of every brief is a lion in every story.
+   */
+  lion:
+    "Asked how he does any of this, Barnabas says he does not: \"I have no " +
+    "control over this.\" Pressed, he may say something like \"The great Lion " +
+    "knows no bounds\" -- mysteriously, and no more. He never says who the " +
+    "Lion is. The Lion does not appear in this story: not seen, not heard, " +
+    "not described. A name Barnabas may say once, and let lie.",
   boundaries:
     "Barnabas is not God and nobody treats him as one. Invent no doctrine, " +
     "contradict no Scripture, and let a real account happen exactly as it is " +
@@ -357,6 +369,7 @@ export function worldCanon(frame: FramingApproach): string[] {
       `${SHOP.underTheCloth}. One of these may be noticed in passing. None of ` +
       "them has to be. Never the thing under the cloth.",
     KEEPER.never,
+    CANON.lion,
     CANON.boundaries,
     frame.opening,
     frame.closing,
@@ -380,6 +393,8 @@ export function worldAnchor(): string {
     "stays dark on the far side; the way back is a threshold, never an " +
     "announcement, and the story ends when it has given what it was sent to " +
     `give. ${KEEPER.shortName} asks what they found and never says what it ` +
-    "meant. He is not God; invent no doctrine and contradict no Scripture."
+    "meant. He is not God; invent no doctrine and contradict no Scripture. " +
+    "The great Lion is a name he may say once and never explain; the Lion " +
+    "does not appear."
   );
 }

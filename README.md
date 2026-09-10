@@ -283,8 +283,8 @@ into a real account. What the model knows about that world lives in
 `server/data/lionTails.ts` — the shop, the shelf, the lantern's rules, why
 the quests happen — and reaches the full brief as its own section and every
 chapter as a short anchor. What the model is *not* told — the arc, the
-forgotten story, the Lion — is in `docs/quests-of-the-timekeeper.md`, for
-people. A model told the ending says so in chapter two.
+forgotten story, who the Lion is — is in `docs/quests-of-the-timekeeper.md`,
+for people. A model told the ending says so in chapter two.
 
 ## Heroes of Faith
 
