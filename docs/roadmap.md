@@ -121,7 +121,11 @@ story INTO a universe by hand (`moveStory` is only ever called with `null`;
 universes are made by the server when a story continues), so a "Move to
 universe" control on the story card is the thing a "New universe" button
 would need first; and `Header`'s exact-match highlight does not light "My
-Stories" on a universe's page.
+Stories" on a universe's page. And **rolling sessions**: the login cookie
+lapses a week after the session was last written, so "Keep Parent Mode on"
+is bounded by it and the copy says "or sign out". `rolling: true` would make
+every login last a week after the last *request* instead — a change to
+everyone's session lifetime, to be decided on its own.
 
 Closed on the way: the `alongside` mode's "stays on their mission / does not
 die / never the villain" lines reached chapter 1 and no other. Both modes

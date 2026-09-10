@@ -357,6 +357,17 @@ learn to ignore. Two sources are required to convict — Wikidata and Wikipedia
 genuinely disagree (Jim Elliot is born 1927 on one and 1926 on the other), so a
 single dissenting source is reported as a warning, not a failure.
 
+## Parent Mode
+
+Password-gated, on the server. Turning it on asks for the account password
+and lasts 30 minutes — or, with the checkbox, until you turn it off or sign
+out. It gates the things that change what a child reads: a story's title and
+text (an **Edit** button on the story's page), a universe's name, summary and
+pinned canon, and the prompt editor. Every hand edit is logged and shown —
+"Edited by a parent · date" under the title, and a history beside "How this
+story was made" — so a story is never passed off as all the AI's or all a
+person's.
+
 ## Tests
 
 ```bash

@@ -928,6 +928,28 @@ call, and the only story in the app one reader can quote to another.
 
 ---
 
+## 27. A hand edit is a leaf merge and an appended log, never a rewrite
+
+`server/db-storage.ts`, `shared/storyAppendices.ts`, `shared/editLog.ts`
+
+Nothing validates `story_data` on write — `savedStorySchema` is a type. So the
+one path that changes a story by hand had to be unable to break the row by
+construction: one UPDATE, a shallow `||` merge into `story` and an append to
+`editLog`, both behind COALESCE. Not `jsonb_set`, which returns NULL into a
+missing key and erases the document. Not read-mutate-write, which would be
+the first place a stale read could clobber a concurrent illustration.
+
+The appended blocks are the other half. The disclaimer that a character was
+invented is appended by the server so the model cannot drop it; a parent
+editing the raw content could. The editor edits the body and the route
+re-attaches the stored appendices — the disclaimer is now unremovable from
+both directions.
+
+The log says "a parent", never a name, and keeps no before/after. It is
+reader-visible, like `debugData`, and a reader may be a child.
+
+---
+
 ## Recurring failure shape
 
 Most incidents here have had the same form: **a check that reported success

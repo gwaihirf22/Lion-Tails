@@ -45,6 +45,7 @@ export default function StoryCard({
   onToggleFavorite,
   onDelete,
   onRemoveFromUniverse,
+  chips = [],
 }: {
   story: SavedStory;
   /** The name of the universe it is in, for the chip. Absent means no chip. */
@@ -53,6 +54,8 @@ export default function StoryCard({
   onDelete: (id: string) => void;
   /** Only the universe page passes this; only there does the button exist. */
   onRemoveFromUniverse?: (id: string) => void;
+  /** What to say about the story -- storyChips(), computed by the page. */
+  chips?: string[];
 }) {
   const [, navigate] = useLocation();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -60,8 +63,6 @@ export default function StoryCard({
 
   const href = `/story?id=${story.id}`;
   const imageUrl = story.story.imageUrl;
-  const details = story.request;
-  const animal = details.animal?.trim().toLowerCase();
 
   const open = (e: React.MouseEvent) => {
     // Let a modifier-click do what the browser does with a link.
@@ -185,26 +186,15 @@ export default function StoryCard({
             <>
               <Separator className="my-3" />
               <div className="flex flex-col md:flex-row justify-between gap-3">
-                <div className="flex-1">
-                  <div className="text-sm text-muted-foreground mb-1">Story details:</div>
-                  <div className="flex flex-wrap gap-2">
-                    {details.childName && (
-                      <Badge variant="outline" className="bg-primary/10">{details.childName}</Badge>
-                    )}
-                    {/* Guarded on purpose: a character may be a dragon, and
-                        "Boy" on a dragon is the app confusing two facts. */}
-                    {details.gender && (
-                      <Badge variant="outline" className="bg-primary/10">
-                        {details.gender === "boy" ? "Boy" : "Girl"}
-                      </Badge>
-                    )}
-                    {animal && !["none", "n/a"].includes(animal) && (
-                      <Badge variant="outline" className="bg-primary/10">{details.animal}</Badge>
-                    )}
-                    {details.theme && (
-                      <Badge variant="outline" className="bg-primary/10">{details.theme}</Badge>
-                    )}
-                  </div>
+                {/* From what the story actually has (storyChips). The old row
+                    read childName/gender/animal/theme, which a modern request
+                    does not carry, and printed a label over nothing. */}
+                <div className="flex flex-1 flex-wrap items-center gap-2">
+                  {chips.map((c) => (
+                    <Badge key={c} variant="outline" className="bg-primary/10">
+                      {c}
+                    </Badge>
+                  ))}
                 </div>
                 <Button
                   size="sm"
