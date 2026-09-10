@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
-import { Loader2 } from "lucide-react";
+import { Loader2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   AlertDialog,
@@ -18,8 +19,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useStoryJobs } from "@/hooks/use-story-jobs";
 import { useUniverses } from "@/hooks/use-universes";
 import { useStories } from "@/hooks/use-stories";
+import { useParentMode } from "@/hooks/use-parent-mode";
+import { useChipSources } from "@/lib/useChipSources";
+import { storyChips } from "@/lib/storyChips";
+import { EDITED_BY_PARENT, lastEditedAt } from "@shared/editLog";
 import StoryCard from "@/components/StoryCard";
-import UniverseDetails from "@/components/UniverseDetails";
+import UniverseDetails, { Section } from "@/components/UniverseDetails";
 
 /**
  * A universe's own page.
@@ -40,7 +45,10 @@ export default function UniversePage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { isActive: parentMode } = useParentMode();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
 
   const {
     universes,
@@ -50,10 +58,12 @@ export default function UniversePage() {
     addCanon,
     removeCanon,
     remove,
+    rename,
     moveStory,
   } = useUniverses();
   const { stories, isLoading: storiesLoading, toggleFavorite, deleteStory } = useStories();
   const { jobs } = useStoryJobs();
+  const chipSources = useChipSources();
 
   const universe = universes.find((u) => u.universeId === id);
   const inThis = stories.filter((s) => s.universeId === id);
@@ -87,6 +97,21 @@ export default function UniversePage() {
     });
   };
 
+  const saveName = async () => {
+    if (!universe) return;
+    const r = await rename(universe.universeId, nameDraft);
+    if (!r.ok) {
+      toast({
+        title: r.code === "parent_mode_required" ? "Parent Mode needed" : "Could not rename",
+        description: r.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    setRenaming(false);
+    toast({ title: "Universe renamed" });
+  };
+
   if (universesLoading || storiesLoading) {
     return (
       <div className="flex justify-center items-center min-h-[60vh]">
@@ -111,6 +136,9 @@ export default function UniversePage() {
     );
   }
 
+  const editedAt = lastEditedAt(universe.editLog);
+  const addHere = () => navigate(`/generate-story?universe=${universe.universeId}`);
+
   return (
     <div className="max-w-4xl mx-auto">
       <p className="mb-2 text-sm">
@@ -120,10 +148,52 @@ export default function UniversePage() {
       </p>
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-3xl font-heading font-bold text-secondary">{universe.name}</h2>
+        <div className="min-w-0 flex-1">
+          {renaming ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                aria-label="Universe name"
+                className="max-w-md text-lg font-semibold"
+                autoFocus
+              />
+              <Button size="sm" onClick={saveName} disabled={!nameDraft.trim()}>
+                Save
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setRenaming(false)}>
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <h2 className="flex items-center gap-2 text-3xl font-heading font-bold text-secondary">
+              <span className="min-w-0">{universe.name}</span>
+              {/* Parent Mode on the server too; this only hides the pencil. */}
+              {parentMode && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2"
+                  aria-label="Rename universe"
+                  onClick={() => {
+                    setNameDraft(universe.name);
+                    setRenaming(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+            </h2>
+          )}
           <p className="text-sm text-muted-foreground">
             {inThis.length} {inThis.length === 1 ? "story" : "stories"}
+            {editedAt && (
+              <>
+                {" · "}
+                {EDITED_BY_PARENT} ·{" "}
+                {new Date(editedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+              </>
+            )}
             {busy && (
               <Badge variant="outline" className="ml-2 gap-1">
                 <Loader2 className="h-3 w-3 animate-spin" /> summarising
@@ -131,14 +201,17 @@ export default function UniversePage() {
             )}
           </p>
         </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-destructive"
-          onClick={() => setConfirmDelete(true)}
-        >
-          Delete universe
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button onClick={addHere}>Add to this Universe</Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-destructive"
+            onClick={() => setConfirmDelete(true)}
+          >
+            Delete universe
+          </Button>
+        </div>
       </div>
 
       <UniverseDetails
@@ -150,21 +223,40 @@ export default function UniversePage() {
         onRemoveCanon={(canonId) => removeCanon(universe.universeId, canonId)}
       />
 
+      {universe.editLog.length > 0 && (
+        <div className="mt-3">
+          <Section title="Changes by a parent" hint={`${universe.editLog.length}`}>
+            <ul className="ml-5 list-disc space-y-1 text-sm">
+              {[...universe.editLog].reverse().map((e, i) => (
+                <li key={i}>
+                  {new Date(e.at).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}
+                  {" — "}
+                  {e.changed.map((c) => (c === "name" ? "the name" : c === "summary" ? "the summary" : c)).join(" and ")}
+                  {" edited by a parent"}
+                </li>
+              ))}
+            </ul>
+          </Section>
+        </div>
+      )}
+
       <h3 className="mt-8 mb-3 text-lg font-heading font-bold text-secondary">
         Stories in this universe
       </h3>
       <div className="grid gap-4">
         {inThis.length === 0 ? (
           <Card className="p-6 text-center">
-            <p className="text-muted-foreground">
-              No stories here yet. Continue a story to write the next one in this world.
+            <p className="text-muted-foreground mb-4">
+              No stories here yet.
             </p>
+            <Button onClick={addHere}>Add to this Universe</Button>
           </Card>
         ) : (
           inThis.map((story) => (
             <StoryCard
               key={story.id}
               story={story}
+              chips={storyChips(story, chipSources)}
               onToggleFavorite={(sid, isFavorite) => toggleFavorite.mutate({ id: sid, isFavorite })}
               onDelete={(sid) => deleteStory.mutate(sid)}
               onRemoveFromUniverse={(sid) => moveStory(sid, null)}

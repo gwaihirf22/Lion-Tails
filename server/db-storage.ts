@@ -1,4 +1,5 @@
 
+import type { EditLogEntry } from "@shared/editLog";
 import { db, pool } from './db';
 import {
   FREE_STORIES_PER_MONTH, users, verificationTokens, readingPrefsSchema, storyRequestSchema, type ReadingPrefs, type User, type InsertUser, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
@@ -824,6 +825,44 @@ export class DbStorage implements IStorage {
       return await this.getStoryById(storyId, userId);
     } catch (error) {
       console.error(`Error saving illustration for story ${storyId}:`, error);
+      return undefined;
+    }
+  }
+
+  async editStory(
+    storyId: string,
+    patch: { title?: string; content?: string },
+    userId: number,
+  ): Promise<SavedStory | undefined> {
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in editStory(${storyId}).`);
+      return undefined;
+    }
+    const entry: EditLogEntry = {
+      at: new Date().toISOString(),
+      by: "parent",
+      // Derived from the patch's keys on the server, never taken from the body.
+      changed: Object.keys(patch),
+    };
+    try {
+      // ONE statement, no read, no jsonb_set. A shallow merge (||) has no NULL
+      // path -- jsonb_set into a missing key returns NULL and erases the row
+      // (see updateStoryHeroId) -- and it leaves every other key of `story`
+      // (imageUrl, bibleVerse, the five questions) exactly as it was. Both
+      // COALESCEs are load-bearing: || is strict too. `story` is never
+      // missing (saveStory writes it), so that one is a belt.
+      const { rowCount } = await pool!.query(
+        `UPDATE user_stories
+            SET story_data = story_data || jsonb_build_object(
+              'story',   COALESCE(story_data->'story',   '{}'::jsonb) || $1::jsonb,
+              'editLog', COALESCE(story_data->'editLog', '[]'::jsonb) || $2::jsonb)
+          WHERE story_id = $3 AND user_id = $4`,
+        [JSON.stringify(patch), JSON.stringify([entry]), storyId, userId],
+      );
+      if (!rowCount) return undefined;
+      return await this.getStoryById(storyId, userId);
+    } catch (error) {
+      console.error(`Error editing story ${storyId}:`, error);
       return undefined;
     }
   }

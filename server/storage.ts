@@ -1,3 +1,4 @@
+import type { EditLogEntry } from "@shared/editLog";
 import {
   storyAllowance, users, type User, type InsertUser, type Song, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory ,
   type ReadingPrefs,
@@ -88,6 +89,15 @@ export interface IStorage {
    * the note on updateStoryHeroId.
    */
   setStoryImageUrl(storyId: string, imageUrl: string, userId: number): Promise<SavedStory | undefined>;
+  /**
+   * A parent's edit to the title and/or text, with an entry appended to the
+   * story's edit log. The patch carries only the keys being changed.
+   */
+  editStory(
+    storyId: string,
+    patch: { title?: string; content?: string },
+    userId: number,
+  ): Promise<SavedStory | undefined>;
   
   // Story search methods
   searchStories(query: string, userId?: number): Promise<SavedStory[]>;
@@ -626,6 +636,27 @@ export class MemStorage implements IStorage {
     const story = await this.getStoryById(storyId, userId);
     if (!story) return undefined;
     const updated = { ...story, story: { ...story.story, imageUrl } };
+    this.stories.set(storyId, updated);
+    return updated;
+  }
+
+  async editStory(
+    storyId: string,
+    patch: { title?: string; content?: string },
+    userId: number,
+  ): Promise<SavedStory | undefined> {
+    const story = await this.getStoryById(storyId, userId);
+    if (!story) return undefined;
+    const entry: EditLogEntry = {
+      at: new Date().toISOString(),
+      by: "parent",
+      changed: Object.keys(patch),
+    };
+    const updated: SavedStory = {
+      ...story,
+      story: { ...story.story, ...patch },
+      editLog: [...(story.editLog ?? []), entry],
+    };
     this.stories.set(storyId, updated);
     return updated;
   }

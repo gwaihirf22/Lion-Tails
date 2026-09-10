@@ -5,6 +5,7 @@
  * here. Recomputing them client-side would be a second definition of "current",
  * which is how this codebase produced six model lists and four schema sources.
  */
+import type { EditLogEntry } from "@shared/editLog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, apiRequestAllowingErrors } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -34,6 +35,8 @@ export type Universe = {
   isStale: boolean;
   canMakeSummary: boolean;
   activeSummaryJobId: string | null;
+  /** What a parent changed by hand -- name or summary -- and when. */
+  editLog: EditLogEntry[];
 };
 
 export type SummaryOutcome =
@@ -65,9 +68,18 @@ export function useUniverses() {
     return body;
   };
 
-  const rename = async (universeId: string, name: string) => {
-    await apiRequest("PATCH", `/api/universes/${universeId}`, { name });
+  /** Parent Mode on the server; a 403 comes back as a code, not an exception. */
+  const rename = async (
+    universeId: string,
+    name: string,
+  ): Promise<{ ok: boolean; message?: string; code?: string }> => {
+    const r = await apiRequestAllowingErrors("PATCH", `/api/universes/${universeId}`, { name });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      return { ok: false, message: body.message || "Could not rename.", code: body.code };
+    }
     await refresh();
+    return { ok: true };
   };
 
   /** Stories survive: they return to Unassigned rather than being deleted. */

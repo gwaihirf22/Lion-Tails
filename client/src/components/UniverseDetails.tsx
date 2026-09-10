@@ -31,7 +31,7 @@ type Props = {
 };
 
 /** One collapsible section: a heading row that is the trigger. */
-function Section({
+export function Section({
   title,
   icon,
   hint,

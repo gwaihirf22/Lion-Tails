@@ -1,3 +1,5 @@
+import { parentModeActive, type ParentModeSession } from "@shared/parentMode";
+import { splitAppendices } from "@shared/storyAppendices";
 import { builtInStoryById, refuseBuiltIn, withBuiltInStories } from "./lib/builtInStories";
 import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
@@ -66,7 +68,7 @@ import {
   storyAllowance,
   statsOf,
   virtueLevels,
-  avatarsOf, storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
+  avatarsOf, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
@@ -758,9 +760,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(result);
   });
 
-  app.patch("/api/universes/:id", requireAuth, async (req, res) => {
-    const ok = await renameUniverse((req.user as any).id, req.params.id, String(req.body?.name ?? ""));
-    if (!ok) return res.status(404).json({ message: "No such universe" });
+  // Renaming is Parent-Mode work like editing the summary: it changes what
+  // every reader sees the world called. The outcome is a word, not a boolean,
+  // so an empty name and a taken name stop being "No such universe".
+  app.patch("/api/universes/:id", requireAuth, requireParentMode, async (req, res) => {
+    const outcome = await renameUniverse((req.user as any).id, req.params.id, String(req.body?.name ?? ""));
+    if (outcome === "empty") return res.status(400).json({ message: "A universe needs a name." });
+    if (outcome === "taken") return res.status(409).json({ message: "You already have a universe with that name." });
+    if (outcome === "missing") return res.status(404).json({ message: "No such universe" });
     res.json({ renamed: true });
   });
 
@@ -800,8 +807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // models produce a bad one often enough for that to matter.
     const force = req.body?.force === true;
     if (force) {
-      const expiry = (req.session as { parentModeExpiry?: number } | undefined)?.parentModeExpiry;
-      if (!expiry || Date.now() >= expiry) {
+      if (!parentModeActive(req.session as ParentModeSession | undefined)) {
         return res.status(403).json({
           code: "parent_mode_required",
           message: "Rebuilding a summary that is already current needs Parent Mode.",
@@ -1409,6 +1415,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  /**
+   * A parent edits a story's title or text.
+   *
+   * Parent Mode, on the server, because this changes what a child reads. The
+   * appended blocks -- "About this story" (the disclaimer CLAUDE.md says must
+   * always be present) and "Digging deeper" (the reader's own answers) -- live
+   * inside content, and the editor never sees them: the route keeps whatever
+   * the stored content carried and re-attaches it to the new body. A parent
+   * cannot delete the disclaimer, by accident or on purpose.
+   */
+  app.patch("/api/stories/:id", requireAuth, requireParentMode, async (req, res) => {
+    try {
+      if (refuseBuiltIn(req, res)) return;
+      const parsed = storyEditSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: fromZodError(parsed.error).message });
+      }
+      const userId = (req.user as any).id;
+      const current = await storage.getStoryById(req.params.id, userId);
+      if (!current) return res.status(404).json({ message: "Story not found" });
+
+      const patch: { title?: string; content?: string } = {};
+      if (parsed.data.title !== undefined) patch.title = parsed.data.title;
+      if (parsed.data.content !== undefined) {
+        const { appendices } = splitAppendices(current.story.content ?? "");
+        patch.content = appendices
+          ? parsed.data.content.trimEnd() + "\n\n" + appendices
+          : parsed.data.content;
+      }
+      const saved = await storage.editStory(req.params.id, patch, userId);
+      if (!saved) return res.status(404).json({ message: "Story not found" });
+      res.json(saved);
+    } catch (error) {
+      console.error("Error editing story:", error);
+      res.status(500).json({ message: "Failed to edit story" });
+    }
+  });
+
   // Delete a story - requires authentication
   app.delete("/api/stories/:id", async (req, res) => {
     try {

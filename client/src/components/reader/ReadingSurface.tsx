@@ -12,7 +12,20 @@ import type { StoryDoc } from "@/lib/storyContent";
  * Scoping the reader's tokens to its own element makes it structurally immune
  * to that, and to whatever else ends up on <html> later.
  */
-export function ReadingSurface({ title, doc }: { title: string; doc: StoryDoc }) {
+export function ReadingSurface({
+  title,
+  doc,
+  note,
+}: {
+  title: string;
+  doc: StoryDoc;
+  /**
+   * A line under the title -- "Edited by a parent · 3 Sep 2026". Inside the
+   * article, because the reader's tokens are scoped to it (see above) and a
+   * sibling outside would not inherit the palette.
+   */
+  note?: React.ReactNode;
+}) {
   const { prefs, fontSizePx } = useReadingPrefs();
 
   return (
@@ -31,6 +44,14 @@ export function ReadingSurface({ title, doc }: { title: string; doc: StoryDoc })
       }
     >
       <h1 className="reader-title">{title}</h1>
+      {note && (
+        <p
+          className="reader-note"
+          style={{ color: "var(--reader-muted)", fontSize: "0.85em", marginTop: "-0.75em", marginBottom: "1.75em", textAlign: "center" }}
+        >
+          {note}
+        </p>
+      )}
       <StoryContent doc={doc} />
     </article>
   );
