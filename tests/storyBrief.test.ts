@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { KEEPER, FRAMING_APPROACHES, framingApproachOf, pickFramingApproach } from "../server/data/lionTails";
+import {
+  CANON,
+  KEEPER,
+  SHOP,
+  FRAMING_APPROACHES,
+  framingApproachOf,
+  pickFramingApproach,
+  worldAnchor,
+} from "../server/data/lionTails";
 import fs from "fs";
 import { readFileSync, writeFileSync } from "fs";
 import path from "path";
@@ -93,9 +101,11 @@ const cases: Record<string, () => ReturnType<typeof buildStoryBrief>> = {
   "time travel": () =>
     buildStoryBrief({ ...base, useTimeTravel: true, characterId: "c1" } as StoryRequest, [mia]),
 
-  // Added when a character stopped having to be a child. Everything above this
-  // line predates it and MUST NOT MOVE -- those six are the compatibility
-  // assertion, and these four are what the widening is supposed to produce.
+  // Added when a character stopped having to be a child. The five cases above
+  // "time travel" predate it and MUST NOT MOVE -- they are the compatibility
+  // assertion. "time travel" is the LORE's golden: it embeds the Lion Tails
+  // canon verbatim and moves whenever server/data/lionTails.ts does. Read that
+  // diff; it is the prompt every quest is written from.
   "non-human lead": () =>
     buildStoryBrief({ ...base, characterIds: ["c2"] } as StoryRequest, [ember]),
   "mixed cast": () =>
@@ -106,6 +116,13 @@ const cases: Record<string, () => ReturnType<typeof buildStoryBrief>> = {
   "lead with parent notes": () =>
     buildStoryBrief({ ...base, characterIds: ["c1"] } as StoryRequest,
       [{ ...mia, mustBeTrue: "Mia uses a wheelchair." }]),
+  // The other way into a real account, captured so the per-chapter anchor for
+  // it is asserted rather than assumed.
+  "alongside, in the ark": () =>
+    buildStoryBrief(
+      { ...base, characterIds: ["c1"], characterRole: "alongside", biblicalEvent: "noah" } as StoryRequest,
+      [mia],
+    ),
 
   /**
    * What StoryForm actually sends, rather than a tidy subset of it.
@@ -1498,5 +1515,93 @@ describe("skill names are not turned into regexes", () => {
     // compiling it would be an escaping bug and a denial of service at once.
     expect(() => skillLeakage("anything at all", ["(a+)+$", "[", "\\"])).not.toThrow();
     expect(skillLeakage("anything at all", ["(a+)+$"])).toEqual([]);
+  });
+});
+
+/**
+ * The world of a quest.
+ *
+ * Three things have to hold at once: the world reaches a quest and nothing
+ * else; it reaches EVERY chapter, not just the outline; and it stays small
+ * enough that the account is still the biggest thing in the prompt.
+ */
+describe("the world of a quest", () => {
+  const words = (t: string) => t.split(/\s+/).filter(Boolean).length;
+  const quest = (o: Record<string, unknown> = {}) =>
+    buildStoryBrief(
+      { ...base, characterIds: ["c1"], characterRole: "travels", biblicalEvent: "noah", ...o } as StoryRequest,
+      [mia],
+    );
+
+  it("renders the world under its own heading, for a quest only", () => {
+    const t = renderBrief(quest(), "single");
+    expect(t).toContain("THE WORLD THIS HAPPENS IN");
+    expect(t).toContain(SHOP.sign);
+    expect(t).toContain(KEEPER.title);
+    // The lore no longer rides under "Also asked for:" -- the heading a
+    // universe does not belong under.
+    expect(t.indexOf("THE WORLD THIS HAPPENS IN")).toBeLessThan(t.indexOf("Also asked for:"));
+
+    for (const characterRole of ["alongside", "meets", "absent"] as const) {
+      const other = renderBrief(quest({ characterRole }), "single");
+      expect(other).not.toContain("THE WORLD THIS HAPPENS IN");
+      expect(other).not.toContain(SHOP.sign);
+    }
+  });
+
+  it("gives a placeholder name no world, whatever the mode says", () => {
+    // The same predicate as the premise: nobody is in the scene, so there is
+    // nobody standing in the shop. Gated on the mode alone this rendered a
+    // world section with no one in it.
+    // The characters array IS the cast -- the route resolved it -- so a
+    // placeholder request is an empty array and the literal name.
+    const t = renderBrief(
+      buildStoryBrief(
+        { ...base, childName: "Character", gender: "girl", characterRole: "travels", biblicalEvent: "noah" } as StoryRequest,
+        [],
+      ),
+      "single",
+    );
+    expect(t).not.toContain("THE WORLD THIS HAPPENS IN");
+  });
+
+  it("reaches every chapter, and so do the rules a character lives by", () => {
+    // The finding this whole section exists for: a long story is chapters,
+    // and chapters used to carry none of this.
+    const travels = renderBrief(quest(), "chapter");
+    expect(travels).toContain(worldAnchor());
+    expect(travels).toContain("does not die");
+    expect(travels).toContain("do not let them change what happened");
+
+    const alongside = renderBrief(quest({ characterRole: "alongside" }), "chapter");
+    expect(alongside).not.toContain(KEEPER.shortName);
+    expect(alongside).toContain("stays on their mission");
+    expect(alongside).toContain("does not die");
+  });
+
+  it("stays small enough that the account is still the biggest thing", () => {
+    // Attention, not tokens: lore that outweighs the account gets written
+    // instead of it. The caps are invariants on the RENDERED text, so a
+    // sentence added to lionTails.ts is measured here rather than felt later.
+    const b = quest();
+    expect(b.world).toBeDefined();
+    // 750: about twice a hero's biography. The old lore was ~300 and the
+    // complaint was too little context; past this the account is no longer
+    // the biggest thing in the prompt. A ceiling, not a target.
+    expect(words(b.world!.canon.join(" "))).toBeLessThanOrEqual(750);
+    expect(words(Object.values(CANON).join(" "))).toBeLessThanOrEqual(350);
+    expect(words(b.world!.anchor)).toBeLessThanOrEqual(90);
+  });
+
+  it("renders a brief frozen before the world existed exactly as it did", () => {
+    // story_jobs.brief is frozen at enqueue; an in-flight quest must not gain
+    // a section its outline was not planned with.
+    const b = quest();
+    const { world, participationAnchor, ...frozen } = b;
+    void world; void participationAnchor;
+    const old = deserialiseBrief(JSON.stringify(frozen));
+    expect(renderBrief(old, "single")).not.toContain("THE WORLD THIS HAPPENS IN");
+    expect(renderBrief(old, "chapter")).not.toContain(KEEPER.shortName);
+    expect(renderBrief(old, "chapter")).not.toContain("does not die");
   });
 });
