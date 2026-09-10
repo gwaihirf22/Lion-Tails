@@ -281,6 +281,30 @@ export function StoryExtras({
           </AccordionItem>
         )}
 
+        {/* What a parent changed, beside what the app wrote -- so a story
+            is never passed off as all the AI's, or all a person's. */}
+        {saved?.editLog && saved.editLog.length > 0 && (
+          <AccordionItem value="edits" style={{ borderColor: "var(--reader-border)" }}>
+            <AccordionTrigger className="text-base">Changes to this story</AccordionTrigger>
+            <AccordionContent>
+              <p className="mb-2 text-sm" style={{ color: "var(--reader-muted)" }}>
+                The app wrote this story; a parent has changed it since. What the app
+                wrote is under &ldquo;How this story was made&rdquo;.
+              </p>
+              <ul className="ml-5 list-disc space-y-1 text-sm">
+                {[...saved.editLog].reverse().map((e, i) => (
+                  <li key={i}>
+                    {new Date(e.at).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}
+                    {" — "}
+                    {e.changed.map((c) => (c === "content" ? "the text" : c === "title" ? "the title" : c)).join(" and ")}
+                    {" edited by a parent"}
+                  </li>
+                ))}
+              </ul>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
         {story.debugData && story.debugData.length > 0 && (
           <AccordionItem value="debug" style={{ borderColor: "var(--reader-border)" }}>
             <AccordionTrigger className="text-base">How this story was made</AccordionTrigger>

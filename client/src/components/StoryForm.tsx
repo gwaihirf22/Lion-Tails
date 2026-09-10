@@ -125,6 +125,11 @@ interface StoryFormProps {
   isContinuation?: boolean;
   /** A hero chosen on the Heroes page, already consumed by the tabs above. */
   handedOverHeroId?: string;
+  /**
+   * The universe this story is being added to. Like a continuation for the
+   * series block: the world will remember it, so there is no box to tick.
+   */
+  universeName?: string;
 }
 
 export default function StoryForm({ 
@@ -142,6 +147,7 @@ export default function StoryForm({
   parentStoryTitle,
   isContinuation = false,
   handedOverHeroId,
+  universeName,
 }: StoryFormProps) {
   const { toast } = useToast();
   /**
@@ -819,6 +825,11 @@ export default function StoryForm({
                   This story continues an earlier one, so what happens in it will
                   be remembered for the next one automatically.
                 </p>
+              ) : universeName ? (
+                <p className="text-xs text-muted-foreground">
+                  This story joins <strong>{universeName}</strong>, so what happens
+                  in it will be remembered there.
+                </p>
               ) : (
                 <FormField
                   control={form.control}
@@ -843,7 +854,7 @@ export default function StoryForm({
                 />
               )}
 
-              {(isContinuation || form.watch("mayContinue")) && (
+              {(isContinuation || universeName || form.watch("mayContinue")) && (
                 <FormField
                   control={form.control}
                   name="cliffhanger"

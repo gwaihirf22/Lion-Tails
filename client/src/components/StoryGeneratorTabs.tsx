@@ -12,6 +12,8 @@ interface StoryGeneratorTabsProps {
   parentStoryTitle?: string;
   /** This story continues another. */
   isContinuation?: boolean;
+  /** The universe this story is being added to, for the series copy. */
+  universeName?: string;
 }
 
 export default function StoryGeneratorTabs({
@@ -20,6 +22,7 @@ export default function StoryGeneratorTabs({
   inheritedCharacterIds,
   parentStoryTitle,
   isContinuation,
+  universeName,
 }: StoryGeneratorTabsProps) {
   /**
    * A hero handed over from the Heroes page, read ONCE and taken.
@@ -89,6 +92,7 @@ export default function StoryGeneratorTabs({
               inheritedCharacterIds={inheritedCharacterIds}
               parentStoryTitle={parentStoryTitle}
               isContinuation={isContinuation}
+              universeName={universeName}
               formType="original"
               showChildFields={true}
               showAnimalToggle={true}
@@ -120,6 +124,7 @@ export default function StoryGeneratorTabs({
               inheritedCharacterIds={inheritedCharacterIds}
               parentStoryTitle={parentStoryTitle}
               isContinuation={isContinuation}
+              universeName={universeName}
               formType="historical"
               handedOverHeroId={handedOverHeroId}
               showChildFields={false}

@@ -671,3 +671,56 @@ My Stories is four folders, every story one card, every universe one card.
 - **`builtIn` and `universeId`** on `savedStorySchema` are server-owned and
   type-only: the server grafts them onto rows; nothing reads them from a
   request.
+
+## Parent Mode
+
+A fact about the SESSION, decided by one predicate: `parentModeActive()` in
+`shared/parentMode.ts`, read by `requireParentMode`, by the forced-summary
+check in `routes.ts`, and by the status route the client polls. It used to
+be written twice on the server and derived a third time on the client from
+`expiresAt`; "until I turn it off" is not an expiry, and the copies would
+have disagreed about it.
+
+- **Two ways on, chosen at the password prompt each time**: the 30-minute
+  window (`PARENT_MODE_WINDOW_MS`), or `keep` — `parentModeIndefinite` on
+  the session, no expiry. Never a setting: a forgotten setting on a shared
+  device is Parent Mode for the children.
+- **"Indefinite" is bounded by the login cookie**, which is not rolling: it
+  lapses a week after the session was last written. The copy says "until
+  you turn it off or sign out". Making sessions rolling is an open decision
+  on the roadmap, not something to flip while passing.
+- **Off is a route**, `POST /api/auth/parent-mode-off`. Before it existed
+  the client's disable cleared React state and the next status poll turned
+  Parent Mode back on.
+- Parent Mode gates: custom character fields, a universe's summary, canon,
+  **name**, and **a story's title and text** (`PATCH /api/stories/:id`).
+
+## Editing what the app wrote
+
+- **A story edit is a leaf merge, never read-mutate-write.** `editStory` is
+  one UPDATE: `story_data || jsonb_build_object('story', COALESCE(...) ||
+  $patch, 'editLog', COALESCE(...) || $entry)`. No `jsonb_set` — into a
+  missing key it returns NULL and erases the row (`updateStoryHeroId`'s
+  warning) — and nothing else in `story` is touched. Nothing validates
+  `story_data` on write, so the write must be unable to break the
+  five-questions / `moralOutcome` invariants by construction.
+- **The appendices survive.** "About this story" (the disclaimer that must
+  always be present) and "Digging deeper" live inside `content`. The editor
+  edits the BODY; the route re-attaches whatever the stored content carried
+  via `splitAppendices()`. A parent cannot delete the disclaimer.
+- **The log is one module**, `shared/editLog.ts`: the entry type, the label
+  "Edited by a parent", `lastEditedAt()`. Stories keep it in
+  `story_data.editLog`; universes in `story_universes.edit_log` (migration
+  0008), appended by `renameUniverse` and `editSummary`. `summary_edited_at`
+  stays — it clears staleness, a different job. The log never carries a
+  name: reader-visible provenance is for everyone, including a child.
+- **Story chips** (`client/src/lib/storyChips.ts`) are what a card says about
+  a story, pure and tested: the source, the cast by name, the way in (via
+  `ROLE_OPTIONS`, never a second spelling), the length, "Edited by a
+  parent". The old details row read fields a modern request does not carry.
+- **"Add to this Universe"** sends `universeId` on the request — a field the
+  server always resolved and no client ever sent. The worker's extraction
+  condition includes it, or a story would be written against a world's
+  memory and never added to it. Explicit id wins in
+  `resolveUniverseForRequest`, so `GenerateStory` sends it only when not
+  continuing.

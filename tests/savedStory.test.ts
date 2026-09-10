@@ -53,3 +53,16 @@ describe("savedStorySchema.outline", () => {
     expect(parsed.outline).toHaveLength(2);
   });
 });
+
+describe("savedStorySchema.editLog", () => {
+  it("is optional, so every story written before it existed still loads", () => {
+    expect(savedStorySchema.parse(base).editLog).toBeUndefined();
+  });
+
+  it("round-trips a log and rejects one that is not an array of entries", () => {
+    const log = [{ at: "2026-09-10T10:00:00.000Z", by: "parent", changed: ["title"] }];
+    expect(savedStorySchema.parse({ ...base, editLog: log }).editLog).toEqual(log);
+    expect(savedStorySchema.safeParse({ ...base, editLog: "edited" }).success).toBe(false);
+    expect(savedStorySchema.safeParse({ ...base, editLog: [{ at: "x", by: "model", changed: [] }] }).success).toBe(false);
+  });
+});

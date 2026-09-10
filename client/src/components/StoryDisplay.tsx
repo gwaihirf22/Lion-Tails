@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Star, Printer, Download } from "lucide-react";
+import { Star, Printer, Download, Pencil } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useParentMode } from "@/hooks/use-parent-mode";
+import { apiRequestAllowingErrors, queryClient } from "@/lib/queryClient";
+import { splitAppendices } from "@shared/storyAppendices";
+import { EDITED_BY_PARENT, lastEditedAt, type EditLogEntry } from "@shared/editLog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
@@ -23,10 +29,31 @@ interface StoryDisplayProps {
   storyType?: StoryRequest["storyType"];
   /** Ships with the app: no favourite, no expiry, nothing to change. */
   builtIn?: boolean;
+  /** What a parent changed by hand, for the line under the title. */
+  editLog?: EditLogEntry[];
+  /** The page holds the story; a saved edit hands the new text back to it. */
+  onEdited?: (next: { title: string; content: string; editLog: EditLogEntry[] }) => void;
 }
 
-export default function StoryDisplay({ story, storyId, storyType, builtIn }: StoryDisplayProps) {
+export default function StoryDisplay({ story, storyId, storyType, builtIn, editLog, onEdited }: StoryDisplayProps) {
   const [isFavorite, setIsFavorite] = useState(false);
+  /**
+   * A parent editing the title and text, in place.
+   *
+   * Gated on a saved row, not built-in, and Parent Mode ON -- which also
+   * hides it on the ?data= path and the just-generated view, neither of
+   * which has a row to PATCH. The Textarea holds the BODY only: the "About
+   * this story" note and the "Digging deeper" answers live inside content,
+   * and the server re-attaches them on save, so they cannot be edited away.
+   * Only the reading surface is swapped; the bar and the extras stay
+   * mounted so focus mode and the palette do not reset.
+   */
+  const { isActive: parentMode } = useParentMode();
+  const [editing, setEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftBody, setDraftBody] = useState("");
+  const [saving, setSaving] = useState(false);
+  const canEdit = Boolean(storyId) && !builtIn && parentMode;
   const [busy, setBusy] = useState(false);
   const [showExpiryAlert, setShowExpiryAlert] = useState(true);
   const { toast } = useToast();
@@ -95,6 +122,42 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn }: Sto
     URL.revokeObjectURL(a.href);
   }, [story]);
 
+  const startEdit = () => {
+    setDraftTitle(story.title);
+    setDraftBody(splitAppendices(story.content ?? "").body.trimEnd());
+    setEditing(true);
+  };
+
+  const saveEdit = async () => {
+    if (!storyId) return;
+    setSaving(true);
+    const r = await apiRequestAllowingErrors("PATCH", `/api/stories/${storyId}`, {
+      title: draftTitle,
+      content: draftBody,
+    });
+    const body = await r.json().catch(() => ({}));
+    setSaving(false);
+    if (!r.ok) {
+      toast({
+        title: body.code === "parent_mode_required" ? "Parent Mode needed" : "Could not save",
+        description: body.message || "Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    onEdited?.({ title: body.story.title, content: body.story.content, editLog: body.editLog ?? [] });
+    // The page holds the story; StoryExtras and the library read the query.
+    queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
+    queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+    setEditing(false);
+    toast({ title: "Story saved", description: "Readers will see it was edited by a parent." });
+  };
+
+  const editedAt = lastEditedAt(editLog);
+  const editedNote = editedAt
+    ? `${EDITED_BY_PARENT} · ${new Date(editedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`
+    : undefined;
+
   const handleToggleFavorite = useCallback(async () => {
     if (!storyId) return;
     const next = !isFavorite;
@@ -145,6 +208,11 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn }: Sto
             {isFavorite ? "Favourited" : "Favourite"}
           </Button>
         )}
+        {canEdit && !editing && (
+          <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={startEdit}>
+            <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
+          </Button>
+        )}
         <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={handlePrint}>
           <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print
         </Button>
@@ -167,7 +235,35 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn }: Sto
         </Alert>
       )}
 
-      <ReadingSurface title={story.title} doc={doc} />
+      {editing ? (
+        <div className="reader-chrome mx-auto w-full max-w-3xl space-y-3 px-3 py-4">
+          <Input
+            value={draftTitle}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            aria-label="Title"
+            className="text-lg font-semibold"
+          />
+          <Textarea
+            value={draftBody}
+            onChange={(e) => setDraftBody(e.target.value)}
+            aria-label="Story text"
+            className="min-h-[60vh] text-base leading-relaxed"
+          />
+          <p className="text-xs" style={{ color: "var(--reader-muted)" }}>
+            The note about this story and any answers below it stay as they are.
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={saveEdit} disabled={saving || !draftTitle.trim() || !draftBody.trim()}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={saving}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <ReadingSurface title={story.title} doc={doc} note={editedNote} />
+      )}
 
       <StoryExtras story={story} storyId={storyId} doc={doc} focusHidden={focus.hidden} builtIn={builtIn} />
     </div>

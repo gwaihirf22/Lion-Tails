@@ -42,10 +42,25 @@ const ALL_HEADINGS = [
  * case for stories written before any of this existed.
  */
 export function storyWithoutAppendices(content: string): string {
+  return splitAppendices(content).body.trimEnd();
+}
+
+/**
+ * The story and its appended blocks, apart -- and put back exactly.
+ *
+ * For the one write path that changes a story's text by hand: a parent edits
+ * the BODY, and the server re-attaches whatever appendices the stored content
+ * carried, so the disclaimer cannot be deleted by an edit. `body + appendices`
+ * is the original content, byte for byte; `appendices` is "" when there are
+ * none.
+ */
+export function splitAppendices(content: string): { body: string; appendices: string } {
   let cut = -1;
   for (const heading of ALL_HEADINGS) {
     const at = content.indexOf(heading);
     if (at !== -1 && (cut === -1 || at < cut)) cut = at;
   }
-  return cut === -1 ? content : content.slice(0, cut).trimEnd();
+  return cut === -1
+    ? { body: content, appendices: "" }
+    : { body: content.slice(0, cut), appendices: content.slice(cut) };
 }

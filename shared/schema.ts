@@ -1,3 +1,4 @@
+import { editLogEntrySchema } from "./editLog";
 import {
   pgTable,
   text,
@@ -145,6 +146,13 @@ export const storyUniverses = pgTable(
      * to model as a second table for no benefit.
      */
     worldState: jsonb("world_state").default([]).notNull(),
+    /**
+     * What a parent changed by hand -- the name, the summary -- and when.
+     * jsonb for the same reasons as world_state: read and written whole with
+     * its universe, appended never rewritten. summary_edited_at stays: it
+     * clears staleness, which is a different job from telling the reader.
+     */
+    editLog: jsonb("edit_log").default([]).notNull(),
   },
   (table) => ({
     userIdx: index("idx_story_universes_user_id").on(table.userId),
@@ -1769,6 +1777,12 @@ export const savedStorySchema = z.object({
    * The plan, not a transcript. Chapters can drift from it.
    */
   outline: z.array(z.string()).optional(),
+  /**
+   * What a parent changed by hand. SERVER-OWNED and appended, never rewritten:
+   * PATCH /api/stories/:id adds an entry; nothing reads it from a request.
+   * Optional because every story written before it existed has none.
+   */
+  editLog: z.array(editLogEntrySchema).optional(),
 
   // Search and relationship metadata
   heroId: z.string().optional(), // ID of the Hero of Faith if story is related to one
@@ -1788,6 +1802,16 @@ export const savedStorySchema = z.object({
 });
 
 export type SavedStory = z.infer<typeof savedStorySchema>;
+
+/** What a parent may change on a story. At least one of the two. */
+export const storyEditSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    content: z.string().trim().min(1).optional(),
+  })
+  .refine((b) => b.title !== undefined || b.content !== undefined, {
+    message: "Nothing to change.",
+  });
 
 // Schema for songs with chord diagrams
 export const chordDiagramSchema = z.object({

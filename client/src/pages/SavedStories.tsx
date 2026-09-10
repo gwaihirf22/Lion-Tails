@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 import { FOLDER_TAB_LIST, FOLDER_TAB_TRIGGER } from "@/lib/folderTabs";
 import { STORY_FOLDERS, storyFolder } from "@/lib/storyFolders";
 import StoryCard from "@/components/StoryCard";
+import { useChipSources } from "@/lib/useChipSources";
+import { storyChips } from "@/lib/storyChips";
 import UniverseSummaryCard from "@/components/UniverseSummaryCard";
 
 /**
@@ -30,6 +32,7 @@ export default function SavedStories() {
   const [activeTab, setActiveTab] = useState<string>("all");
   const { jobs, cancel, dismiss, dismissed } = useStoryJobs();
   const { universes } = useUniverses();
+  const chipSources = useChipSources();
   const { builtIn, stories, isLoading, isError, refetch, toggleFavorite, deleteStory } =
     useStories();
 
@@ -229,6 +232,7 @@ export default function SavedStories() {
                   <StoryCard
                     key={s.id}
                     story={s}
+                    chips={storyChips(s, chipSources)}
                     universeName={universeName(s.universeId)}
                     onToggleFavorite={(id, isFavorite) => toggleFavorite.mutate({ id, isFavorite })}
                     onDelete={(id) => deleteStory.mutate(id)}

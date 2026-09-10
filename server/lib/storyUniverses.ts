@@ -7,6 +7,7 @@
  * NULL on essentially every production row. One writer, no optional parameter
  * for a caller to forget.
  */
+import type { EditLogEntry } from "@shared/editLog";
 import { randomUUID } from "crypto";
 import { pool } from "../db";
 import type { WorldEntry } from "./worldState";
@@ -41,6 +42,8 @@ export type Universe = {
   isStale: boolean;
   canMakeSummary: boolean;
   activeSummaryJobId: string | null;
+  /** What a parent changed by hand -- name or summary -- and when. */
+  editLog: EditLogEntry[];
 };
 
 /**
@@ -63,7 +66,7 @@ const UNIVERSE_SELECT = `
   SELECT
     u.universe_id, u.name, u.created_at, u.summary, u.summary_updated_at, u.world_state,
     u.summary_edited_at, u.summary_model, u.summary_covered_count,
-    u.summary_dropped_count, u.pinned_canon,
+    u.summary_dropped_count, u.pinned_canon, u.edit_log,
     (SELECT count(*)::int FROM user_stories s WHERE s.universe_id = u.universe_id) AS story_count,
     ${CURRENT_HASH_SQL} AS current_hash,
     u.summary_inputs_hash,
@@ -96,7 +99,14 @@ function toUniverse(r: any): Universe {
     canMakeSummary:
       storyCount >= 2 && !r.active_summary_job_id && (!r.summary || isStale),
     activeSummaryJobId: r.active_summary_job_id ?? null,
+    editLog: Array.isArray(r.edit_log) ? r.edit_log : [],
   };
+}
+
+/** One appended log entry, as the jsonb array `||` expects. */
+function logEntry(changed: string[]): string {
+  const entry: EditLogEntry = { at: new Date().toISOString(), by: "parent", changed };
+  return JSON.stringify([entry]);
 }
 
 export async function listUniverses(userId: number): Promise<Universe[]> {
@@ -130,15 +140,35 @@ export async function createUniverse(userId: number, name: string): Promise<Univ
   return (await getUniverse(userId, id))!;
 }
 
-export async function renameUniverse(userId: number, universeId: string, name: string): Promise<boolean> {
-  if (!pool) return false;
+export type RenameOutcome = "renamed" | "empty" | "taken" | "missing";
+
+/**
+ * Rename, and say what happened.
+ *
+ * The same name is a no-op: it neither bumps updated_at (the library orders
+ * universes by it, so a no-op rename would reorder the tab) nor logs an edit.
+ * CASEs rather than a WHERE, because a WHERE that matched nothing would read
+ * as "no such universe". The (user_id, name) unique index is what raises
+ * 23505; it used to reach the route as a 500.
+ */
+export async function renameUniverse(userId: number, universeId: string, name: string): Promise<RenameOutcome> {
+  if (!pool) return "missing";
   const trimmed = name.trim().slice(0, 120);
-  if (!trimmed) return false;
-  const { rowCount } = await pool.query(
-    "UPDATE story_universes SET name = $1, updated_at = now() WHERE universe_id = $2 AND user_id = $3",
-    [trimmed, universeId, userId],
-  );
-  return (rowCount ?? 0) > 0;
+  if (!trimmed) return "empty";
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE story_universes
+          SET updated_at = CASE WHEN name = $1 THEN updated_at ELSE now() END,
+              edit_log   = CASE WHEN name = $1 THEN edit_log ELSE edit_log || $4::jsonb END,
+              name       = $1
+        WHERE universe_id = $2 AND user_id = $3`,
+      [trimmed, universeId, userId, logEntry(["name"])],
+    );
+    return (rowCount ?? 0) > 0 ? "renamed" : "missing";
+  } catch (e) {
+    if ((e as { code?: string }).code === "23505") return "taken";
+    throw e;
+  }
 }
 
 /** Stories survive: universe_id is ON DELETE SET NULL, so they return to Unassigned. */
@@ -331,9 +361,10 @@ export async function editSummary(
             summary_edited_at = now(),
             summary_updated_at = now(),
             summary_inputs_hash = ${CURRENT_HASH_SQL},
+            edit_log = edit_log || $4::jsonb,
             updated_at = now()
       WHERE u.universe_id = $2 AND u.user_id = $3`,
-    [summary.slice(0, 8000), universeId, userId],
+    [summary.slice(0, 8000), universeId, userId, logEntry(["summary"])],
   );
   return (rowCount ?? 0) > 0;
 }

@@ -1,3 +1,5 @@
+import UniverseContext from "@/components/UniverseContext";
+import { useUniverses } from "@/hooks/use-universes";
 import { useState, useEffect } from "react";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
@@ -29,9 +31,18 @@ export default function GenerateStory() {
   const [watchingJobId, setWatchingJobId] = useState<string | null>(null);
   // "Continue this story" arrives as a query parameter rather than as state, so
   // it survives a reload and can be shared as a link.
-  const continuesStoryId = new URLSearchParams(
-    typeof window === "undefined" ? "" : window.location.search,
-  ).get("continues");
+  const params = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
+  const continuesStoryId = params.get("continues");
+  // "Add to this Universe": a fresh story written against a world's memory
+  // and filed into it. Explicit id wins on the server, so a link carrying
+  // both would file a continuation into the wrong universe -- the universe
+  // is sent ONLY when not continuing, and the panels below are a ternary for
+  // the same reason.
+  const universeParam = continuesStoryId ? null : params.get("universe");
+  const { universes } = useUniverses();
+  const attachedUniverse = universeParam
+    ? universes.find((u) => u.universeId === universeParam)
+    : undefined;
   const { jobs, enqueue, cancel } = useStoryJobs();
 
   /**
@@ -152,7 +163,11 @@ export default function GenerateStory() {
     // Carried on the request, where the server resolves which universe this
     // belongs to before freezing the brief.
     const outcome = await enqueue(
-      continuesStoryId ? { ...data, continuesStoryId } : data,
+      continuesStoryId
+        ? { ...data, continuesStoryId }
+        : universeParam
+          ? { ...data, universeId: universeParam }
+          : data,
     );
     setGenerating(false);
 
@@ -238,7 +253,11 @@ export default function GenerateStory() {
         )}
       </div>
 
-      {continuesStoryId && <ContinuationContext storyId={continuesStoryId} />}
+      {continuesStoryId ? (
+        <ContinuationContext storyId={continuesStoryId} />
+      ) : (
+        universeParam && <UniverseContext universeId={universeParam} />
+      )}
 
       <div className="grid grid-cols-1 gap-8">
         <div className="relative">
@@ -246,6 +265,7 @@ export default function GenerateStory() {
             onSubmit={handleGenerateStory}
             loading={generating || Boolean(watchedJob)}
             inheritedCharacterIds={inheritedCharacterIds}
+            universeName={attachedUniverse?.name}
             parentStoryTitle={parentStory?.story?.title}
             isContinuation={Boolean(continuesStoryId)}
           />

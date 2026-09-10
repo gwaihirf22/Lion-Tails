@@ -21,6 +21,7 @@
  * stay reachable without a session (CI's smoke test asserts a 200 with no
  * cookie), and a global guard would put ordering between these and that route.
  */
+import { parentModeActive, type ParentModeSession } from "@shared/parentMode";
 import type { NextFunction, Request, Response } from "express";
 
 /** Any logged-in user. */
@@ -78,8 +79,10 @@ export function requireParentMode(req: Request, res: Response, next: NextFunctio
   if (!req.user || !req.isAuthenticated()) {
     return res.status(401).json({ message: "Authentication required" });
   }
-  const expiry = (req.session as { parentModeExpiry?: number } | undefined)?.parentModeExpiry;
-  if (!expiry || Date.now() >= expiry) {
+  // ONE predicate, shared with the status route and the forced-rebuild check
+  // in routes.ts: "until I turn it off" is not an expiry, and two copies of
+  // this test would have disagreed about it.
+  if (!parentModeActive(req.session as ParentModeSession | undefined)) {
     return res.status(403).json({
       code: "parent_mode_required",
       message: "Parent Mode is required for this. Unlock it in Settings and try again.",

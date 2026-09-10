@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   storyWithoutAppendices,
+  splitAppendices,
   MEETING_NOTE_HEADING,
   DIGGING_DEEPER_HEADING,
   FURTHER_LEARNING_HEADING,
@@ -58,5 +59,30 @@ describe("storyWithoutAppendices", () => {
     // not mistaken for the block.
     const prose = "She thought about further learning, and about this story.";
     expect(storyWithoutAppendices(prose)).toBe(prose);
+  });
+});
+
+describe("splitAppendices", () => {
+  const body = "Once there was a lantern.\n\nIt went dark.";
+  const note = "**About this story:** Corrie ten Boom really lived.";
+  const further = "**For Further Learning:**\n\n- **BibleGateway.com** - Read Bible stories.";
+
+  it("puts a story back together byte for byte, with every appendix combination", () => {
+    for (const content of [body, `${body}\n\n${note}`, `${body}\n\n${note}\n\n${further}`, `${body}\n\n${further}`]) {
+      const { body: b, appendices } = splitAppendices(content);
+      expect(b + appendices).toBe(content);
+    }
+  });
+
+  it("cuts at the earliest appendix and leaves the body alone", () => {
+    const { body: b, appendices } = splitAppendices(`${body}\n\n${note}\n\n${further}`);
+    expect(b.trimEnd()).toBe(body);
+    expect(appendices.startsWith("**About this story:**")).toBe(true);
+    expect(appendices).toContain("**For Further Learning:**");
+    expect(splitAppendices(body).appendices).toBe("");
+  });
+
+  it("is what storyWithoutAppendices is built on", () => {
+    expect(storyWithoutAppendices(`${body}\n\n${note}`)).toBe(body);
   });
 });

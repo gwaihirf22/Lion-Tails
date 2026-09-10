@@ -1,3 +1,4 @@
+import { PARENT_MODE_WINDOW_MS, parentModeActive, type ParentModeSession } from "@shared/parentMode";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
@@ -32,6 +33,8 @@ declare global {
     interface User extends SelectUser {}
     interface Session {
       parentModeExpiry?: number;
+      /** Chosen at the password prompt: on until turned off or signed out. */
+      parentModeIndefinite?: boolean;
     }
   }
 }
@@ -281,13 +284,19 @@ export function setupAuth(app: Express) {
       const isValid = await comparePasswords(password, user.password);
       
       if (isValid) {
-        // Set session flag with 30-minute expiration
-        if (req.session) {
-          (req.session as any).parentModeExpiry = Date.now() + (30 * 60 * 1000); // 30 minutes
-        }
-        res.json({ 
-          success: true, 
-          expiresAt: (req.session as any)?.parentModeExpiry 
+        // Two ways on, chosen at the prompt each time: the window, or until
+        // turned off / signed out. Both are session fields, so logging out
+        // ends either, and the login cookie's own lifetime bounds "indefinite"
+        // whatever the row says. Never a setting -- a forgotten setting on a
+        // shared device is Parent Mode for the children.
+        const keep = req.body?.keep === true;
+        const session = req.session as ParentModeSession;
+        session.parentModeIndefinite = keep;
+        session.parentModeExpiry = keep ? null : Date.now() + PARENT_MODE_WINDOW_MS;
+        res.json({
+          success: true,
+          expiresAt: session.parentModeExpiry,
+          indefinite: keep,
         });
       } else {
         res.status(401).json({ error: "Invalid password" });
@@ -298,16 +307,35 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Check Parent Mode status
+  // Check Parent Mode status -- the same predicate the guards use.
   app.get("/api/auth/parent-mode-status", (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Authentication required" });
     }
-    
-    const isActive = (req.session as any)?.parentModeExpiry && Date.now() < (req.session as any).parentModeExpiry;
-    res.json({ 
-      isActive: !!isActive, 
-      expiresAt: (req.session as any)?.parentModeExpiry || null 
+    const session = req.session as ParentModeSession | undefined;
+    res.json({
+      isActive: parentModeActive(session),
+      expiresAt: session?.parentModeExpiry ?? null,
+      indefinite: Boolean(session?.parentModeIndefinite),
     });
+  });
+
+  /**
+   * Turn Parent Mode OFF, on the server.
+   *
+   * There was no such route: the client's "disable" cleared React state and
+   * sent nothing, so the session stayed valid and the next status poll or
+   * window focus turned it back on. With a 30-minute window that was a
+   * nuisance; with "until I turn it off" it would have made the off switch a
+   * lie.
+   */
+  app.post("/api/auth/parent-mode-off", (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    const session = req.session as ParentModeSession;
+    session.parentModeIndefinite = false;
+    session.parentModeExpiry = null;
+    res.json({ isActive: false, expiresAt: null, indefinite: false });
   });
 }
