@@ -3,13 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -17,7 +17,13 @@ import { useParentMode } from "@/hooks/use-parent-mode";
 import { Lock, Unlock, Clock, AlertTriangle } from "lucide-react";
 
 /**
- * Parent Mode: password-gated prompt editing, expiring after 30 minutes.
+ * Parent Mode: password-gated editing -- prompts, a story's text, a
+ * universe's name and summary -- for 30 minutes, or until turned off.
+ *
+ * "Keep it on" is a checkbox at the password prompt, chosen each time, never a
+ * setting: a forgotten setting on a shared device is Parent Mode for the
+ * children. It lasts until turned off or signed out; the login itself lapses
+ * after a week away, and the copy says so.
  *
  * Lives in Settings. It was previously a full-width warning-coloured card
  * pinned under the Create Story form, which meant every visit to the page it
@@ -25,8 +31,9 @@ import { Lock, Unlock, Clock, AlertTriangle } from "lucide-react";
  * never turn on. It is an account setting and it sits with the others.
  */
 export default function ParentModeToggle() {
-  const { isActive, expiresAt, verifyPassword, disable } = useParentMode();
+  const { isActive, expiresAt, indefinite, verifyPassword, disable } = useParentMode();
   const [password, setPassword] = useState("");
+  const [keep, setKeep] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -43,22 +50,23 @@ export default function ParentModeToggle() {
     if (!password.trim()) return;
 
     setIsVerifying(true);
-    const success = await verifyPassword(password);
+    const success = await verifyPassword(password, keep);
     setIsVerifying(false);
 
     if (success) {
       setPassword("");
+      setKeep(false);
       setDialogOpen(false);
     }
   };
 
+  // Minutes left in the window. Not computed for an indefinite session --
+  // there is no window to count down.
   const getTimeRemaining = () => {
-    if (!expiresAt) return null;
+    if (indefinite || !expiresAt) return null;
     const remaining = expiresAt - Date.now();
     if (remaining <= 0) return null;
-    
-    const minutes = Math.floor(remaining / (1000 * 60));
-    return minutes;
+    return Math.floor(remaining / (1000 * 60));
   };
 
   const timeRemaining = getTimeRemaining();
@@ -82,27 +90,34 @@ export default function ParentModeToggle() {
           />
         </div>
         <CardDescription className="text-warning">
-          Enable advanced prompt editing capabilities for story customization.
+          Edit what the app wrote: a story's text, a universe's name and summary, the prompts.
         </CardDescription>
       </CardHeader>
-      
+
       <CardContent className="pt-0">
         <div className="space-y-3">
           <div className="text-sm text-warning">
             <p className="font-medium mb-2">What Parent Mode enables:</p>
             <ul className="list-disc list-inside space-y-1 text-xs">
+              <li>Edit a story's title and text from its page</li>
+              <li>Rename a universe, edit its summary, pin what must never be forgotten</li>
               <li>Edit AI prompts before story generation</li>
-              <li>Customize both system and user prompts</li>
-              <li>Preview prompts with syntax highlighting</li>
-              <li>Content validation for child-appropriate content</li>
             </ul>
           </div>
 
-          {isActive && timeRemaining !== null && (
+          {isActive && indefinite && (
             <Alert className="bg-success-surface border-success">
               <Clock className="h-4 w-4 text-success" />
               <AlertDescription className="text-success">
-                Active for {timeRemaining} more minute{timeRemaining !== 1 ? 's' : ''}
+                On until you turn it off or sign out.
+              </AlertDescription>
+            </Alert>
+          )}
+          {isActive && !indefinite && timeRemaining !== null && (
+            <Alert className="bg-success-surface border-success">
+              <Clock className="h-4 w-4 text-success" />
+              <AlertDescription className="text-success">
+                Active for {timeRemaining} more minute{timeRemaining !== 1 ? "s" : ""}
               </AlertDescription>
             </Alert>
           )}
@@ -110,7 +125,9 @@ export default function ParentModeToggle() {
           <Alert className="bg-muted border-border">
             <AlertTriangle className="h-4 w-4 text-foreground" />
             <AlertDescription className="text-foreground text-xs">
-              <strong>Important:</strong> Parent Mode requires your account password and automatically expires after 30 minutes for security.
+              <strong>Important:</strong> Parent Mode needs your account password. It turns
+              itself off after 30 minutes unless you choose to keep it on — and then it stays
+              on until you turn it off or sign out.
             </AlertDescription>
           </Alert>
         </div>
@@ -124,10 +141,11 @@ export default function ParentModeToggle() {
               <span>Verify Password</span>
             </DialogTitle>
             <DialogDescription>
-              Enter your account password to enable Parent Mode for 30 minutes.
+              Enter your account password to turn Parent Mode on for 30 minutes, or until you
+              turn it off.
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handlePasswordSubmit} className="space-y-4">
             <div>
               <Label htmlFor="password">Account Password</Label>
@@ -141,7 +159,26 @@ export default function ParentModeToggle() {
                 autoFocus
               />
             </div>
-            
+
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="keep-parent-mode"
+                checked={keep}
+                onCheckedChange={(v) => setKeep(v === true)}
+                disabled={isVerifying}
+                className="mt-0.5"
+              />
+              <div className="space-y-1 leading-none">
+                <Label htmlFor="keep-parent-mode" className="text-sm font-medium">
+                  Keep it on until I turn it off or sign out
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Otherwise it turns itself off after 30 minutes. On a shared device, leave
+                  this unticked.
+                </p>
+              </div>
+            </div>
+
             <div className="flex justify-end space-x-2">
               <Button
                 type="button"
@@ -156,7 +193,7 @@ export default function ParentModeToggle() {
                 disabled={!password.trim() || isVerifying}
                 className="bg-warning hover:bg-warning"
               >
-                {isVerifying ? "Verifying..." : "Enable Parent Mode"}
+                {isVerifying ? "Verifying..." : "Turn Parent Mode on"}
               </Button>
             </div>
           </form>
