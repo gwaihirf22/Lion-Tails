@@ -1,0 +1,1 @@
+ALTER TABLE "story_universes" ADD COLUMN "edit_log" jsonb DEFAULT '[]'::jsonb NOT NULL;
