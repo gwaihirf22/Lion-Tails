@@ -668,9 +668,24 @@ My Stories is four folders, every story one card, every universe one card.
   story count is derived from the stories the library can see, never
   `universe.storyCount` -- the server counts expired rows the library hides,
   and "3 stories" over a list of 2 looks like a bug in the list.
-- **`builtIn` and `universeId`** on `savedStorySchema` are server-owned and
-  type-only: the server grafts them onto rows; nothing reads them from a
-  request.
+- **`builtIn`, `universeId` and `heroId`** on `savedStorySchema` are
+  server-owned: the server grafts them onto rows; nothing reads them from a
+  request. **`rowToSavedStory()` in `db-storage.ts` is the one place the
+  columns win over the blob.** There were twenty-one inline copies of that
+  spread, and that is how `hero_id` was written on every hero story and
+  visible to nobody: the code that set the column looked correct, and the
+  reader was looking in the blob.
+- **A multi-segment query key needs its own `queryFn`.** The default
+  fetcher requests `queryKey[0]` and nothing else. The hero dialog's key
+  `['/api/heroes', id, 'stories']` fetched the whole heroes list for months,
+  destructured two empty arrays from it, and said "No Stories Yet" with no
+  error anywhere.
+- **Stories are linked back to what they are about.** A character's sheet
+  has a Stories tab (the seventh; `--tab-stories`, only when editing) listing
+  every story whose cast -- read through `characterIdsOf()` -- includes it;
+  a hero's dialog lists the user's stories about them. Both are `StoryRow`s,
+  not `StoryCard`s: a card navigates on click and owns dialogs, and these sit
+  inside an open Dialog over a form.
 
 ## Parent Mode
 

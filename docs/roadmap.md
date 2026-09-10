@@ -116,7 +116,9 @@ every library.
    the page.
 5. **The first adventure** on the page. Not before 4.
 
-Two small ones the library redesign left open: there is no way to put a
+Stories are now linked back to the characters and heroes they are about
+(a Stories tab on the sheet, and the hero dialog's tab actually receiving
+data). Two small ones the library redesign left open: there is no way to put a
 story INTO a universe by hand (`moveStory` is only ever called with `null`;
 universes are made by the server when a story continues), so a "Move to
 universe" control on the story card is the thing a "New universe" button

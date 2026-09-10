@@ -86,6 +86,7 @@ export default {
           "stats": "hsl(var(--tab-stats))",
           "virtues": "hsl(var(--tab-virtues))",
           "grown-ups": "hsl(var(--tab-grown-ups))",
+          "stories": "hsl(var(--tab-stories))",
         },
         // The unfilled part of a progress bar. Surface only -- there is
         // deliberately no track-foreground, because nothing writes on it.

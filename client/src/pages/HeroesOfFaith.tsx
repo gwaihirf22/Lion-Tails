@@ -8,7 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
+import { apiRequest, apiRequestAllowingErrors, getQueryFn, queryClient } from "@/lib/queryClient";
+import StoryRow from "@/components/StoryRow";
 import { HeroOfFaith, HeroStory, SavedStory } from '@shared/schema';
 import { 
   Loader2, 
@@ -75,42 +76,44 @@ export default function HeroesOfFaith() {
     queryFn: getQueryFn<HeroOfFaith[]>({ on401: 'returnNull' })
   });
 
-  // Query to fetch stories for a specific hero when one is selected
-  const { data: heroStoriesData, isLoading: isLoadingStories } = useQuery({
+  /**
+   * The stories about the selected hero: the library's curated ones, and the
+   * user's own.
+   *
+   * An EXPLICIT queryFn. This used to lean on the default fetcher with the
+   * key ['/api/heroes', id, 'stories'] -- and the default fetcher requests
+   * queryKey[0], the whole heroes list. Destructuring { heroStories,
+   * userStories } from an array gave two empty arrays, so the tab said "No
+   * Stories Yet" for ever, with no error anywhere.
+   */
+  const { data: heroStoriesData, isLoading: isLoadingStories } = useQuery<{
+    heroStories: HeroStory[];
+    userStories: SavedStory[];
+  }>({
     queryKey: ['/api/heroes', selectedHero?.id, 'stories'],
-    queryFn: selectedHero ? 
-      getQueryFn<{heroStories: HeroStory[], userStories: SavedStory[]}>({ on401: 'returnNull' }) : 
-      () => Promise.resolve({heroStories: [], userStories: []}),
+    queryFn: async () => {
+      const r = await apiRequestAllowingErrors("GET", `/api/heroes/${selectedHero!.id}/stories`);
+      return r.ok ? await r.json() : { heroStories: [], userStories: [] };
+    },
     enabled: !!selectedHero,
   });
-  
-  // Combine both types of stories for display
-  const heroStories = useMemo(() => {
-    if (!heroStoriesData) return [];
-    const { heroStories = [], userStories = [] } = heroStoriesData;
-    
-    // Convert any user stories to the HeroStory format for display
-    const convertedUserStories: HeroStory[] = userStories.map(story => ({
-      id: story.id,
-      heroId: selectedHero?.id || "",
-      title: story.story.title,
-      content: story.story.content,
-      isHistoricallyAccurate: story.searchMetadata?.tags?.includes("historical") || false,
-      // StoryResponse.bibleVerse is optional but HeroStory requires it, so a
-      // saved story without one gets a placeholder rather than rendering
-      // `undefined.reference`.
-      bibleVerse: story.story.bibleVerse ?? { text: "", reference: "" },
-      isFeatured: story.isFavorite || false,
-      createdAt: story.createdAt,
-      createdBy: undefined,
-      sources: [{ title: "User Generated Story" }]
-    }));
-    
-    // Combine and sort by creation date (newest first)
-    return [...heroStories, ...convertedUserStories].sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-  }, [heroStoriesData, selectedHero]);
+
+  // Two lists, not one merged shape: only the user's own stories have a page
+  // to link to. Newest first in each.
+  const curatedStories = useMemo(
+    () =>
+      [...(heroStoriesData?.heroStories ?? [])].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+    [heroStoriesData],
+  );
+  const myStories = useMemo(
+    () =>
+      [...(heroStoriesData?.userStories ?? [])].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+    [heroStoriesData],
+  );
 
   // Function to open hero details dialog
   const openHeroDetails = (hero: HeroOfFaith) => {
@@ -560,41 +563,42 @@ export default function HeroesOfFaith() {
                   </div>
                 ) : (
                   <>
-                    {heroStories && heroStories.length > 0 ? (
-                      <div className="space-y-4">
-                        {heroStories.map(story => (
-                          <Card key={story.id} className={story.isFeatured ? "border-primary/50" : ""}>
-                            <CardHeader className="py-3">
-                              <div className="flex items-center justify-between">
-                                <CardTitle className="text-base flex items-center">
-                                  {story.isFeatured && <Star className="h-4 w-4 text-warning mr-2" />}
-                                  {story.title}
-                                </CardTitle>
-                                <Badge variant={story.isHistoricallyAccurate ? "outline" : "secondary"}>
-                                  {story.isHistoricallyAccurate ? "Historical" : "Fictional"}
-                                </Badge>
-                              </div>
-                            </CardHeader>
-                            <CardContent className="py-2">
-                              <p className="text-sm line-clamp-2">{story?.content ? story.content.substring(0, 150) + '...' : 'No content available'}</p>
-                            </CardContent>
-                            <CardFooter className="pt-0 pb-3">
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => {
-                                  // Here we'd navigate to a story view page
-                                  toast({
-                                    title: "Coming Soon",
-                                    description: "The full story view will be available soon.",
-                                  });
-                                }}
-                              >
-                                Read Full Story
-                              </Button>
-                            </CardFooter>
-                          </Card>
-                        ))}
+                    {myStories.length > 0 || curatedStories.length > 0 ? (
+                      <div className="space-y-6">
+                        {myStories.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-semibold">Your stories</h4>
+                            {myStories.map((story) => (
+                              <StoryRow key={story.id} story={story} />
+                            ))}
+                          </div>
+                        )}
+                        {/* Curated hero_stories are a different table with no
+                            reader page, so they are shown, not linked. The
+                            button that used to be here toasted "Coming Soon". */}
+                        {curatedStories.length > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="text-sm font-semibold">From the library</h4>
+                            {curatedStories.map((story) => (
+                              <Card key={story.id} className={story.isFeatured ? "border-primary/50" : ""}>
+                                <CardHeader className="py-3">
+                                  <div className="flex items-center justify-between">
+                                    <CardTitle className="text-base flex items-center">
+                                      {story.isFeatured && <Star className="h-4 w-4 text-warning mr-2" />}
+                                      {story.title}
+                                    </CardTitle>
+                                    <Badge variant={story.isHistoricallyAccurate ? "outline" : "secondary"}>
+                                      {story.isHistoricallyAccurate ? "Historical" : "Fictional"}
+                                    </Badge>
+                                  </div>
+                                </CardHeader>
+                                <CardContent className="py-2 pb-4">
+                                  <p className="text-sm line-clamp-2">{story?.content ? story.content.substring(0, 150) + '...' : 'No content available'}</p>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="text-center p-8 border rounded-md">
