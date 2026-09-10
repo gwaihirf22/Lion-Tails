@@ -1739,6 +1739,13 @@ export const savedStorySchema = z.object({
    * built-in story is still a SavedStory in every other respect.
    */
   builtIn: z.boolean().optional(),
+  /**
+   * Which universe the story is in, if any. SERVER-OWNED: it is a column on
+   * user_stories, grafted onto the row by db-storage on the way out, and set
+   * only through PUT /api/stories/:id/universe. On the schema for the TYPE --
+   * three components used to cast for it.
+   */
+  universeId: z.string().optional(),
   id: z.string(),
   story: storyResponseSchema,
   request: storyRequestSchema,

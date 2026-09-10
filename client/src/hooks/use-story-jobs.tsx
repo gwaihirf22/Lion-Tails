@@ -103,6 +103,11 @@ export function StoryJobsProvider({ children }: { children: ReactNode }) {
       setLastCompletedAt(Date.now());
       // The worker saved the story, so the library is stale.
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+      // And so is every universe: the extraction after a series story
+      // rewrites its summary and world memory, and with staleTime Infinity
+      // nothing else would ever refetch them. Invisible while the universe
+      // was a collapsed card; the first thing noticed on its own page.
+      queryClient.invalidateQueries({ queryKey: ["/api/universes"] });
     }
   }, [jobs, queryClient]);
 
