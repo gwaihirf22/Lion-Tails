@@ -9,6 +9,7 @@ import { parseStoryContent } from "../client/src/lib/storyContent";
 import { storyWithoutAppendices } from "../shared/storyAppendices";
 import { savedStorySchema, storyResponseSchema, type SavedStory } from "../shared/schema";
 import { KEEPER, SHOP } from "../server/data/lionTails";
+import { isTimekeeperStory } from "../shared/quests";
 
 /**
  * The first story everyone has.
@@ -77,5 +78,24 @@ describe("built-in stories", () => {
     expect(builtInStoryById(QUEST_PROLOGUE_ID)?.builtIn).toBe(true);
     expect(isBuiltInStoryId(mine.id)).toBe(false);
     expect(builtInStoryById(mine.id)).toBeUndefined();
+  });
+});
+
+describe("isTimekeeperStory", () => {
+  const withRequest = (request: Record<string, unknown>) => ({ request });
+
+  it("counts the prologue, a quest, and a legacy time-travel story", () => {
+    expect(isTimekeeperStory(QUEST_PROLOGUE)).toBe(true);
+    expect(isTimekeeperStory(withRequest({ characterRole: "travels" }))).toBe(true);
+    // Read through characterRoleOf: the legacy flag is a quest too.
+    expect(isTimekeeperStory(withRequest({ useTimeTravel: true }))).toBe(true);
+  });
+
+  it("does not count the other way in, a legacy meeting, or a plain story", () => {
+    expect(isTimekeeperStory(withRequest({ characterRole: "alongside" }))).toBe(false);
+    expect(isTimekeeperStory(withRequest({ characterRole: "meets" }))).toBe(false);
+    expect(isTimekeeperStory(withRequest({ characterRole: "absent" }))).toBe(false);
+    expect(isTimekeeperStory(withRequest({}))).toBe(false);
+    expect(isTimekeeperStory({})).toBe(false);
   });
 });
