@@ -45,6 +45,66 @@ function rowToPrefs(row: Record<string, unknown>): Partial<ReadingPrefs> {
   return out;
 }
 
+/**
+ * What a row whose story_data cannot be read becomes, so one bad row does
+ * not blank the library. ONE definition -- there were ten hand-written
+ * placeholders, no two alike, and once rowToSavedStory was typed, eight of
+ * them turned out not to be SavedStorys at all. This one is: the request is
+ * parsed by the schema (the refine wants a name and a gender), and the story
+ * carries the five questions the response schema requires.
+ */
+function corruptStoryPlaceholder(row: {
+  story_id?: string;
+  created_at?: string | Date | null;
+  expires_at?: string | Date | null;
+  is_favorite?: boolean | null;
+}): SavedStory {
+  return {
+    id: row.story_id || "unknown",
+    story: {
+      title: "Story Data Error",
+      content: "There was a problem loading this story. The data may be corrupted.",
+      moralOutcome: "learning",
+      applicationQuestions: ["", "", "", "", ""],
+    },
+    request: storyRequestSchema.parse({ childName: "Unknown", gender: "boy" }),
+    createdAt: new Date(row.created_at ?? Date.now()).toISOString(),
+    expiresAt: row.expires_at ? new Date(row.expires_at).toISOString() : undefined,
+    isFavorite: Boolean(row.is_favorite),
+    searchMetadata: { keywords: [], tags: [], characters: [], biblicalReferences: [], themes: [] },
+  };
+}
+
+/** A hero_stories row: the blob is the whole record; nothing is grafted on. */
+function heroStoryRow(row: { story_data: unknown }): HeroStory {
+  return (typeof row.story_data === "string" ? JSON.parse(row.story_data) : row.story_data) as HeroStory;
+}
+
+/**
+ * A user_stories row as the client sees it.
+ *
+ * THE COLUMNS WIN OVER THE BLOB, in one place. These mappers used to spread
+ * story_data verbatim plus universe_id -- twenty-one copies of the same line
+ * -- which is exactly how hero_id ended up written on every hero story and
+ * visible to nobody: the code that set the column looked correct, and the
+ * reader was looking in the blob. Deliberately NOT jsonb_set into the blob as
+ * well: two sources of truth for one fact is the bug this replaces.
+ */
+function rowToSavedStory(row: {
+  story_data: unknown;
+  universe_id?: string | null;
+  hero_id?: string | null;
+}): SavedStory {
+  const data =
+    typeof row.story_data === "string" ? JSON.parse(row.story_data) : row.story_data;
+  return {
+    ...(data as SavedStory),
+    universeId: row.universe_id ?? undefined,
+    heroId: row.hero_id ?? undefined,
+  };
+}
+
+
 export class DbStorage implements IStorage {
   sessionStore: session.Store;
 
@@ -227,39 +287,14 @@ export class DbStorage implements IStorage {
         try {
           // Handle the case where data might already be an object
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return { ...row.story_data, universeId: row.universe_id ?? undefined };
+            return rowToSavedStory(row);
           }
           // Handle the string format with proper error handling
-          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
+          return rowToSavedStory(row);
         } catch (parseError) {
           console.error("Error parsing story data:", parseError);
           // Return a default story object to prevent app crashes
-          return {
-            id: row.story_id || "unknown",
-            story: {
-              title: "Story Data Error",
-              content: "There was a problem loading this story. The data may be corrupted.",
-              bibleVerse: {
-                text: "The Lord is my helper; I will not fear.",
-                reference: "Hebrews 13:6"
-              }
-            },
-            request: {
-              theme: "",
-              animal: "",
-              gender: "boy" as "boy" | "girl" | undefined,
-              childName: "",
-              storyType: "regular",
-              heroOfFaith: "",
-              customPrompt: "",
-              biblicalEvent: "",
-              useTimeTravel: false,
-              useAnimal: true
-            },
-            createdAt: new Date(row.created_at) || new Date(),
-            expiresAt: new Date(row.expires_at) || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-            isFavorite: !!row.is_favorite
-          };
+          return corruptStoryPlaceholder(row);
         }
       });
     } catch (error) {
@@ -543,39 +578,14 @@ export class DbStorage implements IStorage {
         try {
           // Handle the case where data might already be an object
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return { ...row.story_data, universeId: row.universe_id ?? undefined };
+            return rowToSavedStory(row);
           }
           // Handle the string format with proper error handling
-          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
+          return rowToSavedStory(row);
         } catch (parseError) {
           console.error("Error parsing story data:", parseError);
           // Return a default story object to prevent app crashes
-          return {
-            id: row.story_id || "unknown",
-            story: {
-              title: "Story Data Error",
-              content: "There was a problem loading this story. The data may be corrupted.",
-              bibleVerse: {
-                text: "The Lord is my helper; I will not fear.",
-                reference: "Hebrews 13:6"
-              }
-            },
-            request: {
-              theme: "",
-              animal: "",
-              gender: "boy" as "boy" | "girl" | undefined,
-              childName: "",
-              storyType: "regular",
-              heroOfFaith: "",
-              customPrompt: "",
-              biblicalEvent: "",
-              useTimeTravel: false,
-              useAnimal: true
-            },
-            createdAt: new Date(row.created_at) || new Date(),
-            expiresAt: new Date(row.expires_at) || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-            isFavorite: !!row.is_favorite
-          };
+          return corruptStoryPlaceholder(row);
         }
       });
     } catch (error) {
@@ -601,16 +611,10 @@ export class DbStorage implements IStorage {
       try {
         // Handle the case where data might already be an object
         if (typeof rows[0].story_data === 'object' && rows[0].story_data !== null) {
-          // The COLUMN wins over the blob. A new column is otherwise invisible
-          // to the client, because these mappers return story_data verbatim --
-          // which is exactly how hero_id ended up NULL on nearly every row while
-          // the code that set it looked correct. Deliberately NOT jsonb_set into
-          // the blob as well: updateStoryHeroId writes both and now has two
-          // sources of truth for one fact.
-          return { ...rows[0].story_data, universeId: rows[0].universe_id ?? undefined };
+          return rowToSavedStory(rows[0]);
         }
         // Handle the string format with proper error handling
-        return { ...JSON.parse(rows[0].story_data), universeId: rows[0].universe_id ?? undefined };
+        return rowToSavedStory(rows[0]);
       } catch (parseError) {
         console.error("Error parsing story data:", parseError);
         // Return a default story object to prevent app crashes
@@ -997,36 +1001,12 @@ export class DbStorage implements IStorage {
       return rows.map(row => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return { ...row.story_data, universeId: row.universe_id ?? undefined };
+            return rowToSavedStory(row);
           }
-          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
+          return rowToSavedStory(row);
         } catch (error) {
           console.error("Error parsing story data:", error);
-          return {
-            id: row.story_id || "unknown",
-            story: {
-              title: "Error Loading Story",
-              content: "There was a problem loading this story data.",
-              bibleVerse: { text: "", reference: "" }
-            },
-            request: {
-              theme: "",
-              animal: "",
-              gender: "boy" as "boy" | "girl" | undefined,
-              childName: "",
-              storyType: "regular",
-              useTimeTravel: false,
-              useAnimal: true
-            },
-            createdAt: new Date(row.created_at).toISOString(),
-            isFavorite: !!row.is_favorite,
-            searchMetadata: {
-              childName: "",
-              biblePassage: "",
-              topic: "",
-              tags: []
-            }
-          };
+          return corruptStoryPlaceholder(row);
         }
       });
     } catch (error) {
@@ -1067,36 +1047,12 @@ export class DbStorage implements IStorage {
       return rows.map(row => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return { ...row.story_data, universeId: row.universe_id ?? undefined };
+            return rowToSavedStory(row);
           }
-          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
+          return rowToSavedStory(row);
         } catch (error) {
           console.error("Error parsing story data:", error);
-          return {
-            id: row.story_id || "unknown",
-            story: {
-              title: "Error Loading Story",
-              content: "There was a problem loading this story data.",
-              bibleVerse: { text: "", reference: "" }
-            },
-            request: {
-              theme: "",
-              animal: "",
-              gender: "boy" as "boy" | "girl" | undefined,
-              childName: "",
-              storyType: "regular",
-              useTimeTravel: false,
-              useAnimal: true
-            },
-            createdAt: new Date(row.created_at).toISOString(),
-            isFavorite: !!row.is_favorite,
-            searchMetadata: {
-              childName: name,
-              biblePassage: "",
-              topic: "",
-              tags: []
-            }
-          };
+          return corruptStoryPlaceholder(row);
         }
       });
     } catch (error) {
@@ -1137,36 +1093,12 @@ export class DbStorage implements IStorage {
       return rows.map(row => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return { ...row.story_data, universeId: row.universe_id ?? undefined };
+            return rowToSavedStory(row);
           }
-          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
+          return rowToSavedStory(row);
         } catch (error) {
           console.error("Error parsing story data:", error);
-          return {
-            id: row.story_id || "unknown",
-            story: {
-              title: "Error Loading Story",
-              content: "There was a problem loading this story data.",
-              bibleVerse: { text: "", reference: "" }
-            },
-            request: {
-              theme: "",
-              animal: "",
-              gender: "boy" as "boy" | "girl" | undefined,
-              childName: "",
-              storyType: "regular",
-              useTimeTravel: false,
-              useAnimal: true
-            },
-            createdAt: new Date(row.created_at).toISOString(),
-            isFavorite: !!row.is_favorite,
-            searchMetadata: {
-              childName: "",
-              biblePassage: passage,
-              topic: "",
-              tags: []
-            }
-          };
+          return corruptStoryPlaceholder(row);
         }
       });
     } catch (error) {
@@ -1207,36 +1139,12 @@ export class DbStorage implements IStorage {
       return rows.map(row => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return { ...row.story_data, universeId: row.universe_id ?? undefined };
+            return rowToSavedStory(row);
           }
-          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
+          return rowToSavedStory(row);
         } catch (error) {
           console.error("Error parsing story data:", error);
-          return {
-            id: row.story_id || "unknown",
-            story: {
-              title: "Error Loading Story",
-              content: "There was a problem loading this story data.",
-              bibleVerse: { text: "", reference: "" }
-            },
-            request: {
-              theme: "",
-              animal: "",
-              gender: "boy" as "boy" | "girl" | undefined,
-              childName: "",
-              storyType: "regular",
-              useTimeTravel: false,
-              useAnimal: true
-            },
-            createdAt: new Date(row.created_at).toISOString(),
-            isFavorite: !!row.is_favorite,
-            searchMetadata: {
-              childName: "",
-              biblePassage: "",
-              topic: topic,
-              tags: []
-            }
-          };
+          return corruptStoryPlaceholder(row);
         }
       });
     } catch (error) {
@@ -1284,36 +1192,12 @@ export class DbStorage implements IStorage {
       return rows.map(row => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return { ...row.story_data, universeId: row.universe_id ?? undefined };
+            return rowToSavedStory(row);
           }
-          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
+          return rowToSavedStory(row);
         } catch (error) {
           console.error("Error parsing story data:", error);
-          return {
-            id: row.story_id || "unknown",
-            story: {
-              title: "Error Loading Story",
-              content: "There was a problem loading this story data.",
-              bibleVerse: { text: "", reference: "" }
-            },
-            request: {
-              theme: "",
-              animal: "",
-              gender: "boy" as "boy" | "girl" | undefined,
-              childName: "",
-              storyType: "regular",
-              useTimeTravel: false,
-              useAnimal: true
-            },
-            createdAt: new Date(row.created_at).toISOString(),
-            isFavorite: !!row.is_favorite,
-            searchMetadata: {
-              childName: "",
-              biblePassage: "",
-              topic: "",
-              tags: tags
-            }
-          };
+          return corruptStoryPlaceholder(row);
         }
       });
     } catch (error) {
@@ -1332,7 +1216,7 @@ export class DbStorage implements IStorage {
         sqlQuery = `
           SELECT * FROM user_stories 
           WHERE user_id = $1 
-          AND story_data->>'heroId' = $2
+          AND hero_id = $2
           AND (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
           ORDER BY created_at DESC
         `;
@@ -1341,7 +1225,7 @@ export class DbStorage implements IStorage {
         // Admin function - get all stories for this hero
         sqlQuery = `
           SELECT * FROM user_stories 
-          WHERE story_data->>'heroId' = $1
+          WHERE hero_id = $1
           ORDER BY created_at DESC
         `;
         params = [heroId];
@@ -1354,37 +1238,12 @@ export class DbStorage implements IStorage {
       return rows.map(row => {
         try {
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return { ...row.story_data, universeId: row.universe_id ?? undefined };
+            return rowToSavedStory(row);
           }
-          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
+          return rowToSavedStory(row);
         } catch (error) {
           console.error("Error parsing story data:", error);
-          return {
-            id: row.story_id || "unknown",
-            story: {
-              title: "Error Loading Story",
-              content: "There was a problem loading this story data.",
-              bibleVerse: { text: "", reference: "" }
-            },
-            request: {
-              theme: "",
-              animal: "",
-              gender: "boy" as "boy" | "girl" | undefined,
-              childName: "",
-              storyType: "regular",
-              useTimeTravel: false,
-              useAnimal: true
-            },
-            createdAt: new Date(row.created_at).toISOString(),
-            isFavorite: !!row.is_favorite,
-            heroId,
-            searchMetadata: {
-              childName: "",
-              biblePassage: "",
-              topic: "",
-              tags: []
-            }
-          };
+          return corruptStoryPlaceholder(row);
         }
       });
     } catch (error) {
@@ -1914,10 +1773,10 @@ export class DbStorage implements IStorage {
         try {
           // Handle the case where data might already be an object
           if (typeof row.story_data === 'object' && row.story_data !== null) {
-            return { ...row.story_data, universeId: row.universe_id ?? undefined };
+            return heroStoryRow(row);
           }
           // Handle the string format with proper error handling
-          return { ...JSON.parse(row.story_data), universeId: row.universe_id ?? undefined };
+          return heroStoryRow(row);
         } catch (parseError) {
           console.error("Error parsing hero story data:", parseError);
           // Return a default hero story object to prevent app crashes
@@ -1956,7 +1815,7 @@ export class DbStorage implements IStorage {
       try {
         // Handle the case where data might already be an object
         if (typeof rows[0].story_data === 'object' && rows[0].story_data !== null) {
-          return { ...rows[0].story_data, universeId: rows[0].universe_id ?? undefined };
+          return heroStoryRow(rows[0]);
         }
         // Handle the string format with proper error handling
         return JSON.parse(rows[0].story_data);
