@@ -7,6 +7,7 @@ import Home from "@/pages/Home";
 import Story from "@/pages/Story";
 import Music from "@/pages/Music";
 import SavedStories from "@/pages/SavedStories";
+import UniversePage from "@/pages/Universe";
 import Settings from "@/pages/Settings";
 import AdminStats from "@/pages/AdminStats";
 import Characters from "@/pages/Characters";
@@ -34,6 +35,9 @@ function Router() {
       <Route path="/music" component={Music} />
       <Route path="/auth" component={AuthPage} />
       <ProtectedRoute path="/saved-stories" component={SavedStories} />
+        {/* The first param route here; wouter's Route provides useParams to the
+            page, and ProtectedRoute renders inside one. */}
+        <ProtectedRoute path="/universes/:id" component={UniversePage} />
       <ProtectedRoute path="/settings" component={Settings} />
       {/* The page itself renders the server 403 for a non-admin; the guard that
           matters is requireAdmin on the endpoint, not route visibility. */}
