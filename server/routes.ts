@@ -21,9 +21,12 @@ import {
   buildSystemPrompt,
   resolveStoryCharacters,
   resolveStoryFocus,
+  resolveTravelFrame,
+  resolveStorySource,
   resolveHeroOfFaith,
   serialiseBrief,
 } from "./lib/storyBrief";
+import { listBiblicalEvents } from "./data/biblicalEvents";
 import { getWordCountFromLength , generateStoryImage } from "./lib/openai-implementation";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
@@ -679,6 +682,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Settled BEFORE the hero is resolved, so a request carrying both an
+      // event and a hero does not spend a database lookup on a hero that is
+      // about to be cleared -- and so heroId is never stamped for a hero the
+      // brief will not mention.
+      resolveStorySource(validatedData);
       const characters = await resolveStoryCharacters(validatedData, userId);
       // Resolved HERE, with the character, so the hero's actual biography is
       // frozen into the brief. The prompt used to receive the raw select value
@@ -691,6 +699,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // stored request records the moment that was actually chosen rather than
       // an instruction to choose one. Same reasoning as heroId above.
       resolveStoryFocus(validatedData, hero);
+      // And which framing a travelling story opens with, for the same reason
+      // and at the same moment: picked here, frozen with the request, so the
+      // frame is recoverable from the story rather than re-rolled on replay.
+      resolveTravelFrame(validatedData);
       const result = await enqueueStoryJob({
         userId,
         request: validatedData,
@@ -1246,7 +1258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // story itself rather than refusing.
       const prompt =
         saved.story.imagePrompt ||
-        `An illustration for a children's story titled "${saved.story.title}"`;
+        `An illustration for a story titled "${saved.story.title}"`;
 
       const imageUrl = await generateStoryImage(prompt, userId);
       if (!imageUrl) {
@@ -1614,6 +1626,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // initialisation and silently seeded into memory.
   
   // Get all heroes of faith
+  /**
+   * The biblical events the source picker offers.
+   *
+   * Static and public, like the heroes list beneath it. No auth: the labels
+   * are on the form for anyone who loads it, and gating them would only mean
+   * the picker renders empty for a signed-out visitor.
+   */
+  app.get("/api/biblical-events", (_req, res) => {
+    res.json(listBiblicalEvents());
+  });
+
   app.get("/api/heroes", async (req, res) => {
     try {
       const heroes = await storage.getAllHeroesOfFaith();

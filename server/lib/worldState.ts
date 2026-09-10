@@ -152,7 +152,7 @@ export function activeWorld(entries: WorldEntry[]): {
 
 export function extractionSystemPrompt(): string {
   return (
-    "You keep the continuity notes for a series of children's stories. You " +
+    "You keep the continuity notes for a series of stories. You " +
     "record what a LATER story would need to know so that it does not " +
     "contradict this one. You are not a reviewer and not a storyteller: you do " +
     "not judge the story, you do not retell it, and you never invent anything " +

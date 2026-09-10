@@ -4,6 +4,8 @@ import {
   notableSkills,
   skillsOf,
   characterRoleOf,
+  type CharacterRole,
+  readingLevelAges,
   characterIdsOf,
   characterKind,
   statsOf,
@@ -21,6 +23,12 @@ import {
 import { coveringNoun } from "@shared/characterVocab";
 import { storage } from "../storage";
 import { getBiblicalEvent } from "../data/biblicalEvents";
+import {
+  DEVICE,
+  KEEPER,
+  framingApproachOf,
+  pickFramingApproach,
+} from "../data/lionTails";
 
 export type CustomPrompts = {
   systemPrompt?: string;
@@ -134,6 +142,233 @@ export function resolveStoryFocus(request: StoryRequest, hero?: HeroOfFaith): vo
     text: pick.description,
     reference: pick.reference || pick.year || undefined,
   };
+}
+
+/**
+ * Settle which framing a travelling story opens with, once.
+ *
+ * Same reasoning as resolveStoryFocus above, same place in the request's life:
+ * chosen on the SERVER at enqueue and written back before the request is
+ * frozen, so the stored request records the frame that was actually used and
+ * the story can be traced back to it.
+ *
+ * OVERWRITES whatever arrived. The field is server-owned and it is on the
+ * write schema only because the request object is one shape end to end -- so
+ * a client that sends its own travelFrame must not be able to pin the choice.
+ * Cleared outright for the other modes, which have no frame: leaving a stale
+ * value on a request switched from "travels" to "alongside" would put a
+ * lantern in the debug panel for a story that has none.
+ *
+ * Mutates deliberately: routes.ts freezes the request immediately after.
+ */
+export function resolveTravelFrame(request: StoryRequest): void {
+  request.travelFrame =
+    characterRoleOf(request) === "travels" ? pickFramingApproach().id : undefined;
+}
+
+/**
+ * Settle the story down to ONE source, once.
+ *
+ * A story is about a biblical event, OR a person, OR a passage. Three fields
+ * carry that one choice, because all three are frozen on requests already in
+ * the database and jsonb is never rewritten -- so the choice is enforced here,
+ * at enqueue, rather than by a rule every reader has to remember.
+ *
+ * WHAT COMBINING THEM USED TO DO, silently, with nothing logged:
+ *
+ *   event + hero      buildStoryBrief builds sourceMaterial event-first, so
+ *                     the hero was dropped ENTIRELY -- biography, key events,
+ *                     quote, verse -- and the only trace left was a premise
+ *                     line that is itself suppressed for a uuid, which is
+ *                     exactly what the picker sends. The hero vanished.
+ *
+ *   hero + passage    storytellerPersona asks
+ *                     `isSet(biblicalEvent) || isSet(biblePassage)` to decide
+ *                     whether this is Scripture, so a typed passage flipped a
+ *                     hero story onto the retelling persona -- "faithful to
+ *                     what Scripture actually records" -- while sourceMaterial
+ *                     was still that person's biography. The persona and the
+ *                     brief then described two different stories.
+ *
+ * NORMALISE, DO NOT REJECT. A refine that refused two sources would also
+ * refuse requests already sitting in story_jobs, which are replayed and
+ * re-read. Clearing the losers instead fixes both failures by construction,
+ * leaves old rows working, and makes the frozen request say which source was
+ * actually used rather than which three were offered.
+ *
+ * The precedence is the one buildStoryBrief already had. It is kept rather
+ * than improved on purpose: changing it would change what an existing request
+ * means.
+ *
+ * Mutates deliberately: routes.ts freezes the request immediately after, the
+ * same as resolveStoryFocus and resolveTravelFrame above.
+ */
+export function resolveStorySource(request: StoryRequest): void {
+  /**
+   * Keyed on whether the event RESOLVES, not on whether the field is filled.
+   *
+   * A slug getBiblicalEvent() does not recognise carries no account, no verse
+   * and no cautions -- all it produces is the fallback premise line "Draw on
+   * this biblical event: <slug>.", which is the raw-slug-into-the-prompt
+   * failure being deleted from learningFocus in this same change. Letting an
+   * unrecognised slug win and clear a perfectly good hero would trade a whole
+   * biography for a word the model has to guess the meaning of.
+   */
+  if (getBiblicalEvent(request.biblicalEvent)) {
+    request.heroOfFaith = "";
+    request.biblePassage = "";
+    clearStoryFocus(request);
+    return;
+  }
+  if (isSet(request.heroOfFaith)) {
+    request.biblePassage = "";
+    return;
+  }
+  // A passage alone, an unrecognised slug, or no source at all. An unset field
+  // is left exactly as it arrived rather than normalised to "", so this does
+  // not rewrite fields it has no opinion about.
+  clearStoryFocus(request);
+}
+
+/**
+ * storyFocus belongs to a HERO, and to nothing else.
+ *
+ * The episode select is populated from the chosen hero's own keyEvents and
+ * only RENDERS while a hero with events is selected -- but it was never
+ * cleared when the hero changed or went away. Pick a hero, pick an episode,
+ * switch to a biblical event: the control disappears and
+ * `{mode:"chosen", text:"<that hero's event>"}` is still on the request, so
+ * the brief emits "This story covers ONE episode: ..." naming a moment from
+ * somebody else's life against an unrelated account.
+ *
+ * Cleared to undefined rather than to {mode:"whole"} so the field is absent
+ * from the frozen request, exactly as it is for a story that never had one.
+ */
+function clearStoryFocus(request: StoryRequest): void {
+  if (request.storyFocus) request.storyFocus = undefined;
+}
+
+/**
+ * How the character came to be in this account, and what they may do in it.
+ *
+ * Two modes, and they say almost opposite things -- which is exactly why the
+ * request carries ONE field with three values rather than two flags. When the
+ * form could set both, the brief said both, and the model picked one.
+ */
+function participationPremise(
+  role: CharacterRole,
+  name: string,
+  hasSource: boolean,
+  request: StoryRequest,
+): string[] {
+  const out: string[] = [];
+
+  if (role === "travels") {
+    /**
+     * They are here, now, and they GO there. So the story has a present as
+     * well as a past, and the present is not a doorway to be got out of the
+     * way in a sentence.
+     *
+     * The frame is chosen per story from a set (see server/data/lionTails.ts)
+     * because a single line of arrival makes every travelling story open
+     * identically, and "it cannot be the same each time" is the requirement
+     * Blake put hardest. Which one was chosen is frozen on the request, so a
+     * story can be traced back to the frame it was given.
+     */
+    const frame = framingApproachOf(request.travelFrame);
+    out.push(
+      `${name} lives in the present day. ${KEEPER.name} keeps ${KEEPER.place} ` +
+        `He is ${KEEPER.who} ${KEEPER.why}`,
+    );
+    out.push(`What he keeps is ${DEVICE.brief} ${DEVICE.rules}`);
+    // The rules go LAST of the three, so the prohibitions are the most recent
+    // thing said about him rather than the whole of what was said.
+    out.push(KEEPER.never);
+    out.push(frame.opening);
+    out.push(frame.closing);
+    if (hasSource) {
+      /**
+       * Blake's framing, and the balance is the whole instruction: let the
+       * journey be fun, but the real events still happen and still land. Left
+       * as the bare "travels back in time and witnesses this first-hand", a
+       * model writes a polite tour -- the character stands and watches,
+       * nothing is at stake, and the account is narrated at them. That is the
+       * dullest possible use of the mode and it was what the sentence asked
+       * for.
+       *
+       * The licence to be silly is attached to the JOURNEY and not to what
+       * they do once they arrive. It used to cover both. "A little silly in
+       * how they help" is a fine instruction for the plagues of Egypt and a
+       * terrible one for the crucifixion, and the account block cannot rescue
+       * a tone the premise has already set.
+       */
+      out.push(
+        `Once there, ${name} is part of what happens -- not a visitor watching ` +
+          "it happen. Let the journey itself be fun and surprising; let what " +
+          "they find at the end of it be as serious as it actually was.",
+      );
+      out.push(
+        "The real events still happen exactly as the account gives them, in " +
+          "that order, with those names and that outcome. Invent the journey " +
+          "and the arrival; do not invent history, do not let them change what " +
+          "happened, and do not have them rescue anyone from it.",
+      );
+    }
+    return out;
+  }
+
+  // role === "alongside". They were always there.
+  out.push(
+    `${name} was there. Not a visitor and not a traveller: they belong to that ` +
+      "time and that place and always did. Do not have them arrive, do not " +
+      "give them anything from another century, and do not put a frame around " +
+      "the story.",
+  );
+  if (!hasSource) return out;
+
+  out.push(
+    `${name} matters to what happens. They are not a bystander and not a ` +
+      "rescuer. They help, they ask hard questions, and they push back when " +
+      "the choice in front of them looks mad from where they are standing.",
+  );
+  out.push(
+    "The account still happens exactly as it is recorded -- the same events, " +
+      "in the same order, at the same cost. Nothing they do changes it.",
+  );
+  /**
+   * LOAD-BEARING, both of them, and they are here because a model reaching for
+   * drama reaches for exactly these two things first.
+   *
+   * The mission: given a sympathetic character who thinks the hero's choice is
+   * mad, the obvious scene is the one where they talk him out of it. That is
+   * the story this mode exists to NOT tell. He listens, and he goes anyway --
+   * that is the whole point of putting someone there to argue with him.
+   *
+   * The death: a character the reader made is going to be in accounts where
+   * people die, and some of them die badly. The reader has to be safe to ask
+   * the hard question. This is the one place the mode is allowed to be
+   * unrealistic, and it is worth it.
+   */
+  out.push(
+    "The person the account is about stays on their mission. They are not " +
+      `talked out of it, and they do not change course because of ${name}. ` +
+      "They may listen, and they may answer.",
+  );
+  out.push(
+    `${name} does not die, whatever happens to anybody else in this account, ` +
+      "and is never the one standing in the way. They are never the villain of " +
+      "this story.",
+  );
+  /**
+   * What the mode is FOR, said outright, because everything above it is a
+   * constraint and constraints alone produce a careful, pointless story.
+   */
+  out.push(
+    "What this story is for: the reader should come out of it understanding " +
+      `WHY that choice was made. Let ${name} ask the question the reader would ` +
+      "ask, and let the answer be the story.",
+  );
+  return out;
 }
 
 /**
@@ -478,13 +713,34 @@ export function buildStoryBrief(
         return when ? `${when}: ${e.description}` : e.description;
       })
       .join("; ");
+    /**
+     * WHERE THEY LIVED, not just when. Both are on every hero and only one
+     * was being used.
+     */
+    const when = [hero.timePeriod, hero.place].filter(Boolean).join(", ");
     sourceMaterial = {
       kind: "hero-of-faith",
       label: hero.name,
-      passage: hero.timePeriod || undefined,
+      passage: when || undefined,
       account: [
         hero.description,
         hero.contribution,
+        /**
+         * THE BIOGRAPHY. 250-350 words, hand-written and hand-checked, and
+         * until now read by nothing at all.
+         *
+         * Every hero story this app has ever produced was written from
+         * `description` -- the one-sentence blurb on the card ("Hid Jewish
+         * families in her father's watch shop.") -- plus `contribution` and a
+         * list of key events. All 80 heroes have carried the long form the
+         * whole time; `biography` appeared nowhere in this file.
+         *
+         * That is the difference between a model working from a caption and a
+         * model working from an account. It is the same argument that put the
+         * biblical event's `anchor` here rather than its slug: supply the
+         * material, do not ask the model to remember the person.
+         */
+        hero.biography,
         // The events list has no terminator of its own, so without this the
         // account read "...the springs she asks for In their own words:".
         events && `Key events -- ${events}.`.replace(/\.\.$/, "."),
@@ -496,7 +752,18 @@ export function buildStoryBrief(
       cautions: [
         `${hero.name} was a real person who really lived. Do not invent events for them that did not happen, and do not move them to another century or country.`,
         "Their faith is what the story is for. Do not reduce them to a list of achievements.",
-      ],
+        /**
+         * What they got wrong, where the data says it plainly.
+         *
+         * `complications` is already shown to READERS on the Heroes page, in a
+         * box deliberately not hidden behind a tab -- and it reached no prompt,
+         * so the story was the one place the app rounded a person off. A
+         * caution rather than account text: it is an instruction not to tidy,
+         * which is the shape every other line in this array has.
+         */
+        hero.complications &&
+          `Do not tidy this away: ${hero.complications}`,
+      ].filter((c): c is string => Boolean(c)),
     };
   }
 
@@ -505,19 +772,20 @@ export function buildStoryBrief(
   // there is no child in this story, and saying there is one hands the model a
   // protagonist to displace Noah with.
   /**
-   * Is the child IN the account, or is this a straight retelling?
+   * Is the character IN the account, or is this a straight retelling?
    *
-   * Time travel is the only thing that puts them there. It already exists and
-   * already works -- "Lucy's feet were dancing when the time-step began" -- so
-   * with it off, a retelling is about the person it is about and the child is
-   * not in the scene.
+   * Two modes put them there and they are mutually exclusive: they travel to
+   * it, or they were always part of it. Either way they are in the scene, so
+   * everything downstream that asks "is anybody here" asks THIS, and only the
+   * premise below cares which of the two it was.
    *
-   * A placeholder name is never in the scene whatever the flag says: the form
+   * A placeholder name is never in the scene whatever the mode says: the form
    * writes the literal string "Character" for the historical tab, and
    * "Character travels back in time" is not a sentence anyone meant.
    */
   const placeholder = isPlaceholderName(name);
-  const childInScene = characterRoleOf(request) === "meets" && !placeholder;
+  const role = characterRoleOf(request);
+  const childInScene = role !== "absent" && !placeholder;
 
   /**
    * The child is not a participant, so the prompt is about the account.
@@ -608,37 +876,7 @@ export function buildStoryBrief(
   }
   if (isSet(request.biblePassage)) premise.push(`Draw on this passage: ${request.biblePassage}.`);
   if (childInScene) {
-    if (sourceMaterial) {
-      /**
-       * The character MEETS the figure, and the story is allowed to be fun.
-       *
-       * Blake's framing, and the balance is the whole instruction: wacky, but
-       * the real events still happen and still land. Left as the bare "travels
-       * back in time and witnesses this first-hand", a model writes a polite
-       * tour -- the character stands and watches, nothing is at stake, and the
-       * account is narrated at them. That is the dullest possible use of the
-       * mode and it was what the sentence asked for.
-       *
-       * The invention is bounded to the MEETING. Everything that actually
-       * happened still has to happen, in order, with the right names and the
-       * right outcome -- the cautions and the account block are unchanged and
-       * still apply. What is licensed is how the character gets there and what
-       * they do while they are, not the history.
-       */
-      premise.push(
-        `${name} meets them and is part of the adventure -- not a visitor ` +
-          "watching it happen. Let it be fun, surprising, even a little silly " +
-          "in how they arrive and how they help.",
-      );
-      premise.push(
-        "The real events still happen exactly as the account gives them, in " +
-          "that order, with those names and that outcome. Invent the meeting " +
-          "and the fun around it; do not invent history, do not let them " +
-          "change what happened, and do not have them rescue anyone from it.",
-      );
-    } else {
-      premise.push(`${name} travels back in time and witnesses this first-hand.`);
-    }
+    premise.push(...participationPremise(role, name, Boolean(sourceMaterial), request));
   }
 
   // Scope. Without it, "a story about Corrie ten Boom" gets a life summary --
@@ -684,7 +922,11 @@ export function buildStoryBrief(
 
   // ---- HOW ------------------------------------------------------------------
   const craft: string[] = [];
-  craft.push(`Reading level: ${request.readingLevel || "early-elementary"}.`);
+  // The AGE, not the slug. "Reading level: early-elementary." asked the model
+  // to know what an American school stage implies about a reader, and it got
+  // away with it only because every persona also said "children". That word is
+  // gone, so this line now carries the whole guard rail on its own.
+  craft.push(`Written for a reader ${readingLevelAges(request.readingLevel)}.`);
   if (isSet(request.learningFocus)) craft.push(`Learning focus: ${request.learningFocus}.`);
   const form = storyFormFor(request.storyType);
   if (form.craft) craft.push(form.craft);
@@ -1155,7 +1397,7 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     // up in the same breath as naming a real account.
     out.push(
       "You may choose which moments to dwell on, what people say to each other, " +
-        "and how to make it vivid for a child -- but the events, the names, the " +
+        "and how to make it vivid -- but the events, the names, the " +
         "order and the outcome are fixed. Where the account is silent you may " +
         "imagine; where it speaks you may not contradict it.",
     );
@@ -1268,7 +1510,7 @@ export function buildUserInstruction(request: StoryRequest): string {
     return request.customUserPrompt;
   }
   const form = storyFormFor(request.storyType);
-  return `Please write a complete, faith-based children's ${form.noun}.`;
+  return `Please write a complete, faith-based ${form.noun}.`;
 }
 
 /**
@@ -1291,36 +1533,76 @@ export function buildSystemPrompt(request: StoryRequest): string {
   if (request.useCustomPrompts && request.customSystemPrompt) {
     return request.customSystemPrompt;
   }
+  return `${storytellerPersona(request)} ${audienceLine(request)}`;
+}
 
-  // Keyed on the DATA, not on a story type. Removing the biblical_narrative
-  // story type in Phase A also removed the only thing that had ever selected a
-  // retelling persona, which is why biblical stories got worse rather than
-  // better. Deriving it from "is there a biblical event on the request" means
-  // it cannot be lost again by a change to the storyType enum.
+/**
+ * WHO the reader is, said once, and appended to whichever persona was chosen.
+ *
+ * Every persona used to open "You are a Christian CHILDREN'S storyteller", and
+ * that one word was doing two jobs at once: naming the audience, and setting
+ * the register. It set the register far harder than anyone intended. It is
+ * what made the stories read tame -- a model told it is writing for children
+ * rounds every edge off by default, and no amount of instruction downstream
+ * gets those edges back, because the persona outranks the brief.
+ *
+ * So the audience is now stated as a FACT (an age) rather than as a genre, and
+ * the register is stated separately and deliberately. The two were tangled;
+ * this is the untangling. The age comes from readingLevelAges() -- the one
+ * definition -- and is appended in a single place rather than woven into eight
+ * persona strings, which is how "children" came to appear twice in three of
+ * them.
+ *
+ * The second half is the licence Blake asked for, and it needs both halves to
+ * be safe. "Hard things may happen" without "never dwell on it, never leave
+ * them without hope" is not a children's app growing up, it is a different
+ * app.
+ */
+function audienceLine(request: StoryRequest): string {
+  return (
+    `Your reader is ${readingLevelAges(request.readingLevel)}. Write so a reader that ` +
+    "age can follow you, and then trust them. Hard things are allowed to happen " +
+    "in your stories and are allowed to cost something: grief, fear, a wrong " +
+    "that is not put right by the last page. Do not soften an ending that was " +
+    "not soft. What you never do is dwell on suffering for its own sake, or " +
+    "leave your reader without hope."
+  );
+}
+
+/**
+ * The storyteller, chosen by what the story is made of.
+ *
+ * Keyed on the DATA, not on a story type. Removing the biblical_narrative
+ * story type in Phase A also removed the only thing that had ever selected a
+ * retelling persona, which is why biblical stories got worse rather than
+ * better. Deriving it from "is there a biblical event on the request" means
+ * it cannot be lost again by a change to the storyType enum.
+ */
+function storytellerPersona(request: StoryRequest): string {
   const retelling = isSet(request.biblicalEvent) || isSet(request.biblePassage);
   // A hero of faith is a real person, so the same "do not invent" discipline
   // applies -- but they are not Scripture, and a persona that says so would be
   // wrong about Corrie ten Boom.
   const trueStory = !retelling && isSet(request.heroOfFaith);
-  if (trueStory && !(request.useCustomPrompts && request.customSystemPrompt)) {
+  if (trueStory) {
     return request.storyType === "poem"
-      ? "You are a Christian children's poet who puts the lives of real Christians into verse. You are faithful to what they actually did -- you never invent events for a real person. You write in verse -- rhythmic, rhyming lines -- never in prose paragraphs."
-      : "You are a Christian children's storyteller who tells the true stories of real Christians for children. You are faithful to what actually happened -- the events, the dates, the places and the people. Where the record is silent you may imagine a scene; you never invent events for a real person.";
+      ? "You are a Christian poet who puts the lives of real Christians into verse. You are faithful to what they actually did -- you never invent events for a real person. You write in verse -- rhythmic, rhyming lines -- never in prose paragraphs."
+      : "You are a Christian storyteller who tells the true stories of real Christians. You are faithful to what actually happened -- the events, the dates, the places and the people. Where the record is silent you may imagine a scene; you never invent events for a real person.";
   }
 
   switch (request.storyType) {
     case "poem":
       return retelling
-        ? "You are a Christian children's poet who puts real Bible accounts into verse. You are faithful to what Scripture actually records -- you never invent events, and you never change how an account ends. You write in verse -- rhythmic, rhyming lines -- never in prose paragraphs."
-        : "You are a Christian children's poet. You write in verse -- rhythmic, rhyming lines -- never in prose paragraphs.";
+        ? "You are a Christian poet who puts real Bible accounts into verse. You are faithful to what Scripture actually records -- you never invent events, and you never change how an account ends. You write in verse -- rhythmic, rhyming lines -- never in prose paragraphs."
+        : "You are a Christian poet. You write in verse -- rhythmic, rhyming lines -- never in prose paragraphs.";
     case "moral":
       return retelling
-        ? "You are a Christian children's storyteller who retells real Bible accounts accurately for children. You are faithful to what Scripture records -- the events, the names, the order and the outcome. You let the lesson come out of what actually happened rather than adding one."
-        : "You are a Christian children's storyteller focused on a single clear moral lesson, illustrated through the character's choices.";
+        ? "You are a Christian storyteller who retells real Bible accounts accurately. You are faithful to what Scripture records -- the events, the names, the order and the outcome. You let the lesson come out of what actually happened rather than adding one."
+        : "You are a Christian storyteller working towards a single clear moral, and you let it be earned rather than announced -- it comes out of what the character chooses and what that choice costs.";
     default:
       return retelling
-        ? "You are a Christian children's storyteller who retells real Bible accounts accurately for children. You are faithful to what Scripture records -- the events, the names, the order and the outcome -- and you say so plainly rather than inventing a version that is easier to tell. Where Scripture is silent you may imagine; where it speaks you follow it."
-        : "You are a Christian children's storyteller who writes warm, faith-based stories with a clear moral.";
+        ? "You are a Christian storyteller who retells real Bible accounts accurately. You are faithful to what Scripture records -- the events, the names, the order and the outcome -- and you say so plainly rather than inventing a version that is easier to tell. Where Scripture is silent you may imagine; where it speaks you follow it."
+        : "You are a Christian storyteller. You write faith-based stories that have real weight to them: something is genuinely at stake, the choices are genuinely hard, and the moral is what the story turns out to mean rather than a lesson pinned to the end of it.";
   }
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { DIGGING_DEEPER_HEADING } from "@shared/storyAppendices";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -107,7 +108,21 @@ export function StoryExtras({
     },
   });
 
-  const questions = story.applicationQuestions ?? [];
+  /**
+   * The five generic questions, and when NOT to show them.
+   *
+   * They are hard-required on the response -- min(5).max(5) -- so they cannot
+   * be dropped, only left unrendered. And for a long story they are written by
+   * a call that receives only the "image" projection of the brief, so it has no
+   * idea what account the story was about: they are as generic as it gets.
+   *
+   * A story with a Digging deeper section has the reader's OWN questions in it,
+   * answered from the real source material. Showing five invented ones
+   * underneath would put a visibly worse version of the same idea directly
+   * below a better one.
+   */
+  const answeredTheirOwn = (story.content ?? "").includes(DIGGING_DEEPER_HEADING);
+  const questions = answeredTheirOwn ? [] : (story.applicationQuestions ?? []);
   const further = doc?.furtherLearning ?? [];
 
   return (

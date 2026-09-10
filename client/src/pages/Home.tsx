@@ -15,7 +15,7 @@ export default function Home() {
       <section className="mb-8 text-center">
         <div className="max-w-5xl mx-auto rounded-2xl shadow-xl p-6 relative overflow-hidden content-container">
           <h1 className="text-4xl md:text-5xl font-heading font-bold mb-4 text-secondary drop-shadow-sm">Lion Tails: Christian Stories</h1>
-          <p className="text-lg md:text-xl mb-6 max-w-3xl mx-auto">Learn the key events and people of Scripture and church history the way children actually remember them &mdash; as stories worth staying awake for, with the characters you choose in them.</p>
+          <p className="text-lg md:text-xl mb-6 max-w-3xl mx-auto">Learn the key events and people of Scripture and church history the way anyone actually remembers them &mdash; as stories worth staying awake for, with the characters you choose in them.</p>
           <div className="flex flex-col md:flex-row justify-center items-center gap-8">
             <div className="flex-1 p-4">
               <div className="animate-[float_6s_ease-in-out_infinite] w-64 h-64 md:w-80 md:h-80 mx-auto">
@@ -112,7 +112,7 @@ export default function Home() {
                 <Music className="h-8 w-8 text-foreground" />
               </div>
               <h3 className="text-xl font-heading font-bold mb-2">Christian Music</h3>
-              <p className="mb-4">Browse lyrics and guitar chords for popular Christian children's songs.</p>
+              <p className="mb-4">Browse lyrics and guitar chords for popular Christian songs and hymns.</p>
               <Button 
                 className="bg-secondary hover:bg-secondary/90 text-secondary-foreground border-none shadow-md"
                 onClick={() => navigate("/music")}

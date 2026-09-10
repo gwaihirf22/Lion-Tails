@@ -14,6 +14,7 @@
  * token-budgeted against the resolved model rather than a fixed story count.
  */
 import { pool } from "../db";
+import { storyWithoutAppendices } from "@shared/storyAppendices";
 
 /** Reserved for reasoning plus the summary itself. */
 const RESERVE_OUTPUT = 8192;
@@ -73,7 +74,17 @@ function canonBlock(canon: Array<{ text: string; status: string }>): string {
 }
 
 function storyBlock(s: UniverseStory): string {
-  return `### ${s.title}\n${s.content}`;
+  /**
+   * The story the MODEL wrote, without the blocks the server appended.
+   *
+   * What comes out of here becomes story_universes.world_state, and that is
+   * canon for the next story in this world. Left in, "Ada is invented; nobody
+   * like them was there" is read as something that happened, and a disclaimer
+   * about a story becomes a fact about the universe. Same for the further
+   * reading links, and for a Digging deeper section, whose whole content is
+   * answers about the real world rather than events in this one.
+   */
+  return `### ${s.title}\n${storyWithoutAppendices(s.content)}`;
 }
 
 /**
@@ -140,7 +151,7 @@ export function selectWindow(opts: {
 
 export function summarySystemPrompt(): string {
   return (
-    "You maintain the continuity bible for a series of children's stories. " +
+    "You maintain the continuity bible for a series of stories. " +
     "You record what is TRUE in this world -- characters, relationships, places, " +
     "and what has already happened -- so that the next story does not contradict it. " +
     "You are not a reviewer and not a storyteller: you do not judge the stories and " +

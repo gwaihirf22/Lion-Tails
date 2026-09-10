@@ -38,6 +38,22 @@ import {
   type HeroCollection,
 } from "@shared/schema";
 
+/**
+ * Hand a hero over to the story generator.
+ *
+ * Three buttons on this page did this, in three identical copies of the same
+ * two lines. The key is read once on the other side, by the tabs component,
+ * which takes it and opens the historical tab -- see StoryGeneratorTabs.
+ *
+ * localStorage rather than a query parameter because the navigation is a full
+ * page load, and this predates it; worth revisiting, but not while the read
+ * side is being fixed.
+ */
+function tellStoryAbout(heroId: string) {
+  localStorage.setItem("selectedHeroOfFaith", heroId);
+  window.location.href = "/generate-story";
+}
+
 export default function HeroesOfFaith() {
   const { toast } = useToast();
   
@@ -299,8 +315,7 @@ export default function HeroesOfFaith() {
                 variant="secondary" 
                 size="sm" 
                 onClick={() => {
-                  localStorage.setItem('selectedHeroOfFaith', hero.id);
-                  window.location.href = "/generate-story";
+                  tellStoryAbout(hero.id);
                 }}
               >
                 Create Story
@@ -531,8 +546,7 @@ export default function HeroesOfFaith() {
                   <h3 className="text-lg font-semibold">Stories About {selectedHero.name}</h3>
                   <Button 
                     onClick={() => {
-                      localStorage.setItem('selectedHeroOfFaith', selectedHero.id);
-                      window.location.href = "/generate-story";
+                      tellStoryAbout(selectedHero.id);
                     }}
                   >
                     Create New Story
@@ -591,8 +605,7 @@ export default function HeroesOfFaith() {
                         </p>
                         <Button
                           onClick={() => {
-                            localStorage.setItem('selectedHeroOfFaith', selectedHero.id);
-                            window.location.href = "/generate-story";
+                            tellStoryAbout(selectedHero.id);
                           }}
                         >
                           Create First Story
