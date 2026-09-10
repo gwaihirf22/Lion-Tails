@@ -21,6 +21,7 @@ import {
   buildSystemPrompt,
   resolveStoryCharacters,
   resolveStoryFocus,
+  resolveTravelFrame,
   resolveHeroOfFaith,
   serialiseBrief,
 } from "./lib/storyBrief";
@@ -689,6 +690,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // stored request records the moment that was actually chosen rather than
       // an instruction to choose one. Same reasoning as heroId above.
       resolveStoryFocus(validatedData, hero);
+      // And which framing a travelling story opens with, for the same reason
+      // and at the same moment: picked here, frozen with the request, so the
+      // frame is recoverable from the story rather than re-rolled on replay.
+      resolveTravelFrame(validatedData);
       const result = await enqueueStoryJob({
         userId,
         request: validatedData,
@@ -1262,7 +1267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // story itself rather than refusing.
       const prompt =
         saved.story.imagePrompt ||
-        `An illustration for a children's story titled "${saved.story.title}"`;
+        `An illustration for a story titled "${saved.story.title}"`;
 
       const imageUrl = await generateStoryImage(prompt, userId);
       if (!imageUrl) {

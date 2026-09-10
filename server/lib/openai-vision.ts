@@ -101,9 +101,9 @@ export async function generateStoryFromImage(
       messages: [
         {
           role: "system",
-          content: `You are a master storyteller specializing in Christian children's stories. 
+          content: `You are a master storyteller specializing in Christian stories. 
           Create an engaging, faith-based story that incorporates biblical values and lessons.
-          Your story should be at least 1000 words long, be appropriate for young children,
+          Your story should be at least 1000 words long, be readable by a young reader,
           and include a clear moral tied to Christian values.
           The story should feature a child named ${childName} who is a ${gender}.
           The theme of the story should be centered around "${theme}".
@@ -150,17 +150,17 @@ export async function generateIllustrationPrompt(storyContent: string, userId: n
       messages: [
         {
           role: "system",
-          content: "You are an expert at generating prompts for Christian children's book illustrations. Create a detailed, vivid prompt that a text-to-image model can use to create an appropriate illustration for a children's story."
+          content: "You are an expert at generating prompts for Christian storybook illustrations. Create a detailed, vivid prompt that a text-to-image model can use to create an appropriate illustration for a story."
         },
         {
           role: "user",
-          content: `Given this children's story excerpt, create a prompt for DALL-E to generate an appropriate, child-friendly illustration. Focus on the most visually interesting scene:\n\n${storyContent}`
+          content: `Given this story excerpt, create a prompt for DALL-E to generate an appropriate storybook illustration. Focus on the most visually interesting scene:\n\n${storyContent}`
         }
       ],
       ...tokenLimitFor(model, 500),
     });
 
-    return response.choices[0].message.content || "A Christian children's story illustration, colorful, gentle style";
+    return response.choices[0].message.content || "A Christian storybook illustration, colorful, gentle style";
   } catch (error) {
     console.error("Error generating illustration prompt:", error);
     throw new Error(`Failed to generate illustration prompt: ${error instanceof Error ? error.message : String(error)}`);
@@ -176,7 +176,7 @@ export async function generateIllustration(prompt: string, userId: number): Prom
     
     const response = await openai.images.generate({
       model,
-      prompt: `${prompt} Ensure this is appropriate for children, with a gentle, colorful style reminiscent of Christian children's books.`,
+      prompt: `${prompt} Keep it a gentle, colorful storybook style, and keep it suitable for a young reader.`,
       n: 1,
       size: "1024x1024",
       quality: "standard",

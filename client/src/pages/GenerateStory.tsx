@@ -216,7 +216,7 @@ export default function GenerateStory() {
             Create a Story
           </h1>
           <p className="text-muted-foreground">
-            Generate personalized faith-based stories for children
+            Generate personalized faith-based stories
           </p>
         </div>
         {!statsLoading && generationStats && (

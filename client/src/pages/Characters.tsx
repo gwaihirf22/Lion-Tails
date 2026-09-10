@@ -165,7 +165,7 @@ export default function Characters() {
           <h1 className="text-3xl font-bold">Your Characters</h1>
           <p className="text-muted-foreground mt-1">
             Anyone you want stories written about. Save them once and reuse them
-            across stories — a child you know, or someone invented.
+            across stories — someone you know, or someone invented.
           </p>
         </div>
         

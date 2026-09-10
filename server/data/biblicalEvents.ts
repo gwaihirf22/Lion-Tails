@@ -275,7 +275,7 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
       text: "Jesus said, “Father, forgive them, for they don’t know what they are doing.” Dividing his garments among them, they cast lots.",
     },
     cautions: [
-      "This is the hardest of these to write for children. Tell it truthfully and do not dwell on the physical suffering -- the nails, the blood and the scourging do not need describing.",
+      "This is the hardest of these to tell. Tell it truthfully and do not dwell on the physical suffering -- the nails, the blood and the scourging do not need describing.",
       "Pilate is reluctant and says he finds no guilt. The crowd and the leaders press for it.",
       "Jesus is not a helpless victim overpowered. He goes willingly and says so.",
       "Never end here. The resurrection is three days away and the story is not finished without it -- say so before you close.",

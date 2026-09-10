@@ -1169,10 +1169,20 @@ export const MAX_STORY_CHARACTERS = 8;
 const isSet = (v: unknown): boolean =>
   typeof v === "string" && v.trim() !== "" && v.trim().toLowerCase() !== "none";
 
-export type CharacterRole = "absent" | "meets";
+export type CharacterRole = "absent" | "travels" | "alongside";
 
 /**
- * Is the chosen character IN the account, or is this a straight retelling?
+ * How -- if at all -- the chosen character is in this account.
+ *
+ *   "absent"     a straight retelling. They are not in it.
+ *   "travels"    they are here, now, and they GO there. The account is the
+ *                past, and they arrive in it from outside.
+ *   "alongside"  they were always there. No travel and no frame: they belong
+ *                to that time and that place, and always did.
+ *
+ * The two ways in are mutually exclusive BY CONSTRUCTION, which is the whole
+ * reason this is one field with three values rather than two booleans. Two
+ * flags can contradict each other, and when they did the model picked one.
  *
  * The ONE place that knows characterRole and useTimeTravel are the same fact.
  * A request frozen before characterRole existed still answers correctly, which
@@ -1180,16 +1190,30 @@ export type CharacterRole = "absent" | "meets";
  *
  * Defaults to "absent". A retelling is about the person it is about, and being
  * wrong that way produces a story that is merely plainer than intended --
- * whereas defaulting to "meets" would put a child in Scripture because a form
- * field was left alone.
+ * whereas defaulting the other way would put a character into Scripture
+ * because a form field was left alone.
  */
 export function characterRoleOf(
   request?: { characterRole?: string | null; useTimeTravel?: boolean | null } | null,
 ): CharacterRole {
-  if (request?.characterRole === "meets" || request?.characterRole === "absent") {
-    return request.characterRole;
+  const explicit = request?.characterRole;
+  if (explicit === "absent" || explicit === "travels" || explicit === "alongside") {
+    return explicit;
   }
-  return request?.useTimeTravel ? "meets" : "absent";
+  /**
+   * LEGACY -- and the two legacy spellings do NOT resolve the same way.
+   *
+   * "meets" was written by the historical tab's radio, whose label said the
+   * character meets the figure and said nothing whatever about travel. Those
+   * stories were requested with no journey in them. Resolving them to
+   * "travels" would put a frame around a story that never had one, so a reader
+   * reopening an old story would find lore the app invented after the fact.
+   *
+   * useTimeTravel is the normal tab's old checkbox, and it named time travel
+   * outright. That one really is "travels".
+   */
+  if (explicit === "meets") return "alongside";
+  return request?.useTimeTravel ? "travels" : "absent";
 }
 
 export function characterIdsOf(
@@ -1211,6 +1235,60 @@ export function characterIdsOf(
     out.push(trimmed);
   }
   return out.slice(0, MAX_STORY_CHARACTERS);
+}
+
+/**
+ * The reading levels, and what each one MEANS in years.
+ *
+ * The age is the point. Until now `readingLevel` reached the model as a bare
+ * slug -- "Reading level: early-elementary." -- and the model had to know what
+ * an American school stage implies about a reader's age, unaided. That worked
+ * only because every persona also said the word "children", which did the real
+ * work. With that word gone the age has to be said outright, or nothing in the
+ * prompt says who the story is for.
+ *
+ * The tuple is the single source: z.enum() reads it, and READING_LEVEL_AGES is
+ * typed as a total Record over it, so adding a level without giving it an age
+ * is a compile error rather than a silent fall through to the default.
+ *
+ * This map used to live -- client-side only -- in PromptEditor.tsx, where it
+ * shaped the Parent Mode preview and nothing else. A second definition of a
+ * fact the server needed and did not have.
+ */
+export const READING_LEVELS = [
+  "preschool",
+  "kindergarten",
+  "early-elementary",
+  "late-elementary",
+  "middle-school",
+] as const;
+
+export type ReadingLevel = (typeof READING_LEVELS)[number];
+
+export const READING_LEVEL_AGES: Record<ReadingLevel, string> = {
+  "preschool": "ages 3-4",
+  "kindergarten": "ages 5-6",
+  "early-elementary": "ages 6-8",
+  "late-elementary": "ages 9-11",
+  "middle-school": "ages 12-14",
+};
+
+/** The default reading level, named once so the fallback below cannot drift. */
+export const DEFAULT_READING_LEVEL: ReadingLevel = "early-elementary";
+
+/**
+ * The age range for a reading level, tolerating anything at all.
+ *
+ * Takes a string rather than a ReadingLevel because the callers read it off a
+ * request that may have been frozen years ago, and a level that no longer
+ * exists must give a sane age rather than `undefined` -- which would reach a
+ * prompt as the literal word.
+ */
+export function readingLevelAges(level?: string | null): string {
+  return (
+    READING_LEVEL_AGES[(level ?? "") as ReadingLevel] ??
+    READING_LEVEL_AGES[DEFAULT_READING_LEVEL]
+  );
 }
 
 export const storyRequestSchema = z.object({
@@ -1295,23 +1373,48 @@ export const storyRequestSchema = z.object({
    */
   cliffhanger: z.boolean().default(false),
   /**
-   * What the chosen character is DOING in a retelling. The explicit choice.
+   * What the chosen character is DOING in a retelling. The explicit choice,
+   * and the ONLY way a hero of faith and a user's character are brought
+   * together. See characterRoleOf for what the three values mean.
    *
-   *   "absent"  a straight retelling. The character is not in the account.
-   *   "meets"   they meet the figure and the story is an adventure -- wacky,
-   *             but the real events still happen and still land. Ends with a
-   *             short note saying the meeting was invented.
+   * ONE field with three values, not two flags, because the two ways in are
+   * mutually exclusive and a pair of booleans can say both at once. When they
+   * did, the model picked one and the user could not tell which.
    *
-   * LEGACY: useTimeTravel below is the old spelling of "meets". Read them only
-   * through characterRoleOf(), the one place that knows they are the same fact
-   * -- the characterIdsOf() and characterKind() precedent.
+   * "meets" is still ACCEPTED though nothing writes it any more. Requests are
+   * frozen onto story_jobs.request as jsonb at enqueue and never rewritten, so
+   * dropping the value from the enum would make every story requested through
+   * the old historical tab fail to parse on the way back out. Read only
+   * through characterRoleOf(), which normalises it -- the characterIdsOf() and
+   * characterKind() precedent.
    *
-   * It exists because the two used to be able to contradict each other and
-   * nothing made the user choose. A character attached to an account with time
-   * travel off was silently written into it anyway; see the Caleb/Esther case
-   * in storyBrief.ts.
+   * LEGACY: useTimeTravel below is the old spelling of "travels".
+   *
+   * This field exists because the flag and the cast used to be able to
+   * contradict each other and nothing made the user choose. A character
+   * attached to an account with time travel off was silently written into it
+   * anyway; see the Caleb/Esther case in storyBrief.ts.
    */
-  characterRole: z.enum(["absent", "meets"]).optional(),
+  characterRole: z.enum(["absent", "travels", "alongside", "meets"]).optional(),
+  /**
+   * Which framing approach a "travels" story opens with. The server's choice.
+   *
+   * SERVER-OWNED, and the storyFocus "surprise" precedent exactly: the client
+   * never sends it, the server picks one at enqueue and writes it here before
+   * the request is frozen. Choosing in the browser would make the same request
+   * produce a different story on every replay -- the class of bug that is
+   * impossible to chase six weeks later -- and the frozen request is the only
+   * record of what a story was actually asked for.
+   *
+   * The ID, not the prose. The wording of each approach lives in
+   * server/data/lionTails.ts where it can be tuned, and tuning it must not
+   * require rewriting stored jsonb. A stored id that no longer exists resolves
+   * to a documented fallback rather than to a fresh roll; see
+   * framingApproachOf.
+   *
+   * Meaningless for any other characterRole, and not written for one.
+   */
+  travelFrame: z.string().optional(),
   /** LEGACY. Superseded by characterRole; read via characterRoleOf(). */
   useTimeTravel: z.boolean().default(false),
   /**
@@ -1347,13 +1450,7 @@ export const storyRequestSchema = z.object({
   biblePassage: z.string().default("").optional(), // Bible passage to study
   learningFocus: z.string().default("").optional(), // Focus area for historical/educational stories
   // New fields for reading level and story length
-  readingLevel: z.enum([
-    "preschool", 
-    "kindergarten", 
-    "early-elementary", 
-    "late-elementary", 
-    "middle-school"
-  ]).default("early-elementary"),
+  readingLevel: z.enum(READING_LEVELS).default(DEFAULT_READING_LEVEL),
   storyLength: z.enum([
     "very-short",
     "short", 
@@ -1381,9 +1478,10 @@ export const storyRequestSchema = z.object({
   // satisfies these rules exactly as it did before.
   const cast = characterIdsOf(data);
 
-  // Meeting the figure needs somebody to do the meeting. Asked through the
-  // reader so the old flag and the new field are one rule, not two.
-  if (characterRoleOf(data) === "meets") {
+  // Either way in needs somebody to come in. Asked through the reader so the
+  // old flag and the new field are one rule, not two -- and so a mode added
+  // later is covered by this without anyone remembering to widen it.
+  if (characterRoleOf(data) !== "absent") {
     return cast.length > 0 || Boolean(data.childName?.trim());
   }
 
@@ -1410,7 +1508,7 @@ export const storyRequestSchema = z.object({
   // Otherwise a name and gender are required.
   return !!data.childName && !!data.gender;
 }, {
-  message: "Select at least one character, or give the child's name and gender.",
+  message: "Select at least one character, or give the main character's name and gender.",
   // Must name the field the FORM renders, or the error attaches to a control
   // that no longer exists and the user sees nothing.
   path: ["characterIds"],

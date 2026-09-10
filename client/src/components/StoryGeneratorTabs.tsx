@@ -21,18 +21,18 @@ export default function StoryGeneratorTabs({
   parentStoryTitle,
   isContinuation,
 }: StoryGeneratorTabsProps) {
-  const [activeTab, setActiveTab] = useState<string>("children");
+  const [activeTab, setActiveTab] = useState<string>("original");
 
   return (
     <div>
-      <Tabs defaultValue="children" onValueChange={setActiveTab} className="w-full">
+      <Tabs defaultValue="original" onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-2 mb-6 gap-1 p-1">
           <TabsTrigger 
-            value="children" 
+            value="original" 
             className="text-sm sm:text-base lg:text-lg py-2 sm:py-3 whitespace-normal h-auto data-[state=active]:shadow-sm data-[state=active]:font-semibold data-[state=active]:ring-1 transition-colors data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-primary/30"
           >
-            <span className="block sm:hidden">Children's</span>
-            <span className="hidden sm:block">Children's Stories</span>
+            <span className="block sm:hidden">Original</span>
+            <span className="hidden sm:block">Original Stories</span>
           </TabsTrigger>
           <TabsTrigger 
             value="historical" 
@@ -44,7 +44,7 @@ export default function StoryGeneratorTabs({
         </TabsList>
         
         <TabsContent 
-          value="children"
+          value="original"
           className="rounded-xl p-4"
           style={{ 
             backgroundImage: 'url("/assets/children-background.jpg")',
@@ -56,7 +56,7 @@ export default function StoryGeneratorTabs({
           <div className="absolute inset-0 bg-primary/5 rounded-xl"></div>
           <div className="relative z-10">
             <div className="mb-4 text-center">
-              <h3 className="text-xl font-heading font-bold text-secondary">Personalized Children's Stories</h3>
+              <h3 className="text-xl font-heading font-bold text-secondary">Personalized Stories</h3>
               <p className="text-sm text-muted-foreground">Invented stories, with characters you choose</p>
             </div>
             
@@ -66,12 +66,11 @@ export default function StoryGeneratorTabs({
               inheritedCharacterIds={inheritedCharacterIds}
               parentStoryTitle={parentStoryTitle}
               isContinuation={isContinuation}
-              formType="children"
+              formType="original"
               showChildFields={true}
-              showTimeTravel={true}
               showAnimalToggle={true}
               showBiblicalEvent={false}
-              showHeroOfFaith={true} // Heroes can be in children's stories too
+              showHeroOfFaith={true} // A hero of faith can appear here too, through a mode
               showBiblePassageField={true}
             />
           </div>
@@ -102,7 +101,6 @@ export default function StoryGeneratorTabs({
               isContinuation={isContinuation}
               formType="historical"
               showChildFields={false}
-              showTimeTravel={false}
               showAnimalToggle={false}
               showBiblicalEvent={true}
               showHeroOfFaith={true}

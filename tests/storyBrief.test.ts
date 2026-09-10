@@ -1,12 +1,14 @@
 import { describe, it, expect } from "vitest";
+import { KEEPER, FRAMING_APPROACHES, framingApproachOf, pickFramingApproach } from "../server/data/lionTails";
 import fs from "fs";
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import path from "path";
 import {
   buildStoryBrief,
   deserialiseBrief,
   renderBrief,
   resolveStoryFocus,
+  resolveTravelFrame,
   statLeakage,
   skillLeakage,
   SOLO_RETELLING_GUARD,
@@ -34,6 +36,14 @@ import {
  *
  * If a change here is deliberate, regenerate the fixture and read the diff --
  * that diff is the prompt every single-character story will be written from.
+ *
+ *     UPDATE_GOLDEN=1 npm test -- storyBrief
+ *
+ * That regeneration path is deliberately here rather than in a script nobody
+ * finds: the instruction to "regenerate and read the diff" has been in this
+ * comment since the fixture existed, with no way to do the first half, so it
+ * was done by hand or not at all. It writes only when the variable is set, and
+ * a blessed regression is still a regression -- READ THE DIFF.
  */
 
 const PURPOSES: BriefPurpose[] = ["single", "outline", "chapter", "image"];
@@ -114,6 +124,18 @@ const cases: Record<string, () => ReturnType<typeof buildStoryBrief>> = {
       learningFocus: "", heroOfFaith: "", biblicalEvent: "", useTimeTravel: false,
     } as unknown as StoryRequest, []),
 };
+
+if (process.env.UPDATE_GOLDEN) {
+  const next: Record<string, Record<string, string>> = {};
+  for (const label of Object.keys(cases)) {
+    next[label] = {};
+    for (const purpose of PURPOSES) next[label][purpose] = renderBrief(cases[label](), purpose);
+  }
+  writeFileSync(
+    path.resolve(__dirname, "fixtures/brief-golden.json"),
+    JSON.stringify(next, null, 2) + "\n",
+  );
+}
 
 describe("a brief with no cast renders exactly as it always has", () => {
   it("covers every captured case", () => {
@@ -973,22 +995,68 @@ describe("a retelling requested with a real character's name", () => {
     }
   });
 
-  it("puts her in when time travel is on, and then does NOT deny she exists", () => {
+  it("puts her in when a mode is chosen, and then does NOT deny she exists", () => {
     // The opposite failure, and just as bad: a chapter prompt that says the
     // story is about Esther and that nobody was invented is incoherent, and a
     // first attempt at this fix produced exactly that.
-    const t = brief({ characterRole: "meets" });
-    expect(renderBrief(t, "single")).toContain("meets them and is part of the adventure");
-    expect(renderBrief(t, "chapter")).toContain("Esther");
-    expect(renderBrief(t, "chapter")).not.toContain(SOLO_RETELLING_GUARD);
+    //
+    // Asked of BOTH ways in, because the guard is about being in the scene at
+    // all and neither mode may reintroduce the contradiction.
+    for (const characterRole of ["travels", "alongside"] as const) {
+      const t = brief({ characterRole });
+      expect(renderBrief(t, "chapter")).toContain("Esther");
+      expect(renderBrief(t, "chapter")).not.toContain(SOLO_RETELLING_GUARD);
+    }
   });
 
-  it("keeps the placeholder name out of the scene however the flag is set", () => {
-    // "Character travels back in time and witnesses this first-hand" is not a
-    // sentence anyone meant, and the form sends that literal string.
-    const t = brief({ childName: "Character", characterRole: "meets" });
-    expect(renderBrief(t, "single")).not.toContain("part of the adventure");
-    expect(renderBrief(t, "chapter")).toContain(SOLO_RETELLING_GUARD);
+  it("keeps the placeholder name out of the scene whatever the mode says", () => {
+    // "Character travels back in time" is not a sentence anyone meant, and the
+    // form sends that literal string.
+    for (const characterRole of ["travels", "alongside"] as const) {
+      const t = brief({ childName: "Character", characterRole });
+      expect(renderBrief(t, "single")).not.toContain("Character was there");
+      expect(renderBrief(t, "single")).not.toContain("lives in the present day");
+      expect(renderBrief(t, "chapter")).toContain(SOLO_RETELLING_GUARD);
+    }
+  });
+
+  /**
+   * The two modes say almost opposite things, and the failure that matters is
+   * one leaking into the other. A frame in an "alongside" story is lore the
+   * user did not ask for, in an account it does not belong to.
+   */
+  it("travels brings the frame; alongside brings none of it", () => {
+    const travels = renderBrief(brief({ characterRole: "travels" }), "single");
+    expect(travels).toContain("lives in the present day");
+    expect(travels).toContain(KEEPER.name);
+
+    const alongside = renderBrief(brief({ characterRole: "alongside" }), "single");
+    expect(alongside).toContain("Esther was there");
+    expect(alongside).not.toContain(KEEPER.name);
+    expect(alongside).not.toContain(KEEPER.shortName);
+    expect(alongside).not.toContain("lantern");
+    expect(alongside).not.toContain("present day");
+  });
+
+  it("a legacy \"meets\" story never gains a lantern it was not written with", () => {
+    // Those requests are frozen in the database and a reader can reopen them.
+    const t = renderBrief(brief({ characterRole: "meets" }), "single");
+    expect(t).not.toContain(KEEPER.shortName);
+    expect(t).not.toContain("lantern");
+  });
+
+  /**
+   * The two lines a model reaches for first when it wants a scene to land, and
+   * the two this mode cannot survive. Asserted as PRESENT in the prompt rather
+   * than as absent from a story: what a model does with them is not something
+   * a unit test can check, but silently dropping them from the brief is.
+   */
+  it("tells an alongside story the hero stays on mission and the character lives", () => {
+    const t = renderBrief(brief({ characterRole: "alongside" }), "single");
+    expect(t).toContain("stays on their mission");
+    expect(t).toContain("does not die");
+    expect(t).toContain("never the one standing in the way");
+    expect(t).toContain("the same events");
   });
 
   it("emits the scripture reference and never the word undefined", () => {
@@ -1014,6 +1082,77 @@ describe("a retelling requested with a real character's name", () => {
 });
 
 /**
+ * The frame a travelling story opens with.
+ *
+ * "It CAN'T be the same each time" is the requirement Blake put hardest, so it
+ * is the one asserted hardest here -- alongside the property that makes it
+ * safe, which pulls the other way: a story must replay to the SAME frame it
+ * was generated with. Variety across stories, determinism within one.
+ */
+describe("the framing of a travelling story", () => {
+  it("puts the frame on the request, and only for travels", () => {
+    const req = { characterRole: "travels" } as unknown as StoryRequest;
+    resolveTravelFrame(req);
+    expect(FRAMING_APPROACHES.map((a) => a.id)).toContain(req.travelFrame);
+
+    for (const characterRole of ["absent", "alongside"] as const) {
+      const other = { characterRole } as unknown as StoryRequest;
+      resolveTravelFrame(other);
+      expect(other.travelFrame).toBeUndefined();
+    }
+  });
+
+  it("clears a stale frame when the mode changes away from travels", () => {
+    // Otherwise a request switched from travels to alongside carries a lantern
+    // in the debug panel for a story that has none.
+    const req = { characterRole: "alongside", travelFrame: "errand" } as unknown as StoryRequest;
+    resolveTravelFrame(req);
+    expect(req.travelFrame).toBeUndefined();
+  });
+
+  it("overwrites a frame the client sent, so the choice cannot be pinned", () => {
+    // The field is server-owned. It is on the write schema only because the
+    // request is one shape end to end.
+    const seen = new Set<string | undefined>();
+    for (let i = 0; i < 200; i++) {
+      const req = { characterRole: "travels", travelFrame: "errand" } as unknown as StoryRequest;
+      resolveTravelFrame(req);
+      seen.add(req.travelFrame);
+    }
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it("actually varies -- every approach comes up", () => {
+    // The check that would have caught a frame chosen once and reused, which
+    // is the failure this whole mechanism exists to avoid.
+    const seen = new Set<string>();
+    for (let i = 0; i < 500; i++) seen.add(pickFramingApproach().id);
+    expect(seen.size).toBe(FRAMING_APPROACHES.length);
+    expect(FRAMING_APPROACHES.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("replays a frozen request to the SAME frame, including a deleted one", () => {
+    // The reason the choice is made on the server at all. A stored id that no
+    // longer exists must resolve somewhere fixed -- re-rolling here would give
+    // up the property silently.
+    for (const a of FRAMING_APPROACHES) expect(framingApproachOf(a.id).id).toBe(a.id);
+    const gone = framingApproachOf("an-approach-that-was-deleted");
+    expect(framingApproachOf("an-approach-that-was-deleted").id).toBe(gone.id);
+    expect(framingApproachOf(undefined).id).toBe(gone.id);
+  });
+
+  it("gives every approach both halves, so no frame opens without closing", () => {
+    const ids = FRAMING_APPROACHES.map((a) => a.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const a of FRAMING_APPROACHES) {
+      expect(a.opening.length).toBeGreaterThan(40);
+      expect(a.closing.length).toBeGreaterThan(20);
+      expect(a.label).toBeTruthy();
+    }
+  });
+});
+
+/**
  * The explicit choice, and the one reader that knows the old flag.
  *
  * The two used to be able to contradict each other with nothing making the
@@ -1031,20 +1170,55 @@ describe("how a character appears in a retelling", () => {
   it("reads the legacy flag for requests frozen before the field existed", () => {
     // story_jobs.request is written at enqueue and never rewritten, so these
     // are in flight across the deploy that adds characterRole.
-    expect(characterRoleOf({ useTimeTravel: true })).toBe("meets");
+    //
+    // "travels", specifically: this flag is the normal tab's old Time Travel
+    // checkbox, and it named travel outright.
+    expect(characterRoleOf({ useTimeTravel: true })).toBe("travels");
     expect(characterRoleOf({ useTimeTravel: false })).toBe("absent");
+  });
+
+  it("reads the legacy \"meets\" as alongside, and NOT as travels", () => {
+    /**
+     * The two legacy spellings resolve differently, and this is the one worth
+     * a test of its own.
+     *
+     * "meets" was written by the historical tab's radio, whose label said the
+     * character meets the figure and said nothing about a journey. Those
+     * stories were requested with no travel in them. Resolving them to
+     * "travels" would put a lantern and a keeper into a story that never had
+     * one -- lore invented after the fact, in a story a reader has already
+     * read.
+     */
+    expect(characterRoleOf({ characterRole: "meets" })).toBe("alongside");
+    expect(characterRoleOf({ characterRole: "meets", useTimeTravel: true })).toBe("alongside");
   });
 
   it("lets the explicit choice win over the legacy flag", () => {
     // The historical tab force-sets useTimeTravel to false, so without this
     // precedence the new control could not turn the mode on at all.
-    expect(characterRoleOf({ characterRole: "meets", useTimeTravel: false })).toBe("meets");
+    expect(characterRoleOf({ characterRole: "alongside", useTimeTravel: false })).toBe("alongside");
+    expect(characterRoleOf({ characterRole: "travels", useTimeTravel: false })).toBe("travels");
     expect(characterRoleOf({ characterRole: "absent", useTimeTravel: true })).toBe("absent");
   });
 
-  it("ignores a value that is not one of the two", () => {
-    expect(characterRoleOf({ characterRole: "sidekick", useTimeTravel: true })).toBe("meets");
+  it("ignores a value that is not one of the modes", () => {
+    expect(characterRoleOf({ characterRole: "sidekick", useTimeTravel: true })).toBe("travels");
+    expect(characterRoleOf({ characterRole: "sidekick", useTimeTravel: false })).toBe("absent");
     expect(characterRoleOf({ characterRole: "", useTimeTravel: false })).toBe("absent");
+  });
+
+  it("never leaves the two ways in able to be true at once", () => {
+    // The point of one field with three values. There is no input -- legacy,
+    // explicit, or nonsense -- that produces anything but one of the three.
+    const inputs = [
+      {}, { useTimeTravel: true }, { characterRole: "meets" },
+      { characterRole: "travels", useTimeTravel: false },
+      { characterRole: "alongside", useTimeTravel: true },
+      { characterRole: "sidekick" }, { characterRole: null },
+    ];
+    for (const input of inputs) {
+      expect(["absent", "travels", "alongside"]).toContain(characterRoleOf(input));
+    }
   });
 });
 

@@ -24,7 +24,9 @@ import {
   MAX_STORY_CHARACTERS,
   characterIdsOf,
   type Character,
+  type CharacterRole,
 } from "@shared/schema";
+import { Switch } from "@/components/ui/switch";
 import CharacterPicker from "@/components/CharacterPicker";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -36,12 +38,71 @@ import { saveCharacter } from "@/lib/saveCharacter";
 import { useToast } from "@/hooks/use-toast";
 import PromptEditor from "./PromptEditor";
 
+/**
+ * The three answers to "how is your character in this account", in words.
+ *
+ * ONE definition for both tabs. The historical tab offers all three; the
+ * original tab offers the two ways IN, because getting there is the question
+ * it just asked. Written twice they would drift, and the difference between
+ * "they travel there" and "they were always there" is the whole feature -- a
+ * user who reads two different descriptions of the same radio has been told
+ * the app does not know either.
+ */
+const ROLE_OPTIONS: Record<CharacterRole, { label: string; description: string }> = {
+  absent: {
+    label: "Not in the story",
+    description:
+      "A straight retelling of what actually happened. Your character is not written into it.",
+  },
+  travels: {
+    label: "They travel there",
+    description:
+      "Your character starts here and now, and goes. The story has a present as well as a past, and it opens somewhere before the journey.",
+  },
+  alongside: {
+    label: "They were always there",
+    description:
+      "Your character belongs to that time and place, and always did. No journey. They help, and they ask the hard questions — but everything still happens exactly as it really did.",
+  },
+};
+
+/**
+ * The radio itself, so neither tab owns the markup.
+ *
+ * Takes value and onChange rather than a react-hook-form field object, so it
+ * cannot silently accept the wrong controller.
+ */
+function RoleChoices({
+  value,
+  onChange,
+  options,
+}: {
+  value: string | undefined;
+  onChange: (value: string) => void;
+  options: CharacterRole[];
+}) {
+  return (
+    <RadioGroup onValueChange={onChange} value={value ?? options[0]} className="space-y-2">
+      {options.map((key) => (
+        <FormItem key={key} className="flex items-start space-x-3 space-y-0">
+          <FormControl>
+            <RadioGroupItem value={key} className="mt-1" />
+          </FormControl>
+          <div className="space-y-1 leading-none">
+            <FormLabel className="font-medium">{ROLE_OPTIONS[key].label}</FormLabel>
+            <FormDescription>{ROLE_OPTIONS[key].description}</FormDescription>
+          </div>
+        </FormItem>
+      ))}
+    </RadioGroup>
+  );
+}
+
 interface StoryFormProps {
   onSubmit: (data: StoryRequest) => void;
   loading?: boolean;
-  formType?: "children" | "historical";
+  formType?: "original" | "historical";
   showChildFields?: boolean;
-  showTimeTravel?: boolean;
   showAnimalToggle?: boolean;
   showBiblicalEvent?: boolean;
   showHeroOfFaith?: boolean;
@@ -70,9 +131,8 @@ interface StoryFormProps {
 export default function StoryForm({ 
   onSubmit, 
   loading = false,
-  formType = "children",
+  formType = "original",
   showChildFields = true,
-  showTimeTravel = true,
   showAnimalToggle = true,
   showBiblicalEvent = false,
   showHeroOfFaith = true,
@@ -87,7 +147,14 @@ export default function StoryForm({
   isContinuation = false,
 }: StoryFormProps) {
   const { toast } = useToast();
-  const [useTimeTravel, setUseTimeTravel] = useState(false);
+  /**
+   * Is a hero of faith being brought into this story at all?
+   *
+   * Local rather than a form field because it is not a fact about the story --
+   * it is the question that reveals the two that are. What it gates writes
+   * heroOfFaith and characterRole, and those are what get frozen.
+   */
+  const [bringInHero, setBringInHero] = useState(false);
   const [hasSelectedBiblicalEvent, setHasSelectedBiblicalEvent] = useState(false);
   const [hasSelectedHeroOfFaith, setHasSelectedHeroOfFaith] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -163,7 +230,10 @@ export default function StoryForm({
       // Learning Focus -- not by a story type that told the model to be
       // faithful to a text nobody supplied.
       storyType: "regular" as const,
-      useTimeTravel: false,
+      // useTimeTravel is not defaulted here on purpose. It is legacy, nothing
+      // writes it any more, and the schema's own .default(false) covers a
+      // request that omits it. Listing it invited exactly the bug above:
+      // somewhere to set a flag that no longer decides anything.
       characterIds: [],
       // "absent" is the safe default: a retelling is about the person it is
       // about, and getting it wrong this way gives a plainer story rather than
@@ -240,10 +310,19 @@ export default function StoryForm({
     form.setValue("characterIds", inheritedCharacterIds);
   }, [inheritedCharacterIds, form]);
 
-  // Update the form when the time travel checkbox or biblical narrative option changes
+  /**
+   * Clear the fields the chosen cast makes unnecessary.
+   *
+   * The `form.setValue("useTimeTravel", ...)` writes that used to open and
+   * close this effect are GONE, and they were worse than redundant. The form
+   * defaults characterRole to "absent" and characterRoleOf gives the explicit
+   * field precedence over the legacy flag -- so the checkbox that set this
+   * wrote true into a field nothing read, the request still said "absent", the
+   * character was scrubbed from the brief, and ticking "Time Travel Adventure"
+   * produced a plain retelling. It looked like a working control for as long
+   * as characterRole has existed.
+   */
   useEffect(() => {
-    form.setValue("useTimeTravel", useTimeTravel);
-    
     if (formType === "historical") {
       // In historical mode, child's name, gender, and animal are not needed
       form.clearErrors(['childName', 'gender', 'animal']);
@@ -257,11 +336,10 @@ export default function StoryForm({
       
       // Keep character selection even for historical mode
       // Character selection remains optional; don't clear it
-      form.setValue("useTimeTravel", false);
-      
     } 
-    else if (useTimeTravel) {
-      // In time travel mode the chosen characters carry name, gender and animal.
+    else if (bringInHero) {
+      // With a hero in the story the chosen characters carry name, gender and
+      // animal.
       form.clearErrors(['childName', 'gender', 'animal']);
       form.setValue("animal", "");
 
@@ -276,7 +354,7 @@ export default function StoryForm({
     } 
     // Keep character selection even when time travel is not enabled
     // This allows using the character in regular stories too
-  }, [useTimeTravel, form, formType]);
+  }, [bringInHero, form, formType]);
 
   // Character creation is now handled exclusively through the Character tab
 
@@ -298,7 +376,7 @@ export default function StoryForm({
             </p>
 
             {/* Character Selection - Moved to the top and available for all story types, including biblical narratives */}
-            {(formType === "children" || formType === "historical") && (
+            {(formType === "original" || formType === "historical") && (
               <FormField
                 control={form.control}
                 name="characterIds"
@@ -360,7 +438,7 @@ export default function StoryForm({
                 below does. Loose in the form, as it was, it looked like part of
                 the same question and there was nothing to say that a name typed
                 here is thrown away when the story is written. */}
-            {formType === "children" && showChildFields && characterIdsOf(form.watch()).length === 0 && (
+            {formType === "original" && showChildFields && characterIdsOf(form.watch()).length === 0 && (
               <div className="space-y-4 rounded-lg border border-border bg-muted/40 p-4">
                 <div className="space-y-1">
                   <h3 className="text-sm font-semibold">Quick Character</h3>
@@ -480,7 +558,7 @@ export default function StoryForm({
               </div>
             )}
             
-            {formType === "children" && (
+            {formType === "original" && (
               <FormField
                 control={form.control}
                 name="theme"
@@ -582,7 +660,7 @@ export default function StoryForm({
               )}
             />
             
-            {formType === "children" && (
+            {formType === "original" && (
               <FormField
                 control={form.control}
                 name="storyType"
@@ -617,33 +695,6 @@ export default function StoryForm({
               />
             )}
             
-            {formType === "children" && showTimeTravel && (
-              <FormField
-                control={form.control}
-                name="useTimeTravel"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md p-4 border border-secondary/10">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={(checked) => {
-                          setUseTimeTravel(!!checked);
-                          field.onChange(checked);
-                        }}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel className="text-sm font-medium">
-                        Time Travel Adventure
-                      </FormLabel>
-                      <FormDescription>
-                        Enable this to create a time travel adventure where your character visits Biblical times. This only affects the story theme, not character selection.
-                      </FormDescription>
-                    </div>
-                  </FormItem>
-                )}
-              />
-            )}
 
             {/* HOW THE CHARACTER APPEARS -- the choice that did not exist.
                 
@@ -666,38 +717,11 @@ export default function StoryForm({
                       How should your character appear?
                     </FormLabel>
                     <FormControl>
-                      <RadioGroup
-                        onValueChange={field.onChange}
-                        value={field.value ?? "absent"}
-                        className="space-y-2"
-                      >
-                        <FormItem className="flex items-start space-x-3 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem value="absent" className="mt-1" />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel className="font-medium">Not in the story</FormLabel>
-                            <FormDescription>
-                              A straight retelling of what actually happened. Your
-                              character is not written into it.
-                            </FormDescription>
-                          </div>
-                        </FormItem>
-                        <FormItem className="flex items-start space-x-3 space-y-0">
-                          <FormControl>
-                            <RadioGroupItem value="meets" className="mt-1" />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel className="font-medium">They meet — an adventure</FormLabel>
-                            <FormDescription>
-                              Your character meets them and joins in. Fun, and a
-                              little silly, but the real events still happen the
-                              way they really did. The story ends with a short
-                              note saying the meeting was made up.
-                            </FormDescription>
-                          </div>
-                        </FormItem>
-                      </RadioGroup>
+                      <RoleChoices
+                        value={field.value}
+                        onChange={field.onChange}
+                        options={["absent", "travels", "alongside"]}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -846,7 +870,76 @@ export default function StoryForm({
               />
             )}
             
-            {showHeroOfFaith && (
+            {/* A HERO OF FAITH, and the two ways one can be met.
+                
+                This replaces a "Time Travel Adventure" checkbox that had not
+                worked since characterRole shipped: the form defaults that field
+                to "absent", characterRoleOf gives it precedence over the legacy
+                flag, and so ticking the box produced a plain retelling with the
+                character scrubbed out. It looked exactly like a working control.
+                
+                It is a gate rather than a third radio option because the two
+                modes are only a question at all once there is a hero to meet,
+                and because off is the honest default -- most stories on this tab
+                have nobody real in them. */}
+            {formType === "original" && showHeroOfFaith && (
+              <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold">Bring in a Hero of Faith</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Put someone who really lived into this story, and decide how
+                      your character comes to be there.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={bringInHero}
+                    onCheckedChange={(on) => {
+                      setBringInHero(on);
+                      if (on) {
+                        // Switching on commits to a mode straight away, so the
+                        // request never carries a hero with nobody meeting them.
+                        form.setValue("characterRole", "travels");
+                      } else {
+                        // And switching off clears BOTH, so a hero picked and
+                        // then abandoned cannot ride along on the request.
+                        form.setValue("characterRole", "absent");
+                        form.setValue("heroOfFaith", "");
+                        setHasSelectedHeroOfFaith(false);
+                      }
+                    }}
+                    aria-label="Bring in a Hero of Faith"
+                  />
+                </div>
+
+                {bringInHero && (
+                  <FormField
+                    control={form.control}
+                    name="characterRole"
+                    render={({ field }) => (
+                      <FormItem className="space-y-3 pt-1">
+                        <FormLabel className="text-sm font-semibold">
+                          How does your character come to be there?
+                        </FormLabel>
+                        <FormControl>
+                          {/* Two options, one field: they cannot both be true,
+                              which is the entire reason this is not a pair of
+                              checkboxes. */}
+                          <RoleChoices
+                            value={field.value === "absent" ? "travels" : field.value}
+                            onChange={field.onChange}
+                            options={["travels", "alongside"]}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+            )}
+
+            {showHeroOfFaith && (formType === "historical" || bringInHero) && (
               <FormField
                 control={form.control}
                 name="heroOfFaith"

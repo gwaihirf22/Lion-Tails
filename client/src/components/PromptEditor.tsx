@@ -25,7 +25,7 @@ import {
   Code2
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { characterIdsOf, type Character, type StoryRequest } from "@shared/schema";
+import { characterIdsOf, characterRoleOf, readingLevelAges, type Character, type StoryRequest } from "@shared/schema";
 
 interface PromptEditorProps {
   storyRequest: StoryRequest;
@@ -48,25 +48,20 @@ const generateDefaultSystemPrompt = (storyRequest: StoryRequest) => {
     "extended": "2500+ words (20+ minutes reading time)"
   };
 
-  const readingLevelMapping = {
-    "preschool": "ages 3-4",
-    "kindergarten": "ages 5-6", 
-    "early-elementary": "ages 6-8",
-    "late-elementary": "ages 9-11",
-    "middle-school": "ages 12-14"
-  };
-
   const targetLength = lengthMapping[storyRequest.storyLength] || "1000+ words";
-  const targetAge = readingLevelMapping[storyRequest.readingLevel] || "ages 4-12";
+  // The map this used to hold lives in shared/schema.ts now. It was the only
+  // definition of what a reading level MEANS in years, it was client-side, and
+  // the server -- which is where it was actually needed -- could not see it.
+  const targetAge = readingLevelAges(storyRequest.readingLevel);
 
-  return `You are a Christian children's storyteller who creates engaging, faith-based stories that teach valuable lessons. Your stories should be:
+  return `You are a Christian storyteller who creates engaging, faith-based stories that teach valuable lessons. Your stories should be:
 
-1. Age-appropriate and engaging for children ${targetAge}
+1. Written for a reader ${targetAge}, and willing to trust them with a hard thing
 2. Incorporate biblical values and Christian themes naturally
 3. Feature relatable characters and situations
 4. Include a clear moral lesson or spiritual truth
 5. Be approximately ${targetLength} in length
-6. End with 5 application questions to help children apply the lesson
+6. End with 5 application questions to help the reader apply the lesson
 
 Story Structure:
 - Compelling opening that captures attention
@@ -77,8 +72,9 @@ Story Structure:
 - 5 practical application questions at the end
 
 Content Guidelines:
-- Use simple, age-appropriate language appropriate for ${targetAge}
-- Avoid scary or inappropriate content
+- Use clear language a reader ${targetAge} can follow
+- Hard things may happen and may cost something; never dwell on suffering for
+  its own sake, and never leave the reader without hope
 - Emphasize God's love, grace, and care
 - Show characters learning from mistakes
 - Include elements of adventure, friendship, or family
@@ -104,7 +100,7 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
   // Generate both system and user prompts from story request - updates when storyRequest changes
   useEffect(() => {
     const generateUserPrompt = () => {
-      let prompt = `Create a children's story with the following details:\n\n`;
+      let prompt = `Create a story with the following details:\n\n`;
       
       prompt += `Story Type: ${storyRequest.storyType}\n`;
       
@@ -128,7 +124,13 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
       const noAnimal = ["", "none", "n/a"].includes((storyRequest.animal ?? "").trim().toLowerCase());
       if (!noAnimal && storyRequest.useAnimal) prompt += `Animal Friend: ${storyRequest.animal}\n`;
       if (storyRequest.heroOfFaith) prompt += `Hero of Faith: ${storyRequest.heroOfFaith}\n`;
-      if (storyRequest.useTimeTravel) prompt += `Include Time Travel Elements: Yes\n`;
+      // Through characterRoleOf, so this preview says the same thing the brief
+      // will. Read off the raw flag it showed "Time Travel: Yes" for a request
+      // whose explicit mode said otherwise -- the exact contradiction the one
+      // field exists to make impossible.
+      const role = characterRoleOf(storyRequest);
+      if (role === "travels") prompt += `How they get there: they travel to it\n`;
+      if (role === "alongside") prompt += `How they get there: they were always there\n`;
       if (storyRequest.biblePassage) prompt += `Bible Passage: ${storyRequest.biblePassage}\n`;
       if (storyRequest.biblicalEvent) prompt += `Biblical Event: ${storyRequest.biblicalEvent}\n`;
       
@@ -174,9 +176,9 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
     if (!systemPrompt.toLowerCase().includes('christian') && !systemPrompt.toLowerCase().includes('faith')) {
       warnings.push("System prompt may not emphasize Christian/faith elements");
     }
-    if (!systemPrompt.toLowerCase().includes('children')) {
-      warnings.push("System prompt should specify content is for children");
-    }
+    // A "system prompt must say children" check used to live here. It now
+    // describes no prompt this app writes -- the personas deliberately do not
+    // say it -- so it would have flagged every default prompt as a mistake.
 
     // Check user prompt
     if (userPrompt.length < 50) {

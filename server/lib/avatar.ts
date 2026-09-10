@@ -100,7 +100,7 @@ export function buildAvatarPrompt(character: Character): string {
   return [
     `A friendly head-and-shoulders portrait of ${character.name}, a ${who.join(" ")}.`,
     described,
-    "Warm, gentle children's storybook illustration. Soft colours, plain background,",
+    "Warm, gentle storybook illustration. Soft colours, plain background,",
     "facing the viewer, kind expression. No text, no words, no letters in the image.",
   ]
     .filter(Boolean)
