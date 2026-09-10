@@ -9,6 +9,8 @@ import {
   renderBrief,
   resolveStoryFocus,
   resolveTravelFrame,
+  resolveStorySource,
+  buildSystemPrompt,
   statLeakage,
   skillLeakage,
   SOLO_RETELLING_GUARD,
@@ -580,11 +582,50 @@ describe("a retelling needs no protagonist", () => {
     expect(parse({ heroOfFaith: "bible-ruth", childName: "" }).success).toBe(true);
   });
 
+  it("accepts a bible passage with nobody named", () => {
+    /**
+     * This could not be submitted at all until now.
+     *
+     * "Bible Passage to Study" has been on the historical form the whole time,
+     * but biblePassage was missing from the refine -- so a request carrying
+     * nothing else fell through to the name-and-gender rule and came back as
+     * "Select at least one character". A field you can fill in and cannot send.
+     */
+    expect(parse({ biblePassage: "Psalm 23", childName: "" }).success).toBe(true);
+  });
+
   it("is not fooled by the form's no-value sentinels", () => {
     // The selects write "" and "none" to mean "nothing chosen". Treating either
     // as a source would let a completely empty request through.
     expect(parse({ biblicalEvent: "none", heroOfFaith: "" }).success).toBe(false);
     expect(parse({ biblicalEvent: "", heroOfFaith: "  " }).success).toBe(false);
+    expect(parse({ biblePassage: "none" }).success).toBe(false);
+    expect(parse({ biblePassage: "   " }).success).toBe(false);
+  });
+
+  it("still rejects a source-only request carrying a stale mode", () => {
+    /**
+     * The refine's FIRST branch short-circuits: a non-absent characterRole
+     * demands somebody to be that role, before the source rules are ever
+     * reached. That is correct on the original tab and a trap on the
+     * historical one, where a mode left behind by a tab switch would turn a
+     * good request into "Select at least one character".
+     *
+     * Asserted here so it stays visible: the historical form is what has to
+     * clear the mode, and this is why.
+     */
+    expect(parse({ biblicalEvent: "noah", characterRole: "travels" }).success).toBe(false);
+    expect(parse({ biblicalEvent: "noah", characterRole: "absent" }).success).toBe(true);
+  });
+
+  it("takes studyQuestions, and only so many", () => {
+    expect(parse({ biblicalEvent: "noah", studyQuestions: ["Why did they go?"] }).success).toBe(true);
+    expect(parse({ biblicalEvent: "noah", studyQuestions: [] }).success).toBe(true);
+    // Five is the cap: each one is answered from the source material, and a
+    // list of twenty produces a paragraph of nothing each.
+    expect(parse({ biblicalEvent: "noah", studyQuestions: Array(6).fill("Why?") }).success).toBe(false);
+    expect(parse({ biblicalEvent: "noah", studyQuestions: [""] }).success).toBe(false);
+    expect(parse({ biblicalEvent: "noah", studyQuestions: ["x".repeat(301)] }).success).toBe(false);
   });
 
   it("still renders the retelling as having nobody invented", () => {
@@ -1089,6 +1130,170 @@ describe("a retelling requested with a real character's name", () => {
  * safe, which pulls the other way: a story must replay to the SAME frame it
  * was generated with. Variety across stories, determinism within one.
  */
+/**
+ * One source, settled at enqueue.
+ *
+ * Three fields carry one choice. These assert that the two silent failures
+ * combining them used to cause -- a hero dropped without trace, and a persona
+ * describing a different story from the brief -- are now impossible rather
+ * than merely discouraged.
+ */
+describe("resolveStorySource", () => {
+  const req = (o: Record<string, unknown>) => o as unknown as StoryRequest;
+  /** The form's sentinels are truthy, so "unset" is not the same as falsy. */
+  const unset = (v: unknown) =>
+    typeof v !== "string" || ["", "none", "n/a"].includes(v.trim().toLowerCase());
+
+  it("keeps the event and clears the rest", () => {
+    // The precedence buildStoryBrief already had. Kept deliberately: changing
+    // it would change what a request already in the database means.
+    const r = req({ biblicalEvent: "noah", heroOfFaith: "bible-caleb", biblePassage: "John 3:16" });
+    resolveStorySource(r);
+    expect(r.biblicalEvent).toBe("noah");
+    expect(unset(r.heroOfFaith)).toBe(true);
+    expect(unset(r.biblePassage)).toBe(true);
+  });
+
+  it("keeps the hero when there is no event", () => {
+    const r = req({ biblicalEvent: "", heroOfFaith: "bible-caleb", biblePassage: "John 3:16" });
+    resolveStorySource(r);
+    expect(r.heroOfFaith).toBe("bible-caleb");
+    expect(unset(r.biblePassage)).toBe(true);
+  });
+
+  it("keeps a passage that is the only source", () => {
+    const r = req({ biblePassage: "Psalm 23" });
+    resolveStorySource(r);
+    expect(r.biblePassage).toBe("Psalm 23");
+  });
+
+  it("treats the form's sentinels as no source at all", () => {
+    // "none" is truthy, and the form writes it. Asked through the same isSet
+    // the brief uses, so the two cannot disagree about what "set" means.
+    const r = req({ biblicalEvent: "none", heroOfFaith: "  ", biblePassage: "Psalm 23" });
+    resolveStorySource(r);
+    expect(r.biblePassage).toBe("Psalm 23");
+  });
+
+  it("is idempotent", () => {
+    // It runs once at enqueue today. A second call must not be able to change
+    // what a frozen request means.
+    const r = req({ biblicalEvent: "noah", heroOfFaith: "bible-caleb" });
+    resolveStorySource(r);
+    const once = JSON.stringify(r);
+    resolveStorySource(r);
+    expect(JSON.stringify(r)).toBe(once);
+  });
+
+  it("leaves a request with no source alone", () => {
+    // It has no opinion here, and must not invent empty fields on a request
+    // that never carried them.
+    const r = req({ childName: "Sam", gender: "boy" });
+    resolveStorySource(r);
+    expect(r).toEqual({ childName: "Sam", gender: "boy" });
+  });
+
+  it("stops the persona disagreeing with the brief", () => {
+    /**
+     * The hero+passage failure, asserted through the persona rather than by
+     * inspecting fields: storytellerPersona asks isSet(biblePassage) to decide
+     * whether this is Scripture, so a typed passage flipped a hero story onto
+     * the retelling persona while sourceMaterial was still that person's life.
+     */
+    const r = req({ heroOfFaith: "Corrie ten Boom", biblePassage: "John 3:16", storyType: "regular" });
+    expect(buildSystemPrompt(r)).toContain("Scripture");
+    resolveStorySource(r);
+    const after = buildSystemPrompt(r);
+    expect(after).toContain("real Christians");
+    expect(after).not.toContain("Scripture");
+  });
+
+  it("does not let an unrecognised slug beat a real hero", () => {
+    /**
+     * Keyed on whether the event RESOLVES, not on whether the field is filled.
+     * A slug getBiblicalEvent() does not know carries no account, no verse and
+     * no cautions -- letting it win would trade a whole biography for a word
+     * the model has to guess at.
+     */
+    const r = req({ biblicalEvent: "the-fall-of-jericho-maybe", heroOfFaith: "bible-caleb" });
+    resolveStorySource(r);
+    expect(r.heroOfFaith).toBe("bible-caleb");
+  });
+
+  it("clears an episode that belonged to a hero who is no longer the source", () => {
+    /**
+     * storyFocus is populated from the chosen hero's own keyEvents and the
+     * control only renders while such a hero is selected -- but it was never
+     * cleared when the hero went away. The brief would then say "This story
+     * covers ONE episode: ..." naming a moment from somebody else's life.
+     */
+    const r = req({
+      biblicalEvent: "noah", heroOfFaith: "corrie-ten-boom",
+      storyFocus: { mode: "chosen", text: "Hides the first family in the watch shop" },
+    });
+    resolveStorySource(r);
+    expect(r.storyFocus).toBeUndefined();
+
+    // ...and it survives when the hero IS the source, which is the only case
+    // it was ever for.
+    const kept = req({
+      heroOfFaith: "corrie-ten-boom",
+      storyFocus: { mode: "chosen", text: "Hides the first family in the watch shop" },
+    });
+    resolveStorySource(kept);
+    expect(kept.storyFocus?.text).toBe("Hides the first family in the watch shop");
+  });
+
+  it("runs BEFORE the hero is looked up, not after", () => {
+    /**
+     * Ordering, asserted because nothing else would catch it.
+     *
+     * routes.ts resolves the hero, stamps validatedData.heroId, and that id is
+     * written to the user_stories.hero_id COLUMN -- which is what the Heroes
+     * page lists a person's stories from. Normalising after that point would
+     * clear heroOfFaith while leaving heroId pointing at somebody the story is
+     * not about: wrong rows on a page, with nothing wrong in the request blob
+     * to explain them.
+     */
+    const src = readFileSync(
+      path.resolve(__dirname, "../server/routes.ts"), "utf8",
+    );
+    const order = ["resolveStorySource(", "resolveHeroOfFaith(", "validatedData.heroId ="];
+    const at = order.map((s) => src.indexOf(s));
+    expect(at.every((i) => i > 0)).toBe(true);
+    expect(at).toEqual([...at].sort((a, b) => a - b));
+  });
+
+  it("stops a hero being dropped without trace", () => {
+    /**
+     * event + hero built the event and threw the whole biography away, with
+     * nothing logged and nothing left in the prompt to notice.
+     *
+     * The hero is passed to buildStoryBrief RESOLVED here, which is the state
+     * routes.ts reaches when both are set. Both halves of this can fail: the
+     * first documents the drop, which is still what the brief does when it is
+     * handed both; the second is the fix, which is that it is no longer handed
+     * both, because the request stopped naming one.
+     */
+    const hero = {
+      id: "corrie-ten-boom", name: "Corrie ten Boom", timePeriod: "1892-1983",
+      description: "Hid Jewish families in her father's watch shop.",
+      keyEvents: [],
+    } as unknown as HeroOfFaith;
+    const both = req({
+      biblicalEvent: "noah", heroOfFaith: hero.id,
+      childName: "", storyType: "regular", storyLength: "medium",
+    });
+
+    const before = renderBrief(buildStoryBrief(both, [], undefined, hero), "single");
+    expect(before).toContain("Noah");
+    expect(before).not.toContain("Corrie");
+
+    resolveStorySource(both);
+    expect(unset(both.heroOfFaith)).toBe(true);
+  });
+});
+
 describe("the framing of a travelling story", () => {
   it("puts the frame on the request, and only for travels", () => {
     const req = { characterRole: "travels" } as unknown as StoryRequest;

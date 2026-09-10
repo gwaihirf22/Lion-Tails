@@ -1447,8 +1447,46 @@ export const storyRequestSchema = z.object({
   // already lives.
   continuesStoryId: z.string().optional(),
   universeId: z.string().optional(),
-  biblePassage: z.string().default("").optional(), // Bible passage to study
-  learningFocus: z.string().default("").optional(), // Focus area for historical/educational stories
+  /**
+   * ONE OF THREE SOURCES. `biblicalEvent`, `heroOfFaith` and `biblePassage`
+   * are the three things a story can be ABOUT, and exactly one of them may be
+   * set on a request that reaches the model.
+   *
+   * They are three fields rather than one because all three are frozen on
+   * thousands of requests already and jsonb is never rewritten. What makes
+   * them behave as one choice is resolveStorySource(), which settles the
+   * request at enqueue -- not a rule anybody has to remember here. See the
+   * note on that function for what combining them used to do silently.
+   */
+  biblePassage: z.string().default("").optional(),
+  /**
+   * LEGACY. Nothing writes this any more and no prompt reads it.
+   *
+   * It was a Select of seven slugs whose value reached the model unrendered --
+   * the prompt literally said "Learning focus: theological-significance." --
+   * with no description in the UI saying what any of them meant.
+   * `studyQuestions` replaces it: the same intent, in the user's own words.
+   *
+   * DECLARED, not deleted. z.object strips what it does not declare, so
+   * removing it would silently drop the field from every frozen request that
+   * carries it the moment anything re-parses one.
+   */
+  learningFocus: z.string().default("").optional(),
+  /**
+   * What the reader actually wants to know about this account.
+   *
+   * Answered AFTER the story, in an appended "Digging deeper" section, and
+   * deliberately not woven into it -- a model asked to answer a history
+   * question inside a scene answers it by inventing history, which is the one
+   * thing every other prompt in this file is arranged to prevent.
+   *
+   * Capped at five because each one has to be answered from the source
+   * material and a list of twenty produces a paragraph of nothing each. Capped
+   * at 300 characters because this is a question, and anything longer is
+   * somebody using it as the free-text steering box, which is a different
+   * field on a different tab.
+   */
+  studyQuestions: z.array(z.string().min(1).max(300)).max(5).optional(),
   // New fields for reading level and story length
   readingLevel: z.enum(READING_LEVELS).default(DEFAULT_READING_LEVEL),
   storyLength: z.enum([
@@ -1501,7 +1539,16 @@ export const storyRequestSchema = z.object({
   // value that then reached the prompt as a protagonist and had to be stripped
   // back out by PLACEHOLDER_NAMES. Stating the rule here removes the need for
   // the workaround rather than the need to undo it.
-  if (isSet(data.biblicalEvent) || isSet(data.heroOfFaith)) {
+  //
+  // biblePassage was missing from this list, and had been for as long as the
+  // field has existed on the form. A request carrying nothing but a typed
+  // passage fell through to the name-and-gender rule below and was rejected --
+  // so "Bible Passage to Study" could be filled in but never submitted alone.
+  if (
+    isSet(data.biblicalEvent) ||
+    isSet(data.heroOfFaith) ||
+    isSet(data.biblePassage)
+  ) {
     return true;
   }
 

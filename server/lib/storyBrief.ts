@@ -167,6 +167,88 @@ export function resolveTravelFrame(request: StoryRequest): void {
 }
 
 /**
+ * Settle the story down to ONE source, once.
+ *
+ * A story is about a biblical event, OR a person, OR a passage. Three fields
+ * carry that one choice, because all three are frozen on requests already in
+ * the database and jsonb is never rewritten -- so the choice is enforced here,
+ * at enqueue, rather than by a rule every reader has to remember.
+ *
+ * WHAT COMBINING THEM USED TO DO, silently, with nothing logged:
+ *
+ *   event + hero      buildStoryBrief builds sourceMaterial event-first, so
+ *                     the hero was dropped ENTIRELY -- biography, key events,
+ *                     quote, verse -- and the only trace left was a premise
+ *                     line that is itself suppressed for a uuid, which is
+ *                     exactly what the picker sends. The hero vanished.
+ *
+ *   hero + passage    storytellerPersona asks
+ *                     `isSet(biblicalEvent) || isSet(biblePassage)` to decide
+ *                     whether this is Scripture, so a typed passage flipped a
+ *                     hero story onto the retelling persona -- "faithful to
+ *                     what Scripture actually records" -- while sourceMaterial
+ *                     was still that person's biography. The persona and the
+ *                     brief then described two different stories.
+ *
+ * NORMALISE, DO NOT REJECT. A refine that refused two sources would also
+ * refuse requests already sitting in story_jobs, which are replayed and
+ * re-read. Clearing the losers instead fixes both failures by construction,
+ * leaves old rows working, and makes the frozen request say which source was
+ * actually used rather than which three were offered.
+ *
+ * The precedence is the one buildStoryBrief already had. It is kept rather
+ * than improved on purpose: changing it would change what an existing request
+ * means.
+ *
+ * Mutates deliberately: routes.ts freezes the request immediately after, the
+ * same as resolveStoryFocus and resolveTravelFrame above.
+ */
+export function resolveStorySource(request: StoryRequest): void {
+  /**
+   * Keyed on whether the event RESOLVES, not on whether the field is filled.
+   *
+   * A slug getBiblicalEvent() does not recognise carries no account, no verse
+   * and no cautions -- all it produces is the fallback premise line "Draw on
+   * this biblical event: <slug>.", which is the raw-slug-into-the-prompt
+   * failure being deleted from learningFocus in this same change. Letting an
+   * unrecognised slug win and clear a perfectly good hero would trade a whole
+   * biography for a word the model has to guess the meaning of.
+   */
+  if (getBiblicalEvent(request.biblicalEvent)) {
+    request.heroOfFaith = "";
+    request.biblePassage = "";
+    clearStoryFocus(request);
+    return;
+  }
+  if (isSet(request.heroOfFaith)) {
+    request.biblePassage = "";
+    return;
+  }
+  // A passage alone, an unrecognised slug, or no source at all. An unset field
+  // is left exactly as it arrived rather than normalised to "", so this does
+  // not rewrite fields it has no opinion about.
+  clearStoryFocus(request);
+}
+
+/**
+ * storyFocus belongs to a HERO, and to nothing else.
+ *
+ * The episode select is populated from the chosen hero's own keyEvents and
+ * only RENDERS while a hero with events is selected -- but it was never
+ * cleared when the hero changed or went away. Pick a hero, pick an episode,
+ * switch to a biblical event: the control disappears and
+ * `{mode:"chosen", text:"<that hero's event>"}` is still on the request, so
+ * the brief emits "This story covers ONE episode: ..." naming a moment from
+ * somebody else's life against an unrelated account.
+ *
+ * Cleared to undefined rather than to {mode:"whole"} so the field is absent
+ * from the frozen request, exactly as it is for a story that never had one.
+ */
+function clearStoryFocus(request: StoryRequest): void {
+  if (request.storyFocus) request.storyFocus = undefined;
+}
+
+/**
  * How the character came to be in this account, and what they may do in it.
  *
  * Two modes, and they say almost opposite things -- which is exactly why the
@@ -195,9 +277,13 @@ function participationPremise(
      */
     const frame = framingApproachOf(request.travelFrame);
     out.push(
-      `${name} lives in the present day. ${KEEPER.name} is ${KEEPER.brief} ` +
-        `What he keeps is ${DEVICE.brief}`,
+      `${name} lives in the present day. ${KEEPER.name} keeps ${KEEPER.place} ` +
+        `He is ${KEEPER.who} ${KEEPER.why}`,
     );
+    out.push(`What he keeps is ${DEVICE.brief} ${DEVICE.rules}`);
+    // The rules go LAST of the three, so the prohibitions are the most recent
+    // thing said about him rather than the whole of what was said.
+    out.push(KEEPER.never);
     out.push(frame.opening);
     out.push(frame.closing);
     if (hasSource) {

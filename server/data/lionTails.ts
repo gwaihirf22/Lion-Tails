@@ -42,15 +42,53 @@ export const KEEPER = {
   /** How he is referred to after that. */
   shortName: "Barnabas",
   /**
-   * What the model needs to know to write him. Kept short on purpose: a long
-   * character brief for a supporting figure crowds out the account, which is
-   * what the story is actually about.
+   * WHERE HE IS, and the reason this field exists at all.
+   *
+   * He had no place, so every story invented one and no two agreed: three test
+   * stories in a row put him under a library staircase, in a churchyard, and
+   * in "his room". That is not variety, it is a universe contradicting itself,
+   * and it is the thing a reader notices first when they read two of these
+   * back to back.
+   *
+   * The shop earns its keep three ways: every visit has something on a shelf
+   * worth asking about, it explains without explaining why HE is the one who
+   * has the lantern, and it is already where two of the framing approaches
+   * below wanted to open -- "something brought back" and "someone was here
+   * first" are both descriptions of this room.
    */
-  brief:
-    "an old man who keeps the lantern, knows exactly what it does, and will " +
-    "not explain it. He is kind, dry, and entirely unsurprised by any of this. " +
-    "He never travels himself and he never tells anyone what they are about to " +
-    "see.",
+  place:
+    "a crowded second-hand shop of things people brought back and never came " +
+    "for. Every shelf has something on it that does not belong to the century " +
+    "it is sitting in, and none of it is labelled.",
+  /**
+   * Who he is.
+   *
+   * This used to be one string, and three of its four clauses were
+   * prohibitions -- which is exactly why he did nothing in a story but nod
+   * twice and hand something over. A character defined by what he will not do
+   * has nothing to do. The rules are still here, below, where they cannot
+   * crowd him out.
+   */
+  who:
+    "an old man, kind and dry and entirely unsurprised by any of this. He has " +
+    "been doing whatever this is for a very long time. He asks better " +
+    "questions than he answers, and he notices what a person is actually " +
+    "asking rather than what they said.",
+  /**
+   * Why he lends it. He is not a mechanism; he chooses.
+   *
+   * Whit's role in Adventures in Odyssey: a good man who helps a young person
+   * see history, who is trusted, and who is not the protagonist.
+   */
+  why:
+    "He lends the lantern to people he judges ready for what is on the other " +
+    "side of it, and he is rarely wrong. He does not say how he judges, and he " +
+    "is not always pleased about it.",
+  /** The rules, kept separate so they constrain him without replacing him. */
+  never:
+    "He never travels himself. He never explains the lantern. He never says " +
+    "what someone is about to see, and he does not tell them what it meant " +
+    "afterwards -- he lets them work that out.",
 } as const;
 
 /**
@@ -69,6 +107,20 @@ export const DEVICE = {
     "an old lantern that does not light rooms. Lit in the right place it opens " +
     "onto somewhere else, some when else. Nobody in the story knows how, and " +
     "nobody explains it. Do not invent a mechanism for it.",
+  /**
+   * How it behaves once someone is through.
+   *
+   * PROMOTED FROM INVENTION TO CANON. Neither of these was in the data, and
+   * the model reached for both anyway, in the same shape, in every test story:
+   * the lantern went dark behind them on arrival, and it opened again when it
+   * was time to come home. Left unwritten they would keep being reinvented,
+   * and eventually reinvented differently -- so they are written down, in the
+   * one file that gets to say what is true here.
+   */
+  rules:
+    "Once someone is through, the lantern goes dark and stays dark; it is not " +
+    "a door they can walk back through whenever they like. It lights again " +
+    "when it is time to come back, and it decides when that is.",
 } as const;
 
 /**

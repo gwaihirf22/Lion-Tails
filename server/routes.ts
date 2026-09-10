@@ -22,6 +22,7 @@ import {
   resolveStoryCharacters,
   resolveStoryFocus,
   resolveTravelFrame,
+  resolveStorySource,
   resolveHeroOfFaith,
   serialiseBrief,
 } from "./lib/storyBrief";
@@ -678,6 +679,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Settled BEFORE the hero is resolved, so a request carrying both an
+      // event and a hero does not spend a database lookup on a hero that is
+      // about to be cleared -- and so heroId is never stamped for a hero the
+      // brief will not mention.
+      resolveStorySource(validatedData);
       const characters = await resolveStoryCharacters(validatedData, userId);
       // Resolved HERE, with the character, so the hero's actual biography is
       // frozen into the brief. The prompt used to receive the raw select value
