@@ -66,6 +66,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { FOLDER_TAB_LIST, FOLDER_TAB_TRIGGER } from "@/lib/folderTabs";
 import {
   Dialog,
   DialogContent,
@@ -659,7 +660,7 @@ export default function CharacterForm({
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
 
-                <TabsList className="flex-1 h-auto flex-wrap justify-start gap-1 rounded-none border-b border-border bg-transparent p-0 pt-1">
+                <TabsList className={FOLDER_TAB_LIST}>
                   {TABS.map((t) => {
                     const count = t.value === "stats" ? unspent : t.value === "virtues" ? unseen : 0;
                     return (
@@ -667,7 +668,7 @@ export default function CharacterForm({
                         key={t.value}
                         value={t.value}
                         className={cn(
-                          "relative z-10 -mb-px rounded-b-none rounded-t-md border border-t-2 border-border border-b-transparent px-3 py-1.5 text-foreground data-[state=active]:border-b-card data-[state=active]:bg-card data-[state=active]:shadow-none",
+                          FOLDER_TAB_TRIGGER,
                           // Its own colour when it is one of the closed folders,
                           // and the same colour as a top edge when it is the
                           // open one -- which has to stay bg-card, because that

@@ -116,6 +116,13 @@ every library.
    the page.
 5. **The first adventure** on the page. Not before 4.
 
+Two small ones the library redesign left open: there is no way to put a
+story INTO a universe by hand (`moveStory` is only ever called with `null`;
+universes are made by the server when a story continues), so a "Move to
+universe" control on the story card is the thing a "New universe" button
+would need first; and `Header`'s exact-match highlight does not light "My
+Stories" on a universe's page.
+
 Closed on the way: the `alongside` mode's "stays on their mission / does not
 die / never the villain" lines reached chapter 1 and no other. Both modes
 carry a per-chapter anchor now.

@@ -352,3 +352,42 @@ describe("the header bar", () => {
     expect(barLum, "Night's header bar is far brighter than its page").toBeLessThan(pageLum * 3);
   });
 });
+
+/**
+ * Every tab tint named anywhere in the client is a real token.
+ *
+ * `bg-tab-favourites` renders as nothing -- no class emitted, no error, a
+ * transparent tab in every palette -- and the contrast assertions above
+ * cannot see it, because they iterate TAB_TINTS rather than the source. So
+ * the source is read: every `bg-tab-*` and `border-t-tab-*` literal, in .ts as
+ * well as .tsx, because the folder tables live in .ts files.
+ */
+describe("tab tint literals", () => {
+  it("name only tokens the palettes define", () => {
+    const dir = path.resolve(__dirname, "../client/src");
+    const files: string[] = [];
+    (function walk(d: string) {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const full = path.join(d, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (e.name.endsWith(".tsx") || e.name.endsWith(".ts")) files.push(full);
+      }
+    })(dir);
+
+    const known = new Set<string>(TAB_TINTS);
+    const seen: string[] = [];
+    const bad: string[] = [];
+    for (const f of files) {
+      const src = fs.readFileSync(f, "utf8");
+      for (const m of src.matchAll(/\b(?:bg|border-t)-tab-([a-z-]+?)(?=["'\s/`)])/g)) {
+        seen.push(m[1]);
+        if (!known.has(m[1] as (typeof TAB_TINTS)[number])) {
+          bad.push(`${path.relative(dir, f)}: ${m[0]}`);
+        }
+      }
+    }
+    // Guards the guard: the character sheet alone uses six.
+    expect(new Set(seen).size).toBeGreaterThanOrEqual(4);
+    expect(bad).toEqual([]);
+  });
+});
