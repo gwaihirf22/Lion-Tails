@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { buildAvatarPrompt } from "../server/lib/avatar";
-import { avatarsOf, MAX_AVATARS, characterSchema } from "../shared/schema";
+import {
+  avatarsOf,
+  baseStats,
+  characterSchema,
+  MAX_AVATARS,
+  pointsAvailable,
+  STARTING_POINTS,
+  unseenVirtues,
+} from "../shared/schema";
 import { avatarCapFor, hasUnlimitedUse } from "../server/lib/modelPolicy";
 import type { Character } from "@shared/schema";
 
@@ -157,5 +165,82 @@ describe("pictures per character", () => {
         expect(avatarCapFor({ isAdmin, hasOwnKey })).toBe(unlimited ? MAX_AVATARS : 1);
       }
     }
+  });
+});
+
+/**
+ * What the badges count.
+ *
+ * Both numbers appear on a card the user has not opened, so being wrong here
+ * is worse than being absent: a badge that never clears trains people to
+ * ignore every badge.
+ */
+describe("points waiting to be spent", () => {
+  const withStories = (n: number) => ({
+    adventures: Array.from({ length: n }, (_, i) => ({ storyId: String(i), theme: "courage" })),
+  });
+
+  it("starts everyone with the starting points", () => {
+    expect(pointsAvailable({})).toBe(STARTING_POINTS);
+  });
+
+  it("adds one per finished story and subtracts what was spent", () => {
+    expect(pointsAvailable(withStories(3))).toBe(STARTING_POINTS + 3);
+    expect(pointsAvailable({ ...withStories(3), stats: { ...baseStats(), strength: 5 } }))
+      .toBe(STARTING_POINTS + 3 - 2);
+  });
+
+  it("measures a sheet handed to it instead of the stored one", () => {
+    // This is why the override exists: the form asks about stats being dragged
+    // around right now, the card asks about what is saved, and they were two
+    // separate sums before.
+    const c = withStories(1);
+    expect(pointsAvailable(c, { ...baseStats(), wisdom: 6 })).toBe(STARTING_POINTS + 1 - 3);
+    expect(pointsAvailable(c)).toBe(STARTING_POINTS + 1);
+  });
+
+  it("can go negative, which is a Parent Mode sheet and not a badge", () => {
+    // Parent Mode writes any sheet it likes. The number is honest here; the
+    // callers clamp, because "-4 points to spend" is not a thing to show.
+    const over = { ...baseStats(), strength: 10, agility: 10 };
+    expect(pointsAvailable({ stats: over })).toBeLessThan(0);
+  });
+});
+
+describe("virtues nobody has looked at", () => {
+  const adv = (...themes: string[]) => ({
+    adventures: themes.map((theme, i) => ({ storyId: String(i), theme })),
+  });
+
+  it("counts everything when the character has never been looked at", () => {
+    // No backfill, and no pretending old virtues were read. One badge, then
+    // it is quiet for good.
+    expect(unseenVirtues(adv("courage", "kindness")).sort()).toEqual(["courage", "kindness"]);
+  });
+
+  it("is quiet once they have been seen", () => {
+    expect(unseenVirtues({ ...adv("courage"), seenVirtues: ["courage"] })).toEqual([]);
+  });
+
+  it("notices a new one arriving", () => {
+    expect(unseenVirtues({ ...adv("courage", "patience"), seenVirtues: ["courage"] }))
+      .toEqual(["patience"]);
+  });
+
+  it("matches on the same normalised key virtueLevels builds", () => {
+    // A theme is stored verbatim from the story form. Comparing raw strings
+    // would leave "Courage" unseen against a stored "courage" for ever, and
+    // the badge would never go out.
+    expect(unseenVirtues({ ...adv(" Courage "), seenVirtues: ["courage"] })).toEqual([]);
+    expect(unseenVirtues({ ...adv("courage"), seenVirtues: [" COURAGE "] })).toEqual([]);
+  });
+
+  it("ignores stories with no theme", () => {
+    expect(unseenVirtues(adv("none", "", "courage"))).toEqual(["courage"]);
+  });
+
+  it("is empty for a character with no stories at all", () => {
+    expect(unseenVirtues({})).toEqual([]);
+    expect(unseenVirtues(null)).toEqual([]);
   });
 });

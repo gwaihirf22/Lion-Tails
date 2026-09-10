@@ -4,6 +4,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Pencil, Search, Undo2 } from "lucide-react";
 import {
+  unseenVirtues,
+  statsEnabledFor,
+  pointsAvailable,
   avatarsOf,
   MAX_AVATARS,
   characterSchema,
@@ -203,7 +206,7 @@ type CharacterFormProps = {
    * The saved row, when editing. Carries the two things the form shows but
    * never writes -- adventures and therefore virtues, which are the server's.
    */
-  saved?: Pick<Character, "adventures" | "id" | "avatarUrl" | "avatarPrompt" | "avatars" | "createdAt">;
+  saved?: Pick<Character, "adventures" | "id" | "avatarUrl" | "avatarPrompt" | "avatars" | "createdAt" | "seenVirtues">;
 };
 
 export default function CharacterForm({
@@ -251,7 +254,10 @@ export default function CharacterForm({
   // character has been in is not something the form gets an opinion about.
   const statValues = statsOf({ stats: form.watch("stats") });
   const earned = pointsEarned(saved);
-  const available = earned + STARTING_POINTS - pointsSpent(statValues);
+  // pointsAvailable existed and this re-derived it. The override is what lets
+  // the card ask about the stored sheet and the form about the one being
+  // dragged around right now, from one function.
+  const available = pointsAvailable(saved ?? {}, statValues);
   const levels = virtueLevels(saved);
 
   const setStat = (stat: CharacterStat, value: number) => {
@@ -501,20 +507,61 @@ export default function CharacterForm({
    * being added here would be unreachable by the arrows and reachable by
    * clicking -- which is the kind of half-working nobody notices.
    */
+  /**
+   * Class names are written out IN FULL, never built from t.value.
+   *
+   * Tailwind's scanner only sees string literals: BookPage once composed its
+   * background class by interpolation and the whole colour picker silently did
+   * nothing for months, because the class was never emitted. ci.yml records it.
+   */
   const TABS = [
-    { value: "basics", label: "Basics" },
-    { value: "appearance", label: "Appearance" },
-    { value: "personality", label: "Personality" },
-    { value: "stats", label: "Statistics" },
-    { value: "virtues", label: "Virtues" },
-    ...(parentMode ? [{ value: "grown-ups", label: "Grown-ups" }] : []),
+    { value: "basics", label: "Basics", tint: "bg-tab-basics", edge: "border-t-tab-basics" },
+    { value: "appearance", label: "Appearance", tint: "bg-tab-appearance", edge: "border-t-tab-appearance" },
+    { value: "personality", label: "Personality", tint: "bg-tab-personality", edge: "border-t-tab-personality" },
+    // "Statistics" read as a record of things done, which is what Virtues
+    // actually is. These are what the character CAN do.
+    { value: "stats", label: "Stats", tint: "bg-tab-stats", edge: "border-t-tab-stats" },
+    { value: "virtues", label: "Virtues", tint: "bg-tab-virtues", edge: "border-t-tab-virtues" },
+    ...(parentMode
+      ? [{ value: "grown-ups", label: "Grown-ups", tint: "bg-tab-grown-ups", edge: "border-t-tab-grown-ups" }]
+      : []),
   ];
+  /**
+   * What the tab badges are counting.
+   *
+   * Stats stays quiet when the sheet is switched off -- a character nobody is
+   * levelling should not nag -- and when the total is negative, which a Parent
+   * Mode sheet can produce and which is not something to spend.
+   */
+  const unspent = statsEnabledFor({ statsEnabled: form.watch("statsEnabled") })
+    ? Math.max(0, available)
+    : 0;
+  const unseen = unseenVirtues(saved).length;
+
   const [tab, setTab] = useState("basics");
   // Parent Mode can be locked while the form is open, taking its tab with it.
   const tabIndex = Math.max(0, TABS.findIndex((t) => t.value === tab));
+  /**
+   * Opening the Virtues tab is what "seen" means.
+   *
+   * Fired from the tab change rather than a render effect so it cannot run for
+   * a tab nobody looked at, and guarded on there being something unseen so it
+   * is not a write on every visit.
+   */
+  const markVirtuesSeen = async () => {
+    if (!saved?.id || unseen === 0) return;
+    const res = await apiRequestAllowingErrors("PUT", `/api/characters/${saved.id}/virtues/seen`);
+    if (res.ok) void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+  };
+
+  const openTab = (next: string) => {
+    setTab(next);
+    if (next === "virtues") void markVirtuesSeen();
+  };
+
   const step = (by: number) => {
     const next = TABS[tabIndex + by];
-    if (next) setTab(next.value);
+    if (next) openTab(next.value);
   };
 
   const results = kindSearch ? searchKinds(kindSearch, 40) : [];
@@ -539,7 +586,7 @@ export default function CharacterForm({
               form state, so nothing is lost by switching between them
               mid-edit.
             */}
-            <Tabs value={tab} onValueChange={setTab} className="w-full">
+            <Tabs value={tab} onValueChange={openTab} className="w-full">
               {/*
                 FOLDER TABS. The default shadcn tab strip is a segmented control
                 -- a grey pill where only the selected item has a surface -- so
@@ -573,15 +620,43 @@ export default function CharacterForm({
                 </Button>
 
                 <TabsList className="flex-1 h-auto flex-wrap justify-start gap-1 rounded-none border-b border-border bg-transparent p-0 pt-1">
-                  {TABS.map((t) => (
-                    <TabsTrigger
-                      key={t.value}
-                      value={t.value}
-                      className="relative z-10 -mb-px rounded-b-none rounded-t-md border border-border border-b-transparent bg-muted/60 px-3 py-1.5 text-muted-foreground data-[state=active]:border-b-card data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-none"
-                    >
-                      {t.label}
-                    </TabsTrigger>
-                  ))}
+                  {TABS.map((t) => {
+                    const count = t.value === "stats" ? unspent : t.value === "virtues" ? unseen : 0;
+                    return (
+                      <TabsTrigger
+                        key={t.value}
+                        value={t.value}
+                        className={cn(
+                          "relative z-10 -mb-px rounded-b-none rounded-t-md border border-t-2 border-border border-b-transparent px-3 py-1.5 text-foreground data-[state=active]:border-b-card data-[state=active]:bg-card data-[state=active]:shadow-none",
+                          // Its own colour when it is one of the closed folders,
+                          // and the same colour as a top edge when it is the
+                          // open one -- which has to stay bg-card, because that
+                          // is what joins it to the panel below.
+                          t.tint,
+                          t.edge,
+                        )}
+                      >
+                        {t.label}
+                        {count > 0 && (
+                          <span
+                            className={cn(
+                              "absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none",
+                              // Red for "there is something here". destructive is
+                              // the only red that follows all four palettes, and
+                              // an attention red sharing a token with a danger
+                              // red is the ordinary convention -- it is not
+                              // saying this is dangerous.
+                              t.value === "stats"
+                                ? "bg-destructive text-destructive-foreground"
+                                : "bg-tab-virtues text-foreground ring-1 ring-border",
+                            )}
+                          >
+                            {count}
+                          </span>
+                        )}
+                      </TabsTrigger>
+                    );
+                  })}
                 </TabsList>
 
                 <Button
@@ -789,7 +864,7 @@ export default function CharacterForm({
                                 // gets: the tooltip is a hover affordance and
                                 // the button has no text of its own.
                                 aria-label="Generate random name"
-                                className="shrink-0 bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-400"
+                                className="shrink-0 bg-action text-action-foreground hover:bg-action/90 focus-visible:ring-action"
                               >
                                 <RefreshCw className="h-4 w-4" />
                               </Button>

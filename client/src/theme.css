@@ -202,6 +202,104 @@ header h1 {
  * ---------------------------------------------------------------------- */
 
 /* ------------------------------------------------------------------------
+ * A hue per tab on the character sheet.
+ *
+ * The tabs all shared bg-muted/60, and --muted is identical to --card in every
+ * palette, so an unselected tab read as "slightly veiled card" and six of them
+ * were indistinguishable but for the label.
+ *
+ * SURFACES, never text colours -- the label on them is --muted-foreground, and
+ * the theme test checks it clears AA on every tint in every palette, plus that
+ * each tint separates from the card so the strip does not collapse back into
+ * one colour.
+ *
+ * WRITTEN OUT IN FULL, twenty-four values, and that is deliberate. The compact
+ * version -- one hue angle per tab plus a saturation/lightness knob per palette
+ * -- cannot be composed in CSS in a form tests/theme.test.ts can parse: it
+ * reads bare "H S% L%" triplets and nothing else, so hsl(var(--h) var(--s)
+ * var(--l)) would be invisible to every assertion in the file. An unreadable
+ * tab in Night would have shipped green. The hue is still constant across
+ * palettes so a tab keeps its colour when the theme changes; only the
+ * saturation and lightness move.
+ * ---------------------------------------------------------------------- */
+
+:root,
+[data-palette="paper"] {
+  /* soft and a shade under the near-white card */
+  --tab-basics: 205 34% 83%;
+  --tab-appearance: 275 34% 83%;
+  --tab-personality: 25 34% 83%;
+  --tab-stats: 150 34% 83%;
+  --tab-virtues: 45 34% 83%;
+  --tab-grown-ups: 0 34% 83%;
+}
+
+[data-palette="sepia"] {
+  /* warmer and deeper, so a tint reads against a cream card */
+  --tab-basics: 205 30% 77%;
+  --tab-appearance: 275 30% 77%;
+  --tab-personality: 25 30% 77%;
+  --tab-stats: 150 30% 77%;
+  --tab-virtues: 45 30% 77%;
+  --tab-grown-ups: 0 30% 77%;
+}
+
+[data-palette="night"] {
+  /* dark tints -- a pale tab on this palette would be the brightest thing on screen */
+  --tab-basics: 205 33% 27%;
+  --tab-appearance: 275 33% 27%;
+  --tab-personality: 25 33% 27%;
+  --tab-stats: 150 33% 27%;
+  --tab-virtues: 45 33% 27%;
+  --tab-grown-ups: 0 33% 27%;
+}
+
+[data-palette="contrast"] {
+  /* muted enough that black label text still clears AA on every one */
+  --tab-basics: 205 43% 88.5%;
+  --tab-appearance: 275 43% 88.5%;
+  --tab-personality: 25 43% 88.5%;
+  --tab-stats: 150 43% 88.5%;
+  --tab-virtues: 45 43% 88.5%;
+  --tab-grown-ups: 0 43% 88.5%;
+}
+
+/* ------------------------------------------------------------------------
+ * --action: a button that DOES something rather than submitting.
+ *
+ * Blake asked for the reroll-a-name button to be blue. Written as bg-blue-600
+ * that is a guess about the background -- it fails the CI hardcoded-colour
+ * gate, and it is the same colour in Night, where it becomes the brightest
+ * thing on a dark page. So: blue per palette, with its own foreground, and the
+ * pair checked like every other.
+ * ---------------------------------------------------------------------- */
+
+:root,
+[data-palette="paper"] {
+  /* blue against a warm page, so the reroll reads as an action */
+  --action: 216 60% 42%;
+  --action-foreground: 0 0% 100%;
+}
+
+[data-palette="sepia"] {
+  /* deeper, or it disappears into the cream */
+  --action: 214 58% 38%;
+  --action-foreground: 0 0% 100%;
+}
+
+[data-palette="night"] {
+  /* light on dark, with a dark label -- the palette's own inversion */
+  --action: 214 70% 66%;
+  --action-foreground: 220 12% 10%;
+}
+
+[data-palette="contrast"] {
+  /* near-navy, the only blue that clears AA on white here */
+  --action: 220 100% 28%;
+  --action-foreground: 0 0% 100%;
+}
+
+/* ------------------------------------------------------------------------
  * Semantic colours.
  *
  * Warning and success had no token at all, so amber and green were hardcoded

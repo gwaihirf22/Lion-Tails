@@ -752,6 +752,16 @@ export const characterSchema = z.object({
    * and the virtues are the same list, so a virtue level is just how many
    * entries here carry that theme. No matching, and nothing to drift.
    */
+  /**
+   * Virtues already shown to whoever owns this character. Server-owned.
+   *
+   * It is the read-receipt for a notification badge, so a client that could
+   * write it could silence its own badge -- and more to the point it is
+   * derived from adventures, which the client cannot write either. Set by
+   * PUT /api/characters/:id/virtues/seen, from the row, never from a body.
+   */
+  seenVirtues: z.array(z.string()).optional(),
+
   adventures: z
     .array(
       z.object({
@@ -884,8 +894,19 @@ export function pointsEarned(c?: { adventures?: Character["adventures"] } | null
 }
 
 /** Spare points left to spend. May be negative only if a sheet was written by Parent Mode. */
-export function pointsAvailable(c: { stats?: CharacterStats; adventures?: Character["adventures"] }): number {
-  return pointsEarned(c) + STARTING_POINTS - pointsSpent(statsOf(c));
+export function pointsAvailable(
+  c: { stats?: CharacterStats; adventures?: Character["adventures"] },
+  /**
+   * The sheet to measure, when it is not the one on the row.
+   *
+   * The form asks this about stats the user is dragging around right now while
+   * the card asks it about what is stored, and they were two different sums --
+   * this function existed and the form re-derived it inline anyway. One
+   * definition, two callers, and the difference is a parameter.
+   */
+  stats: CharacterStats = statsOf(c),
+): number {
+  return pointsEarned(c) + STARTING_POINTS - pointsSpent(stats);
 }
 
 /**
@@ -918,6 +939,25 @@ export function virtueLevels(c?: { adventures?: Character["adventures"] } | null
     levels[theme] = (levels[theme] ?? 0) + 1;
   }
   return levels;
+}
+
+/**
+ * Virtues this character has earned that nobody has looked at yet.
+ *
+ * Compared on the SAME normalised key virtueLevels builds -- it lowercases and
+ * trims, because a theme is stored verbatim from whatever the story form sent.
+ * Comparing raw strings would leave "Courage" permanently unseen against a
+ * stored "courage", and the badge would never go out.
+ *
+ * A character with no seenVirtues has genuinely never had them looked at, so
+ * they all count as new. That is one badge on an existing character, cleared
+ * the first time the tab is opened -- better than pretending they were read.
+ */
+export function unseenVirtues(
+  c?: { adventures?: Character["adventures"]; seenVirtues?: string[] } | null,
+): string[] {
+  const seen = new Set((c?.seenVirtues ?? []).map((v) => v.trim().toLowerCase()));
+  return Object.keys(virtueLevels(c)).filter((v) => !seen.has(v));
 }
 
 /**

@@ -358,6 +358,42 @@ directory and is the right path: the parent is the mount point of the
 `story_images` volume, so anything written there survives a redeploy and
 anything written beside it does not.
 
+## The character sheet's tabs and badges
+
+Two badges say there is something waiting, because nobody opens a tab to find
+out whether it has anything in it:
+
+- **Stats** (renamed from "Statistics", which read as a record of things done —
+  that is what Virtues is): `pointsAvailable()` above zero, and only when the
+  sheet is switched on. That helper already existed and `CharacterForm` was
+  re-deriving it inline; it now takes an optional live sheet, so the form and
+  the card ask one function.
+- **Virtues**: `unseenVirtues()`. `seenVirtues` is **server-owned** — omitted
+  from all three write schemas, and `PUT /api/characters/:id/virtues/seen`
+  computes the list from the row rather than the body. A client that could
+  write it could silence its own badge, and virtues derive from `adventures`,
+  which the client cannot write either. Both compare on the lowercased, trimmed
+  key `virtueLevels()` builds, or "Courage" would sit unseen against a stored
+  "courage" for ever.
+
+A character with no `seenVirtues` shows a badge once. That is deliberate: those
+virtues genuinely have not been looked at, and pretending otherwise is worse
+than one badge.
+
+**`--tab-*` is twenty-four hand-written values and that is on purpose.** The
+compact version — a hue per tab plus a saturation/lightness knob per palette —
+cannot be composed in CSS in a form `tests/theme.test.ts` can read: it parses
+bare `H S% L%` triplets and nothing else, so `hsl(var(--h) var(--s) var(--l))`
+would be invisible to every assertion in the file and an unreadable tab in
+Night would ship green. The hue stays constant across palettes so a tab keeps
+its colour when the theme changes; only saturation and lightness move. Class
+names are written out in full, never interpolated — see `ci.yml` on the colour
+picker that did nothing for months.
+
+`--action` is the blue reroll button. It was `bg-blue-600`, which failed the
+CI hardcoded-colour gate and would have been the brightest thing on the page in
+Night.
+
 ## Heroes of Faith data
 
 Eighty hand-written profiles in `server/data/heroes/`, one file per era, two

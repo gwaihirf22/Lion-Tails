@@ -1,4 +1,7 @@
-import { type Character, characterKind } from "@shared/schema";
+import {
+  unseenVirtues,
+  statsEnabledFor,
+  pointsAvailable, type Character, characterKind } from "@shared/schema";
 import { coveringNoun } from "@shared/characterVocab";
 import CharacterAvatar from "./CharacterAvatar";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +30,10 @@ export default function CharacterCard({
   // The covering noun follows what they are, so a dragon's card says "Scales"
   // where a child's says "Hair". A character saved before categories existed
   // has none, and falls through to "hair" exactly as the story prompt does.
+  // Stats switched off means nothing to spend, not a badge saying otherwise.
+  const unspent = statsEnabledFor(character) ? Math.max(0, pointsAvailable(character)) : 0;
+  const unseen = unseenVirtues(character).length;
+
   const rows = ([
     [title(coveringNoun(character.category, kind)), character.hair],
     ["Eyes", character.eyes],
@@ -44,10 +51,38 @@ export default function CharacterCard({
             <CharacterAvatar character={character} size="md" />
             <CardTitle className="text-xl truncate">{character.name}</CardTitle>
           </div>
-          {/* Whatever they are. The badge used to read the gender and print
-              "Girl" for anything that was not the string "boy" -- which, once a
-              character could be a dragon, was most of them. */}
-          {kind && <Badge variant="secondary" className="shrink-0">{title(kind)}</Badge>}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/*
+              Two counts, so the card says what is waiting without being opened
+              -- which is the whole point: nobody opens a tab to find out
+              whether it has anything in it.
+              
+              The colours are the tabs they send you to: red for points to
+              spend, the Virtues tab's own tint for virtues nobody has looked
+              at. Both are tokens; a literal here would look right in Paper and
+              wrong everywhere else.
+            */}
+            {unspent > 0 && (
+              <span
+                title={`${unspent} point${unspent === 1 ? "" : "s"} to spend`}
+                className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-semibold text-destructive-foreground"
+              >
+                {unspent}
+              </span>
+            )}
+            {unseen > 0 && (
+              <span
+                title={`${unseen} new virtue${unseen === 1 ? "" : "s"}`}
+                className="flex h-5 min-w-5 items-center justify-center rounded-full bg-tab-virtues px-1.5 text-xs font-semibold text-foreground ring-1 ring-border"
+              >
+                {unseen}
+              </span>
+            )}
+            {/* Whatever they are. The badge used to read the gender and print
+                "Girl" for anything that was not the string "boy" -- which, once
+                a character could be a dragon, was most of them. */}
+            {kind && <Badge variant="secondary">{title(kind)}</Badge>}
+          </div>
         </div>
         {character.age != null && (
           <CardDescription className="flex items-center gap-1">

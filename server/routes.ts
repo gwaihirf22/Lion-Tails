@@ -58,6 +58,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import {
   MAX_AVATARS,
+  virtueLevels,
   avatarsOf, storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
@@ -136,6 +137,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     avatarUrl: true,
     avatarPrompt: true,
     avatars: true,
+    // The read-receipt for a badge. A client that could write it could
+    // silence its own notification.
+    seenVirtues: true,
     // Derived from `kind` below, never taken from the client: a body claiming
     // {kind: "dragon", category: "human"} would otherwise pick the human
     // colour lists to validate against.
@@ -215,7 +219,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.user as any).id;
       const parsed = characterSchema
         .omit({ id: true, createdAt: true, customFields: true, adventures: true,
-                 avatarUrl: true, avatarPrompt: true, avatars: true })
+                 avatarUrl: true, avatarPrompt: true, avatars: true,
+                 seenVirtues: true })
         .parse(req.body);
 
       const customFields = Object.keys(parsed).filter((k) => k !== "category");
@@ -298,7 +303,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // fetches a child's picture from.
       const updates = characterSchema
         .omit({ id: true, createdAt: true, customFields: true, adventures: true,
-                 avatarUrl: true, avatarPrompt: true, avatars: true })
+                 avatarUrl: true, avatarPrompt: true, avatars: true,
+                 seenVirtues: true })
         .partial()
         .parse(req.body);
 
@@ -467,6 +473,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error generating character avatar:", error);
       res.status(500).json({ message: "Failed to generate a picture" });
+    }
+  });
+
+  /**
+   * Mark this character's virtues as looked at.
+   *
+   * The list is computed HERE, from the row, and never taken from the body:
+   * virtues are derived from adventures, which are server-owned, so letting a
+   * request name what it had seen would let it acknowledge a virtue that does
+   * not exist -- and then a real one arriving with the same name would never
+   * badge.
+   */
+  app.put("/api/characters/:id/virtues/seen", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const character = await storage.getCharacterById(req.params.id, userId);
+      if (!character) return res.status(404).json({ message: "Character not found" });
+
+      const updated = await storage.updateCharacter(req.params.id, userId, {
+        seenVirtues: Object.keys(virtueLevels(character)),
+      });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error marking virtues seen:", error);
+      res.status(500).json({ message: "Failed to update this character" });
     }
   });
 
