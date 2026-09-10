@@ -71,7 +71,7 @@ export default function Characters() {
       setIsCreating(false);
       toast({
         title: "Character created!",
-        description: "Your character is ready for time travel adventures.",
+        description: "Your character is ready for a quest with the Timekeeper.",
       });
     },
     onError: (error) => {
@@ -186,7 +186,7 @@ export default function Characters() {
             <DialogHeader>
               <DialogTitle>Create a New Character</DialogTitle>
               <DialogDescription>
-                Design your time traveler to journey through biblical stories
+                Design a character for stories of their own, and for quests with the Timekeeper
               </DialogDescription>
             </DialogHeader>
             <CharacterForm 
@@ -226,7 +226,7 @@ export default function Characters() {
         <div className="text-center py-12 border rounded-lg bg-muted/10">
           <h3 className="text-xl font-medium mb-2">No characters yet</h3>
           <p className="text-muted-foreground mb-4">
-            Create your first time traveler to take on adventures through Bible stories
+            Create your first character -- for stories of their own, and for quests with the Timekeeper
           </p>
           <Button onClick={() => setIsCreating(true)}>
             Create Your First Character
@@ -240,7 +240,7 @@ export default function Characters() {
           <DialogHeader>
             <DialogTitle>Edit Character</DialogTitle>
             <DialogDescription>
-              Update your time traveler's details
+              Update your character's details
             </DialogDescription>
           </DialogHeader>
           {editingCharacter && (

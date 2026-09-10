@@ -275,8 +275,8 @@ export default function AuthPage() {
               <p className="text-sm">Explore stories about heroes of faith</p>
             </div>
             <div className="bg-card rounded-lg p-4 shadow-sm">
-              <h3 className="font-semibold">Time Travel</h3>
-              <p className="text-sm">Create characters who travel to biblical times</p>
+              <h3 className="font-semibold">Quests with the Timekeeper</h3>
+              <p className="text-sm">Your character, and a lantern that opens onto the stories that must not be forgotten</p>
             </div>
           </div>
         </div>

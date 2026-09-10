@@ -27,6 +27,7 @@ type StoryContext = {
   resolved: ResolvedModel;
 };
 import { getBibleVerseByTheme } from "../data/bibleVerses";
+import { DEVICE, KEEPER } from "../data/lionTails";
 import { storage } from "../storage";
 import {
   StoryGenerationError,
@@ -995,10 +996,15 @@ async function runGeneration(
        * of a traveller and misleading about a character who was written into
        * the account as having been there all along -- the invention there is
        * the PERSON, not an encounter.
+       *
+       * A quest names the Timekeeper and the lantern as invented too, from
+       * the same object the prompt read them from. This is the line between a
+       * fun story about Caleb and a child thinking Barnabas is in the Bible,
+       * and it is a disclaimer, not flavour: it stays plain.
        */
       const invented =
         role === "travels"
-          ? ` ${who} was added so it could be told as an adventure -- the journey and that meeting are made up.`
+          ? ` ${who} was added so it could be told as a quest -- ${KEEPER.name}, ${KEEPER.title}, ${DEVICE.name}, the journey and that meeting are all made up.`
           : ` ${who} is invented. Nobody like them was there; everything that happens around them is what the account records.`;
       finalDetails.content +=
         `\n\n${MEETING_NOTE_HEADING} ${account.label} really lived, and what happens ` +

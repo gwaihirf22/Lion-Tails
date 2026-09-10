@@ -25,6 +25,7 @@ import {
   Code2
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { ROLE_OPTIONS } from "@/lib/characterRole";
 import { characterIdsOf, characterRoleOf, readingLevelAges, type Character, type StoryRequest } from "@shared/schema";
 
 interface PromptEditorProps {
@@ -129,8 +130,8 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
       // whose explicit mode said otherwise -- the exact contradiction the one
       // field exists to make impossible.
       const role = characterRoleOf(storyRequest);
-      if (role === "travels") prompt += `How they get there: they travel to it\n`;
-      if (role === "alongside") prompt += `How they get there: they were always there\n`;
+      // The same words the radio shows -- one definition, not a paraphrase.
+      if (role !== "absent") prompt += `How they get there: ${ROLE_OPTIONS[role].label}\n`;
       if (storyRequest.biblePassage) prompt += `Bible Passage: ${storyRequest.biblePassage}\n`;
       if (storyRequest.biblicalEvent) prompt += `Biblical Event: ${storyRequest.biblicalEvent}\n`;
       
