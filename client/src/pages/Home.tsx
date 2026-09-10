@@ -89,7 +89,7 @@ export default function Home() {
             loading="lazy"
           />
           <p className="text-lg max-w-2xl mx-auto">
-            Every story starts at the keeper&rsquo;s shop. Mr Barnabas knows what the
+            Visit the Timekeeper: Every story starts at the keeper&rsquo;s shop. Mr Barnabas knows what the
             lantern does and never quite explains it &mdash; he just opens the door,
             and the people you have made walk through it into something that really
             happened.
