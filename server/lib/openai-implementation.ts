@@ -37,6 +37,10 @@ import {
 } from "./storyErrors";
 import { resolveModel, createClient, type ResolvedModel , tokenLimitFor, temperatureFor } from "./modelPolicy";
 import { newGenerationId, recordGeneration } from "./generationRecords";
+import {
+  MEETING_NOTE_HEADING,
+  FURTHER_LEARNING_HEADING,
+} from "./storyAppendices";
 import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
@@ -1000,9 +1004,9 @@ async function runGeneration(
         (who ? invented : "");
     }
 
-    if (!finalDetails.content.includes("For Further Learning")) {
+    if (!finalDetails.content.includes(FURTHER_LEARNING_HEADING)) {
       finalDetails.content +=
-        "\n\n**For Further Learning:**\n\n- **BibleGateway.com** - Read Bible stories.\n- **GotQuestions.org** - Find answers about faith.";
+        `\n\n${FURTHER_LEARNING_HEADING}\n\n- **BibleGateway.com** - Read Bible stories.\n- **GotQuestions.org** - Find answers about faith.`;
     }
 
     // A retelling gets ITS OWN verse -- the one the account turns on -- rather
@@ -1166,7 +1170,9 @@ function buildDebugHeader(
 // =========================================================================
 
 /** Matched before appending, so a regenerated story cannot collect two. */
-const MEETING_NOTE_HEADING = "**About this story:**";
+// Moved to ./storyAppendices, which is the one place that knows what the
+// server adds -- so the universe summariser can strip what it adds without
+// holding a second copy of the strings.
 
 export async function generateStoryImage(
   imagePrompt: string,

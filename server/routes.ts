@@ -26,6 +26,7 @@ import {
   resolveHeroOfFaith,
   serialiseBrief,
 } from "./lib/storyBrief";
+import { listBiblicalEvents } from "./data/biblicalEvents";
 import { getWordCountFromLength , generateStoryImage } from "./lib/openai-implementation";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
@@ -1641,6 +1642,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // initialisation and silently seeded into memory.
   
   // Get all heroes of faith
+  /**
+   * The biblical events the source picker offers.
+   *
+   * Static and public, like the heroes list beneath it. No auth: the labels
+   * are on the form for anyone who loads it, and gating them would only mean
+   * the picker renders empty for a signed-out visitor.
+   */
+  app.get("/api/biblical-events", (_req, res) => {
+    res.json(listBiblicalEvents());
+  });
+
   app.get("/api/heroes", async (req, res) => {
     try {
       const heroes = await storage.getAllHeroesOfFaith();

@@ -340,6 +340,30 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
  * the empty string, and anything unrecognised -- the caller then falls back to
  * ordinary story generation rather than to a half-anchored prompt.
  */
+/**
+ * What the PICKER needs, and deliberately nothing else.
+ *
+ * The label and the passage, so a person can find "the twelve spies" by
+ * searching for spies or for Numbers. The anchor and the cautions stay on the
+ * server: they are prompt material, they are the bulk of this file, and
+ * shipping them would put thirty kilobytes of instructions-to-the-model into
+ * the browser to render seventeen lines of text.
+ *
+ * This exists because the seventeen labels were hardcoded a second time inside
+ * StoryForm as SelectItems -- a list that had to be edited in two places and
+ * where a slug getBiblicalEvent() does not recognise falls silently through to
+ * a premise line naming the raw slug.
+ */
+export type BiblicalEventOption = { id: string; label: string; passage: string };
+
+export function listBiblicalEvents(): BiblicalEventOption[] {
+  return Object.entries(BIBLICAL_EVENTS).map(([id, e]) => ({
+    id,
+    label: e.label,
+    passage: e.passage,
+  }));
+}
+
 export function getBiblicalEvent(slug: string | undefined): BiblicalEvent | undefined {
   if (!slug) return undefined;
   const key = slug.trim();
