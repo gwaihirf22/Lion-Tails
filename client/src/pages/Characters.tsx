@@ -74,8 +74,12 @@ export default function Characters() {
       saveCharacter(values, custom, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/characters'] });
-      setIsEditing(false);
-      setEditingCharacter(null);
+      // The dialog STAYS OPEN. Saving is not finishing: a character is built
+      // across five tabs, and closing the card on save meant reopening it to
+      // carry on -- and reopening it is also the only way to reach the picture
+      // button, which needs a saved id to exist. The Save button greys itself
+      // out until something changes again, so it is still obvious there is
+      // nothing left to save. Closing is the user's to decide.
       toast({
         title: "Character updated!",
         description: "Your character has been successfully updated.",
@@ -124,7 +128,7 @@ export default function Characters() {
 
   const handleUpdateCharacter = (values: CharacterFormValues, custom: boolean) => {
     if (editingCharacter) {
-      updateMutation.mutate({ id: editingCharacter.id, values, custom });
+      return updateMutation.mutateAsync({ id: editingCharacter.id, values, custom });
     }
   };
 

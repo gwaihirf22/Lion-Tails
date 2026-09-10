@@ -56,7 +56,7 @@ import { Badge } from "@/components/ui/badge";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, RefreshCw } from "lucide-react";
+import { Loader2, Sparkles, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -180,7 +180,12 @@ type CharacterFormProps = {
    * sends the save to the Parent Mode route. The page decides the endpoint; the
    * form only reports how the values were arrived at.
    */
-  onSubmit: (data: CharacterFormValues, custom: boolean) => void;
+  /**
+   * May return a promise. When it does, the form waits for it and then treats
+   * its own values as the saved ones, which is what lets the Save button go
+   * quiet without the dialog closing to prove the save happened.
+   */
+  onSubmit: (data: CharacterFormValues, custom: boolean) => void | Promise<unknown>;
   loading?: boolean;
   initialCharacter?: Partial<CharacterFormValues>;
   /**
@@ -276,7 +281,19 @@ export default function CharacterForm({
     return false;
   };
 
-  const submit = (values: CharacterFormValues) => onSubmit(values, isCustom(values));
+  const submit = async (values: CharacterFormValues) => {
+    try {
+      await onSubmit(values, isCustom(values));
+      // Reset TO THE SUBMITTED VALUES, not to the initial ones: this is what
+      // clears isDirty, and it is why the button can grey out while the card
+      // stays open. Only on success -- a failed save must stay dirty, or the
+      // button goes quiet on work that was never stored.
+      form.reset(values, { keepDefaultValues: false });
+    } catch {
+      // The parent's mutation already toasts. Swallowed here so the promise
+      // rejection does not go unhandled, and so the form stays dirty.
+    }
+  };
 
   /**
    * One list-backed field, with the Parent Mode pencil already attached.
@@ -359,6 +376,48 @@ export default function CharacterForm({
     }
   };
 
+  /**
+   * Their portrait. Shown on Basics AND on Appearance.
+   *
+   * Blake wants to see it in both places -- Basics is where you meet the
+   * character, Appearance is where you decide what they look like and so where
+   * the button that draws them belongs. A function returning jsx, not a nested
+   * component: see the note on vocabField about identity changing every render.
+   */
+  const portrait = (size: "md" | "lg") => (
+    <CharacterAvatar
+      size={size}
+      character={{
+        name: form.watch("name") || "This character",
+        kind, category, gender: form.watch("gender"),
+        avatarUrl: form.watch("avatarUrl"),
+      }}
+    />
+  );
+
+  /**
+   * The tabs, in order, and the only definition of that order.
+   *
+   * The arrows step through THIS array, so a tab added to the list without
+   * being added here would be unreachable by the arrows and reachable by
+   * clicking -- which is the kind of half-working nobody notices.
+   */
+  const TABS = [
+    { value: "basics", label: "Basics" },
+    { value: "appearance", label: "Appearance" },
+    { value: "personality", label: "Personality" },
+    { value: "stats", label: "Statistics" },
+    { value: "virtues", label: "Virtues" },
+    ...(parentMode ? [{ value: "grown-ups", label: "Grown-ups" }] : []),
+  ];
+  const [tab, setTab] = useState("basics");
+  // Parent Mode can be locked while the form is open, taking its tab with it.
+  const tabIndex = Math.max(0, TABS.findIndex((t) => t.value === tab));
+  const step = (by: number) => {
+    const next = TABS[tabIndex + by];
+    if (next) setTab(next.value);
+  };
+
   const results = kindSearch ? searchKinds(kindSearch, 40) : [];
 
   return (
@@ -381,54 +440,63 @@ export default function CharacterForm({
               form state, so nothing is lost by switching between them
               mid-edit.
             */}
-            <Tabs defaultValue="basics" className="w-full">
-              <TabsList className="w-full justify-start flex-wrap h-auto">
-                <TabsTrigger value="basics">Basics</TabsTrigger>
-                <TabsTrigger value="appearance">Appearance</TabsTrigger>
-                <TabsTrigger value="personality">Personality</TabsTrigger>
-                <TabsTrigger value="stats">Statistics</TabsTrigger>
-                <TabsTrigger value="virtues">Virtues</TabsTrigger>
-                {parentMode && <TabsTrigger value="grown-ups">Grown-ups</TabsTrigger>}
-              </TabsList>
+            <Tabs value={tab} onValueChange={setTab} className="w-full">
+              {/*
+                FOLDER TABS. The default shadcn tab strip is a segmented control
+                -- a grey pill where only the selected item has a surface -- so
+                the unselected ones read as plain text and the strip does not
+                read as tabs at all.
+
+                Each trigger carries its own border and a rounded top, so an
+                unselected tab is still visibly a tab. The selected one takes
+                the card's background, loses its bottom border and is pulled
+                down a pixel over the strip's own border, which is what joins it
+                to the panel below and makes it read as the front folder.
+              */}
+              <div className="flex items-stretch gap-1">
+                <Button
+                  type="button" variant="ghost" size="icon"
+                  className="shrink-0 self-end mb-[3px]"
+                  onClick={() => step(-1)}
+                  disabled={tabIndex === 0}
+                  aria-label="Previous tab"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <TabsList className="flex-1 h-auto flex-wrap justify-start gap-1 rounded-none border-b border-border bg-transparent p-0 pt-1">
+                  {TABS.map((t) => (
+                    <TabsTrigger
+                      key={t.value}
+                      value={t.value}
+                      className="relative -mb-px rounded-b-none rounded-t-md border border-border border-b-transparent bg-muted/60 px-3 py-1.5 text-muted-foreground data-[state=active]:border-b-card data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                    >
+                      {t.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                <Button
+                  type="button" variant="ghost" size="icon"
+                  className="shrink-0 self-end mb-[3px]"
+                  onClick={() => step(1)}
+                  disabled={tabIndex >= TABS.length - 1}
+                  aria-label="Next tab"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
 
             <TabsContent value="basics" className="space-y-5 pt-4">
-              {/* Their picture, or a stand-in for one until the avatar work
-                  lands. Here and on the card, which is the minimum. */}
+              {/* Display only here. The button that makes it lives on
+                  Appearance, next to the fields it draws from. */}
               <div className="flex items-center gap-4">
-                <CharacterAvatar
-                  size="lg"
-                  character={{
-                    name: form.watch("name") || "This character",
-                    kind, category, gender: form.watch("gender"),
-                    avatarUrl: form.watch("avatarUrl"),
-                  }}
-                />
-                <div className="space-y-2">
-                  {saved?.id ? (
-                    <>
-                      <Button type="button" variant="outline" size="sm"
-                              onClick={makeAvatar} disabled={drawing}>
-                        {drawing
-                          ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Drawing…</>
-                          : <><Sparkles className="mr-2 h-4 w-4" />
-                              {form.watch("avatarUrl") ? "Draw a new picture" : "Make a picture"}</>}
-                      </Button>
-                      <p className="text-xs text-muted-foreground">
-                        {drawing
-                          ? "This takes about half a minute."
-                          : remaining === null
-                            ? "Drawn from what they look like — fill in Appearance first, or describe them under Grown-ups."
-                            : `${remaining} free ${remaining === 1 ? "picture" : "pictures"} left.`}
-                      </p>
-                    </>
-                  ) : (
-                    // No id yet, so there is nothing to attach a picture TO.
-                    // Saying why beats a button that fails.
-                    <p className="text-sm text-muted-foreground">
-                      Save them first, then you can make a picture.
-                    </p>
-                  )}
-                </div>
+                {portrait("lg")}
+                <p className="text-sm text-muted-foreground">
+                  {form.watch("avatarUrl")
+                    ? "You can draw them again on the Appearance tab."
+                    : "No picture yet — make one on the Appearance tab."}
+                </p>
               </div>
 
             {/* ---- What are they? The one question worth asking first. ---- */}
@@ -660,6 +728,36 @@ export default function CharacterForm({
             </TabsContent>
 
             <TabsContent value="appearance" className="space-y-4 pt-4">
+              <div className="flex items-center gap-4 rounded-lg border border-border bg-muted/40 p-4">
+                {portrait("lg")}
+                <div className="space-y-2">
+                  {saved?.id ? (
+                    <>
+                      <Button type="button" variant="outline" size="sm"
+                              onClick={makeAvatar} disabled={drawing}>
+                        {drawing
+                          ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Drawing…</>
+                          : <><Sparkles className="mr-2 h-4 w-4" />
+                              {form.watch("avatarUrl") ? "Draw a new picture" : "Make a picture"}</>}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        {drawing
+                          ? "This takes about half a minute."
+                          : remaining === null
+                            ? "Drawn from the fields below, or from how you describe them under Grown-ups."
+                            : `${remaining} free ${remaining === 1 ? "picture" : "pictures"} left.`}
+                      </p>
+                    </>
+                  ) : (
+                    // No id yet, so there is nothing to attach a picture TO.
+                    // Saying why beats a button that fails.
+                    <p className="text-sm text-muted-foreground">
+                      Save them first, then you can make a picture.
+                    </p>
+                  )}
+                </div>
+              </div>
+
               <div className="grid md:grid-cols-2 gap-4">
                   {vocabField("hair", `${title(covering)} colour`)}
                   {vocabField("eyes", "Eye colour")}
@@ -955,8 +1053,18 @@ export default function CharacterForm({
           </CardContent>
 
           <CardFooter>
-            <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "Saving…" : initialCharacter ? "Save changes" : "Create character"}
+            <Button
+              type="submit"
+              disabled={loading || (Boolean(saved?.id) && !form.formState.isDirty)}
+              className="w-full"
+            >
+              {loading
+                ? "Saving…"
+                : !initialCharacter
+                  ? "Create character"
+                  : form.formState.isDirty
+                    ? "Save changes"
+                    : "Saved"}
             </Button>
           </CardFooter>
         </Card>
