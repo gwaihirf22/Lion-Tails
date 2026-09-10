@@ -23,6 +23,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+/**
+ * The surface each badge sits on, as WHOLE class names.
+ *
+ * Never `ring-${x}`: Tailwind's scanner only sees string literals, so an
+ * interpolated class emits no rule and the ring silently does not exist.
+ * ci.yml records a colour picker that did nothing for months for this reason.
+ */
+const RING = {
+  header: "ring-header",
+  popover: "ring-popover",
+  card: "ring-card",
+} as const;
+
 export default function Header() {
   const [location] = useLocation();
   const isMobile = useIsMobile();
@@ -65,27 +78,48 @@ export default function Header() {
    * `onDark` is the bar itself, where the ring has to be the bar's colour --
    * ring-border is a page-surface hairline and disappears against it.
    */
-  const alertBubbles = (onDark: boolean) =>
-    waiting > 0 ? (
-      <span className="absolute -right-1.5 -top-1.5 z-10 flex items-center -space-x-1">
-        {alerts.unspent > 0 && (
-          <span
-            title={`${alerts.unspent} Attribute/Skill point${alerts.unspent === 1 ? "" : "s"} to spend`}
-            className={`flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-none text-destructive-foreground ${onDark ? "ring-2 ring-header" : "ring-2 ring-card"}`}
-          >
-            {alerts.unspent}
-          </span>
-        )}
-        {alerts.unseen > 0 && (
-          <span
-            title={`${alerts.unseen} new virtue${alerts.unseen === 1 ? "" : "s"} to look at`}
-            className={`flex h-4 min-w-4 items-center justify-center rounded-full bg-tab-virtues px-1 text-[10px] font-semibold leading-none text-foreground ${onDark ? "ring-2 ring-header" : "ring-2 ring-card"}`}
-          >
-            {alerts.unseen}
-          </span>
-        )}
+  /**
+   * The bubbles, placed for the surface they sit on.
+   *
+   * "corner" hangs them off the top-right of a nav PILL, matching the cards and
+   * the character tabs. That only works where nothing clips: the nav list needs
+   * overflow-x-clip for it, and DropdownMenuContent is overflow-hidden, so a
+   * corner badge in the More menu is simply invisible.
+   *
+   * "row" is for the two full-width menus. A badge hanging off the corner of a
+   * full-width row would sit half outside the menu, so it is pinned to the end
+   * of the row and centred instead -- which is how an unread count reads in a
+   * menu anyway.
+   *
+   * The ring is always the surface BEHIND them, never a fixed colour: the bar,
+   * the popover and the sheet are three different colours and a hairline that
+   * guessed would vanish on at least one. That is the mistake .nav-text made.
+   */
+  const alertBubbles = (place: "corner" | "row", ring: keyof typeof RING) => {
+    if (waiting === 0) return null;
+    const dot = (count: number, tone: string, what: string) => (
+      <span
+        title={`${count} ${what}${count === 1 ? "" : "s"}`}
+        className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none ring-2 ${tone} ${RING[ring]}`}
+      >
+        {count}
       </span>
-    ) : null;
+    );
+    return (
+      <span
+        className={
+          place === "corner"
+            ? "absolute -right-1.5 -top-1.5 z-10 flex items-center -space-x-1"
+            : "absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center -space-x-1"
+        }
+      >
+        {alerts.unspent > 0 &&
+          dot(alerts.unspent, "bg-destructive text-destructive-foreground", "Attribute/Skill point")}
+        {alerts.unseen > 0 &&
+          dot(alerts.unseen, "bg-tab-virtues text-foreground", "new virtue")}
+      </span>
+    );
+  };
 
   const navItems = [
     { href: "/", text: "Home" },
@@ -273,7 +307,7 @@ export default function Header() {
                         }`}
                       >
                         {item.text}
-                        {item.href === "/characters" && alertBubbles(true)}
+                        {item.href === "/characters" && alertBubbles("corner", "header")}
                       </Link>
                     </li>
                   ))}
@@ -302,7 +336,7 @@ export default function Header() {
                                 className={`relative w-full cursor-pointer ${location === item.href ? "font-semibold text-primary" : ""}`}
                               >
                                 {item.text}
-                                {item.href === "/characters" && alertBubbles(false)}
+                                {item.href === "/characters" && alertBubbles("row", "popover")}
                               </Link>
                             </DropdownMenuItem>
                           ))}
@@ -399,6 +433,7 @@ export default function Header() {
                         }`}
                       >
                         {item.text}
+                        {item.href === "/characters" && alertBubbles("row", "card")}
                       </Link>
                     </li>
                   ))}
