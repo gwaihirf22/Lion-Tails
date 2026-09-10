@@ -84,6 +84,9 @@ import {
 } from "@/components/ui/tooltip";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useParentMode } from "@/hooks/use-parent-mode";
+import { useStories } from "@/hooks/use-stories";
+import { characterIdsOf } from "@shared/schema";
+import StoryRow from "@/components/StoryRow";
 import AnimalAutocomplete from "./AnimalAutocomplete";
 
 /**
@@ -555,6 +558,11 @@ export default function CharacterForm({
     // four-file change buying nothing a label already says.
     { value: "stats", label: "Attributes/Skills", tint: "bg-tab-stats", edge: "border-t-tab-stats" },
     { value: "virtues", label: "Virtues", tint: "bg-tab-virtues", edge: "border-t-tab-virtues" },
+    // Only when editing: a character being created has no stories, and the
+    // arrows step through this array, so a tab that exists must be reachable.
+    ...(saved?.id
+      ? [{ value: "stories", label: "Stories", tint: "bg-tab-stories", edge: "border-t-tab-stories" }]
+      : []),
     ...(parentMode
       ? [{ value: "grown-ups", label: "Grown-ups", tint: "bg-tab-grown-ups", edge: "border-t-tab-grown-ups" }]
       : []),
@@ -572,6 +580,13 @@ export default function CharacterForm({
   const unseen = unseenVirtues(saved).length;
 
   const [tab, setTab] = useState("basics");
+  // The library, filtered to this character. Cached app-wide; free here.
+  const { stories: allStories } = useStories();
+  const storiesIn = saved?.id
+    ? allStories
+        .filter((s) => characterIdsOf(s.request).includes(saved.id))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    : [];
   // Parent Mode can be locked while the form is open, taking its tab with it.
   const tabIndex = Math.max(0, TABS.findIndex((t) => t.value === tab));
   /**
@@ -1416,6 +1431,33 @@ export default function CharacterForm({
                 </div>
               )}
             </TabsContent>
+
+            {saved?.id && (
+              <TabsContent value="stories" className="space-y-3 pt-4">
+                {/*
+                  A record, like Virtues: nothing here is editable. The cast of
+                  every saved story is read through characterIdsOf(), the one
+                  reader of that fact, over the library the app already holds --
+                  no route, no second list. Rows, not cards: a card navigates on
+                  click and owns dialogs, and this sits inside an open Dialog
+                  over a half-edited form.
+                */}
+                <p className="text-sm text-muted-foreground">
+                  Every story {form.watch("name") || "this character"} has been in.
+                </p>
+                {storiesIn.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">
+                    No stories yet. They appear here after {form.watch("name") || "this character"} has been in one.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {storiesIn.map((s) => (
+                      <StoryRow key={s.id} story={s} />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            )}
 
             {parentMode && (
               <TabsContent value="grown-ups" className="space-y-4 pt-4">

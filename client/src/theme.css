@@ -232,6 +232,7 @@ header h1 {
   --tab-stats: 150 34% 83%;
   --tab-virtues: 45 34% 83%;
   --tab-grown-ups: 0 34% 83%;
+  --tab-stories: 190 34% 83%;
 }
 
 [data-palette="sepia"] {
@@ -242,6 +243,7 @@ header h1 {
   --tab-stats: 150 30% 77%;
   --tab-virtues: 45 30% 77%;
   --tab-grown-ups: 0 30% 77%;
+  --tab-stories: 190 30% 77%;
 }
 
 [data-palette="night"] {
@@ -252,6 +254,7 @@ header h1 {
   --tab-stats: 150 33% 27%;
   --tab-virtues: 45 33% 27%;
   --tab-grown-ups: 0 33% 27%;
+  --tab-stories: 190 33% 27%;
 }
 
 [data-palette="contrast"] {
@@ -262,6 +265,7 @@ header h1 {
   --tab-stats: 150 43% 88.5%;
   --tab-virtues: 45 43% 88.5%;
   --tab-grown-ups: 0 43% 88.5%;
+  --tab-stories: 190 43% 88.5%;
 }
 
 /* ------------------------------------------------------------------------

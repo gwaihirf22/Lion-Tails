@@ -70,7 +70,7 @@ const palettes = parsePalettes();
 const NAMES = ["paper", "sepia", "night", "contrast"];
 
 /** Every tab on the character sheet. Kept beside the palettes it is checked against. */
-const TAB_TINTS = ["basics", "appearance", "personality", "stats", "virtues", "grown-ups"] as const;
+const TAB_TINTS = ["basics", "appearance", "personality", "stats", "virtues", "grown-ups", "stories"] as const;
 
 describe("palette parsing", () => {
   it("finds all four palettes with their tokens", () => {
