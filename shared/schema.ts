@@ -224,9 +224,10 @@ export const userUsage = pgTable("user_usage", {
    * Avatar images this account has ever generated. NEVER reset.
    *
    * It sits in this table because this is where per-user counters live, but it
-   * is a different kind of number from the one above it: `count` is a monthly
-   * story allowance that resetStoryGenerationCount() zeroes, and this is a
-   * lifetime total that nothing zeroes. Adding it here rather than as a jsonb
+   * is a different kind of number from the one above it: `count` is spending
+   * against a story allowance that applyStoryTopUp() forgives a month at a
+   * time, and this is a lifetime total that nothing forgives. Adding it here
+   * rather than as a jsonb
    * blob follows the argument already made in this file for named columns --
    * and it survives the reset for free, because that statement sets `count`
    * by name and never touches anything else.
@@ -604,6 +605,100 @@ const optionalText = (max: number) =>
  * here and refunds nothing there, which is the point -- otherwise
  * delete-and-regenerate would be free.
  */
+/* ------------------------------------------------------------------------
+ * The free story allowance.
+ *
+ * ONE PAIR OF NUMBERS AND ONE FUNCTION, because there were five restatements
+ * of 50 and 10 and four different meanings of "a month". The two endpoints
+ * that reported it were exact inverses: /api/story/usage called the total 60
+ * when there was no reset date, /api/stats/story-generation called it 60 when
+ * there was one. The pill on Create Story computed max(0, 10 - count) against
+ * a LIFETIME count, so it read 0 for anyone past ten stories while the server
+ * happily let them run to fifty.
+ * --------------------------------------------------------------------- */
+
+/**
+ * What GET /api/story/usage returns.
+ *
+ * Declared here so both screens and the route agree by construction. The pill
+ * used to read `limit` and `nextReset` off an untyped res.json(), so when the
+ * shape moved nothing failed -- it just rendered undefined.
+ */
+export type StoryUsage = {
+  used: number;
+  remaining: number;
+  total: number;
+  perMonth: number;
+  lastReset: string | null;
+  nextTopUp: string;
+};
+
+/** Where everyone starts, and the ceiling a top-up can never carry them past. */
+export const FREE_STORIES = 50;
+/** Added at the start of each calendar month, up to FREE_STORIES. */
+export const FREE_STORIES_PER_MONTH = 10;
+
+/** Whole calendar months from a to b. Negative if b is earlier. */
+function monthsBetween(a: Date, b: Date): number {
+  return (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+}
+
+/** The first moment of the month n months after d. */
+function startOfMonthAfter(d: Date, n = 1): Date {
+  // Built from year/month directly. The old code did setMonth(+1) then
+  // setDate(1), which from 31 January gives 1 MARCH -- the intermediate date
+  // overflows before the day is pinned.
+  return new Date(d.getFullYear(), d.getMonth() + n, 1);
+}
+
+/**
+ * What this account may still spend, and when it next gets more.
+ *
+ * A BALANCE THAT TOPS UP, not an allowance that refills. Everyone starts with
+ * FREE_STORIES; each calendar month forgives FREE_STORIES_PER_MONTH of what
+ * they have used, and it stops at zero used. So a heavy user gets ten a month
+ * after the first fifty and a light user simply sits at fifty -- which is the
+ * rule Blake asked for, and the reason a full monthly refill is wrong.
+ *
+ * Expressed as forgiving `count` rather than as a stored balance so that the
+ * existing column keeps its meaning and nothing needs migrating.
+ *
+ * PURE. Every screen and the enforcement path call this, so if it is wrong it
+ * is wrong everywhere at once rather than differently in five places -- which
+ * is the state it replaces.
+ */
+export function storyAllowance(
+  usage?: { count?: number | null; lastResetDate?: Date | string | null } | null,
+  now: Date = new Date(),
+): {
+  used: number;
+  remaining: number;
+  total: number;
+  /** What `count` becomes once the months owed have been forgiven. */
+  toppedUpCount: number;
+  /** Whole months of top-up owed since lastResetDate. Zero means nothing to do. */
+  monthsOwed: number;
+  nextTopUp: Date;
+} {
+  const raw = Math.max(0, usage?.count ?? 0);
+  const last = usage?.lastResetDate ? new Date(usage.lastResetDate) : null;
+
+  // No reset date means nothing has been charged yet, so nothing is owed.
+  const monthsOwed = last ? Math.max(0, monthsBetween(last, now)) : 0;
+  const used = Math.max(0, raw - monthsOwed * FREE_STORIES_PER_MONTH);
+
+  return {
+    used,
+    // Clamped both ways: a row written before the ceiling was lowered, or by an
+    // admin, can carry a count above it, and "-3 remaining" is not a thing.
+    remaining: Math.max(0, FREE_STORIES - used),
+    total: FREE_STORIES,
+    toppedUpCount: used,
+    monthsOwed,
+    nextTopUp: startOfMonthAfter(last && monthsOwed === 0 ? last : now),
+  };
+}
+
 export const MAX_AVATARS = 5;
 
 /**

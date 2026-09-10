@@ -1,4 +1,5 @@
-import { users, type User, type InsertUser, type Song, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory ,
+import {
+  storyAllowance, users, type User, type InsertUser, type Song, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory ,
   type ReadingPrefs,
 } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
@@ -124,9 +125,26 @@ export interface IStorage {
   toggleHeroStoryFeatured(id: string, isFeatured: boolean): Promise<HeroStory | undefined>;
 
   // Usage tracking per user
-  getStoryGenerationCount(userId: number): Promise<number>;
-  incrementStoryGenerationCount(userId: number): Promise<number>;
-  resetStoryGenerationCount(userId: number): Promise<void>;
+  /**
+   * The story allowance is READ through storyAllowance() and moved by
+   * applyStoryTopUp() below. The five methods that used to be here --
+   * get/increment/resetStoryGenerationCount, get/setLastResetDate -- are gone
+   * because every one of them was dead: the real increment is raw SQL inside
+   * the worker's finishing transaction (storyWorker.ts), which is where it has
+   * to be to share that transaction, and the two endpoints that read the rest
+   * were collapsed into one. A storage method that LOOKS like the counter and
+   * is not is worse than no method at all.
+   */
+  /**
+   * Forgive the months this account is owed, once.
+   *
+   * Replaces resetStoryGenerationCount on the live path. That one was a blind
+   * "count = 0, last_reset_date = now" with no guard, so two concurrent calls
+   * both fired and each pushed the date forward again -- granting a month that
+   * had not passed. This advances the date by EXACTLY the months it applied,
+   * so calling it twice for the same instant is a no-op.
+   */
+  applyStoryTopUp(userId: number, now?: Date): Promise<{ count: number; lastResetDate: Date | null }>;
   /** Avatars this account has ever generated. Lifetime; nothing resets it. */
   getAvatarCount(userId: number): Promise<number>;
   /**
@@ -146,8 +164,7 @@ export interface IStorage {
    * an allowance out of nothing.
    */
   refundAvatarGeneration(userId: number): Promise<void>;
-  getLastResetDate(userId: number): Promise<Date | null>;
-  setLastResetDate(userId: number, date: Date): Promise<void>;
+
 
   // User settings
   getUserOpenAIKey(userId: number): Promise<string | null>;
@@ -864,20 +881,18 @@ export class MemStorage implements IStorage {
   }
 
   // Usage tracking methods
-  async getStoryGenerationCount(userId: number): Promise<number> {
-    return this.userStoryGenerationCounts.get(userId) || 0;
-  }
 
-  async incrementStoryGenerationCount(userId: number): Promise<number> {
-    const currentCount = this.userStoryGenerationCounts.get(userId) || 0;
-    const newCount = currentCount + 1;
-    this.userStoryGenerationCounts.set(userId, newCount);
-    return newCount;
-  }
 
-  async resetStoryGenerationCount(userId: number): Promise<void> {
-    this.userStoryGenerationCounts.set(userId, 0);
-    this.userLastResetDates.set(userId, new Date());
+
+  async applyStoryTopUp(userId: number, now: Date = new Date()) {
+    const count = this.userStoryGenerationCounts.get(userId) ?? 0;
+    const lastResetDate = this.userLastResetDates.get(userId) ?? null;
+    const { toppedUpCount, monthsOwed } = storyAllowance({ count, lastResetDate }, now);
+    if (monthsOwed === 0) return { count, lastResetDate };
+    const advanced = new Date(lastResetDate!.getFullYear(), lastResetDate!.getMonth() + monthsOwed, 1);
+    this.userStoryGenerationCounts.set(userId, toppedUpCount);
+    this.userLastResetDates.set(userId, advanced);
+    return { count: toppedUpCount, lastResetDate: advanced };
   }
 
   async getAvatarCount(userId: number): Promise<number> {
@@ -896,13 +911,7 @@ export class MemStorage implements IStorage {
     this.userAvatarCounts.set(userId, Math.max(0, used - 1));
   }
 
-  async getLastResetDate(userId: number): Promise<Date | null> {
-    return this.userLastResetDates.get(userId) || null;
-  }
 
-  async setLastResetDate(userId: number, date: Date): Promise<void> {
-    this.userLastResetDates.set(userId, date);
-  }
 
   // User settings methods
   async getUserOpenAIKey(userId: number): Promise<string | null> {

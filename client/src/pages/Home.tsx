@@ -1,4 +1,5 @@
 import { useLocation , Link } from "wouter";
+import { FREE_STORIES, FREE_STORIES_PER_MONTH } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import appIcon from "@/assets/app-icon.jpg";
 import { useAuth } from "@/hooks/use-auth";
@@ -129,9 +130,14 @@ export default function Home() {
           <div className="inline-block bg-secondary/20 px-4 py-2 rounded-full text-secondary font-medium text-sm mb-3">
             ✨ AI-Powered Stories
           </div>
-          <h3 className="text-2xl font-heading font-bold mb-2">Your First 50 Stories Are Free!</h3>
+          <h3 className="text-2xl font-heading font-bold mb-2">
+            Your First {FREE_STORIES} Stories Are Free!
+          </h3>
           <p className="text-foreground mb-2">
-            Enjoy 50 free AI-generated stories to start, plus 10 more each month. Want unlimited stories?
+            {/* Read, not restated. These were literals in the copy, which is how
+                a marketing sentence outlives the number it describes. */}
+            Enjoy {FREE_STORIES} free AI-generated stories to start, then {FREE_STORIES_PER_MONTH} more
+            each month up to {FREE_STORIES}. Want unlimited stories?
             Add your own OpenAI API key in the <Link href="/settings" className="text-secondary hover:underline font-medium">Settings</Link> page.
           </p>
         </div>

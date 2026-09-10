@@ -9,6 +9,8 @@
  * One copy, two presentations -- not two copies that drift.
  */
 import React, { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { type StoryUsage } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import ReadingSettingsCard from "@/components/reader/ReadingSettingsCard";
@@ -36,13 +38,6 @@ interface SelectableModel {
   allowed: boolean;
 }
 
-interface StoryStats {
-  used: number;
-  remaining: number;
-  total: number;
-  lastResetDate: string | null;
-}
-
 const TIER_ORDER: SelectableModel["tier"][] = ["local", "economy", "premium"];
 
 const TIER_LABELS: Record<SelectableModel["tier"], string> = {
@@ -61,8 +56,18 @@ export function SettingsPanel() {
   const [hasStoredKey, setHasStoredKey] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [storyStats, setStoryStats] = useState<StoryStats | null>(null);
-  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  /**
+   * The SAME query the Create Story pill uses, by key.
+   *
+   * This was a bare useEffect fetch against a second endpoint with no query
+   * key, so it never revalidated -- generate a story and this card kept the
+   * old number until a full reload. That second endpoint also disagreed with
+   * the first by construction: it called the total 60 when a reset date
+   * existed, while the other called it 60 when one did not.
+   */
+  const { data: storyStats, isLoading: isLoadingStats } = useQuery<StoryUsage>({
+    queryKey: ["/api/story/usage"],
+  });
   const [models, setModels] = useState<SelectableModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
 
@@ -103,13 +108,6 @@ export function SettingsPanel() {
 
         await loadModels();
 
-        // Get story generation stats
-        setIsLoadingStats(true);
-        const statsResponse = await apiRequest("GET", "/api/stats/story-generation");
-        if (statsResponse.ok) {
-          const statsData = await statsResponse.json();
-          setStoryStats(statsData);
-        }
       } catch (error) {
         console.error("Error fetching settings:", error);
         toast({
@@ -117,8 +115,6 @@ export function SettingsPanel() {
           description: "Failed to load settings. Please try again.",
           variant: "destructive",
         });
-      } finally {
-        setIsLoadingStats(false);
       }
     }
 
@@ -297,12 +293,15 @@ export function SettingsPanel() {
                   <span className="font-bold text-lg">{storyStats.remaining}</span>
                 </div>
                 
-                {storyStats.lastResetDate && (
-                  <div className="text-sm text-muted-foreground">
-                    <p>Last reset: {formatDate(storyStats.lastResetDate)}</p>
-                    <p className="mt-1">You receive 10 new free stories each month.</p>
-                  </div>
-                )}
+                <div className="text-sm text-muted-foreground">
+                  {storyStats.lastReset && <p>Last top-up: {formatDate(storyStats.lastReset)}</p>}
+                  {/* Interpolated, not restated. This said "10" in prose, which
+                      is how a sentence outlives the number it describes. */}
+                  <p className="mt-1">
+                    You start with {storyStats.total} and receive {storyStats.perMonth} more each
+                    month, up to {storyStats.total}. Next on {formatDate(storyStats.nextTopUp)}.
+                  </p>
+                </div>
               </div>
             ) : (
               <p className="text-center text-muted-foreground py-6">No usage statistics available</p>

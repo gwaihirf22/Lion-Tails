@@ -1,55 +1,32 @@
-import { StoryRequest } from "@shared/schema";
+import { storyAllowance, type StoryRequest } from "@shared/schema";
 import { storage } from "../storage";
 import { resolveModel } from "./modelPolicy";
 import { StoryGenerationError } from "./storyErrors";
 
-// Constants for our subscription model
-const FREE_STORY_INITIAL_QUOTA = 50;
-const FREE_STORY_MONTHLY_QUOTA = 10;
-const MONTH_IN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
-
-// Function to check if user can generate a story with the free tier
+/**
+ * Has this account got a free story left?
+ *
+ * The whole rule now lives in storyAllowance(). What was here was four things
+ * at once and none of them right: its own copies of 50 and 10, a 30-day
+ * "month" that agreed with neither endpoint, an unguarded reset that two
+ * concurrent calls could both fire, and -- above all -- a "count < 50" early
+ * return that made the monthly path unreachable. Because the reset set count
+ * to 0, the very next call short-circuited there, so a user who ran out got
+ * FIFTY more rather than ten a month. That is the behaviour Blake asked to
+ * change, and it had never actually run.
+ */
 async function canGenerateStoryWithFreeTier(userId: number = 1): Promise<boolean> {
   // Admins bypass the quota. This used to compare username === 'paulblake',
   // which is one rename away from locking the owner out and, worse, would grant
   // the bypass to anyone who registered that name -- nothing reserves it.
   const user = await storage.getUser(userId);
-  if (user?.isAdmin) {
-    return true;
-  }
-  
-  // Default to user ID 1 if not authenticated
-  const count = await storage.getStoryGenerationCount(userId);
-  const lastResetDate = await storage.getLastResetDate(userId);
-  
-  // If user has generated less than the initial quota, they can generate a story
-  if (count < FREE_STORY_INITIAL_QUOTA) {
-    return true;
-  }
-  
-  // If it's been a month since the last reset, reset the counter
-  // and give the user their monthly quota
-  if (lastResetDate) {
-    const now = new Date();
-    const timeSinceLastReset = now.getTime() - lastResetDate.getTime();
-    
-    if (timeSinceLastReset >= MONTH_IN_MS) {
-      // It's been a month, so reset the counter
-      await storage.resetStoryGenerationCount(userId);
-      return true;
-    }
-    
-    // Check if user has monthly quota available
-    const monthlyQuotaUsed = count - FREE_STORY_INITIAL_QUOTA;
-    const currentMonthNumber = Math.floor(timeSinceLastReset / MONTH_IN_MS) + 1;
-    const totalMonthlyQuota = FREE_STORY_MONTHLY_QUOTA * currentMonthNumber;
-    
-    return monthlyQuotaUsed < totalMonthlyQuota;
-  }
-  
-  // If no reset date has been set, set it now and allow the generation
-  await storage.setLastResetDate(userId, new Date());
-  return true;
+  if (user?.isAdmin) return true;
+
+  // Forgive whatever months are owed first, and persist it -- otherwise the
+  // allowance would be recomputed from a stale count on every request and the
+  // top-up would never actually land in the row.
+  const { count, lastResetDate } = await storage.applyStoryTopUp(userId);
+  return storyAllowance({ count, lastResetDate }).remaining > 0;
 }
 
 /**
