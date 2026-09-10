@@ -92,9 +92,8 @@ export const KEEPER = {
    */
   place:
     `${SHOP.name}, a crowded second-hand shop of things people brought back ` +
-    "and never came for. The sign over the door reads " +
-    `"${SHOP.sign}". Every shelf has something on it that does not belong ` +
-    "to the century it is sitting in, and none of it is labelled.",
+    "and never came for, none of it labelled. The sign over the door reads " +
+    `"${SHOP.sign}".`,
   /**
    * Who he is.
    *
@@ -215,10 +214,9 @@ export const CANON = {
    */
   lion:
     "Asked how he does any of this, Barnabas says he does not: \"I have no " +
-    "control over this.\" Pressed, he may say something like \"The great Lion " +
-    "knows no bounds\" -- mysteriously, and no more. He never says who the " +
-    "Lion is. The Lion does not appear in this story: not seen, not heard, " +
-    "not described. A name Barnabas may say once, and let lie.",
+    "control over this.\" Pressed, he may say \"The great Lion knows no " +
+    "bounds\" -- mysteriously, once, and no more. He never says who the Lion " +
+    "is, and the Lion does not appear: not seen, not heard, not described.",
   boundaries:
     "Barnabas is not God and nobody treats him as one. Invent no doctrine, " +
     "contradict no Scripture, and let a real account happen exactly as it is " +
