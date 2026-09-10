@@ -1,3 +1,4 @@
+import { builtInStoryById, refuseBuiltIn, withBuiltInStories } from "./lib/builtInStories";
 import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
 import { isModelAllowedFor, listSelectableModels, MODEL_CATALOG, DEFAULTS,
@@ -770,6 +771,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.put("/api/stories/:id/universe", requireAuth, async (req, res) => {
+    if (refuseBuiltIn(req, res)) return;
     const target = req.body?.universeId ?? null;
     const ok = await setStoryUniverse((req.user as any).id, req.params.id, target);
     if (!ok) return res.status(404).json({ message: "No such story or universe" });
@@ -1259,6 +1261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    */
   app.post("/api/stories/:id/illustrate", requireAuth, async (req, res) => {
     try {
+      if (refuseBuiltIn(req, res)) return;
       const userId = (req.user as any).id;
       const saved = await storage.getStoryById(req.params.id, userId);
       if (!saved) {
@@ -1303,6 +1306,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/stories/:id/associate-hero", async (req, res) => {
     try {
+      if (refuseBuiltIn(req, res)) return;
       // Check if user is authenticated
       if (!req.user || !req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required to modify stories" });
@@ -1356,7 +1360,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get only the stories belonging to the authenticated user
       const userId = (req.user as any).id;
       const stories = await storage.getUserStories(userId);
-      res.json(stories);
+      // What the app ships with comes first, in every library.
+      res.json(withBuiltInStories(stories));
     } catch (error) {
       console.error("Error fetching stories:", error);
       res.status(500).json({ message: "Failed to fetch stories" });
@@ -1371,6 +1376,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Authentication required to view stories" });
       }
       
+      // A built-in story has no row and belongs to everyone.
+      const builtIn = builtInStoryById(req.params.id);
+      if (builtIn) return res.json(builtIn);
+
       // Get the story, but only if it belongs to the authenticated user
       const userId = (req.user as any).id;
       const story = await storage.getStoryById(req.params.id, userId);
@@ -1389,6 +1398,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Toggle a story as favorite - requires authentication
   app.put("/api/stories/:id/favorite", async (req, res) => {
     try {
+      if (refuseBuiltIn(req, res)) return;
       // Check if user is authenticated
       if (!req.user || !req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required to modify stories" });
@@ -1418,6 +1428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete a story - requires authentication
   app.delete("/api/stories/:id", async (req, res) => {
     try {
+      if (refuseBuiltIn(req, res)) return;
       // Check if user is authenticated
       if (!req.user || !req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required to delete stories" });

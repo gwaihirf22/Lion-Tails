@@ -1635,6 +1635,15 @@ export type StoryResponse = z.infer<typeof storyResponseSchema>;
 
 // Schema for saved stories with enhanced search metadata
 export const savedStorySchema = z.object({
+  /**
+   * A story the app ships with, present in every library and owned by nobody.
+   *
+   * SERVER-OWNED: set by server/lib/builtInStories.ts on the way out, never
+   * read from a request and never stored. It is on the schema for the TYPE --
+   * so the client reads `story.builtIn` rather than casting -- and because a
+   * built-in story is still a SavedStory in every other respect.
+   */
+  builtIn: z.boolean().optional(),
   id: z.string(),
   story: storyResponseSchema,
   request: storyRequestSchema,
