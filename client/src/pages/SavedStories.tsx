@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { SavedStory } from "@shared/schema";
-import { QUEST_SERIES_TITLE } from "@shared/quests";
+import { QUEST_SERIES_TITLE, isTimekeeperStory } from "@shared/quests";
 import { apiRequest } from "@/lib/queryClient";
 import { formatDistanceToNow } from "date-fns";
 
@@ -152,12 +152,17 @@ export default function SavedStories() {
     navigate(`/story?id=${story.id}`);
   };
 
-  // Filter stories based on active tab
-  const filteredStories = activeTab === 'all' 
-    ? stories 
-    : activeTab === 'favorites' 
-      ? stories.filter(story => story.isFavorite)
-      : stories.filter(story => !story.isFavorite);
+  // Filter stories based on active tab. A switch WITH a default: this was a
+  // chained ternary whose last arm was "temporary", so a tab it had not heard
+  // of silently showed the temporary list.
+  const filteredStories = (() => {
+    switch (activeTab) {
+      case "timekeeper": return stories.filter(isTimekeeperStory);
+      case "favorites": return stories.filter((story) => story.isFavorite);
+      case "temporary": return stories.filter((story) => !story.isFavorite);
+      default: return stories;
+    }
+  })();
 
   // Grouped by universe, with Unassigned last. Every existing story starts
   // unassigned, so that group is the normal case rather than an edge case.
@@ -279,33 +284,7 @@ export default function SavedStories() {
         </div>
       )}
 
-      {builtIn.map((s) => (
-        <Card
-          key={s.id}
-          className="mb-6 bg-card overflow-hidden transition-all duration-200 hover:shadow-md cursor-pointer"
-          onClick={() => navigate(`/story?id=${s.id}`)}
-        >
-          <CardContent className="p-5">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {QUEST_SERIES_TITLE}
-            </p>
-            <h3 className="text-xl font-bold text-primary mb-1">
-              <Link
-                href={`/story?id=${s.id}`}
-                className="hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {s.story.title}
-              </Link>
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Where every library begins. It is always here.
-            </p>
-          </CardContent>
-        </Card>
-      ))}
-
-      {stories.length === 0 && visibleJobs.length === 0 ? (
+      {stories.length === 0 && visibleJobs.length === 0 && (
         <Card className="bg-card rounded-2xl shadow-lg">
           <CardContent className="p-8 text-center">
             <h3 className="text-2xl font-medium text-foreground mb-4">No Stories Yet</h3>
@@ -313,7 +292,9 @@ export default function SavedStories() {
             <Button onClick={() => navigate("/generate-story")}>Create Your First Story</Button>
           </CardContent>
         </Card>
-      ) : (
+      )}
+
+      {(
         <>
           <Card className="mb-4 bg-card rounded-lg">
             <CardContent className="p-4">
@@ -326,13 +307,51 @@ export default function SavedStories() {
           <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="mb-4">
               <TabsTrigger value="all">All Stories ({stories.length})</TabsTrigger>
+              {/* Slot for the lantern: an <img className="mr-2 h-4 w-4"> before
+                  the label, when the file is in the repo. */}
+              <TabsTrigger value="timekeeper">
+                Timekeeper ({stories.filter(isTimekeeperStory).length})
+              </TabsTrigger>
               <TabsTrigger value="favorites">Favorites ({stories.filter(s => s.isFavorite).length})</TabsTrigger>
               <TabsTrigger value="temporary">Temporary ({stories.filter(s => !s.isFavorite).length})</TabsTrigger>
             </TabsList>
             
             <TabsContent value={activeTab}>
+              {/* What the app ships with, pinned first in the series' own tab.
+                  Never counted, no favourite, no delete. */}
+              {activeTab === "timekeeper" &&
+                builtIn.map((s) => (
+                  <Card
+                    key={s.id}
+                    className="mb-6 bg-card overflow-hidden transition-all duration-200 hover:shadow-md cursor-pointer"
+                    onClick={() => navigate(`/story?id=${s.id}`)}
+                  >
+                    <CardContent className="p-5">
+                      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        {QUEST_SERIES_TITLE}
+                      </p>
+                      <h3 className="text-xl font-bold text-primary mb-1">
+                        <Link
+                          href={`/story?id=${s.id}`}
+                          className="hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {s.story.title}
+                        </Link>
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Where every library begins. It is always here.
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+
               {universes.map((u) => {
                 const inThis = byUniverse.get(u.universeId) ?? [];
+                // On a filtered tab a universe with nothing in it is noise --
+                // and on the Timekeeper tab it was every universe, each saying
+                // "No stories in this universe yet". All still lists them all.
+                if (activeTab !== "all" && inThis.length === 0) return null;
                 const busy = Boolean(summaryJobFor(u.universeId));
                 return (
                   <UniverseCard
@@ -382,9 +401,13 @@ export default function SavedStories() {
               )}
 
               <div className="grid gap-4">
-                {unassigned.length === 0 ? (
+                {filteredStories.length === 0 ? (
                   <Card className="p-6 text-center">
-                    <p className="text-muted-foreground">No stories in this category.</p>
+                    <p className="text-muted-foreground">
+                      {activeTab === "timekeeper"
+                        ? "No quests yet. Send a character on one from Create Story."
+                        : "No stories in this category."}
+                    </p>
                   </Card>
                 ) : (
                   unassigned.map((savedStory) => (

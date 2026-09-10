@@ -40,6 +40,7 @@ import { saveCharacter } from "@/lib/saveCharacter";
 import { useToast } from "@/hooks/use-toast";
 import PromptEditor from "./PromptEditor";
 import { ROLE_OPTIONS } from "@/lib/characterRole";
+import { QUEST_SERIES_TITLE } from "@shared/quests";
 
 /**
  * The radio itself, so neither tab owns the markup.
@@ -51,17 +52,25 @@ function RoleChoices({
   value,
   onChange,
   options,
+  disabled,
 }: {
   value: string | undefined;
   onChange: (value: string) => void;
   options: CharacterRole[];
+  /** Visible but not yet enabled: a real disabled, on the group and each item. */
+  disabled?: boolean;
 }) {
   return (
-    <RadioGroup onValueChange={onChange} value={value ?? options[0]} className="space-y-2">
+    <RadioGroup
+      onValueChange={onChange}
+      value={value ?? options[0]}
+      className="space-y-2"
+      disabled={disabled}
+    >
       {options.map((key) => (
         <FormItem key={key} className="flex items-start space-x-3 space-y-0">
           <FormControl>
-            <RadioGroupItem value={key} className="mt-1" />
+            <RadioGroupItem value={key} className="mt-1" disabled={disabled} />
           </FormControl>
           <div className="space-y-1 leading-none">
             <FormLabel className="font-medium">{ROLE_OPTIONS[key].label}</FormLabel>
@@ -971,7 +980,9 @@ export default function StoryForm({
                 It is a gate rather than a third radio option because the two
                 modes are only a question at all once there is somewhere real to
                 be, and because off is the honest default -- most stories on this
-                tab have nothing real in them.
+                tab have nothing real in them. But a gate is not a curtain: what
+                it gates is VISIBLE before it is on, greyed, so nobody has to
+                flip a switch to find out the Timekeeper exists.
                 
                 It offers the SAME picker as the historical tab, and that is not
                 an accident of reuse. Biblical events could only ever be chosen
@@ -983,6 +994,11 @@ export default function StoryForm({
               <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
+                    {/* Slot for the shop sign: a wide image, h-8 to h-10, on
+                        the right of this eyebrow, when the file is in the repo. */}
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {QUEST_SERIES_TITLE}
+                    </p>
                     <h3 className="text-sm font-semibold">Set it somewhere real</h3>
                     <p className="text-xs text-muted-foreground">
                       Put your character into an event that happened, or beside
@@ -1008,18 +1024,29 @@ export default function StoryForm({
                   />
                 </div>
 
-                {bringInHero && (
+                {/* ALWAYS RENDERED, greyed while off. These used to mount only
+                    once the switch was on, so until then there was no sign the
+                    Timekeeper existed -- and he is becoming most of what this
+                    app is. A real `disabled` on each control (house style, not
+                    a pointer-events wrapper), and opacity on the block so the
+                    labels grey with them. The switch and heading stay at full
+                    strength: the thing to press is the thing that is not grey.
+                    The quest shows preselected while off because it is the
+                    mode the switch commits to; disabled says it is not yet
+                    what will happen. */}
+                <div
+                  className={bringInHero ? "space-y-3" : "space-y-3 opacity-60"}
+                  aria-disabled={!bringInHero}
+                >
                   <FormItem>
                     <FormLabel className="text-sm font-semibold">
                       Where, or who?
                     </FormLabel>
                     <FormControl>
-                      <SourcePicker value={source} onChange={writeSource} />
+                      <SourcePicker value={source} onChange={writeSource} disabled={!bringInHero} />
                     </FormControl>
                   </FormItem>
-                )}
 
-                {bringInHero && (
                   <FormField
                     control={form.control}
                     name="characterRole"
@@ -1036,13 +1063,14 @@ export default function StoryForm({
                             value={field.value === "absent" ? "travels" : field.value}
                             onChange={field.onChange}
                             options={["travels", "alongside"]}
+                            disabled={!bringInHero}
                           />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                )}
+                </div>
               </div>
             )}
 
