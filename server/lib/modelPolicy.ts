@@ -1,3 +1,4 @@
+import { MAX_AVATARS } from "@shared/schema";
 import OpenAI from "openai";
 import { StoryGenerationError } from "./storyErrors";
 import { storage } from "../storage";
@@ -218,6 +219,25 @@ export const MAX_FREE_AVATARS = 8;
  * inside whatever transaction it already holds -- and so this stays testable
  * without one.
  */
+/**
+ * How many pictures ONE CHARACTER may keep at once.
+ *
+ * Not the same question as avatarsRemaining, which is about money: that counts
+ * generations for the lifetime of an account, this bounds what a single
+ * character holds. Deleting frees a slot here and refunds nothing there, which
+ * is what stops delete-and-regenerate being a free image.
+ *
+ * One without your own key. A capped account gets eight generations in total,
+ * so letting each character hoard five of them would spend the whole allowance
+ * on two characters. With a key you are paying, and may keep the lot.
+ *
+ * The fourth caller of hasUnlimitedUse, and the last: "own key or admin" is
+ * written once in this file and nowhere else.
+ */
+export function avatarCapFor(opts: { isAdmin: boolean; hasOwnKey: boolean }): number {
+  return hasUnlimitedUse(opts) ? MAX_AVATARS : 1;
+}
+
 export function avatarsRemaining(
   used: number,
   opts: { isAdmin: boolean; hasOwnKey: boolean },

@@ -329,6 +329,30 @@ feature rather than a detail:
   already-counted request and is not a property of the user. Charge first, then
   pass the result of having charged.
 
+**Two caps, and they are not the same question.** `MAX_FREE_AVATARS` (8)
+counts generations for the lifetime of an ACCOUNT and is about money.
+`avatarCapFor()` bounds how many pictures ONE CHARACTER keeps — five with your
+own key or admin, **one without**, because eight generations spread over five
+slots each would be gone after two characters. Deleting frees a slot and
+refunds nothing, which is what stops delete-and-regenerate being free. The
+client never computes the cap: `GET /api/settings/models` returns `avatarCap`
+from the same helper the route enforces with, the way `canIllustrate` already
+does, so the UI cannot disagree with the server.
+
+Generating takes a `note` (a one-off steer, appended to the prompt for that
+picture) and `remember` (folds it into `canonicalLook` so later pictures keep
+it). The note is appended by `generateAvatar`, never inside
+`buildAvatarPrompt`, so that function stays pure and its tests keep meaning
+what they say. Over the 300-character limit the note is refused rather than
+truncated.
+
+**Generation already survives the tab closing.** Express does not abort a
+handler when the socket does, so the OpenAI call and the write both finish —
+verified by hanging up a client mid-generation and watching the picture land.
+What used to be missing was the UI finding out: `Characters.tsx` holds the
+edited character's **id** and looks the row up from the query, so a refetch
+reaches the open card instead of a snapshot taken when it was opened.
+
 Files go to `public/images/stories/avatars`. That looks like the wrong
 directory and is the right path: the parent is the mount point of the
 `story_images` volume, so anything written there survives a redeploy and
@@ -363,6 +387,12 @@ Rules that are easy to break without noticing:
 - Never hardcode a text colour on something that moves between surfaces.
   `.nav-text` was `text-white` and shipped white-on-white in the active nav
   pill, the "More" menu and the whole mobile sheet. See docs/decisions.md 23.
+- `--track` is the unfilled part of a progress bar: a surface, never a text
+  colour, per palette. The stat bars painted the track with `--secondary` and
+  the fill with `--primary` — two brand colours within a few points of the
+  same lightness. `tests/theme.test.ts` now checks the fill separates from the
+  track AND that the track is visible on the card, because a track that
+  vanishes into the card passes the first check alone.
 - A design token is a surface colour OR a text colour, not both. --secondary
   and --accent were each mapped one way and used the other, and both produced
   text that was invisible in some palettes and fine in the one being looked at.

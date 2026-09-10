@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
 import { isModelAllowedFor, listSelectableModels, MODEL_CATALOG, DEFAULTS,
+  avatarCapFor,
   hasUnlimitedUse,
   avatarsRemaining,
   MAX_FREE_AVATARS,
@@ -66,7 +67,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import { generateAvatar, AVATAR_DIR } from "./lib/avatar";
 import { statsAreAffordable } from "@shared/schema";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
 // zod 4's $ZodError type, and this app defines its schemas with zod 3's
 // classic API -- so the default export rejects every ZodError we pass it with
@@ -103,6 +104,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * Ownership is a required argument to every storage call rather than a check
    * here, so an unscoped read or write cannot be written by accident.
    */
+
+  /**
+   * What may be said about ONE generation.
+   *
+   * `note` is a one-off steer -- "wearing a blue scarf" -- appended to the
+   * prompt for this picture only. `remember` promotes it into canonicalLook so
+   * later pictures inherit it. Bounded because it reaches an image prompt.
+   */
+  const avatarRequestSchema = z.object({
+    note: z.string().trim().max(200).optional(),
+    remember: z.boolean().optional(),
+  });
 
   /** What a child may send. id and createdAt are the server's to assign. */
   const characterWriteSchema = characterSchema.omit({
@@ -334,6 +347,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Character not found" });
       }
 
+      // What they asked to be different about this one, and whether to keep
+      // it. Parsed rather than trusted: it reaches an image prompt, and it can
+      // be written into canonicalLook, which is a field a person owns.
+      const { note, remember } = avatarRequestSchema.parse(req.body ?? {});
+
       const isAdmin = Boolean((req.user as any).isAdmin);
       const hasOwnKey = Boolean(await storage.getUserOpenAIKey(userId).catch(() => null));
       const unlimited = hasUnlimitedUse({ isAdmin, hasOwnKey });
@@ -355,11 +373,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Separate from that allowance on purpose -- this bounds what one
       // character holds, the allowance bounds what an account may spend, and
       // deleting a picture frees a slot here while refunding nothing there.
-      if (avatarsOf(character).length >= MAX_AVATARS) {
+      const cap = avatarCapFor({ isAdmin, hasOwnKey });
+      if (avatarsOf(character).length >= cap) {
         return res.status(409).json({
           code: "avatar_limit",
-          message: `${character.name} already has ${MAX_AVATARS} pictures. Delete one to make room.`,
-          limit: MAX_AVATARS,
+          message:
+            cap === 1
+              ? `${character.name} already has a picture. Delete it to draw another, or ` +
+                "add your own OpenAI API key in Settings to keep up to " +
+                `${MAX_AVATARS}.`
+              : `${character.name} already has ${cap} pictures. Delete one to make room.`,
+          limit: cap,
         });
       }
 
@@ -386,6 +410,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await generateAvatar(character, userId, {
         grantedByAllowance: !unlimited,
         likeUrl: character.avatarUrl ?? gallery[gallery.length - 1]?.url,
+        note,
       });
 
       if (!result) {
@@ -404,10 +429,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         prompt: result.prompt,
         createdAt: new Date().toISOString(),
       };
+      /**
+       * "Remember this" folds the note into canonicalLook, which is the field
+       * that steers every future picture AND is a field the user owns and can
+       * see. Appended, never replaced, and REFUSED rather than truncated when
+       * it will not fit: silently cutting the end off a description someone
+       * wrote is a worse outcome than not saving the note.
+       */
+      const keepNote =
+        remember && note
+          ? [character.canonicalLook, note].filter(Boolean).join(" ").trim()
+          : undefined;
+
       const updated = await storage.updateCharacter(req.params.id, userId, {
-        avatars: [...avatarsOf(character), entry].slice(-MAX_AVATARS),
+        avatars: [...avatarsOf(character), entry].slice(-cap),
         avatarUrl: result.url,
         avatarPrompt: result.prompt,
+        ...(keepNote && keepNote.length <= 300 ? { canonicalLook: keepNote } : {}),
       });
       if (!updated) {
         // The image exists but its owner does not, which means the character
@@ -420,6 +458,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         remaining: unlimited ? null : avatarsRemaining(used + 1, { isAdmin, hasOwnKey }),
       });
     } catch (error) {
+      // A note that is too long is the CALLER's problem, and every other write
+      // route in this file says so with a 400. Without this branch it fell
+      // through to the 500 below and read as "the picture could not be made",
+      // which is the one thing it was not.
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: fromZodError(error).message });
+      }
       console.error("Error generating character avatar:", error);
       res.status(500).json({ message: "Failed to generate a picture" });
     }
@@ -1437,6 +1482,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isAdmin,
           hasOwnKey: Boolean(ownKey),
         }),
+        // How many pictures ONE character may keep, for this account. Derived
+        // from the same helper the generate route enforces with, for the same
+        // reason canIllustrate is derived rather than restated: the UI must not
+        // be able to disagree with what the server will actually allow.
+        avatarCap: avatarCapFor({ isAdmin, hasOwnKey: Boolean(ownKey) }),
       });
     } catch (error) {
       console.error("Error listing models:", error);

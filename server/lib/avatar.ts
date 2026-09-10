@@ -126,9 +126,19 @@ export type AvatarResult = { url: string; prompt: string };
 export async function generateAvatar(
   character: Character,
   userId: number,
-  opts: { grantedByAllowance: boolean; likeUrl?: string },
+  opts: { grantedByAllowance: boolean; likeUrl?: string; note?: string },
 ): Promise<AvatarResult | undefined> {
-  const prompt = buildAvatarPrompt(character);
+  /**
+   * The note is appended HERE, not inside buildAvatarPrompt.
+   *
+   * That function is pure and its tests assert exactly what it must and must
+   * not contain; threading a per-request string through it would make those
+   * tests describe something that no longer happens on every call. The stored
+   * prompt is this whole string, so a picture always records what actually
+   * made it.
+   */
+  const base = buildAvatarPrompt(character);
+  const prompt = opts.note ? `${base} ${opts.note.trim()}` : base;
   try {
     const resolved = await resolveModel(userId, "image", {
       grantedByAllowance: opts.grantedByAllowance,

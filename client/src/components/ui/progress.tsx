@@ -10,7 +10,11 @@ const Progress = React.forwardRef<
   <ProgressPrimitive.Root
     ref={ref}
     className={cn(
-      "relative h-4 w-full overflow-hidden rounded-full bg-secondary",
+      // bg-track, not bg-secondary: the track and the fill were both brand
+      // colours at nearly the same lightness. Fixed here rather than at the
+      // call site so the story-quota bar in SettingsPanel gets it too, and so
+      // the next <Progress> cannot forget.
+      "relative h-4 w-full overflow-hidden rounded-full bg-track",
       className
     )}
     {...props}

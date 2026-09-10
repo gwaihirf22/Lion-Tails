@@ -119,6 +119,37 @@ describe.each(NAMES)("%s palette", (name) => {
     ).toBeGreaterThanOrEqual(min);
   });
 
+  /**
+   * The gap that let an unreadable stat bar ship.
+   *
+   * PAIRS is framed as foreground-on-background, so every row asks "can you
+   * read this text". Nothing asked whether --primary and --secondary could sit
+   * BESIDE each other, which is exactly what a progress bar does -- and in
+   * every palette they were two brand colours within a few points of the same
+   * lightness, separated only by hue.
+   *
+   * Both directions are asserted on purpose. A track that clears the fill by
+   * vanishing into the card would pass the first check on its own, and the bar
+   * would be worse: you could see the fill and not how far it had to go.
+   */
+  it("shows how far a progress bar has to go", () => {
+    const { primary, track, card } = v();
+    expect(track, `--track is not defined in ${name}`).toBeDefined();
+
+    const fillVsTrack = contrast(primary, track);
+    expect(
+      Number(fillVsTrack.toFixed(2)),
+      `--primary on --track in ${name} is ${fillVsTrack.toFixed(2)}:1, needs 3:1`,
+    ).toBeGreaterThanOrEqual(3);
+
+    const trackVsCard = contrast(track, card);
+    expect(
+      Number(trackVsCard.toFixed(2)),
+      `--track on --card in ${name} is ${trackVsCard.toFixed(2)}:1 -- the empty ` +
+        `part of the bar is invisible, so the value has nothing to be read against`,
+    ).toBeGreaterThanOrEqual(1.2);
+  });
+
   it("separates a dropdown from the card it opens over", () => {
     const { popover, card, border } = v();
     const sep = contrast(popover, card);

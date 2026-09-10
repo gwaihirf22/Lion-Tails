@@ -73,6 +73,9 @@ export default {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        // The unfilled part of a progress bar. Surface only -- there is
+        // deliberately no track-foreground, because nothing writes on it.
+        track: "hsl(var(--track))",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

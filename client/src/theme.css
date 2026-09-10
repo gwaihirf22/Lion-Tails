@@ -64,6 +64,8 @@
   --muted: 43 22.6% 93.9%;
   --muted-foreground: 60 1.7% 34.7%;
   --border: 42 14.7% 86.7%;
+  /* a shade under the near-white card, or it would not be there at all */
+  --track: 42 16% 82%;
   --input: 42 14.7% 86.7%;
   --primary: 216 56.3% 42.2%;
   --primary-foreground: 0 0% 100%;
@@ -89,6 +91,8 @@
   --muted: 42 50.7% 85.7%;
   --muted-foreground: 34 22.3% 34.3%;
   --border: 40 37.9% 79.8%;
+  /* white, which Blake asked for: the card is cream, so it still reads */
+  --track: 0 0% 100%;
   --input: 40 37.9% 79.8%;
   --primary: 28 57.4% 30.4%;
   --primary-foreground: 0 0% 100%;
@@ -114,6 +118,8 @@
   --muted: 220 13% 13.5%;
   --muted-foreground: 215 8% 66%;
   --border: 217 12.4% 20.6%;
+  /* lighter than the card, and dark enough for a pale blue fill to sit on */
+  --track: 217 12% 24%;
   --input: 217 12.4% 20.6%;
   --primary: 217 88.7% 75.7%;
   --primary-foreground: 220 12% 9.8%;
@@ -139,6 +145,8 @@
   --muted: 0 0% 100%;
   --muted-foreground: 0 0% 12.2%;
   --border: 0 0% 0%;
+  /* mid grey -- far enough from both the white card and the navy fill */
+  --track: 0 0% 70%;
   --input: 0 0% 0%;
   --primary: 240 100% 27.3%;
   --primary-foreground: 0 0% 100%;
@@ -175,6 +183,23 @@ header h1 {
   /* The wordmark carries a drop-shadow class from when it sat on a photo. */
   text-shadow: none;
 }
+
+/* ------------------------------------------------------------------------
+ * --track: the unfilled part of a progress bar.
+ *
+ * A SURFACE AND NEVER A TEXT COLOUR, which is the whole reason it exists
+ * rather than being --secondary. The stat bars painted their track with
+ * --secondary and their fill with --primary: two brand colours at almost the
+ * same lightness, separated only by hue, so the value was hard to read in all
+ * four palettes. Remapping --secondary was not an option -- decisions.md 22
+ * records that it is ALREADY doing two jobs (it is text-secondary in StoryForm
+ * and Home), and that a token used both ways is better stopped than balanced.
+ *
+ * Chosen per palette rather than computed, the way --warning-foreground
+ * already is. Two things have to hold and the theme test asserts both: it must
+ * separate from the fill, and it must still be visible against the card it
+ * sits on -- a white track on a white card is high contrast and invisible.
+ * ---------------------------------------------------------------------- */
 
 /* ------------------------------------------------------------------------
  * Semantic colours.

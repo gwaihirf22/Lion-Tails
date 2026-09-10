@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildAvatarPrompt } from "../server/lib/avatar";
-import { avatarsOf, MAX_AVATARS } from "../shared/schema";
+import { avatarsOf, MAX_AVATARS, characterSchema } from "../shared/schema";
+import { avatarCapFor, hasUnlimitedUse } from "../server/lib/modelPolicy";
 import type { Character } from "@shared/schema";
 
 /**
@@ -114,9 +115,47 @@ describe("the picture list", () => {
     expect(list.map((a) => a.url)).toEqual(["/p/one.png"]);
   });
 
-  it("never exceeds what the schema allows", () => {
-    // The cap is enforced on the write path; this asserts the number the UI
-    // and the route both read is the same one.
-    expect(MAX_AVATARS).toBe(4);
+  it("is bounded by the schema, whatever the number happens to be", () => {
+    // Asserting MAX_AVATARS === 4 was wrong the moment it became 5. The
+    // invariant is that the schema refuses more than the cap, not what the cap
+    // currently is -- see CLAUDE.md on gates that hardcode a number.
+    const entry = (i: number) => ({ id: String(i), url: "/p/x.png", prompt: "", createdAt: "2026-01-01" });
+    const field = characterSchema.shape.avatars;
+    expect(field.safeParse(Array.from({ length: MAX_AVATARS }, (_, i) => entry(i))).success).toBe(true);
+    expect(field.safeParse(Array.from({ length: MAX_AVATARS + 1 }, (_, i) => entry(i))).success).toBe(false);
+  });
+});
+
+/**
+ * How many pictures one character may keep, for THIS account.
+ *
+ * A different question from the lifetime allowance: that one is about money
+ * and counts generations forever, this one bounds what a single character
+ * holds. They are deliberately unconnected -- deleting a picture frees a slot
+ * here and refunds nothing there, which is what stops delete-and-regenerate
+ * being a free image.
+ */
+describe("pictures per character", () => {
+  it("gives an own-key or admin account the full set", () => {
+    expect(avatarCapFor({ isAdmin: true, hasOwnKey: false })).toBe(MAX_AVATARS);
+    expect(avatarCapFor({ isAdmin: false, hasOwnKey: true })).toBe(MAX_AVATARS);
+    expect(avatarCapFor({ isAdmin: true, hasOwnKey: true })).toBe(MAX_AVATARS);
+  });
+
+  it("gives everyone else exactly one", () => {
+    // Eight generations in total, so letting each character hoard five would
+    // spend the whole allowance on two of them.
+    expect(avatarCapFor({ isAdmin: false, hasOwnKey: false })).toBe(1);
+  });
+
+  it("is the same predicate as everything else that asks who pays", () => {
+    // If this ever disagrees with hasUnlimitedUse, there are two definitions of
+    // "entitled" again, which is the failure this repo names most often.
+    for (const isAdmin of [true, false]) {
+      for (const hasOwnKey of [true, false]) {
+        const unlimited = hasUnlimitedUse({ isAdmin, hasOwnKey });
+        expect(avatarCapFor({ isAdmin, hasOwnKey })).toBe(unlimited ? MAX_AVATARS : 1);
+      }
+    }
   });
 });

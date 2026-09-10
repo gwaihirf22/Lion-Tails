@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -55,11 +55,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Loader2, Sparkles, RefreshCw, RotateCcw, ChevronLeft, ChevronRight, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, Sparkles, RefreshCw, RotateCcw, ChevronLeft, ChevronRight, X, Plus, Lock } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -363,6 +371,49 @@ export default function CharacterForm({
     form.setValue("avatarUrl", c.avatarUrl);
   };
 
+  /**
+   * Take the server's word for it whenever the row changes.
+   *
+   * Generation finishes whether or not anyone is listening -- Express does not
+   * abort a handler when the socket closes, and a picture started before the
+   * tab was shut is saved regardless. What was missing is that the open card
+   * never found out. Now the page looks the row up by id on every refetch, and
+   * this adopts it.
+   *
+   * Compared by content, not identity: a refetch returns a new array every
+   * time, and depending on identity would reset the strip on every render.
+   * Skipped mid-draw so the server's answer, not a stale refetch, wins the
+   * race.
+   */
+  const savedShape = JSON.stringify([avatarsOf(saved).map((a) => a.id), saved?.avatarUrl]);
+  useEffect(() => {
+    if (drawing) return;
+    setGallery(avatarsOf(saved));
+    if (saved?.avatarUrl !== form.getValues("avatarUrl")) {
+      form.setValue("avatarUrl", saved?.avatarUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedShape]);
+
+  /**
+   * How many pictures this ACCOUNT may keep per character.
+   *
+   * Read from the server, never worked out here: the generate route enforces
+   * avatarCapFor() and a second opinion in the UI is a thing that can disagree
+   * with it. Defaults to 1 while the query is in flight, which is the cautious
+   * direction -- it shows one slot too few for a moment rather than offering a
+   * slot the server will refuse.
+   */
+  const { data: entitlement } = useQuery<{ avatarCap?: number }>({
+    queryKey: ["/api/settings/models"],
+  });
+  const avatarCap = entitlement?.avatarCap ?? 1;
+
+  const [askOpen, setAskOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [remember, setRemember] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
   const [drawing, setDrawing] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
   const queryClient = useQueryClient();
@@ -386,15 +437,19 @@ export default function CharacterForm({
 
   const makeAvatar = async () => {
     if (!saved?.id || drawing) return;
+    setAskOpen(false);
     setDrawing(true);
     try {
-      const res = await apiRequestAllowingErrors("POST", `/api/characters/${saved.id}/avatar`);
+      const res = await apiRequestAllowingErrors("POST", `/api/characters/${saved.id}/avatar`, {
+        note: note.trim() || undefined,
+        remember: remember && Boolean(note.trim()),
+      });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast({
           title:
             res.status === 409
-              ? "That is four pictures"
+              ? "No room for another picture"
               : res.status === 403
                 ? "No free pictures left"
                 : "That did not work",
@@ -412,6 +467,11 @@ export default function CharacterForm({
       toast({ title: "That did not work", description: "Please try again.", variant: "destructive" });
     } finally {
       setDrawing(false);
+      setNote("");
+      setRemember(false);
+      // Whatever happened, the row is the truth. A generation that finished
+      // after the client gave up shows up here rather than staying invisible.
+      void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
     }
   };
 
@@ -782,8 +842,8 @@ export default function CharacterForm({
                   {saved?.id ? (
                     <>
                       <Button type="button" variant="outline" size="sm"
-                              onClick={makeAvatar}
-                              disabled={drawing || gallery.length >= MAX_AVATARS}>
+                              onClick={() => setAskOpen(true)}
+                              disabled={drawing || gallery.length >= avatarCap}>
                         {drawing
                           ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Drawing…</>
                           : <><Sparkles className="mr-2 h-4 w-4" />
@@ -792,8 +852,10 @@ export default function CharacterForm({
                       <p className="text-xs text-muted-foreground">
                         {drawing
                           ? "This takes about half a minute."
-                          : gallery.length >= MAX_AVATARS
-                              ? `${MAX_AVATARS} pictures is the most one character can keep — delete one to draw another.`
+                          : gallery.length >= avatarCap
+                              ? avatarCap === 1
+                                ? "Delete this one to draw another, or add your own API key in Settings to keep more."
+                                : `${avatarCap} pictures is the most one character can keep — delete one to draw another.`
                           : remaining === null
                             ? "Drawn from the fields below, or from how you describe them under Grown-ups."
                             : `${remaining} free ${remaining === 1 ? "picture" : "pictures"} left.`}
@@ -809,40 +871,79 @@ export default function CharacterForm({
                 </div>
 
               {/*
-                UP TO FOUR, ONE CHOSEN. The chosen one is what the card and any
-                story illustration use; the rest are alternatives kept so a new
-                one can be drawn to LOOK like them. Hidden entirely when there
-                is nothing to choose between -- a gallery of one is a picture.
+                ALWAYS VISIBLE, even at one picture.
+                
+                It used to hide below two, so a character with a single
+                portrait had nothing on screen saying more were possible. The
+                empty slot IS the affordance: it is the same size as a picture,
+                so the row reads as a set with a gap in it rather than as one
+                image with a button somewhere else.
+                
+                Three across before it folds. The cap is five, so at most two
+                are ever hidden -- but a fifth tile pushes the fields below it
+                off the card on a phone, which is the thing worth avoiding.
               */}
-              {gallery.length > 1 && (
-                <div className="flex flex-wrap gap-2">
-                  {gallery.map((a: { id: string; url: string }) => {
-                    const chosen = a.url === form.watch("avatarUrl");
-                    return (
-                      <div key={a.id} className="relative">
+              {saved?.id && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {(showAll ? gallery : gallery.slice(0, 3)).map((a: { id: string; url: string }) => {
+                      const chosen = a.url === form.watch("avatarUrl");
+                      return (
+                        <div key={a.id} className="relative">
+                          <button
+                            type="button"
+                            onClick={() => void pickAvatar(a.id)}
+                            aria-label={chosen ? "Chosen picture" : "Use this picture"}
+                            aria-pressed={chosen}
+                            className={cn(
+                              "block h-20 w-20 overflow-hidden rounded-lg border-2 transition-colors",
+                              chosen ? "border-primary" : "border-transparent hover:border-border",
+                            )}
+                          >
+                            <img src={a.url} alt="" className="h-full w-full object-cover" />
+                          </button>
+                          <Button
+                            type="button" variant="secondary" size="icon"
+                            className="absolute -right-2 -top-2 h-6 w-6 rounded-full"
+                            onClick={() => void removeAvatar(a.id)}
+                            aria-label="Delete this picture"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+
+                    {/* The empty slot, or the reason there isn't one. */}
+                    {(showAll || gallery.length < 3) && (
+                      gallery.length < avatarCap ? (
                         <button
                           type="button"
-                          onClick={() => void pickAvatar(a.id)}
-                          aria-label={chosen ? "Chosen picture" : "Use this picture"}
-                          aria-pressed={chosen}
-                          className={cn(
-                            "block h-20 w-20 overflow-hidden rounded-lg border-2 transition-colors",
-                            chosen ? "border-primary" : "border-transparent hover:border-border",
-                          )}
+                          onClick={() => setAskOpen(true)}
+                          disabled={drawing}
+                          className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:opacity-50"
                         >
-                          <img src={a.url} alt="" className="h-full w-full object-cover" />
+                          {drawing
+                            ? <Loader2 className="h-5 w-5 animate-spin" />
+                            : <><Plus className="h-5 w-5" />
+                                <span className="px-1 text-[10px] leading-tight">Add more photos</span></>}
                         </button>
-                        <Button
-                          type="button" variant="secondary" size="icon"
-                          className="absolute -right-2 -top-2 h-6 w-6 rounded-full"
-                          onClick={() => void removeAvatar(a.id)}
-                          aria-label="Delete this picture"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    );
-                  })}
+                      ) : avatarCap === 1 ? (
+                        // Not a failure, a plan. Say which one they are on.
+                        <div className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border/60 px-1 text-center text-[10px] leading-tight text-muted-foreground">
+                          <Lock className="h-4 w-4" />
+                          <span>Add your own API key for up to {MAX_AVATARS}</span>
+                        </div>
+                      ) : null
+                    )}
+                  </div>
+
+                  {gallery.length > 3 && (
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs"
+                            onClick={() => setShowAll((v) => !v)}>
+                      {showAll ? "Show fewer" : `Show all (${gallery.length})`}
+                    </Button>
+                  )}
                 </div>
               )}
               </div>
@@ -1187,6 +1288,97 @@ export default function CharacterForm({
             </TooltipProvider>
           </CardFooter>
         </Card>
+
+        {/*
+          ASK BEFORE SPENDING. A picture costs one of a small lifetime
+          allowance and about half a minute, and the button used to fire on the
+          first click -- so a stray click was a picture nobody wanted.
+          
+          A Dialog rather than an AlertDialog because it holds a text field,
+          and every text input in this app lives in a Dialog. It is nested
+          inside the edit Dialog, which is the supported Radix case (Select
+          already works here) unlike the Popover recorded further up this file
+          -- but the focus trap is the thing to actually try, not assume.
+        */}
+        <Dialog open={askOpen} onOpenChange={setAskOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {gallery.length === 0 ? "Make a picture" : "Draw another picture"} of{" "}
+                {form.watch("name") || "this character"}
+              </DialogTitle>
+              <DialogDescription>
+                {gallery.length === 0
+                  ? "Anything to add about how they look? This is optional."
+                  : "How should this one be different? Leave it blank for another go at the same thing."}
+              </DialogDescription>
+            </DialogHeader>
+
+            <Textarea
+              autoFocus
+              rows={3}
+              maxLength={200}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={gallery.length === 0 ? "Holding a lantern." : "Wearing a blue scarf."}
+            />
+
+            {/*
+              Off by default. A one-off stays one-off unless someone says
+              otherwise, and canonicalLook is a field they can see and edit.
+              Disabled when it will not fit rather than quietly cutting the end
+              off a description somebody wrote.
+            */}
+            {(() => {
+              const merged = [form.watch("canonicalLook"), note.trim()].filter(Boolean).join(" ");
+              const fits = merged.length <= 300;
+              return (
+                <label className={cn("flex items-start gap-2 text-sm", !fits && "opacity-60")}>
+                  <Checkbox
+                    checked={remember && fits}
+                    disabled={!note.trim() || !fits}
+                    onCheckedChange={(c) => setRemember(Boolean(c))}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Remember this for future pictures
+                    <span className="block text-xs text-muted-foreground">
+                      {!fits
+                        ? "Their description is already full — edit “How they look, for pictures” instead."
+                        : "Adds it to their description, so later pictures keep it too."}
+                    </span>
+                  </span>
+                </label>
+              );
+            })()}
+
+            {/*
+              The bit that is not obvious: every new picture is drawn FROM an
+              existing one, which is what keeps them the same character and
+              also what stops a small note changing very much. Say so, rather
+              than letting people conclude the box does not work.
+            */}
+            <p className="text-xs text-muted-foreground">
+              {gallery.length > 0
+                ? "Each new picture is drawn from the one chosen now, so it will stay close to it. For a really different look, change “How they look, for pictures” and delete the old pictures first."
+                : "Drawn from what they look like on this tab."}
+            </p>
+
+            <DialogFooter className="gap-2 sm:justify-between">
+              <span className="self-center text-xs text-muted-foreground">
+                {remaining === null ? "" : `Uses 1 of your ${remaining} free ${remaining === 1 ? "picture" : "pictures"}.`}
+              </span>
+              <span className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setAskOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={makeAvatar} disabled={drawing}>
+                  {drawing ? "Drawing…" : "Make it"}
+                </Button>
+              </span>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </form>
     </Form>
   );

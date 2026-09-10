@@ -604,7 +604,7 @@ const optionalText = (max: number) =>
  * here and refunds nothing there, which is the point -- otherwise
  * delete-and-regenerate would be free.
  */
-export const MAX_AVATARS = 4;
+export const MAX_AVATARS = 5;
 
 export const characterSchema = z.object({
   id: z.string(),

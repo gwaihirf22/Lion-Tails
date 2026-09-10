@@ -32,7 +32,18 @@ export default function Characters() {
   const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
+  /**
+   * WHICH character is being edited, not a copy of it.
+   *
+   * It used to hold the row itself, which meant the edit card showed a
+   * snapshot taken when it was opened. A picture generated while the tab was
+   * closed -- and generation DOES finish without the tab, the server does not
+   * abort when the socket does -- landed in the database and never appeared,
+   * because invalidating the query refreshed the list behind a card still
+   * rendering its own stale copy. Looking it up by id means every refetch
+   * reaches the open card.
+   */
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<Character | null>(null);
 
@@ -46,6 +57,10 @@ export default function Characters() {
       showErrorToast: true
     }
   });
+
+  // Always the CURRENT row for the open card. Undefined once it is deleted,
+  // which closes the dialog on its own rather than editing a ghost.
+  const editingCharacter = characters.find((c) => c.id === editingId) ?? null;
 
   // Create a new character
   const createMutation = useMutation({
@@ -122,7 +137,7 @@ export default function Characters() {
   };
 
   const handleEditCharacter = (character: Character) => {
-    setEditingCharacter(character);
+    setEditingId(character.id);
     setIsEditing(true);
   };
 
