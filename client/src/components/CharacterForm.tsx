@@ -56,7 +56,13 @@ import { Badge } from "@/components/ui/badge";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, RefreshCw } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useParentMode } from "@/hooks/use-parent-mode";
 import AnimalAutocomplete from "./AnimalAutocomplete";
@@ -579,13 +585,43 @@ export default function CharacterForm({
                       <FormControl>
                         <Input placeholder="What are they called?" {...field} />
                       </FormControl>
-                      {/* Shown for everyone now. It used to appear only for a
-                          boy or a girl, because the only names it had were
-                          fifteen biblical ones -- so most of the catalogue got
-                          no button at all rather than a name that suited it. */}
-                      <Button type="button" variant="outline" onClick={pickRandomName} className="whitespace-nowrap">
-                        Random
-                      </Button>
+                      {/*
+                        CREATING ONLY. Rerolling the name of a character who
+                        already exists is not naming them, it is renaming them --
+                        and the one place you would reach for it is the one place
+                        it does real damage, because stories already written
+                        refer to them by the name they had.
+
+                        `saved` is only passed by the edit dialog, so its absence
+                        is what "new character" means here. Same signal the
+                        picture button uses, rather than a second notion of it.
+
+                        Shown for every kind now. It used to appear only for a
+                        boy or a girl, because the only names it had were fifteen
+                        biblical ones -- so most of the catalogue got no button
+                        at all rather than a name that suited it.
+                      */}
+                      {!saved?.id && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                size="icon"
+                                onClick={pickRandomName}
+                                // The label is the only thing a screen reader
+                                // gets: the tooltip is a hover affordance and
+                                // the button has no text of its own.
+                                aria-label="Generate random name"
+                                className="shrink-0 bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-400"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Generate random name</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </div>
                     <FormMessage />
                   </FormItem>
