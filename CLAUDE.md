@@ -455,6 +455,28 @@ Rules that are easy to break without noticing:
 - Verses are **fetched from bible-api.com, never recalled.** A model reciting
   scripture produces text that reads correctly and is not.
 
+## Dropdowns
+
+`ui/select.tsx` sized its scrolling viewport with
+`h-[var(--radix-select-trigger-height)]` — the height of the CLOSED control,
+not the list — so `max-h-96` on the content could never apply and a long list
+rendered without scrolling. Stock shadcn, and wrong for all thirteen dropdowns
+here; the 31-item skill list is only what made it obvious. It is `max-h-72
+overflow-y-auto` now, the idiom `HeroPicker`, `CharacterPicker` and
+`AnimalAutocomplete` already used, with `flex flex-col` on the content so
+Radix's own `flex: 1` can apply.
+
+`SelectItem` styles `data-[highlighted]` as well as `focus` — Radix highlights
+on pointer move, and `focus:` alone left the list with no hover feedback. Both
+halves of the accent pair, always: `findUnpairedAccent` in `tests/theme.test.ts`
+scans `components/ui` too.
+
+**A tabbed dialog must be anchored, not centred.** `DialogContent` is
+`top-[50%] translate-y-[-50%]` with an intrinsic height, so switching to a
+shorter tab moved the whole card, tab strip included. The three dialogs that
+host `CharacterForm` override it with `top-[4vh] translate-y-0`; the other
+seven call sites are fine centred.
+
 ## Conventions
 
 - ESM throughout (`"type": "module"`). `require()` is not available in the

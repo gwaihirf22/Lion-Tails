@@ -961,12 +961,23 @@ export default function CharacterForm({
             </TabsContent>
 
             <TabsContent value="appearance" className="space-y-4 pt-4">
-              <div className="flex items-center gap-4 rounded-lg border border-border bg-muted/40 p-4">
+              {/*
+                WRAPS, and the gallery below is the third child of this row --
+                the indentation makes it look like a sibling and it is not.
+                
+                Three things were missing and each one shoved the tiles further
+                past the border on a narrow screen: the row never wrapped, the
+                portrait had no shrink-0 so it squashed first, and the text
+                column had no min-w-0 -- so the longest word in the helper
+                paragraph set a floor the row could not shrink below.
+              */}
+              <div className="flex flex-wrap items-start gap-4 rounded-lg border border-border bg-muted/40 p-4">
                 {portrait("lg")}
-                <div className="space-y-2">
+                <div className="min-w-0 flex-1 space-y-2">
                   {saved?.id ? (
                     <>
                       <Button type="button" variant="outline" size="sm"
+                              className="w-full sm:w-auto"
                               onClick={() => setAskOpen(true)}
                               disabled={drawing || gallery.length >= avatarCap}>
                         {drawing
@@ -1009,7 +1020,7 @@ export default function CharacterForm({
                 off the card on a phone, which is the thing worth avoiding.
               */}
               {saved?.id && (
-                <div className="space-y-2">
+                <div className="w-full space-y-2 sm:w-auto">
                   <div className="flex flex-wrap gap-2">
                     {(showAll ? gallery : gallery.slice(0, 3)).map((a: { id: string; url: string }) => {
                       const chosen = a.url === form.watch("avatarUrl");
