@@ -487,9 +487,19 @@ export default function StoryForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm font-medium">
-                      Theme/Message
+                      Virtue to learn
                       <span className="ml-2 font-normal text-muted-foreground">(optional)</span>
                     </FormLabel>
+                    {/*
+                      Says what the choice DOES, which was invisible: the theme
+                      is what a finished story records as a virtue on everyone
+                      who was in it, and that is the whole Virtues tab. Called a
+                      theme, it read as a tone setting.
+                    */}
+                    <FormDescription className="text-xs">
+                      Whatever you choose here is added to every character in the
+                      story as a virtue they have learned, once it is finished.
+                    </FormDescription>
                     <FormControl>
                       <div className="relative">
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">

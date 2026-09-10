@@ -10,6 +10,7 @@ import {
   notableSkills,
   pointsSpent,
   skillsOf,
+  SKILL_START,
   STAT_BASE,
   statsAreAffordable,
   unseenVirtues,
@@ -261,51 +262,59 @@ describe("virtues nobody has looked at", () => {
 describe("skills cost points", () => {
   const sk = (name: string, value: number) => ({ name, value });
 
-  it("costs exactly one to have", () => {
-    expect(pointsSpent(baseStats(), [sk("climbing", STAT_BASE + 1)])).toBe(1);
+  it("costs one point to take up", () => {
+    // A skill's cost IS its level. Attributes measure distance from an ordinary
+    // 3 because everybody has a strength; nobody has climbing by default, so
+    // there is no baseline to be a distance from.
+    expect(pointsSpent(baseStats(), [sk("climbing", SKILL_START)])).toBe(1);
   });
 
-  it("costs nothing at the baseline, and refunds below it", () => {
-    expect(pointsSpent(baseStats(), [sk("climbing", STAT_BASE)])).toBe(0);
-    expect(pointsSpent(baseStats(), [sk("climbing", STAT_BASE - 1)])).toBe(-1);
+  it("costs one more for each level after that", () => {
+    expect(pointsSpent(baseStats(), [sk("climbing", 4)])).toBe(4);
+    expect(pointsSpent(baseStats(), [sk("climbing", 10)])).toBe(10);
+  });
+
+  it("never refunds for being low", () => {
+    // The bug the old model had: measured against the attribute baseline, a
+    // skill at 1 gave back two points and a new one cost four.
+    for (let v = SKILL_START; v <= 10; v++) {
+      expect(pointsSpent(baseStats(), [sk("x", v)])).toBeGreaterThan(0);
+    }
   });
 
   it("adds to what the attributes already spent", () => {
     const stats = { ...baseStats(), strength: STAT_BASE + 2 };
-    expect(pointsSpent(stats, [sk("climbing", STAT_BASE + 1)])).toBe(3);
+    expect(pointsSpent(stats, [sk("climbing", SKILL_START)])).toBe(3);
   });
 
   it("counts against the same allowance", () => {
     const oneStory = { adventures: [{ storyId: "s1", theme: "courage" }] };
-    // 2 to start + 1 earned = 3.
-    expect(pointsAvailable({ ...oneStory, skills: [sk("climbing", STAT_BASE + 1)] })).toBe(2);
+    // 2 to start + 1 earned = 3, less one skill at level 1.
+    expect(pointsAvailable({ ...oneStory, skills: [sk("climbing", SKILL_START)] })).toBe(2);
   });
 
   it("is affordable up to the pool and not past it", () => {
-    // The boundary, both sides: a check that only refuses is off by one.
-    const three = [sk("a", 4), sk("b", 4)];
-    expect(statsAreAffordable(baseStats(), undefined, three.slice(0, 2))).toBe(true);
-    expect(statsAreAffordable(baseStats(), undefined, [...three, sk("c", 4)])).toBe(false);
+    // The boundary, both sides: a check that only ever refuses is off by one.
+    expect(statsAreAffordable(baseStats(), undefined, [sk("a", 1), sk("b", 1)])).toBe(true);
+    expect(statsAreAffordable(baseStats(), undefined, [sk("a", 1), sk("b", 1), sk("c", 1)])).toBe(false);
+    expect(statsAreAffordable(baseStats(), undefined, [sk("a", 2)])).toBe(true);
+    expect(statsAreAffordable(baseStats(), undefined, [sk("a", 3)])).toBe(false);
   });
 
   it("lets a weakness pay for a skill", () => {
     // The same trade the attributes allow: be poor at one thing to be good at
     // another, rather than only ever spending upward.
     const weak = { ...baseStats(), agility: STAT_BASE - 2 };
-    expect(statsAreAffordable(weak, undefined, [sk("a", 4), sk("b", 4), sk("c", 4), sk("d", 4)])).toBe(true);
+    expect(statsAreAffordable(weak, undefined, [sk("climbing", 4)])).toBe(true);
   });
 });
 
 describe("what reaches the story", () => {
-  it("names only the skills somebody spent on", () => {
-    expect(notableSkills({ skills: [{ name: "climbing", value: 5 }, { name: "baking", value: 3 }] }))
-      .toEqual([{ name: "climbing", value: 5 }]);
-  });
-
-  it("counts a skill dropped below the baseline as notable too", () => {
-    // "Poor at swimming" is as much a story as "good at climbing" -- the block
-    // exists to decide against a character as readily as for them.
-    expect(notableSkills({ skills: [{ name: "swimming", value: 1 }] })).toHaveLength(1);
+  it("names every skill, because every one was paid for", () => {
+    // Unlike an attribute there is no "ordinary" level of climbing that
+    // everybody has, so there is nothing to filter out.
+    const skills = [{ name: "climbing", value: 5 }, { name: "baking", value: SKILL_START }];
+    expect(notableSkills({ skills })).toEqual(skills);
   });
 
   it("is empty for a character with none", () => {

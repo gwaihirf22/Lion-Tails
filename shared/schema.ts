@@ -903,9 +903,15 @@ export function skillsOf(c?: { skills?: CharacterSkill[] } | null): CharacterSki
   return c?.skills ?? [];
 }
 
-/** The skills worth telling a story about: the ones somebody spent on. */
+/**
+ * The skills worth telling a story about: all of them.
+ *
+ * Unlike an attribute, a skill at its lowest level was still bought -- there is
+ * no "ordinary" level of climbing that everybody has. So there is nothing to
+ * filter out, and this exists as the name for that fact rather than as a filter.
+ */
 export function notableSkills(c?: { skills?: CharacterSkill[] } | null): CharacterSkill[] {
-  return skillsOf(c).filter((s) => s.value !== STAT_BASE);
+  return skillsOf(c);
 }
 
 export function statsOf(c?: { stats?: CharacterStats } | null): CharacterStats {
@@ -922,13 +928,30 @@ export function statsOf(c?: { stats?: CharacterStats } | null): CharacterStats {
 export function pointsSpent(stats: CharacterStats, skills: CharacterSkill[] = []): number {
   return (
     CHARACTER_STATS.reduce((n, s) => n + (stats[s] - STAT_BASE), 0) +
-    // A skill added at STAT_BASE + 1 costs exactly one, and dropping one below
-    // the baseline refunds, exactly as an attribute does. No special case: the
-    // whole reason a skill starts one above baseline is that this sum then
-    // needs no knowledge of skills being different.
-    skills.reduce((n, s) => n + (s.value - STAT_BASE), 0)
+    skills.reduce((n, s) => n + skillCost(s), 0)
   );
 }
+
+/**
+ * What one skill costs: its level.
+ *
+ * Attributes measure distance from an ordinary 3, because everybody HAS a
+ * strength whether they spent on it or not. Nobody has a skill by default, so
+ * there is no baseline to be a distance from -- a skill at 1 is a skill you
+ * bought, and it costs the one point that bought it. Level 4 costs four.
+ *
+ * This is why SKILL_START is 1 and not STAT_BASE + 1. The earlier version
+ * measured skills against the attribute baseline, which made a new skill cost
+ * four points and a skill at 1 REFUND two.
+ */
+export function skillCost(skill: CharacterSkill): number {
+  return skill.value;
+}
+
+/** Where a new skill starts, and therefore what it costs to have one at all. */
+export const SKILL_START = 1;
+/** At or above this a skill is more than a beginner's. */
+export const SKILL_COMPETENT = 3;
 
 /**
  * Whether the stat system applies to this character.
