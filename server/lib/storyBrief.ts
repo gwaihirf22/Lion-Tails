@@ -713,13 +713,34 @@ export function buildStoryBrief(
         return when ? `${when}: ${e.description}` : e.description;
       })
       .join("; ");
+    /**
+     * WHERE THEY LIVED, not just when. Both are on every hero and only one
+     * was being used.
+     */
+    const when = [hero.timePeriod, hero.place].filter(Boolean).join(", ");
     sourceMaterial = {
       kind: "hero-of-faith",
       label: hero.name,
-      passage: hero.timePeriod || undefined,
+      passage: when || undefined,
       account: [
         hero.description,
         hero.contribution,
+        /**
+         * THE BIOGRAPHY. 250-350 words, hand-written and hand-checked, and
+         * until now read by nothing at all.
+         *
+         * Every hero story this app has ever produced was written from
+         * `description` -- the one-sentence blurb on the card ("Hid Jewish
+         * families in her father's watch shop.") -- plus `contribution` and a
+         * list of key events. All 80 heroes have carried the long form the
+         * whole time; `biography` appeared nowhere in this file.
+         *
+         * That is the difference between a model working from a caption and a
+         * model working from an account. It is the same argument that put the
+         * biblical event's `anchor` here rather than its slug: supply the
+         * material, do not ask the model to remember the person.
+         */
+        hero.biography,
         // The events list has no terminator of its own, so without this the
         // account read "...the springs she asks for In their own words:".
         events && `Key events -- ${events}.`.replace(/\.\.$/, "."),
@@ -731,7 +752,18 @@ export function buildStoryBrief(
       cautions: [
         `${hero.name} was a real person who really lived. Do not invent events for them that did not happen, and do not move them to another century or country.`,
         "Their faith is what the story is for. Do not reduce them to a list of achievements.",
-      ],
+        /**
+         * What they got wrong, where the data says it plainly.
+         *
+         * `complications` is already shown to READERS on the Heroes page, in a
+         * box deliberately not hidden behind a tab -- and it reached no prompt,
+         * so the story was the one place the app rounded a person off. A
+         * caution rather than account text: it is an instruction not to tidy,
+         * which is the shape every other line in this array has.
+         */
+        hero.complications &&
+          `Do not tidy this away: ${hero.complications}`,
+      ].filter((c): c is string => Boolean(c)),
     };
   }
 
