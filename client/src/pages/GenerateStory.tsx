@@ -13,7 +13,8 @@ import { apiRequest } from "@/lib/queryClient";
 import type { StoryRequest, StoryResponse } from "@shared/schema";
 import { useStoryJobs, describeJob } from "@/hooks/use-story-jobs";
 import ContinuationContext from "@/components/ContinuationContext";
-import { characterIdsOf, type SavedStory } from "@shared/schema";
+import {
+  type StoryUsage, characterIdsOf, type SavedStory } from "@shared/schema";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 
 export default function GenerateStory() {
@@ -61,7 +62,7 @@ export default function GenerateStory() {
   );
 
   // Query for remaining story generations
-  const { data: generationStats, isLoading: statsLoading } = useQuery({
+  const { data: generationStats, isLoading: statsLoading } = useQuery<StoryUsage>({
     queryKey: ["/api/story/usage"],
     queryFn: async () => {
       const res = await fetch("/api/story/usage");
@@ -221,11 +222,17 @@ export default function GenerateStory() {
         </div>
         {!statsLoading && generationStats && (
           <div className="bg-primary/10 rounded-lg p-3 mt-4 md:mt-0 text-sm">
+            {/* The balance, then the rule. This said "{remaining} / {limit}
+                stories remaining this month" against a LIFETIME count, so it
+                read 0 for anyone past ten stories while the server let them
+                run to fifty. */}
             <p className="font-medium">
-              {generationStats.remaining} / {generationStats.limit} stories remaining this month
+              {generationStats.remaining} {generationStats.remaining === 1 ? "story" : "stories"} left
             </p>
             <p className="text-xs text-muted-foreground">
-              Next reset: {new Date(generationStats.nextReset).toLocaleDateString()}
+              You start with {generationStats.total} and get {generationStats.perMonth} more a month,
+              up to {generationStats.total}. Next on{" "}
+              {new Date(generationStats.nextTopUp).toLocaleDateString()}.
             </p>
           </div>
         )}
