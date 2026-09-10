@@ -4,6 +4,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Pencil, Search, Undo2 } from "lucide-react";
 import {
+  type CharacterSkill,
+  skillsOf,
+  MAX_SKILLS,
   unseenVirtues,
   statsEnabledFor,
   pointsAvailable,
@@ -242,6 +245,7 @@ export default function CharacterForm({
       avatarUrl: initialCharacter?.avatarUrl,
       statsEnabled: initialCharacter?.statsEnabled,
       stats: initialCharacter?.stats,
+      skills: initialCharacter?.skills,
     },
   });
 
@@ -257,8 +261,31 @@ export default function CharacterForm({
   // pointsAvailable existed and this re-derived it. The override is what lets
   // the card ask about the stored sheet and the form about the one being
   // dragged around right now, from one function.
-  const available = pointsAvailable(saved ?? {}, statValues);
+  const [skillDraft, setSkillDraft] = useState("");
+  const skillValues = skillsOf({ skills: form.watch("skills") });
+  const available = pointsAvailable(saved ?? {}, statValues, skillValues);
   const levels = virtueLevels(saved);
+
+  const setSkill = (name: string, value: number) => {
+    if (value < STAT_FLOOR || value > STAT_CAP) return;
+    form.setValue("skills", skillValues.map((sk: CharacterSkill) => (sk.name === name ? { ...sk, value } : sk)), {
+      shouldDirty: true,
+    });
+  };
+  const addSkill = (name: string) => {
+    const clean = name.trim();
+    // Refused here AND on the server. A duplicate would cost a second point and
+    // say nothing the first did not.
+    if (!clean || skillValues.some((sk: CharacterSkill) => sk.name.toLowerCase() === clean.toLowerCase())) return;
+    if (skillValues.length >= MAX_SKILLS) return;
+    // One above the baseline, which is what makes having it cost a point --
+    // see pointsSpent, which needs no knowledge that skills exist.
+    form.setValue("skills", [...skillValues, { name: clean, value: STAT_BASE + 1 }], {
+      shouldDirty: true,
+    });
+  };
+  const removeSkill = (name: string) =>
+    form.setValue("skills", skillValues.filter((sk: CharacterSkill) => sk.name !== name), { shouldDirty: true });
 
   const setStat = (stat: CharacterStat, value: number) => {
     if (value < STAT_FLOOR || value > STAT_CAP) return;
@@ -520,7 +547,11 @@ export default function CharacterForm({
     { value: "personality", label: "Personality", tint: "bg-tab-personality", edge: "border-t-tab-personality" },
     // "Statistics" read as a record of things done, which is what Virtues
     // actually is. These are what the character CAN do.
-    { value: "stats", label: "Stats", tint: "bg-tab-stats", edge: "border-t-tab-stats" },
+    //
+    // The VALUE stays "stats": it is the key for --tab-stats, the tailwind map
+    // and TAB_TINTS in the theme test, and renaming it would be a coordinated
+    // four-file change buying nothing a label already says.
+    { value: "stats", label: "Attributes/Skills", tint: "bg-tab-stats", edge: "border-t-tab-stats" },
     { value: "virtues", label: "Virtues", tint: "bg-tab-virtues", edge: "border-t-tab-virtues" },
     ...(parentMode
       ? [{ value: "grown-ups", label: "Grown-ups", tint: "bg-tab-grown-ups", edge: "border-t-tab-grown-ups" }]
@@ -646,7 +677,7 @@ export default function CharacterForm({
                             // real tooltip.
                             title={
                               t.value === "stats"
-                                ? `${count} point${count === 1 ? "" : "s"} to spend on what they can do`
+                                ? `${count} Attribute/Skill point${count === 1 ? "" : "s"}`
                                 : `${count} new virtue${count === 1 ? "" : "s"} to look at`
                             }
                             className={cn(
@@ -1163,6 +1194,7 @@ export default function CharacterForm({
                 )}
               </div>
 
+              <p className="pt-1 text-sm font-semibold">Attributes</p>
               {CHARACTER_STATS.map((stat) => {
                 const value = statValues[stat];
                 const canRaise = value < STAT_CAP && (available > 0 || parentMode);
@@ -1197,6 +1229,119 @@ export default function CharacterForm({
               </p>
 
               {/*
+                SKILLS. The half of this tab that says something a number
+                cannot: "good at climbing" is specific in a way a sixth
+                attribute would not be, and it costs one clause in the prompt.
+
+                They spend from the SAME pool -- a new one starts one above the
+                baseline, so having it costs a point by exactly the arithmetic
+                the attributes already use. That is why nothing here needs its
+                own budget: pointsSpent counts them without knowing they are
+                different.
+              */}
+              <div className="space-y-3 border-t pt-4">
+                <div>
+                  <p className="text-sm font-semibold">Skills</p>
+                  <p className="text-xs text-muted-foreground">
+                    Things they have learned to do. Each one costs a point to have.
+                  </p>
+                </div>
+
+                {skillValues.map((sk: CharacterSkill) => (
+                  <div key={sk.name} className="flex items-center gap-3">
+                    <span className="w-28 truncate text-sm capitalize" title={sk.name}>{sk.name}</span>
+                    <Button
+                      type="button" variant="outline" size="icon" className="h-7 w-7"
+                      disabled={sk.value <= STAT_FLOOR}
+                      onClick={() => setSkill(sk.name, sk.value - 1)}
+                      aria-label={`Lower ${sk.name}`}
+                    >
+                      −
+                    </Button>
+                    <span className="w-6 text-center text-sm tabular-nums">{sk.value}</span>
+                    <Button
+                      type="button" variant="outline" size="icon" className="h-7 w-7"
+                      disabled={sk.value >= STAT_CAP || (available <= 0 && !parentMode)}
+                      onClick={() => setSkill(sk.name, sk.value + 1)}
+                      aria-label={`Raise ${sk.name}`}
+                    >
+                      +
+                    </Button>
+                    <Progress value={(sk.value / STAT_CAP) * 100} className="h-2 flex-1" />
+                    <Button
+                      type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                      onClick={() => removeSkill(sk.name)}
+                      aria-label={`Remove ${sk.name}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+
+                {skillValues.length >= MAX_SKILLS ? (
+                  <p className="text-xs text-muted-foreground">
+                    {MAX_SKILLS} skills is the most one character can keep — a sheet
+                    with more than a handful of notable things stops having anything
+                    notable about it.
+                  </p>
+                ) : available <= 0 && !parentMode ? (
+                  <p className="text-xs text-muted-foreground">
+                    No points left. Finish a story to earn one, or lower something above.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <Select value="" onValueChange={addSkill}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Add a skill…" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {optionsFor("skill")
+                          .filter((o) => !skillValues.some((sk: CharacterSkill) => sk.name === o))
+                          .map((o) => (
+                            <SelectItem key={o} value={o}>{title(o)}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/*
+                      NOT ParentEditable, which every other field here uses.
+                      That component reports on every keystroke, which is right
+                      for a field whose value IS the text and wrong for adding
+                      to a list: typing "climbing" would add "c", then "cl",
+                      then "cli", until it hit the cap. A draft plus an explicit
+                      commit, the same shape pinned canon uses.
+                    */}
+                    {parentMode && (
+                      <div className="flex gap-2">
+                        <Input
+                          value={skillDraft}
+                          onChange={(e) => setSkillDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            // Or it submits the whole character.
+                            e.preventDefault();
+                            addSkill(skillDraft);
+                            setSkillDraft("");
+                          }}
+                          placeholder="Or type anything — breathing fire, whistling…"
+                          className="text-sm"
+                        />
+                        <Button
+                          type="button" variant="outline" size="sm"
+                          disabled={!skillDraft.trim()}
+                          onClick={() => { addSkill(skillDraft); setSkillDraft(""); }}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/*
                 Off altogether. Distinct from "all threes": an untouched sheet
                 is a character who happens to be ordinary, and this is a
                 character the story is never told about in these terms at all.
@@ -1213,7 +1358,7 @@ export default function CharacterForm({
                       />
                     </FormControl>
                     <FormLabel className="!mt-0 font-normal">
-                      Use statistics for this character
+                      Use attributes and skills for this character
                     </FormLabel>
                   </FormItem>
                 )}

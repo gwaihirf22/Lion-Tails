@@ -7,6 +7,11 @@ import {
   MAX_AVATARS,
   pointsAvailable,
   STARTING_POINTS,
+  notableSkills,
+  pointsSpent,
+  skillsOf,
+  STAT_BASE,
+  statsAreAffordable,
   unseenVirtues,
 } from "../shared/schema";
 import { avatarCapFor, hasUnlimitedUse } from "../server/lib/modelPolicy";
@@ -242,5 +247,69 @@ describe("virtues nobody has looked at", () => {
   it("is empty for a character with no stories at all", () => {
     expect(unseenVirtues({})).toEqual([]);
     expect(unseenVirtues(null)).toEqual([]);
+  });
+});
+
+/**
+ * Skills spend from the same pool as attributes.
+ *
+ * The whole reason a new skill starts one above the baseline is that
+ * pointsSpent then needs no knowledge that skills exist -- it is the same
+ * "distance from baseline" sum. These assert that, because if it ever stops
+ * being true the server and the form will disagree about what is affordable.
+ */
+describe("skills cost points", () => {
+  const sk = (name: string, value: number) => ({ name, value });
+
+  it("costs exactly one to have", () => {
+    expect(pointsSpent(baseStats(), [sk("climbing", STAT_BASE + 1)])).toBe(1);
+  });
+
+  it("costs nothing at the baseline, and refunds below it", () => {
+    expect(pointsSpent(baseStats(), [sk("climbing", STAT_BASE)])).toBe(0);
+    expect(pointsSpent(baseStats(), [sk("climbing", STAT_BASE - 1)])).toBe(-1);
+  });
+
+  it("adds to what the attributes already spent", () => {
+    const stats = { ...baseStats(), strength: STAT_BASE + 2 };
+    expect(pointsSpent(stats, [sk("climbing", STAT_BASE + 1)])).toBe(3);
+  });
+
+  it("counts against the same allowance", () => {
+    const oneStory = { adventures: [{ storyId: "s1", theme: "courage" }] };
+    // 2 to start + 1 earned = 3.
+    expect(pointsAvailable({ ...oneStory, skills: [sk("climbing", STAT_BASE + 1)] })).toBe(2);
+  });
+
+  it("is affordable up to the pool and not past it", () => {
+    // The boundary, both sides: a check that only refuses is off by one.
+    const three = [sk("a", 4), sk("b", 4)];
+    expect(statsAreAffordable(baseStats(), undefined, three.slice(0, 2))).toBe(true);
+    expect(statsAreAffordable(baseStats(), undefined, [...three, sk("c", 4)])).toBe(false);
+  });
+
+  it("lets a weakness pay for a skill", () => {
+    // The same trade the attributes allow: be poor at one thing to be good at
+    // another, rather than only ever spending upward.
+    const weak = { ...baseStats(), agility: STAT_BASE - 2 };
+    expect(statsAreAffordable(weak, undefined, [sk("a", 4), sk("b", 4), sk("c", 4), sk("d", 4)])).toBe(true);
+  });
+});
+
+describe("what reaches the story", () => {
+  it("names only the skills somebody spent on", () => {
+    expect(notableSkills({ skills: [{ name: "climbing", value: 5 }, { name: "baking", value: 3 }] }))
+      .toEqual([{ name: "climbing", value: 5 }]);
+  });
+
+  it("counts a skill dropped below the baseline as notable too", () => {
+    // "Poor at swimming" is as much a story as "good at climbing" -- the block
+    // exists to decide against a character as readily as for them.
+    expect(notableSkills({ skills: [{ name: "swimming", value: 1 }] })).toHaveLength(1);
+  });
+
+  it("is empty for a character with none", () => {
+    expect(skillsOf({})).toEqual([]);
+    expect(notableSkills(null)).toEqual([]);
   });
 });

@@ -84,7 +84,7 @@ export default function CharacterCard({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {unspent} point{unspent === 1 ? "" : "s"} to spend on what they can do
+                  {unspent} Attribute/Skill point{unspent === 1 ? "" : "s"}
                 </TooltipContent>
               </Tooltip>
             )}

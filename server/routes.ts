@@ -58,6 +58,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import {
   MAX_AVATARS,
+  statsOf,
   virtueLevels,
   avatarsOf, storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
@@ -191,8 +192,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       // A new character has earned nothing, so this allows exactly the starting
       // points and no more.
-      if (parsed.stats && !statsAreAffordable(parsed.stats, undefined)) {
-        return res.status(400).json({ message: "That character has spent more points than they have." });
+      // Skills spend from the SAME pool, so they are checked in the same call:
+      // a body that could add six skills for free would be awarding itself six
+      // points, which is the hole the adventures omission exists to close.
+      if (
+        (parsed.stats || parsed.skills) &&
+        !statsAreAffordable(statsOf(parsed), undefined, parsed.skills ?? [])
+      ) {
+        return res.status(400).json({
+          message: "That character has spent more Attribute/Skill points than they have.",
+        });
       }
 
       const character = await storage.createCharacter({ ...parsed, category }, userId);
@@ -258,8 +267,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Against the adventures THIS character has been through -- read from the
       // stored row, never from the request, which cannot be trusted to say how
       // many stories it has earned.
-      if (updates.stats && !statsAreAffordable(updates.stats, existing)) {
-        return res.status(400).json({ message: "That is more points than this character has." });
+      // MERGED for the budget, even though the vocabulary is checked on the
+      // patch alone. These are different questions: "is this word allowed" is
+      // about the field being edited, and "can they afford this sheet" is about
+      // the whole sheet -- raising one attribute while six skills already sit
+      // on the row has to count all seven.
+      if (updates.stats || updates.skills) {
+        const merged = { ...existing, ...updates };
+        if (!statsAreAffordable(statsOf(merged), existing, merged.skills ?? [])) {
+          return res.status(400).json({
+            message: "That is more Attribute/Skill points than this character has.",
+          });
+        }
       }
 
       const patch = "kind" in updates ? { ...updates, category } : updates;

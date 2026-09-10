@@ -1,4 +1,7 @@
 import {
+  type CharacterSkill,
+  notableSkills,
+  skillsOf,
   characterRoleOf,
   characterIdsOf,
   characterKind,
@@ -326,6 +329,12 @@ export type BriefCharacter = {
   stats?: CharacterStats;
   /** False when this character opted out of stats entirely. */
   statsEnabled?: boolean;
+  /**
+   * Named skills. Absent on every brief frozen before this shipped, and
+   * story_jobs.brief is written at enqueue and never rewritten -- so every
+   * reader below treats absence as "none" rather than reaching for a length.
+   */
+  skills?: CharacterSkill[];
 };
 
 export type StoryBrief = {
@@ -688,7 +697,7 @@ export function buildStoryBrief(
   // the companion animal goes because "give it a name and a personality" eight
   // times is a menagerie, not a cast.
   const cast: BriefCharacter[] = [
-    { name, identity, colour, stats: details?.stats, statsEnabled: details?.statsEnabled },
+    { name, identity, colour, stats: details?.stats, statsEnabled: details?.statsEnabled, skills: details?.skills },
     ...supporting.map((c): BriefCharacter => {
       const who = [c.name];
       if (c.age) who.push(`aged ${c.age}`);
@@ -732,6 +741,7 @@ export function buildStoryBrief(
         name: c.name,
         stats: c.stats,
         statsEnabled: c.statsEnabled,
+        skills: c.skills,
         identity: isSet(c.mustBeTrue)
           ? `${sentence([who.join(", ")])} ${sentence([c.mustBeTrue])}`
           : sentence([who.join(", ")]),
@@ -848,13 +858,31 @@ function renderAbilities(cast: BriefCharacter[]): string {
   // is answerable, and a partial table is not.
   const sheets = cast
     .filter((c) => c.statsEnabled !== false)
-    .map((c) => ({ name: c.name, stats: statsOf(c) }));
-  const touched = sheets.filter((c) =>
-    CHARACTER_STATS.some((s) => c.stats[s] !== STAT_BASE),
+    .map((c) => ({ name: c.name, stats: statsOf(c), skills: notableSkills(c) }));
+  // Skills count as "touched" too. Keyed on attributes alone, a character who
+  // is ordinary at all five but good at climbing would be suppressed entirely
+  // -- and climbing is exactly the thing worth saying about them.
+  const touched = sheets.filter(
+    (c) => CHARACTER_STATS.some((s) => c.stats[s] !== STAT_BASE) || c.skills.length > 0,
   );
   // Nobody has spent anything, so there is nothing to say and a cast of
   // untouched characters costs no tokens at all.
   if (touched.length === 0) return "";
+
+  /**
+   * Skills are named, so they cannot be columns -- and they are the half of
+   * this block that says something a number cannot. Prose under the table,
+   * only for characters who have any, and only the ones spent on.
+   */
+  const skillLines = sheets
+    .filter((c) => c.skills.length > 0)
+    .map((c) => {
+      const said = c.skills.map(
+        (sk) =>
+          `${sk.value >= STAT_NOTABLE_HIGH ? "very good at" : sk.value <= STAT_NOTABLE_LOW ? "poor at" : "good at"} ${sk.name}`,
+      );
+      return `  ${c.name} is ${said.join(", and ")}.`;
+    });
 
   const guidance =
     "Reference, not content. Never write a number, never name a stat, and never " +
@@ -871,8 +899,9 @@ function renderAbilities(cast: BriefCharacter[]): string {
       const both = [...high, ...low];
       return both.length ? `  ${c.name} is ${both.join(", and ")}.` : "";
     }).filter(Boolean);
-    if (!lines.length) return "";
-    return ["WHAT EACH OF THEM CAN DO", ...lines, guidance].join("\n    ");
+    const said = [...lines, ...skillLines];
+    if (!said.length) return "";
+    return ["WHAT EACH OF THEM CAN DO", ...said, guidance].join("\n    ");
   }
 
   // The whole sheet, for everyone, so "who here is strongest" is answerable.
@@ -891,6 +920,9 @@ function renderAbilities(cast: BriefCharacter[]): string {
     `  Scale 1-10. ${STAT_BASE} is ordinary for their age; ${STAT_NOTABLE_HIGH} is notable; 9 is rare.`,
     header,
     ...rows,
+    // Named, so they cannot be columns. Under the table, above the guidance
+    // that governs both halves.
+    ...skillLines,
     guidance,
   ].join("\n    ");
 }
@@ -1372,14 +1404,37 @@ export function deserialiseBrief(raw: string): StoryBrief {
  * is the shape a leak actually takes.
  */
 const LEAK_PATTERNS: ReadonlyArray<[string, RegExp]> = [
-  ["stat name", /\b(strength|agility|constitution|wisdom|heart)\s+(?:of\s+)?(?:is\s+)?\d/gi],
+  // Built FROM the list rather than restating it, so adding an attribute
+  // cannot leave the detector checking four of five.
+  [
+    "stat name",
+    new RegExp(`\\b(${CHARACTER_STATS.join("|")})\\s+(?:of\\s+)?(?:is\\s+)?\\d`, "gi"),
+  ],
   ["scale", /\b\d\s*(?:\/|out of)\s*10\b/gi],
-  ["sheet word", /\b(stat|stats|statistic|attribute|ability score|character sheet)\b/gi],
+  ["sheet word", /\b(stat|stats|statistic|attribute|attributes|skill|skills|ability score|character sheet)\b/gi],
   // No \b before the +: it is not a word character, so \b\+ can only match
   // after one, and "gained +1" has a space there. The pattern would have been
   // dead in exactly the case it was written for.
   ["level talk", /(\blevel \d|\bpoints? in\b|\+\d\b)/gi],
 ];
+
+/**
+ * Did a SKILL name get announced, rather than shown?
+ *
+ * Separate from LEAK_PATTERNS and deliberately not a regex: skill names are
+ * user-authored free text, and compiling a pattern out of them is an escaping
+ * bug and a denial-of-service in one. A plain case-insensitive scan is neither,
+ * and it is looking for the giveaway phrasing rather than the word itself --
+ * "she went climbing" is the feature working; "her climbing skill" is not.
+ */
+export function skillLeakage(story: string, skills: string[]): string[] {
+  const text = story.toLowerCase();
+  return skills
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.length > 2)
+    .filter((s) => text.includes(`${s} skill`) || text.includes(`skill at ${s}`) || text.includes(`${s} level`))
+    .map((s) => `skill named: ${s}`);
+}
 
 export function statLeakage(story: string): string[] {
   const found: string[] = [];

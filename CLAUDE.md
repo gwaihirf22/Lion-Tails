@@ -358,6 +358,42 @@ directory and is the right path: the parent is the mount point of the
 `story_images` volume, so anything written there survives a redeploy and
 anything written beside it does not.
 
+## Attributes and Skills
+
+The tab is **Attributes/Skills**. The five fixed values are attributes; skills
+are named and user-added — "good at climbing" tells a story something a number
+cannot, and costs one clause. That is deliberately instead of more built-in
+attributes: the block works because an outlier is a SIGNAL, and a dozen columns
+would bury the two that matter in a wall of baselines (and at eight characters,
+cost ~96 numbers of prompt for background colour).
+
+**The stored key is still `stats`, and that is on purpose.** It lives inside the
+`character_data` jsonb, and `characterSchema` is a `z.object`, which strips
+unknown keys — renaming it without a data migration would silently drop every
+existing character's numbers on their next save. `story_jobs.brief` carries it
+too, frozen at enqueue. This was a vocabulary change; paying a migration to make
+an identifier match a label is the wrong trade. (`AdminStats`,
+`/api/admin/generation-stats` and the usage stats in Settings are a different
+feature — do not sweep them in.)
+
+**Skills spend from the same pool.** A new one is added at `STAT_BASE + 1`, so
+having it costs exactly one point by the arithmetic `pointsSpent` already does —
+no special case anywhere, and `pointsAvailable`, `statsAreAffordable`, the
+notable thresholds and the suppression rule all kept working. Names come from
+`optionsFor("skill")`; Parent Mode's `/custom` routes take anything, as they do
+for every other field. Duplicates and the count are refused server-side.
+
+Two things had to move together in `renderAbilities()`: skills render as prose
+under the table (they are named, so they cannot be columns), and the `touched`
+predicate had to widen — keyed on attribute deviation alone, a character
+ordinary at all five but good at climbing was suppressed entirely.
+
+**Never build a regex from a skill name.** They are user text; compiling one is
+an escaping bug and a denial of service at once. `skillLeakage()` is a plain
+case-insensitive scan for the giveaway phrasing, and the attribute pattern in
+`LEAK_PATTERNS` is built FROM `CHARACTER_STATS` so adding one cannot leave the
+detector checking four of five.
+
 ## The character sheet's tabs and badges
 
 Two badges say there is something waiting, because nobody opens a tab to find

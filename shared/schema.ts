@@ -606,6 +606,19 @@ const optionalText = (max: number) =>
  */
 export const MAX_AVATARS = 5;
 
+/**
+ * Named skills one character may keep.
+ *
+ * Six, because each one costs a point and a sheet with more than a handful of
+ * notable things stops having anything notable about it.
+ */
+export const MAX_SKILLS = 6;
+/** Ordinary for a child their age. Everyone starts here, on everything. */
+export const STAT_BASE = 3;
+/** Never 0: "cannot at all" invites a model to treat it as absolute. */
+export const STAT_FLOOR = 1;
+export const STAT_CAP = 10;
+
 export const characterSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Character name is required").max(60),
@@ -733,6 +746,31 @@ export const characterSchema = z.object({
   statsEnabled: z.boolean().optional(),
 
   /**
+   * Named things this character is good at, that the five attributes cannot say.
+   *
+   * "Good at climbing" tells a story something a number cannot, and costs one
+   * clause. That is why this exists rather than a dozen more built-in
+   * attributes: the table works because an outlier is a SIGNAL, and twelve
+   * columns would bury the two that matter in a wall of baselines.
+   *
+   * They spend from the SAME pool as attributes. A skill is added at
+   * STAT_BASE + 1, so having one costs exactly one point by the arithmetic
+   * pointsSpent already does -- no special case anywhere. A free list would be
+   * unbounded flattery; the pool is what makes a sheet a set of choices.
+   *
+   * The name is bounded because it reaches an image-free but real prompt.
+   */
+  skills: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(40),
+        value: z.number().int().min(STAT_FLOOR).max(STAT_CAP),
+      }),
+    )
+    .max(MAX_SKILLS)
+    .optional(),
+
+  /**
    * The stories they have been through: one entry per finished story.
    *
    * A SET KEYED ON storyId, not a counter. That is what makes it safe against
@@ -846,11 +884,6 @@ export const CHARACTER_STATS = [
 export type CharacterStat = (typeof CHARACTER_STATS)[number];
 export type CharacterStats = NonNullable<Character["stats"]>;
 
-/** Ordinary for a child their age. Everyone starts here, on everything. */
-export const STAT_BASE = 3;
-/** Never 0: "cannot at all" invites a model to treat it as absolute. */
-export const STAT_FLOOR = 1;
-export const STAT_CAP = 10;
 /** Spare points a brand-new character has to spend. */
 export const STARTING_POINTS = 2;
 /** At or above this a stat is worth the model knowing about. */
@@ -861,6 +894,18 @@ export const STAT_NOTABLE_LOW = 2;
 /** Every stat at the baseline. What an untouched character is. */
 export function baseStats(): CharacterStats {
   return { strength: STAT_BASE, agility: STAT_BASE, constitution: STAT_BASE, wisdom: STAT_BASE, heart: STAT_BASE };
+}
+
+export type CharacterSkill = NonNullable<Character["skills"]>[number];
+
+/** A character's named skills. Absent means none, like every other list here. */
+export function skillsOf(c?: { skills?: CharacterSkill[] } | null): CharacterSkill[] {
+  return c?.skills ?? [];
+}
+
+/** The skills worth telling a story about: the ones somebody spent on. */
+export function notableSkills(c?: { skills?: CharacterSkill[] } | null): CharacterSkill[] {
+  return skillsOf(c).filter((s) => s.value !== STAT_BASE);
 }
 
 export function statsOf(c?: { stats?: CharacterStats } | null): CharacterStats {
@@ -874,8 +919,15 @@ export function statsOf(c?: { stats?: CharacterStats } | null): CharacterStats {
  * real trade rather than a penalty — a child buys Strength 6 by accepting
  * Agility 1. Nobody starts weak; they choose it.
  */
-export function pointsSpent(stats: CharacterStats): number {
-  return CHARACTER_STATS.reduce((n, s) => n + (stats[s] - STAT_BASE), 0);
+export function pointsSpent(stats: CharacterStats, skills: CharacterSkill[] = []): number {
+  return (
+    CHARACTER_STATS.reduce((n, s) => n + (stats[s] - STAT_BASE), 0) +
+    // A skill added at STAT_BASE + 1 costs exactly one, and dropping one below
+    // the baseline refunds, exactly as an attribute does. No special case: the
+    // whole reason a skill starts one above baseline is that this sum then
+    // needs no knowledge of skills being different.
+    skills.reduce((n, s) => n + (s.value - STAT_BASE), 0)
+  );
 }
 
 /**
@@ -895,7 +947,7 @@ export function pointsEarned(c?: { adventures?: Character["adventures"] } | null
 
 /** Spare points left to spend. May be negative only if a sheet was written by Parent Mode. */
 export function pointsAvailable(
-  c: { stats?: CharacterStats; adventures?: Character["adventures"] },
+  c: { stats?: CharacterStats; skills?: CharacterSkill[]; adventures?: Character["adventures"] },
   /**
    * The sheet to measure, when it is not the one on the row.
    *
@@ -905,8 +957,9 @@ export function pointsAvailable(
    * definition, two callers, and the difference is a parameter.
    */
   stats: CharacterStats = statsOf(c),
+  skills: CharacterSkill[] = skillsOf(c as { skills?: CharacterSkill[] }),
 ): number {
-  return pointsEarned(c) + STARTING_POINTS - pointsSpent(stats);
+  return pointsEarned(c) + STARTING_POINTS - pointsSpent(stats, skills);
 }
 
 /**
@@ -919,8 +972,9 @@ export function pointsAvailable(
 export function statsAreAffordable(
   stats: CharacterStats,
   c?: { adventures?: Character["adventures"] } | null,
+  skills: CharacterSkill[] = [],
 ): boolean {
-  return pointsSpent(stats) <= pointsEarned(c) + STARTING_POINTS;
+  return pointsSpent(stats, skills) <= pointsEarned(c) + STARTING_POINTS;
 }
 
 /**
