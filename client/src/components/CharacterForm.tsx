@@ -639,6 +639,16 @@ export default function CharacterForm({
                         {t.label}
                         {count > 0 && (
                           <span
+                            // A plain title, not a Tooltip: this sits inside a
+                            // modal Dialog, where a portalled Radix layer is
+                            // the thing that has already bitten this file once.
+                            // The card's bubbles are not in a dialog and use a
+                            // real tooltip.
+                            title={
+                              t.value === "stats"
+                                ? `${count} point${count === 1 ? "" : "s"} to spend on what they can do`
+                                : `${count} new virtue${count === 1 ? "" : "s"} to look at`
+                            }
                             className={cn(
                               "absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none",
                               // Red for "there is something here". destructive is
