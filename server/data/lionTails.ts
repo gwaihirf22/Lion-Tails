@@ -162,14 +162,17 @@ export const DEVICE = {
    * unwritten it would keep being reinvented, eventually differently. The
    * second half REPLACES an earlier rule that the lantern "lights again when
    * it is time to come back" -- which contradicted the way home the universe
-   * actually uses (see CANON.wayBack): a threshold on the far side, with the
-   * lantern waiting on the near side of it.
+   * actually uses (see CANON.wayBack): a threshold on the far side.
+   *
+   * The lantern GOES with them. A first draft of this said it did not, and
+   * the first quest written against it had the traveller carrying it through
+   * every threshold anyway -- as Barnabas does in the prologue, which is
+   * canon a reader can check. The data was wrong, not the story.
    */
   rules:
-    "Once someone is through, the lantern goes dark and stays dark. It does " +
-    "not come with them, and it is not a door to walk back through whenever " +
-    "they like. The way back, when it is time, is a threshold on the far " +
-    "side; the lantern is waiting on the near side of it.",
+    "Once someone is through, the lantern goes dark and stays dark, however " +
+    "far they carry it. It is not a door to walk back through whenever they " +
+    "like. The way back, when it is time, is a threshold on the far side.",
 } as const;
 
 /**
