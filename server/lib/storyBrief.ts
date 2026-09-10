@@ -1,4 +1,5 @@
 import {
+  SKILL_COMPETENT,
   type CharacterSkill,
   notableSkills,
   skillsOf,
@@ -878,10 +879,25 @@ function renderAbilities(cast: BriefCharacter[]): string {
     .filter((c) => c.skills.length > 0)
     .map((c) => {
       const said = c.skills.map(
+        // Graded for a scale that STARTS at 1, not one centred on an ordinary
+        // 3. A skill at 1 is somebody who has just taken it up, not somebody
+        // bad at it -- "poor at climbing" would be wrong about the commonest
+        // case. And the word "skill" never appears in what the model is told:
+        // it is the word the leak detector watches for.
         (sk) =>
-          `${sk.value >= STAT_NOTABLE_HIGH ? "very good at" : sk.value <= STAT_NOTABLE_LOW ? "poor at" : "good at"} ${sk.name}`,
+          `${
+            sk.value >= STAT_NOTABLE_HIGH
+              ? "very good at"
+              : sk.value >= SKILL_COMPETENT
+                ? "good at"
+                : "a beginner at"
+          } ${sk.name}`,
       );
-      return `  ${c.name} is ${said.join(", and ")}.`;
+      // "A, B, and C" rather than "A, and B, and C" -- with six skills the
+      // repeated "and" reads as a list the model is meant to work through.
+      const list =
+        said.length > 1 ? `${said.slice(0, -1).join(", ")}, and ${said[said.length - 1]}` : said[0];
+      return `  ${c.name} is ${list}.`;
     });
 
   const guidance =

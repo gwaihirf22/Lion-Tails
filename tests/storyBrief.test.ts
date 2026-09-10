@@ -1067,10 +1067,14 @@ describe("skills reach the story", () => {
     expect(t).toContain("Ember is good at climbing.");
   });
 
-  it("grades them, and says the poor ones too", () => {
+  it("grades them for a scale that starts at 1", () => {
+    // A skill at 1 is somebody who has just taken it up. Calling that "poor at
+    // swimming" would be wrong about the commonest case -- every skill starts
+    // there, because one point is what one point buys.
     const t = renderBrief(withSkills([{ name: "baking", value: 8 }, { name: "swimming", value: 1 }]), "single");
     expect(t).toContain("very good at baking");
-    expect(t).toContain("poor at swimming");
+    expect(t).toContain("a beginner at swimming");
+    expect(t).not.toContain("poor at");
   });
 
   it("shows up for a character who is ordinary at everything else", () => {
@@ -1086,11 +1090,16 @@ describe("skills reach the story", () => {
       .not.toContain("climbing");
   });
 
-  it("says nothing for a skill nobody spent on", () => {
-    // At the baseline it is not a fact about them, and a brief with nothing to
-    // say must still cost nothing.
-    expect(renderBrief(withSkills([{ name: "climbing", value: baseStats().strength }]), "single"))
-      .not.toContain("WHAT EACH OF THEM CAN DO");
+  it("says the lowest skill too, because it was still bought", () => {
+    // There is no free level of climbing to filter out: having the skill at all
+    // cost a point, so it is a fact about the character.
+    expect(renderBrief(withSkills([{ name: "climbing", value: 1 }]), "single"))
+      .toContain("a beginner at climbing");
+  });
+
+  it("still costs nothing for a character with no skills at all", () => {
+    // The guarantee the golden fixture rests on.
+    expect(renderBrief(withSkills([]), "single")).not.toContain("WHAT EACH OF THEM CAN DO");
   });
 });
 

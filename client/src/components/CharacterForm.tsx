@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Pencil, Search, Undo2 } from "lucide-react";
 import {
+  SKILL_START,
   type CharacterSkill,
   skillsOf,
   MAX_SKILLS,
@@ -278,9 +279,9 @@ export default function CharacterForm({
     // say nothing the first did not.
     if (!clean || skillValues.some((sk: CharacterSkill) => sk.name.toLowerCase() === clean.toLowerCase())) return;
     if (skillValues.length >= MAX_SKILLS) return;
-    // One above the baseline, which is what makes having it cost a point --
-    // see pointsSpent, which needs no knowledge that skills exist.
-    form.setValue("skills", [...skillValues, { name: clean, value: STAT_BASE + 1 }], {
+    // Level 1, which is what one point buys. A skill's cost IS its level:
+    // nobody has a skill by default, so there is no baseline to measure from.
+    form.setValue("skills", [...skillValues, { name: clean, value: SKILL_START }], {
       shouldDirty: true,
     });
   };
@@ -602,9 +603,17 @@ export default function CharacterForm({
       <form onSubmit={form.handleSubmit(submit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Make a character</CardTitle>
+            {/*
+              Whose card this is, when it is somebody's. Editing said "Make a
+              character" over a character who already existed, which is the
+              wrong sentence and hides the one thing worth knowing at a glance.
+              `saved` is the same signal the picture button uses.
+            */}
+            <CardTitle>{saved?.id ? form.watch("name") || "This character" : "Make a character"}</CardTitle>
             <CardDescription>
-              Anyone you like — a person, an animal, or something make-believe.
+              {saved?.id
+                ? "Make changes to this character here, and don't forget to apply your Attribute and Skill points."
+                : "Anyone you like — a person, an animal, or something make-believe."}
             </CardDescription>
           </CardHeader>
 
@@ -1243,7 +1252,8 @@ export default function CharacterForm({
                 <div>
                   <p className="text-sm font-semibold">Skills</p>
                   <p className="text-xs text-muted-foreground">
-                    Things they have learned to do. Each one costs a point to have.
+                    Things they have learned to do. A skill costs its level — one point
+                    to take it up, and one more for each level after that.
                   </p>
                 </div>
 

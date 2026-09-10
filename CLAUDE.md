@@ -376,10 +376,13 @@ an identifier match a label is the wrong trade. (`AdminStats`,
 `/api/admin/generation-stats` and the usage stats in Settings are a different
 feature — do not sweep them in.)
 
-**Skills spend from the same pool.** A new one is added at `STAT_BASE + 1`, so
-having it costs exactly one point by the arithmetic `pointsSpent` already does —
-no special case anywhere, and `pointsAvailable`, `statsAreAffordable`, the
-notable thresholds and the suppression rule all kept working. Names come from
+**Skills spend from the same pool, and a skill's cost IS its level.** A new one
+starts at `SKILL_START` (1) and costs one point; level 4 costs four. Attributes
+measure distance from an ordinary 3 because everybody HAS a strength — nobody
+has climbing by default, so there is no baseline for a skill to be a distance
+from. Getting that wrong made a new skill cost four points and a skill at 1
+refund two. `notableSkills()` returns everything for the same reason: there is
+no free level to filter out. Names come from
 `optionsFor("skill")`; Parent Mode's `/custom` routes take anything, as they do
 for every other field. Duplicates and the count are refused server-side.
 
