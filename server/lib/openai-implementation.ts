@@ -39,8 +39,10 @@ import { resolveModel, createClient, type ResolvedModel , tokenLimitFor, tempera
 import { newGenerationId, recordGeneration } from "./generationRecords";
 import {
   MEETING_NOTE_HEADING,
+  DIGGING_DEEPER_HEADING,
   FURTHER_LEARNING_HEADING,
 } from "./storyAppendices";
+import { generateDiggingDeeper, type DiggingSource } from "./diggingDeeper";
 import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
@@ -1002,6 +1004,47 @@ async function runGeneration(
         `\n\n${MEETING_NOTE_HEADING} ${account.label} really lived, and what happens ` +
         `in this story is what the account records.` +
         (who ? invented : "");
+    }
+
+    /**
+     * What the reader asked, answered from the source material.
+     *
+     * HERE, after the meeting note and before the further reading, for three
+     * reasons that all point at the same spot: it must land after the
+     * length ratio and the poem verse check, which measure the model's own
+     * output and would be thrown off by an appendix; it must land before the
+     * further-reading block, because the reader parses that by finding the
+     * last occurrence of its literal and everything after it is swallowed;
+     * and it must land after the disclaimer, which belongs with the story it
+     * disclaims rather than after a page of answers.
+     *
+     * Guarded on the heading because the worker resumes: a job that failed
+     * after this point and retried would otherwise append a second copy.
+     */
+    const studyQuestions = (request.studyQuestions ?? [])
+      .map((q) => q.trim())
+      .filter(Boolean);
+    if (
+      studyQuestions.length > 0 &&
+      !finalDetails.content.includes(DIGGING_DEEPER_HEADING)
+    ) {
+      const passage = request.biblePassage?.trim();
+      const source: DiggingSource | undefined = account
+        ? { kind: "account", material: account }
+        : passage && passage.toLowerCase() !== "none"
+          ? { kind: "passage", reference: passage }
+          : undefined;
+      // No source means nothing to be grounded in, and an ungrounded answer to
+      // a question about Scripture is the worst thing this app could print.
+      if (source) {
+        finalDetails.content += await generateDiggingDeeper(
+          openaiClient,
+          ctx.resolved.model,
+          source,
+          studyQuestions,
+          debugData,
+        );
+      }
     }
 
     if (!finalDetails.content.includes(FURTHER_LEARNING_HEADING)) {
