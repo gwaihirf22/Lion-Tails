@@ -21,11 +21,34 @@ export default function StoryGeneratorTabs({
   parentStoryTitle,
   isContinuation,
 }: StoryGeneratorTabsProps) {
-  const [activeTab, setActiveTab] = useState<string>("original");
+  /**
+   * A hero handed over from the Heroes page, read ONCE and taken.
+   *
+   * In a useState initialiser rather than at render time, and removed in the
+   * same breath, because both matter. Read at render it was read by every
+   * render of every form; removed anywhere else, a stale key from a previous
+   * visit would preselect a hero on a cold visit to this page.
+   *
+   * It lands on the HISTORICAL tab, which is where somebody arriving from a
+   * biography wants to be: they were reading about a person, and this is the
+   * tab that tells that person's story and answers questions about it.
+   */
+  const [handedOverHeroId] = useState<string | undefined>(() => {
+    if (typeof window === "undefined") return undefined;
+    const id = localStorage.getItem("selectedHeroOfFaith") ?? undefined;
+    if (id) localStorage.removeItem("selectedHeroOfFaith");
+    return id;
+  });
+
+  // CONTROLLED, not defaultValue. activeTab was stored and never read, so the
+  // tab could not be opened from anywhere but a click.
+  const [activeTab, setActiveTab] = useState<string>(
+    handedOverHeroId ? "historical" : "original",
+  );
 
   return (
     <div>
-      <Tabs defaultValue="original" onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-2 mb-6 gap-1 p-1">
           <TabsTrigger 
             value="original" 
@@ -69,9 +92,7 @@ export default function StoryGeneratorTabs({
               formType="original"
               showChildFields={true}
               showAnimalToggle={true}
-              showBiblicalEvent={false}
               showHeroOfFaith={true} // A hero of faith can appear here too, through a mode
-              showBiblePassageField={true}
             />
           </div>
         </TabsContent>
@@ -100,13 +121,11 @@ export default function StoryGeneratorTabs({
               parentStoryTitle={parentStoryTitle}
               isContinuation={isContinuation}
               formType="historical"
+              handedOverHeroId={handedOverHeroId}
               showChildFields={false}
               showAnimalToggle={false}
-              showBiblicalEvent={true}
               showHeroOfFaith={true}
-              showBiblePassageField={true}
               showHistoricalAccuracyToggle={true}
-              showLearningFocus={true}
             />
           </div>
         </TabsContent>

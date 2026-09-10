@@ -1165,9 +1165,18 @@ export const MAX_STORY_CHARACTERS = 8;
  * above the schema that infers it, and so the CLIENT can call it on a request
  * read back out of a saved story.
  */
-/** Present and not one of the form's "no value" sentinels. */
-const isSet = (v: unknown): boolean =>
+/**
+ * Present, and not one of the form's "no value" sentinels.
+ *
+ * EXPORTED, because the form has to ask the same question the refine and the
+ * brief ask -- "is there a source on this request" -- and "none" is truthy.
+ * The selects write the literal string, and a second opinion about what set
+ * means is how the brief came to emit "Animal companion: none", telling the
+ * model the child's companion was an animal called None.
+ */
+export const isChosen = (v: unknown): boolean =>
   typeof v === "string" && v.trim() !== "" && v.trim().toLowerCase() !== "none";
+const isSet = isChosen;
 
 export type CharacterRole = "absent" | "travels" | "alongside";
 
@@ -1290,6 +1299,15 @@ export function readingLevelAges(level?: string | null): string {
     READING_LEVEL_AGES[DEFAULT_READING_LEVEL]
   );
 }
+
+/**
+ * How many questions one story may be asked.
+ *
+ * Each is answered from the source material in a single call, so a list of
+ * twenty produces a paragraph of nothing each. Named because the form has to
+ * enforce the same number and must not hold a second opinion about it.
+ */
+export const MAX_STUDY_QUESTIONS = 5;
 
 export const storyRequestSchema = z.object({
   // Fields that are conditionally required based on useTimeTravel
@@ -1486,7 +1504,7 @@ export const storyRequestSchema = z.object({
    * somebody using it as the free-text steering box, which is a different
    * field on a different tab.
    */
-  studyQuestions: z.array(z.string().min(1).max(300)).max(5).optional(),
+  studyQuestions: z.array(z.string().min(1).max(300)).max(MAX_STUDY_QUESTIONS).optional(),
   // New fields for reading level and story length
   readingLevel: z.enum(READING_LEVELS).default(DEFAULT_READING_LEVEL),
   storyLength: z.enum([
@@ -1555,7 +1573,9 @@ export const storyRequestSchema = z.object({
   // Otherwise a name and gender are required.
   return !!data.childName && !!data.gender;
 }, {
-  message: "Select at least one character, or give the main character's name and gender.",
+  message:
+    "Pick something for this story to be about -- a character of your own, " +
+    "or an event, a person or a passage to dig into.",
   // Must name the field the FORM renders, or the error attaches to a control
   // that no longer exists and the user sees nothing.
   path: ["characterIds"],

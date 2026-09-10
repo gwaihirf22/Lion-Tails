@@ -4,7 +4,7 @@ import {
   MEETING_NOTE_HEADING,
   DIGGING_DEEPER_HEADING,
   FURTHER_LEARNING_HEADING,
-} from "../server/lib/storyAppendices";
+} from "../shared/storyAppendices";
 
 /**
  * What the server adds to a story, and why it must come back off again.

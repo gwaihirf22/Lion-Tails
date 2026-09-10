@@ -5,7 +5,7 @@ import {
   type DiggingSource,
 } from "../server/lib/diggingDeeper";
 import { getBiblicalEvent } from "../server/data/biblicalEvents";
-import { DIGGING_DEEPER_HEADING, storyWithoutAppendices } from "../server/lib/storyAppendices";
+import { DIGGING_DEEPER_HEADING, storyWithoutAppendices } from "../shared/storyAppendices";
 
 const noah = getBiblicalEvent("noah")!;
 const account: DiggingSource = {

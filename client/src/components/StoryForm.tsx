@@ -25,13 +25,15 @@ import {
   characterIdsOf,
   type Character,
   type CharacterRole,
+  MAX_STUDY_QUESTIONS,
+  isChosen,
 } from "@shared/schema";
 import { Switch } from "@/components/ui/switch";
 import CharacterPicker from "@/components/CharacterPicker";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import AnimalAutocomplete from "./AnimalAutocomplete";
-import HeroPicker from "./HeroPicker";
+import SourcePicker, { type StorySource } from "./SourcePicker";
 import type { HeroOfFaith } from "@shared/schema";
 import CharacterForm, { type CharacterFormValues } from "./CharacterForm";
 import { saveCharacter } from "@/lib/saveCharacter";
@@ -98,17 +100,30 @@ function RoleChoices({
   );
 }
 
+/**
+ * Starters, offered because a blank box is the problem this tab has.
+ *
+ * The complaint that produced this feature was that the historical tab
+ * demanded knowledge the reader may not have; asking them to compose questions
+ * about an account they have not read yet demands exactly that. These are
+ * generic on purpose -- they work against any event, person or passage, and
+ * they are the questions worth asking about all of them.
+ */
+const SUGGESTED_QUESTIONS = [
+  "What was it actually like to be there?",
+  "What does the text not tell us?",
+  "Why did they do it that way?",
+  "What do people get wrong about this?",
+];
+
 interface StoryFormProps {
   onSubmit: (data: StoryRequest) => void;
   loading?: boolean;
   formType?: "original" | "historical";
   showChildFields?: boolean;
   showAnimalToggle?: boolean;
-  showBiblicalEvent?: boolean;
   showHeroOfFaith?: boolean;
-  showBiblePassageField?: boolean;
   showHistoricalAccuracyToggle?: boolean;
-  showLearningFocus?: boolean;
   showReadingLevel?: boolean;
   showStoryLength?: boolean;
   showCustomCharacter?: boolean;
@@ -126,6 +141,8 @@ interface StoryFormProps {
    * exactly where "not over yet" is a real choice.
    */
   isContinuation?: boolean;
+  /** A hero chosen on the Heroes page, already consumed by the tabs above. */
+  handedOverHeroId?: string;
 }
 
 export default function StoryForm({ 
@@ -134,17 +151,15 @@ export default function StoryForm({
   formType = "original",
   showChildFields = true,
   showAnimalToggle = true,
-  showBiblicalEvent = false,
   showHeroOfFaith = true,
-  showBiblePassageField = true,
   showHistoricalAccuracyToggle = false,
-  showLearningFocus = false,
   showReadingLevel = true,
   showStoryLength = true,
   showCustomCharacter = true,
   inheritedCharacterIds = [],
   parentStoryTitle,
   isContinuation = false,
+  handedOverHeroId,
 }: StoryFormProps) {
   const { toast } = useToast();
   /**
@@ -155,8 +170,15 @@ export default function StoryForm({
    * heroOfFaith and characterRole, and those are what get frozen.
    */
   const [bringInHero, setBringInHero] = useState(false);
-  const [hasSelectedBiblicalEvent, setHasSelectedBiblicalEvent] = useState(false);
-  const [hasSelectedHeroOfFaith, setHasSelectedHeroOfFaith] = useState(false);
+  /**
+   * The questions, as typed. One per line.
+   *
+   * Local state backing a textarea, split into the array the request carries
+   * on every change -- rather than the array being edited directly, which
+   * would mean a list editor with add and remove buttons to type three
+   * sentences into.
+   */
+  const [questionText, setQuestionText] = useState("");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState<Character | undefined>();
   
@@ -213,7 +235,16 @@ export default function StoryForm({
   const usingLocalModel = modelSetting?.tier === "local";
 
   // Check localStorage for a pre-selected hero of faith
-  const selectedHeroFromStorage = typeof window !== 'undefined' ? localStorage.getItem('selectedHeroOfFaith') : null;
+  /**
+   * A hero handed over from the Heroes page.
+   *
+   * A PROP now, read once by the tabs component above. It used to be read here
+   * with a bare localStorage.getItem at render time -- by BOTH tabs' forms,
+   * each of which then removed the key, so whichever mounted first destroyed it
+   * for the other. That was always the original tab's, and once its picker went
+   * behind a switch the hero landed in a control nobody could see.
+   */
+  const selectedHeroFromStorage = handedOverHeroId ?? null;
   
   const form = useForm<StoryRequest>({
     resolver: zodResolver(storyRequestSchema),
@@ -234,6 +265,16 @@ export default function StoryForm({
       // writes it any more, and the schema's own .default(false) covers a
       // request that omits it. Listing it invited exactly the bug above:
       // somewhere to set a flag that no longer decides anything.
+      /**
+       * Empty on both tabs, and on the historical tab it STAYS empty: no
+       * control there can add to it.
+       *
+       * Set here rather than force-written by an effect. An effect that
+       * rewrites a field on every render is exactly how useTimeTravel came to
+       * be written into a field nothing read -- and it would race the
+       * continuation seeding above, where whichever landed last would win
+       * permanently.
+       */
       characterIds: [],
       // "absent" is the safe default: a retelling is about the person it is
       // about, and getting it wrong this way gives a plainer story rather than
@@ -278,21 +319,16 @@ export default function StoryForm({
       : undefined) ?? [];
 
   
-  // Effect to set hasSelectedHeroOfFaith based on selectedHeroFromStorage
-  useEffect(() => {
-    if (selectedHeroFromStorage) {
-      setHasSelectedHeroOfFaith(true);
-      
-      // If we're in historical mode and have a hero selected, make sure biblical event is cleared
-      if (formType === "historical") {
-        form.setValue("biblicalEvent", "");
-        setHasSelectedBiblicalEvent(false);
-      }
-      
-      // Clear localStorage after we've used the value
-      localStorage.removeItem('selectedHeroOfFaith');
-    }
-  }, [selectedHeroFromStorage, form, formType]);
+  /**
+   * hasSelectedBiblicalEvent and hasSelectedHeroOfFaith used to live here, with
+   * an effect keeping them and the form in step.
+   *
+   * They were React state MIRRORING form values -- not derived from them -- so
+   * they could disagree with the form, and the mutual exclusion they enforced
+   * was one-directional anyway: picking an event disabled the hero picker;
+   * picking a hero disabled nothing. The single source control has no second
+   * copy of the answer to keep in step.
+   */
 
   /**
    * Seed the cast from the story being continued -- ONCE.
@@ -304,11 +340,15 @@ export default function StoryForm({
    */
   const seededRef = useRef(false);
   useEffect(() => {
+    // Never on the historical tab, which has no cast at all. Seeding one there
+    // would put characters on a request whose form cannot show or remove them,
+    // and "Continue this story" reaches both tabs.
+    if (formType === "historical") return;
     if (seededRef.current || inheritedCharacterIds.length === 0) return;
     if (form.formState.dirtyFields.characterIds) return;
     seededRef.current = true;
     form.setValue("characterIds", inheritedCharacterIds);
-  }, [inheritedCharacterIds, form]);
+  }, [inheritedCharacterIds, form, formType]);
 
   /**
    * Clear the fields the chosen cast makes unnecessary.
@@ -356,6 +396,75 @@ export default function StoryForm({
     // This allows using the character in regular stories too
   }, [bringInHero, form, formType]);
 
+  /**
+   * ONE choice, three frozen fields.
+   *
+   * biblicalEvent, heroOfFaith and biblePassage are three columns of one
+   * decision, kept apart only because thousands of requests already carry them
+   * and jsonb is never rewritten. Read and written here and nowhere else, so
+   * no handler can set one without clearing the others -- which is precisely
+   * how a hero came to be silently dropped from a prompt.
+   */
+  const watched = form.watch();
+  const source: StorySource = isChosen(watched.biblicalEvent)
+    ? { kind: "event", id: watched.biblicalEvent! }
+    : isChosen(watched.heroOfFaith)
+      ? { kind: "hero", id: watched.heroOfFaith! }
+      : isChosen(watched.biblePassage)
+        ? { kind: "passage", text: watched.biblePassage! }
+        : null;
+
+  const writeSource = (next: StorySource) => {
+    form.setValue("biblicalEvent", next?.kind === "event" ? next.id : "");
+    form.setValue("heroOfFaith", next?.kind === "hero" ? next.id : "");
+    form.setValue("biblePassage", next?.kind === "passage" ? next.text : "");
+    // The episode select is populated from a hero's own key events, so a focus
+    // chosen for one source is meaningless against another. The server clears
+    // this too; doing it here as well is what stops the FORM lying about it.
+    if (next?.kind !== "hero") form.setValue("storyFocus", undefined);
+  };
+
+  const writeQuestions = (text: string) => {
+    setQuestionText(text);
+    form.setValue(
+      "studyQuestions",
+      text
+        .split("\n")
+        .map((q) => q.trim())
+        .filter(Boolean)
+        .slice(0, MAX_STUDY_QUESTIONS),
+    );
+  };
+
+  /**
+   * Say something when the form refuses to submit.
+   *
+   * There was no onInvalid at all, and the schema's single refine attaches its
+   * message to `characterIds` -- a control the historical tab no longer
+   * renders. So an empty historical form met "Create Historical Story" with
+   * nothing: no error, no message, no movement. The refine's own comment warns
+   * about exactly this ("must name the field the FORM renders, or the error
+   * attaches to a control that no longer exists and the user sees nothing"),
+   * and taking the cast off this tab is what made it true again.
+   *
+   * A toast rather than a better path, because there is no single field to
+   * blame: the rule is about the request as a whole.
+   */
+  const onInvalid = (errors: Record<string, unknown>) => {
+    const first = Object.values(errors).find(
+      (e): e is { message?: string } => typeof e === "object" && e !== null,
+    );
+    toast({
+      title: "Not quite ready",
+      description:
+        first?.message ||
+        (formType === "historical"
+          ? "Pick something to dig into first -- an event, a person, or a passage."
+          : "Add a character, or give a name and gender."),
+      variant: "destructive",
+    });
+  };
+
   // Character creation is now handled exclusively through the Character tab
 
   return (
@@ -364,30 +473,37 @@ export default function StoryForm({
       <CardContent className="p-6">
         {/* Only show child fields when needed */}
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
             {/* Said once, up front. Before this the ONLY signal about what was
                 required was the refine's error message, which appears after
                 you press the button -- and on the historical tab, where nothing
                 is required at all, there was no signal in either direction. */}
             <p className="text-sm text-muted-foreground">
               {formType === "historical"
-                ? "Everything here is optional. Pick a biblical event or a hero of the faith, or just describe what you want."
+                ? "Pick one thing to dig into -- an event, someone who really lived, or a passage -- then ask whatever you want to know about it."
                 : "All you need is a character, or a name. Everything else is optional."}
             </p>
 
-            {/* Character Selection - Moved to the top and available for all story types, including biblical narratives */}
-            {(formType === "original" || formType === "historical") && (
+            {/* THE CAST -- and it belongs to ONE tab now.
+                
+                A character attached to a real account was the ambiguity this
+                whole form kept tripping over: a story about Caleb came back
+                with a child called Esther standing in the wilderness of Paran,
+                and because her name is itself a figure in Scripture it read as
+                the app confusing two people. It was not -- the account was
+                accurate throughout. She had simply been put inside it.
+                
+                The answer is not a better question about how she appears. It is
+                that the two tabs mean two different things: this one is a story
+                about YOUR character, optionally set somewhere real; the other
+                is the real thing itself, and nobody is written into it. */}
+            {formType === "original" && (
               <FormField
                 control={form.control}
                 name="characterIds"
                 render={({ field }) => (
                   <FormItem className="mb-4">
-                    <FormLabel className="text-sm font-medium">
-                      Characters
-                      {formType === "historical" && (
-                        <span className="ml-2 font-normal text-muted-foreground">(optional)</span>
-                      )}
-                    </FormLabel>
+                    <FormLabel className="text-sm font-medium">Characters</FormLabel>
                     <FormControl>
                       <CharacterPicker
                         value={field.value ?? []}
@@ -401,9 +517,7 @@ export default function StoryForm({
                       />
                     </FormControl>
                     <FormDescription>
-                      {formType === "historical"
-                        ? "A historical or biblical story does not need a character. Add one only if you want somebody to witness the account, or to be written into it."
-                        : `Saved characters, reusable across stories. Up to ${MAX_STORY_CHARACTERS}; the first one is the main character.`}
+                      {`Saved characters, reusable across stories. Up to ${MAX_STORY_CHARACTERS}; the first one is the main character.`}
                     </FormDescription>
                     {/* Always, not only when the list is empty. The picker is
                         the door to persistent characters, and a user with two
@@ -621,44 +735,55 @@ export default function StoryForm({
               />
             )}
 
-            {/* What actually happens in the story.
-                Deliberately prominent, and placed next to Theme because these
-                two together decide what the story is about. This field already
-                existed and was already un-gated -- it just sat two-thirds of the
-                way down a flat 900-line form, styled like every other optional
-                dropdown, labelled "Custom Story Request (Optional)", where
-                nobody found it.
+            {/* ONE free-text box per tab, and they mean different things.
+                
+                This one steers the STORY, and it is the strongest channel in
+                the whole prompt -- rendered last, under "WHAT THE USER ASKED
+                FOR SPECIFICALLY". The historical tab has "What do you want to
+                know?" instead, which steers the answers rather than the story.
+                Two free-text boxes on one form was most of the confusion this
+                change is here to remove, and "what should happen in this
+                story?" is an odd question to ask about an account where what
+                happens is what happened.
+
+                It is also deliberately prominent. It already existed and was
+                already un-gated -- it just sat two-thirds of the way down a
+                flat 900-line form, styled like every other optional dropdown,
+                labelled "Custom Story Request (Optional)", where nobody found
+                it.
 
                 It is NOT the Parent Mode prompt editor further down. That one
                 REPLACES the storyteller's persona and is correctly gated. This
                 one only adds to the brief. */}
-            <FormField
-              control={form.control}
-              name="customPrompt"
-              render={({ field }) => (
-                <FormItem className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4">
-                  <FormLabel className="text-base font-semibold text-secondary">
-                    What should happen in this story?
-                    <span className="ml-2 text-sm font-normal text-muted-foreground">
-                      (optional)
-                    </span>
-                  </FormLabel>
-                  <FormDescription className="mb-2">
-                    The best way to get a story that feels like yours rather than
-                    a generic one. Describe a situation, a problem, or something
-                    that happened this week.
-                  </FormDescription>
-                  <FormControl>
-                    <Textarea
-                      placeholder="e.g. She was frightened of the thunderstorm last night and hid under the table. I'd like a story about being brave when you're scared."
-                      className="min-h-28 bg-card border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {formType === "original" && (
+              <FormField
+                control={form.control}
+                name="customPrompt"
+                render={({ field }) => (
+                  <FormItem className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4">
+                    <FormLabel className="text-base font-semibold text-secondary">
+                      What should happen in this story?
+                      <span className="ml-2 text-sm font-normal text-muted-foreground">
+                        (optional)
+                      </span>
+                    </FormLabel>
+                    <FormDescription className="mb-2">
+                      The best way to get a story that feels like yours rather than
+                      a generic one. Describe a situation, a problem, or something
+                      that happened this week.
+                    </FormDescription>
+                    <FormControl>
+                      <Textarea
+                        placeholder="e.g. She was frightened of the thunderstorm last night and hid under the table. I'd like a story about being brave when you're scared."
+                        className="min-h-28 bg-card border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             
             {formType === "original" && (
               <FormField
@@ -696,38 +821,6 @@ export default function StoryForm({
             )}
             
 
-            {/* HOW THE CHARACTER APPEARS -- the choice that did not exist.
-                
-                A character attached to a real account is ambiguous, and the app
-                used to resolve the ambiguity silently: this tab force-sets
-                useTimeTravel to false, and the brief then wrote the character
-                into the account anyway. A story about Caleb came back with a
-                child called Esther standing in the wilderness of Paran, which
-                read as the app confusing two figures in Scripture.
-                
-                So it is asked, not inferred, and only when there is actually a
-                character to ask about. */}
-            {formType === "historical" && characterIdsOf(form.watch()).length > 0 && (
-              <FormField
-                control={form.control}
-                name="characterRole"
-                render={({ field }) => (
-                  <FormItem className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
-                    <FormLabel className="text-sm font-semibold">
-                      How should your character appear?
-                    </FormLabel>
-                    <FormControl>
-                      <RoleChoices
-                        value={field.value}
-                        onChange={field.onChange}
-                        options={["absent", "travels", "alongside"]}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
 
             {/* SERIES. Two related choices, boxed together because they are one
                 decision: is this story the end of something, or the start.
@@ -800,77 +893,101 @@ export default function StoryForm({
                 <p className="font-medium mb-1">
                   {usingLocalModel ? "Accuracy on the local model" : "About accuracy"}
                 </p>
-                <p>
-                  Lion Tails ships the actual account -- what happens, in order, with the real
-                  names, and a verbatim key verse -- for every <strong>Biblical Event</strong> and
-                  every <strong>Hero of the Faith</strong> in the lists below, so the AI is
-                  retelling rather than remembering.
-                </p>
-                <p className="mt-1">
-                  A <strong>Bible Passage</strong> you type yourself has no such anchor: the AI is
-                  working from memory{usingLocalModel ? ", and the local model's memory of Scripture is unreliable. For a passage that is not in the list, switch to a cloud model in Settings, or check the result before reading it aloud." : ". Check the result before reading it aloud."}
-                </p>
+                {/* Keyed on WHICH KIND was chosen rather than on the tab. The
+                    difference that matters is whether the app supplied the
+                    account or the model is remembering it, and only the source
+                    knows that. */}
+                {source?.kind === "passage" ? (
+                  <p>
+                    A passage you type yourself has no anchor in Lion Tails: the AI is working
+                    from memory{usingLocalModel ? ", and the local model's memory of Scripture is unreliable. Switch to a cloud model in Settings, or check the result before reading it aloud." : ". Check the result before reading it aloud."}
+                  </p>
+                ) : (
+                  <p>
+                    Lion Tails ships the actual account -- what happens, in order, with the real
+                    names, and a verbatim key verse -- for every event and every person you can
+                    pick from the list, so the AI is retelling rather than remembering. A passage
+                    you type yourself has no such anchor.
+                  </p>
+                )}
               </div>
             )}
 
-            {showBiblicalEvent && formType === "historical" && (
-              <FormField
-                control={form.control}
-                name="biblicalEvent"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Biblical Event</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-book">
-                            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
-                          </svg>
-                        </span>
-                        <Select
-                          onValueChange={(value) => {
-                            field.onChange(value);
-                            setHasSelectedBiblicalEvent(value !== "none" && value !== "");
-                            // Clear hero of faith if biblical event is selected
-                            if (value !== "none" && value !== "") {
-                              form.setValue("heroOfFaith", "");
-                              setHasSelectedHeroOfFaith(false);
-                            }
-                          }}
-                          value={field.value}
-                        >
-                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                            <SelectValue placeholder="Select a Biblical event" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">None</SelectItem>
-                            <SelectItem value="creation">Creation</SelectItem>
-                            <SelectItem value="noah">Noah's Ark</SelectItem>
-                            <SelectItem value="abraham">Abraham's Journey</SelectItem>
-                            <SelectItem value="joseph">Joseph in Egypt</SelectItem>
-                            <SelectItem value="moses">Moses and the Exodus</SelectItem>
-                            <SelectItem value="joshua">Joshua and the Battle of Jericho</SelectItem>
-                            <SelectItem value="davidGoliath">David and Goliath</SelectItem>
-                            <SelectItem value="daniel">Daniel in the Lion's Den</SelectItem>
-                            <SelectItem value="jonah">Jonah and the Whale</SelectItem>
-                            <SelectItem value="nativity">The Nativity of Jesus</SelectItem>
-                            <SelectItem value="miracles">Jesus' Miracles</SelectItem>
-                            <SelectItem value="parables">Jesus' Parables</SelectItem>
-                            <SelectItem value="crucifixion">The Crucifixion</SelectItem>
-                            <SelectItem value="resurrection">The Resurrection</SelectItem>
-                            <SelectItem value="pentecost">Day of Pentecost</SelectItem>
-                            <SelectItem value="paul">Paul's Missionary Journeys</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* THE ONE THING THIS STORY IS ABOUT.
+
+                Three fields used to live here -- Biblical Event, Heroes of the
+                Faith, Bible Passage to Study -- of which only one may be used,
+                which is not something three stacked fields say. Combining them
+                also did things silently: an event beside a hero dropped the
+                hero's whole biography from the prompt, and a passage typed
+                beside a hero flipped the story onto the Scripture-retelling
+                persona while the brief still described that person's life.
+                resolveStorySource() settles any request that arrives; this
+                makes the question unaskable.
+
+                On the original tab it sits inside the gate above, because there
+                it is optional. Here it is the point of the tab. */}
+            {formType === "historical" && (
+              <FormItem>
+                <FormLabel className="text-sm font-medium">
+                  What do you want to dig into?
+                </FormLabel>
+                <FormControl>
+                  <SourcePicker value={source} onChange={writeSource} />
+                </FormControl>
+                <FormDescription>
+                  An event, someone who really lived, or a passage. One of the
+                  three &mdash; they are different ways in, not ingredients.
+                </FormDescription>
+              </FormItem>
             )}
+
+            {/* WHAT THEY WANT TO KNOW.
+
+                This replaces a "Learning Focus" Select of seven slugs that had
+                no description saying what any of them meant and whose value
+                reached the model unrendered -- the prompt literally read
+                "Learning focus: theological-significance."
+
+                Suggested questions matter more than the box. The complaint
+                that started this was that the tab demanded knowledge the user
+                may not have; a blank box asking for questions about an account
+                you have not read yet demands exactly that. */}
+            {formType === "historical" && source && (
+              <FormItem>
+                <FormLabel className="text-sm font-medium">
+                  What do you want to know? <span className="text-muted-foreground font-normal">(optional)</span>
+                </FormLabel>
+                <FormControl>
+                  <Textarea
+                    rows={3}
+                    value={questionText}
+                    onChange={(e) => writeQuestions(e.target.value)}
+                    placeholder={"One question per line.\ne.g. Why did they do it that way?"}
+                    className="resize-y"
+                  />
+                </FormControl>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {SUGGESTED_QUESTIONS.filter((q) => !questionText.includes(q)).map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => writeQuestions(questionText.trim() ? `${questionText.trim()}\n${q}` : q)}
+                      className="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                    >
+                      + {q}
+                    </button>
+                  ))}
+                </div>
+                <FormDescription>
+                  Answered after the story, in a section of its own, from the
+                  same account it was written from. Up to {MAX_STUDY_QUESTIONS}.
+                </FormDescription>
+              </FormItem>
+            )}
+
             
-            {/* A HERO OF FAITH, and the two ways one can be met.
+            {/* SET IT IN SOMETHING REAL, and the two ways in.
                 
                 This replaces a "Time Travel Adventure" checkbox that had not
                 worked since characterRole shipped: the form defaults that field
@@ -879,17 +996,24 @@ export default function StoryForm({
                 character scrubbed out. It looked exactly like a working control.
                 
                 It is a gate rather than a third radio option because the two
-                modes are only a question at all once there is a hero to meet,
-                and because off is the honest default -- most stories on this tab
-                have nobody real in them. */}
+                modes are only a question at all once there is somewhere real to
+                be, and because off is the honest default -- most stories on this
+                tab have nothing real in them.
+                
+                It offers the SAME picker as the historical tab, and that is not
+                an accident of reuse. Biblical events could only ever be chosen
+                on the historical tab, so taking characters off that tab would
+                have quietly deleted the ability to travel to one: a character
+                could meet Caleb and never see the ark. The lantern exists for
+                the ark. */}
             {formType === "original" && showHeroOfFaith && (
               <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
-                    <h3 className="text-sm font-semibold">Bring in a Hero of Faith</h3>
+                    <h3 className="text-sm font-semibold">Set it somewhere real</h3>
                     <p className="text-xs text-muted-foreground">
-                      Put someone who really lived into this story, and decide how
-                      your character comes to be there.
+                      Put your character into an event that happened, or beside
+                      somebody who really lived.
                     </p>
                   </div>
                   <Switch
@@ -898,19 +1022,29 @@ export default function StoryForm({
                       setBringInHero(on);
                       if (on) {
                         // Switching on commits to a mode straight away, so the
-                        // request never carries a hero with nobody meeting them.
+                        // request never carries a source with nobody in it.
                         form.setValue("characterRole", "travels");
                       } else {
-                        // And switching off clears BOTH, so a hero picked and
+                        // And switching off clears BOTH, so a source picked and
                         // then abandoned cannot ride along on the request.
                         form.setValue("characterRole", "absent");
-                        form.setValue("heroOfFaith", "");
-                        setHasSelectedHeroOfFaith(false);
+                        writeSource(null);
                       }
                     }}
-                    aria-label="Bring in a Hero of Faith"
+                    aria-label="Set it somewhere real"
                   />
                 </div>
+
+                {bringInHero && (
+                  <FormItem>
+                    <FormLabel className="text-sm font-semibold">
+                      Where, or who?
+                    </FormLabel>
+                    <FormControl>
+                      <SourcePicker value={source} onChange={writeSource} />
+                    </FormControl>
+                  </FormItem>
+                )}
 
                 {bringInHero && (
                   <FormField
@@ -939,48 +1073,6 @@ export default function StoryForm({
               </div>
             )}
 
-            {showHeroOfFaith && (formType === "historical" || bringInHero) && (
-              <FormField
-                control={form.control}
-                name="heroOfFaith"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Heroes of the Faith</FormLabel>
-                    <FormControl>
-                      <div>
-                        {/* Was a plain Select. At forty-one heroes -- and
-                            roughly double once the biblical characters land --
-                            an alphabetical scroll list is not a way to find
-                            anybody. This searches names, eras, places and the
-                            biography text, so a parent who wants a story about
-                            someone brave can type "martyr" instead of needing
-                            the name first. */}
-                        <HeroPicker
-                          value={field.value === "none" ? "" : field.value || ""}
-                          onChange={(heroId) => {
-                            field.onChange(heroId);
-                            setHasSelectedHeroOfFaith(Boolean(heroId));
-                            // Choosing a hero clears a biblical event: the form
-                            // allows one or the other, not both.
-                            if (heroId && formType === "historical") {
-                              form.setValue("biblicalEvent", "");
-                              setHasSelectedBiblicalEvent(false);
-                            }
-                          }}
-                          disabled={formType === "historical" && hasSelectedBiblicalEvent}
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                    {formType === "historical" && hasSelectedBiblicalEvent && (
-                      <div className="text-xs text-secondary/70 mt-1">
-                        You can only select a Hero of Faith or a Biblical Event, not both.
-                      </div>
-                    )}
-                  </FormItem>
-                )}
-              />
-            )}
 
             {/* WHICH PART of that life. A Hero of Faith is a whole life, and
                 asked for "a story about Corrie ten Boom" a model returns a
@@ -1049,75 +1141,8 @@ export default function StoryForm({
             )}
 
             
-            {showBiblePassageField && (
-              <FormField
-                control={form.control}
-                name="biblePassage"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Bible Passage to Study (Optional)</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-book-open-text">
-                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /><path d="M6 8h2" /><path d="M6 12h2" /><path d="M16 8h2" /><path d="M16 12h2" />
-                          </svg>
-                        </span>
-                        <Input 
-                          placeholder="e.g. John 3:16 or Psalm 23" 
-                          className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary"
-                          {...field} 
-                        />
-                      </div>
-                    </FormControl>
-                    <FormDescription>
-                      Enter a specific Bible verse or passage to include in the story.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
             
             
-            {showLearningFocus && formType === "historical" && (
-              <FormField
-                control={form.control}
-                name="learningFocus"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Learning Focus (Optional)</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-secondary z-10">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-graduation-cap">
-                            <path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
-                          </svg>
-                        </span>
-                        <Select
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                        >
-                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
-                            <SelectValue placeholder="What would you like to focus on?" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">No specific focus</SelectItem>
-                            <SelectItem value="historical-context">Historical Context</SelectItem>
-                            <SelectItem value="theological-significance">Theological Significance</SelectItem>
-                            <SelectItem value="moral-lessons">Moral Lessons</SelectItem>
-                            <SelectItem value="cultural-insights">Cultural Insights</SelectItem>
-                            <SelectItem value="character-development">Character Development</SelectItem>
-                            <SelectItem value="faith-application">Faith Application Today</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
             
             
             {/* Reading Level */}

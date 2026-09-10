@@ -26,7 +26,7 @@
 import type OpenAI from "openai";
 import { requestModelJson, TOKEN_BUDGET } from "./openai-implementation";
 import { temperatureFor, tokenLimitFor } from "./modelPolicy";
-import { DIGGING_DEEPER_HEADING } from "./storyAppendices";
+import { DIGGING_DEEPER_HEADING } from "@shared/storyAppendices";
 import type { StoryBrief } from "./storyBrief";
 
 /**

@@ -14,7 +14,7 @@
  * token-budgeted against the resolved model rather than a fixed story count.
  */
 import { pool } from "../db";
-import { storyWithoutAppendices } from "./storyAppendices";
+import { storyWithoutAppendices } from "@shared/storyAppendices";
 
 /** Reserved for reasoning plus the summary itself. */
 const RESERVE_OUTPUT = 8192;

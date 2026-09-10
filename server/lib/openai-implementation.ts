@@ -41,7 +41,7 @@ import {
   MEETING_NOTE_HEADING,
   DIGGING_DEEPER_HEADING,
   FURTHER_LEARNING_HEADING,
-} from "./storyAppendices";
+} from "@shared/storyAppendices";
 import { generateDiggingDeeper, type DiggingSource } from "./diggingDeeper";
 import * as fs from "fs";
 import * as path from "path";
