@@ -879,6 +879,54 @@ custom path a parent sets it, because an off-catalogue kind has none to derive.
 
 ---
 
+## 26. The canon is small, split by audience, and the first story is a constant
+
+`server/data/lionTails.ts`, `docs/quests-of-the-timekeeper.md`,
+`server/data/questPrologue.ts`
+
+The universe underneath the quests has an arc: a forgotten story, a Lion, an
+ending. **None of that is given to the model.** A model told "the stories were
+never separate" says so in chapter two, and §24 measured a model acting on
+every optional thread it was handed — one Lion line in every brief is a lion
+in every story. So there are two documents with two audiences: the data
+module holds only what is TRUE and may show, phrased as fact and never as
+something coming; the doc holds the movements, the planted mysteries, and a
+table of what is withheld and until when. When a withheld thing becomes
+showable it moves from one to the other. They are not two definitions of one
+fact.
+
+The model canon is composed, not written: one function assembles KEEPER,
+DEVICE, SHOP, CANON and the frame, so the prompt cannot describe the man
+twice in two ways. It is capped by a test on the RENDERED section — 750
+words, about twice a hero's biography — because the constraint is attention,
+not context: lore that outweighs the account gets written instead of it. The
+original proposal's 2–5k tokens of permanent canon would fit an API model and
+would still be the wrong trade; the layers that should grow are the
+continuity layers, and those already exist.
+
+### The world reaches every chapter, or it does not exist
+
+The chapter projection carried no premise. Every story of a thousand words or
+more is chapters, so the lantern's rules — and, worse, "stays on their
+mission / does not die" — reached chapter 1 and no other. Both modes now have
+a per-chapter anchor built from the same named sentences the full brief uses.
+Two strings that must agree are one string.
+
+### The first story is a constant, not a row
+
+A story in every library, undeletable, identical for everyone, is exactly a
+constant. A row per user needs a backfill migration, a hook in two storages,
+an immutability column and three row mappers, and a reader can still end up
+without it. `builtInStories.ts` splices the constant into the list route,
+answers the id route, and refuses the mutating routes with a 403 that says
+what the story is rather than "not found". Undeletable by construction: there
+is no row to delete.
+
+It is in second person because it is fixed text: no personalisation, no model
+call, and the only story in the app one reader can quote to another.
+
+---
+
 ## Recurring failure shape
 
 Most incidents here have had the same form: **a check that reported success

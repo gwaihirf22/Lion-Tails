@@ -259,12 +259,13 @@ The strict path validates **the patch, not the merged character**, or a parent's
 custom value would block a child's unrelated edit.
 
 Before changing `storyBrief.ts`, know that `tests/fixtures/brief-golden.json`
-holds 44 captured strings (11 cases × 4 projections) asserting the rendered
-brief. The first six are the compatibility set and **must not move**: they are
-what a 0/1-character request rendered before any of this. If a change is
-deliberate, read the diff before regenerating — that diff is the prompt every
-existing story would now be written from. There is no regeneration script, which
-makes it easy to regenerate first and "verify" against your own output.
+holds 48 captured strings (12 cases × 4 projections) asserting the rendered
+brief. **Cases 1–5 are the compatibility set and must not move**: they are
+what a 0/1-character request rendered before any of this. **Case 6, "time
+travel", is the lore's own golden** — it embeds the Lion Tails canon verbatim
+and moves whenever `server/data/lionTails.ts` does; read that diff, it is the
+prompt every quest is written from. Regenerate with `UPDATE_GOLDEN=1 npm test
+-- storyBrief`, and read the diff before believing it.
 
 ## A character in a real account
 
@@ -275,19 +276,23 @@ are read only through `characterRoleOf()` — the `characterIdsOf()` precedent.
 - `"absent"` — a straight retelling. Nobody is written into the account. The
   default, because being wrong this way gives a plainer story, and being wrong
   the other way puts a child into Scripture.
-- SUPERSEDED: see "The two story tabs" at the end of this file.
-- `"meets"` — they meet the figure and join in. Fun and a little silly in how
-  they arrive and help; the real events still happen in order, with the right
-  names and outcome. The story gets a short appended note saying the meeting
-  was invented.
+- `"travels"` — **A Quest with the Timekeeper** in the UI. They start here and
+  now and the lantern takes them into the account. The world reaches the
+  brief as its own section and every chapter as an anchor; see "Quests of the
+  Timekeeper" at the end of this file.
+- `"alongside"` — they were always there. No journey, no lantern. They help
+  and push back; the figure stays on their mission; they do not die.
+- `"meets"` — LEGACY, resolves to `"alongside"`. See "The two story tabs".
+
+Either way in, the story gets a short appended note saying what was invented.
 
 **The note is appended by the server, never asked of the model** — a disclaimer
 the model writes is one it can forget, soften, or bury mid-story, and this one
 has to be exactly right and always present.
 
 This exists because the two used to contradict each other with nothing making
-anyone choose. The historical tab force-sets `useTimeTravel: false`, and the
-brief then wrote the character into the account regardless: a story about Caleb
+anyone choose. The historical tab used to force-set `useTimeTravel: false`,
+and the brief then wrote the character into the account regardless: a story about Caleb
 came back with a child called Esther in the wilderness of Paran, and because her
 name is itself a figure in Scripture it read as the app confusing two people. It
 was not — the account was accurate throughout. `soloRetelling` is carried on the
@@ -533,7 +538,9 @@ confused everyone:
 
 - **Original** — a story about YOUR character. Optionally set somewhere real,
   through the "Set it somewhere real" gate: pick a source, then one of the two
-  ways in (`characterRole`).
+  ways in (`characterRole`). The labels live in
+  `client/src/lib/characterRole.ts`, read by the form AND the Parent-Mode
+  preview; the ids are frozen in `story_jobs.request` and are not renamed.
 - **Historical & Biblical** — the real thing itself. **No user characters at
   all.** One source, plus questions.
 
@@ -560,3 +567,41 @@ a disclaimer becomes canon for the next story in that world.
 story, never woven into it: a model asked to answer a history question inside a
 scene answers it by inventing history. It never throws — a failed job is
 retried whole, so an exception would regenerate the whole story for free.
+
+## Quests of the Timekeeper
+
+The universe underneath the `travels` mode. Read
+`docs/quests-of-the-timekeeper.md` before touching any of it.
+
+**Two audiences, two homes.** `server/data/lionTails.ts` holds only what the
+model may know — the shop, the shelf, the lantern's rules, why the quests
+happen — phrased as what is TRUE, never as what is coming. The arc, the
+forgotten story, the Lion and the ending are in the doc, for people. A model
+told the ending says so in chapter two. When something withheld becomes
+showable it moves; it is never in both.
+
+**Composed, not written.** `worldCanon(frame)` and `worldAnchor()` assemble
+`KEEPER`, `DEVICE`, `SHOP`, `CANON` and the frame. Do not add a prose block
+that re-describes the man or the lantern; edit the field it belongs to. The
+rendered section is capped by a test (750 words) because the constraint is
+attention, not context — lore that outweighs the account gets written instead
+of it.
+
+**It reaches every chapter.** `StoryBrief.world` renders as `THE WORLD THIS
+HAPPENS IN` in the full brief and as `world.anchor` in the chapter
+projection; `StoryBrief.participationAnchor` carries both modes' "stays on
+their mission / does not die / do not change history" lines into every
+chapter too. Both are absent on briefs frozen before they existed, and those
+render exactly as before.
+
+**The prologue is a constant.** `server/data/questPrologue.ts` is in every
+library, pinned first, and refused by every mutating route through
+`server/lib/builtInStories.ts` — the only place that knows its id. It is one
+sentence to a line, every line its own paragraph: joined with single newlines
+the reader renders it as a poem, and a test holds the shape. The series name
+is `QUEST_SERIES_TITLE` in `shared/quests.ts`, because the card and the
+prologue heading both print it.
+
+**The Lion is not in the model canon.** He belongs to the guided Quests page,
+which does not exist yet. The prologue's last lines are fixed text and keep
+him.

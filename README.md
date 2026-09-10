@@ -268,6 +268,24 @@ one account with no sub-events, and only 8 of the 15 slugs have a matching hero
 to borrow from — the rest are `creation`, `nativity`, `crucifixion`, where "which
 part of their life" is not a sensible question.
 
+## Quests of the Timekeeper
+
+Every library begins with the same story: **The Shop That Wasn't There**, the
+prologue to *Quests of the Timekeeper*. It is a constant in
+`server/data/questPrologue.ts`, not a row — in every account, pinned first,
+not deletable, revised by editing the file. `server/lib/builtInStories.ts`
+splices it into `GET /api/stories` and refuses every route that would change
+it.
+
+A story on the Original tab can be **A Quest with the Timekeeper**: the
+reader's character starts here and now, and Mr Barnabas's lantern takes them
+into a real account. What the model knows about that world lives in
+`server/data/lionTails.ts` — the shop, the shelf, the lantern's rules, why
+the quests happen — and reaches the full brief as its own section and every
+chapter as a short anchor. What the model is *not* told — the arc, the
+forgotten story, the Lion — is in `docs/quests-of-the-timekeeper.md`, for
+people. A model told the ending says so in chapter two.
+
 ## Heroes of Faith
 
 Eighty hand-written profiles in `server/data/heroes/`, split into **two
@@ -349,7 +367,7 @@ deliberately narrow: the pure functions with a history of shipping bugs.
 | `tests/heroes.test.ts` | Eighty hand-written profiles: duplicate slugs (which make the seed silently drop a person), groups from the wrong collection's list, a Wikipedia URL where an article title belongs, a biblical date written as settled fact. |
 | `tests/theme.test.ts` | Contrast, computed from `theme.css` itself, for every token pair in all four palettes — plus that every element painting `bg-accent` also sets `text-accent-foreground`. Both failures it guards were invisible in Paper and unreadable in Night. |
 | `tests/focusMode.test.ts` | What may interrupt the reader's focus mode. Mouse movement across the page and taps must not; reaching the top strip and scrolling up must. |
-| `tests/storyBrief.test.ts` | The prompt. 25 **golden strings** assert that a request with no cast renders byte-identically to before multi-character shipped — which is what makes "backward compatible" a check rather than a claim. Plus the cast weighting, the cliffhanger, the three continuity tiers, and that the legacy `characterId` appears nowhere it should not. |
+| `tests/storyBrief.test.ts` | The prompt. **Golden strings** assert that a request with no cast renders byte-identically to before multi-character shipped — which is what makes "backward compatible" a check rather than a claim — and one case captures the Lion Tails canon so a change to it is read rather than felt. Plus the cast weighting, the cliffhanger, the three continuity tiers, and that the legacy `characterId` appears nowhere it should not. |
 | `tests/worldState.test.ts` | What a world remembers: superseding an entry rather than duplicating it, closing rather than deleting, and staying inside the cap by dropping closed entries first. |
 
 `vitest.config.ts` is separate from `vite.config.ts` on purpose —

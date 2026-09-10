@@ -80,6 +80,46 @@ first-time visitor who lands on whichever tab someone else last opened.
 
 ## Features
 
+### Quests of the Timekeeper
+
+The universe underneath the travelling mode. `docs/quests-of-the-timekeeper.md`
+is the arc; this is the build order.
+
+**Done (2026-09-10):** the canon as data (`server/data/lionTails.ts`), reaching
+the full brief as its own section and every chapter as an anchor; the mode
+renamed *A Quest with the Timekeeper*; the prologue as a built-in story in
+every library.
+
+**Next, in order:**
+
+1. **The per-user quest universe.** `resolveUniverseForRequest` grows a branch
+   that finds-or-creates a universe named after the series for any request
+   whose `characterRole` is `travels`, and the extraction runs for it. That
+   is the "current arc / previous chapter" layers of the original proposal —
+   `story_universes.world_state` and `summary`, pointed at this universe.
+   It also makes "Continue this story" on the prologue mean something, which
+   is why the reader hides that button today rather than the server refusing
+   it.
+2. **The Quests page.** Separate, less editable, API-model only, and *guided*:
+   the story chooses the destination, the arc is released movement by
+   movement under program control, and the Lion appears there and nowhere
+   else. Most of the generation pipeline is reused; what is new is program
+   state for "where in the arc is this reader" and a form that does not ask
+   what to write about.
+3. **Whether the Original tab's quest mode should refuse the local tier.**
+   Blake: "We will not use local AI for this." The canon is sized for
+   attention rather than the 16k window, so nothing breaks on the local
+   model today; the question is whether a quest written by it is worth
+   having.
+4. **The first saga outline** — twenty to thirty beats, mysteries planted
+   early and paid off late — as a doc, before any adventure is written for
+   the page.
+5. **The first adventure** on the page. Not before 4.
+
+Closed on the way: the `alongside` mode's "stays on their mission / does not
+die / never the villain" lines reached chapter 1 and no other. Both modes
+carry a per-chapter anchor now.
+
 ### Phase C — story arcs: DONE
 
 Shipped as the series flag and the cliffhanger option. The tension recorded here
