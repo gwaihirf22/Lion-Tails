@@ -73,6 +73,23 @@ export default {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        action: {
+          DEFAULT: "hsl(var(--action))",
+          foreground: "hsl(var(--action-foreground))",
+        },
+        // One soft surface per character-sheet tab. Surfaces only; the label
+        // on them is text-muted-foreground.
+        tab: {
+          "basics": "hsl(var(--tab-basics))",
+          "appearance": "hsl(var(--tab-appearance))",
+          "personality": "hsl(var(--tab-personality))",
+          "stats": "hsl(var(--tab-stats))",
+          "virtues": "hsl(var(--tab-virtues))",
+          "grown-ups": "hsl(var(--tab-grown-ups))",
+        },
+        // The unfilled part of a progress bar. Surface only -- there is
+        // deliberately no track-foreground, because nothing writes on it.
+        track: "hsl(var(--track))",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
 import { isModelAllowedFor, listSelectableModels, MODEL_CATALOG, DEFAULTS,
+  avatarCapFor,
   hasUnlimitedUse,
   avatarsRemaining,
   MAX_FREE_AVATARS,
@@ -55,13 +56,20 @@ import {
 } from "./lib/generationStats";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
+import {
+  MAX_AVATARS,
+  statsOf,
+  virtueLevels,
+  avatarsOf, storyRequestSchema, savedStorySchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
-import { generateAvatar } from "./lib/avatar";
+import { randomUUID } from "crypto";
+import { promises as fsp } from "fs";
+import path from "path";
+import { generateAvatar, AVATAR_DIR } from "./lib/avatar";
 import { statsAreAffordable } from "@shared/schema";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
 // zod 4's $ZodError type, and this app defines its schemas with zod 3's
 // classic API -- so the default export rejects every ZodError we pass it with
@@ -99,6 +107,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * here, so an unscoped read or write cannot be written by accident.
    */
 
+  /**
+   * What may be said about ONE generation.
+   *
+   * `note` is a one-off steer -- "wearing a blue scarf" -- appended to the
+   * prompt for this picture only. `remember` promotes it into canonicalLook so
+   * later pictures inherit it. Bounded because it reaches an image prompt.
+   */
+  const avatarRequestSchema = z.object({
+    note: z.string().trim().max(200).optional(),
+    remember: z.boolean().optional(),
+  });
+
   /** What a child may send. id and createdAt are the server's to assign. */
   const characterWriteSchema = characterSchema.omit({
     id: true,
@@ -117,6 +137,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // server after generating or storing an image; nothing else should.
     avatarUrl: true,
     avatarPrompt: true,
+    avatars: true,
+    // The read-receipt for a badge. A client that could write it could
+    // silence its own notification.
+    seenVirtues: true,
     // Derived from `kind` below, never taken from the client: a body claiming
     // {kind: "dragon", category: "human"} would otherwise pick the human
     // colour lists to validate against.
@@ -168,8 +192,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       // A new character has earned nothing, so this allows exactly the starting
       // points and no more.
-      if (parsed.stats && !statsAreAffordable(parsed.stats, undefined)) {
-        return res.status(400).json({ message: "That character has spent more points than they have." });
+      // Skills spend from the SAME pool, so they are checked in the same call:
+      // a body that could add six skills for free would be awarding itself six
+      // points, which is the hole the adventures omission exists to close.
+      if (
+        (parsed.stats || parsed.skills) &&
+        !statsAreAffordable(statsOf(parsed), undefined, parsed.skills ?? [])
+      ) {
+        return res.status(400).json({
+          message: "That character has spent more Attribute/Skill points than they have.",
+        });
       }
 
       const character = await storage.createCharacter({ ...parsed, category }, userId);
@@ -196,7 +228,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.user as any).id;
       const parsed = characterSchema
         .omit({ id: true, createdAt: true, customFields: true, adventures: true,
-                 avatarUrl: true, avatarPrompt: true })
+                 avatarUrl: true, avatarPrompt: true, avatars: true,
+                 seenVirtues: true })
         .parse(req.body);
 
       const customFields = Object.keys(parsed).filter((k) => k !== "category");
@@ -234,8 +267,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Against the adventures THIS character has been through -- read from the
       // stored row, never from the request, which cannot be trusted to say how
       // many stories it has earned.
-      if (updates.stats && !statsAreAffordable(updates.stats, existing)) {
-        return res.status(400).json({ message: "That is more points than this character has." });
+      // MERGED for the budget, even though the vocabulary is checked on the
+      // patch alone. These are different questions: "is this word allowed" is
+      // about the field being edited, and "can they afford this sheet" is about
+      // the whole sheet -- raising one attribute while six skills already sit
+      // on the row has to count all seven.
+      if (updates.stats || updates.skills) {
+        const merged = { ...existing, ...updates };
+        if (!statsAreAffordable(statsOf(merged), existing, merged.skills ?? [])) {
+          return res.status(400).json({
+            message: "That is more Attribute/Skill points than this character has.",
+          });
+        }
       }
 
       const patch = "kind" in updates ? { ...updates, category } : updates;
@@ -279,7 +322,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // fetches a child's picture from.
       const updates = characterSchema
         .omit({ id: true, createdAt: true, customFields: true, adventures: true,
-                 avatarUrl: true, avatarPrompt: true })
+                 avatarUrl: true, avatarPrompt: true, avatars: true,
+                 seenVirtues: true })
         .partial()
         .parse(req.body);
 
@@ -328,6 +372,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Character not found" });
       }
 
+      // What they asked to be different about this one, and whether to keep
+      // it. Parsed rather than trusted: it reaches an image prompt, and it can
+      // be written into canonicalLook, which is a field a person owns.
+      const { note, remember } = avatarRequestSchema.parse(req.body ?? {});
+
       const isAdmin = Boolean((req.user as any).isAdmin);
       const hasOwnKey = Boolean(await storage.getUserOpenAIKey(userId).catch(() => null));
       const unlimited = hasUnlimitedUse({ isAdmin, hasOwnKey });
@@ -342,6 +391,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             "Add your own OpenAI API key in Settings to make more.",
           used,
           limit: MAX_FREE_AVATARS,
+        });
+      }
+
+      // Checked BEFORE the charge: a refusal must not spend an allowance.
+      // Separate from that allowance on purpose -- this bounds what one
+      // character holds, the allowance bounds what an account may spend, and
+      // deleting a picture frees a slot here while refunding nothing there.
+      const cap = avatarCapFor({ isAdmin, hasOwnKey });
+      if (avatarsOf(character).length >= cap) {
+        return res.status(409).json({
+          code: "avatar_limit",
+          message:
+            cap === 1
+              ? `${character.name} already has a picture. Delete it to draw another, or ` +
+                "add your own OpenAI API key in Settings to keep up to " +
+                `${MAX_AVATARS}.`
+              : `${character.name} already has ${cap} pictures. Delete one to make room.`,
+          limit: cap,
         });
       }
 
@@ -363,8 +430,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // grantedByAllowance ONLY for the capped user: an admin or own-key user
       // already passes the premium gate on their own, and saying otherwise
       // would hide which of the two actually paid for this call.
+      // Draw it to LOOK LIKE the one they already chose, when there is one.
+      const gallery = avatarsOf(character);
       const result = await generateAvatar(character, userId, {
         grantedByAllowance: !unlimited,
+        likeUrl: character.avatarUrl ?? gallery[gallery.length - 1]?.url,
+        note,
       });
 
       if (!result) {
@@ -375,9 +446,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Appended AND selected. A picture you just asked for is the one you
+      // meant to look at; making it a two-step would be pedantry.
+      const entry = {
+        id: randomUUID(),
+        url: result.url,
+        prompt: result.prompt,
+        createdAt: new Date().toISOString(),
+      };
+      /**
+       * "Remember this" folds the note into canonicalLook, which is the field
+       * that steers every future picture AND is a field the user owns and can
+       * see. Appended, never replaced, and REFUSED rather than truncated when
+       * it will not fit: silently cutting the end off a description someone
+       * wrote is a worse outcome than not saving the note.
+       */
+      const keepNote =
+        remember && note
+          ? [character.canonicalLook, note].filter(Boolean).join(" ").trim()
+          : undefined;
+
       const updated = await storage.updateCharacter(req.params.id, userId, {
+        avatars: [...avatarsOf(character), entry].slice(-cap),
         avatarUrl: result.url,
         avatarPrompt: result.prompt,
+        ...(keepNote && keepNote.length <= 300 ? { canonicalLook: keepNote } : {}),
       });
       if (!updated) {
         // The image exists but its owner does not, which means the character
@@ -390,8 +483,115 @@ export async function registerRoutes(app: Express): Promise<Server> {
         remaining: unlimited ? null : avatarsRemaining(used + 1, { isAdmin, hasOwnKey }),
       });
     } catch (error) {
+      // A note that is too long is the CALLER's problem, and every other write
+      // route in this file says so with a 400. Without this branch it fell
+      // through to the 500 below and read as "the picture could not be made",
+      // which is the one thing it was not.
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: fromZodError(error).message });
+      }
       console.error("Error generating character avatar:", error);
       res.status(500).json({ message: "Failed to generate a picture" });
+    }
+  });
+
+  /**
+   * Mark this character's virtues as looked at.
+   *
+   * The list is computed HERE, from the row, and never taken from the body:
+   * virtues are derived from adventures, which are server-owned, so letting a
+   * request name what it had seen would let it acknowledge a virtue that does
+   * not exist -- and then a real one arriving with the same name would never
+   * badge.
+   */
+  app.put("/api/characters/:id/virtues/seen", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const character = await storage.getCharacterById(req.params.id, userId);
+      if (!character) return res.status(404).json({ message: "Character not found" });
+
+      const updated = await storage.updateCharacter(req.params.id, userId, {
+        seenVirtues: Object.keys(virtueLevels(character)),
+      });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error marking virtues seen:", error);
+      res.status(500).json({ message: "Failed to update this character" });
+    }
+  });
+
+  /** Choose which of a character's pictures the stories and the card use. */
+  app.put("/api/characters/:id/avatar/:avatarId", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const character = await storage.getCharacterById(req.params.id, userId);
+      if (!character) return res.status(404).json({ message: "Character not found" });
+
+      const picked = avatarsOf(character).find((a) => a.id === req.params.avatarId);
+      if (!picked) return res.status(404).json({ message: "Picture not found" });
+
+      // avatarUrl and avatarPrompt ARE the selection. Everything downstream --
+      // the card, the form, a story illustration -- reads those two and knows
+      // nothing about the gallery, which is what keeps this a display change
+      // rather than a change to how a character is drawn into a story.
+      const updated = await storage.updateCharacter(req.params.id, userId, {
+        avatars: avatarsOf(character),
+        avatarUrl: picked.url,
+        avatarPrompt: picked.prompt,
+      });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error selecting avatar:", error);
+      res.status(500).json({ message: "Failed to choose that picture" });
+    }
+  });
+
+  /**
+   * Delete one picture.
+   *
+   * Frees a slot for this character and REFUNDS NOTHING against the account's
+   * lifetime allowance -- the money was spent when the image was made. If the
+   * two were connected, delete-and-regenerate would be a free image forever,
+   * which is the exact hole MAX_FREE_AVATARS counts generations to avoid.
+   */
+  app.delete("/api/characters/:id/avatar/:avatarId", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const character = await storage.getCharacterById(req.params.id, userId);
+      if (!character) return res.status(404).json({ message: "Character not found" });
+
+      const gallery = avatarsOf(character);
+      const gone = gallery.find((a) => a.id === req.params.avatarId);
+      if (!gone) return res.status(404).json({ message: "Picture not found" });
+
+      const kept = gallery.filter((a) => a.id !== req.params.avatarId);
+      // Deleting the chosen one has to choose again, or the character keeps an
+      // avatarUrl pointing at a file that is about to stop existing.
+      const stillChosen = kept.some((a) => a.url === character.avatarUrl);
+      const next = stillChosen ? undefined : kept[kept.length - 1];
+
+      const updated = await storage.updateCharacter(req.params.id, userId, {
+        avatars: kept,
+        ...(stillChosen
+          ? {}
+          : { avatarUrl: next?.url ?? undefined, avatarPrompt: next?.prompt ?? undefined }),
+      });
+
+      // The row is updated FIRST and the file removed after. The other order
+      // leaves a character pointing at a file that is already gone if the
+      // write fails, which shows a broken image; this order leaves an orphan
+      // file nobody references, which shows nothing.
+      const name = path.basename(gone.url);
+      if (/^avatar_[0-9a-f-]+\.png$/i.test(name)) {
+        await fsp.rm(path.join(AVATAR_DIR, name), { force: true }).catch((e) => {
+          console.warn(`[avatar] could not remove ${name}:`, e);
+        });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error deleting avatar:", error);
+      res.status(500).json({ message: "Failed to delete that picture" });
     }
   });
 
@@ -1332,6 +1532,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isAdmin,
           hasOwnKey: Boolean(ownKey),
         }),
+        // How many pictures ONE character may keep, for this account. Derived
+        // from the same helper the generate route enforces with, for the same
+        // reason canIllustrate is derived rather than restated: the UI must not
+        // be able to disagree with what the server will actually allow.
+        avatarCap: avatarCapFor({ isAdmin, hasOwnKey: Boolean(ownKey) }),
       });
     } catch (error) {
       console.error("Error listing models:", error);

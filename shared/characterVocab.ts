@@ -303,6 +303,24 @@ const HOBBIES = [
   "making up songs", "exploring", "helping in the kitchen",
 ] as const;
 
+/**
+ * Named skills, on top of the five attributes.
+ *
+ * Most of these are hobbies, because a thing you practise is a thing you get
+ * good at -- but a skill list is not the hobby list: it also needs what a story
+ * reaches for and nobody does for fun. Kept separate rather than aliased so
+ * either can grow without dragging the other with it.
+ */
+const SKILLS = [
+  // Things a character does, that a story can turn on.
+  "climbing", "swimming", "running", "riding", "sailing", "rowing",
+  "cooking", "baking", "building", "fixing things", "sewing", "woodwork",
+  "gardening", "fishing", "tracking", "hiding", "listening", "remembering",
+  "drawing", "painting", "singing", "music", "storytelling", "juggling",
+  "whistling", "tying knots", "reading maps", "first aid", "languages",
+  "looking after animals", "calming people down", "spotting things",
+] as const;
+
 const PERSONALITY = [
   "brave", "kind", "curious", "shy", "cheerful", "patient", "creative",
   "thoughtful", "joyful", "determined", "gentle", "adventurous", "loyal",
@@ -310,7 +328,10 @@ const PERSONALITY = [
   "stubborn", "forgiving", "hopeful", "humble", "protective",
 ] as const;
 
+/** The SCALAR fields a child picks one value for. Skills are a list, so not here. */
 export type VocabField = "hair" | "eyes" | "favoriteColor" | "hobby" | "personality";
+/** Anything with a curated list behind it, including the one that is an array. */
+export type ListedField = VocabField | "skill";
 
 /** Every kind, flat, for search. */
 const ALL_KINDS: readonly string[] = Object.values(KINDS_BY_CATEGORY).flat();
@@ -343,7 +364,7 @@ export function coveringNoun(category?: CharacterCategory | null, kind?: string 
 }
 
 /** The permitted values for one field, given what the character is. */
-export function optionsFor(field: VocabField, category?: CharacterCategory | null): readonly string[] {
+export function optionsFor(field: ListedField, category?: CharacterCategory | null): readonly string[] {
   const cat = category ?? "human";
   switch (field) {
     case "hair": return COVERING_COLOURS[cat];
@@ -351,6 +372,7 @@ export function optionsFor(field: VocabField, category?: CharacterCategory | nul
     case "favoriteColor": return FAVOURITE_COLOURS;
     case "hobby": return HOBBIES;
     case "personality": return PERSONALITY;
+    case "skill": return SKILLS;
   }
 }
 
@@ -425,7 +447,7 @@ const ANIMALS = new Set(animalDatabase);
  * edit to some other field must not trip over them.
  */
 export function vocabularyErrors(
-  patch: Partial<Record<VocabField | "kind" | "favoriteAnimal" | "sex", unknown>>,
+  patch: Partial<Record<VocabField | "kind" | "favoriteAnimal" | "sex" | "skills", unknown>>,
   category?: CharacterCategory | null,
 ): string[] {
   const errors: string[] = [];
@@ -440,6 +462,33 @@ export function vocabularyErrors(
     const allowed = optionsFor(field, category);
     if (!allowed.includes(String(value))) {
       errors.push(`"${String(value)}" is not one of the choices for ${field}.`);
+    }
+  }
+
+  /**
+   * Skills, which the loop above cannot check.
+   *
+   * CONTROLLED_FIELDS compares one value to one list; this is an array of
+   * {name, value}. Its own branch rather than a generalised loop, beside the
+   * other shapes that do not fit -- kind, favouriteAnimal, sex.
+   *
+   * Duplicates are refused here and not only in the UI: two "climbing" rows
+   * would each cost a point and the second would say nothing.
+   */
+  if (Array.isArray(patch.skills)) {
+    const seen = new Set<string>();
+    for (const raw of patch.skills as Array<{ name?: unknown }>) {
+      const name = String(raw?.name ?? "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) {
+        errors.push(`${name} is in the list twice.`);
+        continue;
+      }
+      seen.add(key);
+      if (!SKILLS.includes(name as (typeof SKILLS)[number])) {
+        errors.push(`"${name}" is not one of the skills to choose from.`);
+      }
     }
   }
 

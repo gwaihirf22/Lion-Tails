@@ -64,6 +64,8 @@
   --muted: 43 22.6% 93.9%;
   --muted-foreground: 60 1.7% 34.7%;
   --border: 42 14.7% 86.7%;
+  /* a shade under the near-white card, or it would not be there at all */
+  --track: 42 16% 82%;
   --input: 42 14.7% 86.7%;
   --primary: 216 56.3% 42.2%;
   --primary-foreground: 0 0% 100%;
@@ -89,6 +91,8 @@
   --muted: 42 50.7% 85.7%;
   --muted-foreground: 34 22.3% 34.3%;
   --border: 40 37.9% 79.8%;
+  /* white, which Blake asked for: the card is cream, so it still reads */
+  --track: 0 0% 100%;
   --input: 40 37.9% 79.8%;
   --primary: 28 57.4% 30.4%;
   --primary-foreground: 0 0% 100%;
@@ -114,6 +118,8 @@
   --muted: 220 13% 13.5%;
   --muted-foreground: 215 8% 66%;
   --border: 217 12.4% 20.6%;
+  /* lighter than the card, and dark enough for a pale blue fill to sit on */
+  --track: 217 12% 24%;
   --input: 217 12.4% 20.6%;
   --primary: 217 88.7% 75.7%;
   --primary-foreground: 220 12% 9.8%;
@@ -139,6 +145,8 @@
   --muted: 0 0% 100%;
   --muted-foreground: 0 0% 12.2%;
   --border: 0 0% 0%;
+  /* mid grey -- far enough from both the white card and the navy fill */
+  --track: 0 0% 70%;
   --input: 0 0% 0%;
   --primary: 240 100% 27.3%;
   --primary-foreground: 0 0% 100%;
@@ -174,6 +182,121 @@
 header h1 {
   /* The wordmark carries a drop-shadow class from when it sat on a photo. */
   text-shadow: none;
+}
+
+/* ------------------------------------------------------------------------
+ * --track: the unfilled part of a progress bar.
+ *
+ * A SURFACE AND NEVER A TEXT COLOUR, which is the whole reason it exists
+ * rather than being --secondary. The stat bars painted their track with
+ * --secondary and their fill with --primary: two brand colours at almost the
+ * same lightness, separated only by hue, so the value was hard to read in all
+ * four palettes. Remapping --secondary was not an option -- decisions.md 22
+ * records that it is ALREADY doing two jobs (it is text-secondary in StoryForm
+ * and Home), and that a token used both ways is better stopped than balanced.
+ *
+ * Chosen per palette rather than computed, the way --warning-foreground
+ * already is. Two things have to hold and the theme test asserts both: it must
+ * separate from the fill, and it must still be visible against the card it
+ * sits on -- a white track on a white card is high contrast and invisible.
+ * ---------------------------------------------------------------------- */
+
+/* ------------------------------------------------------------------------
+ * A hue per tab on the character sheet.
+ *
+ * The tabs all shared bg-muted/60, and --muted is identical to --card in every
+ * palette, so an unselected tab read as "slightly veiled card" and six of them
+ * were indistinguishable but for the label.
+ *
+ * SURFACES, never text colours -- the label on them is --muted-foreground, and
+ * the theme test checks it clears AA on every tint in every palette, plus that
+ * each tint separates from the card so the strip does not collapse back into
+ * one colour.
+ *
+ * WRITTEN OUT IN FULL, twenty-four values, and that is deliberate. The compact
+ * version -- one hue angle per tab plus a saturation/lightness knob per palette
+ * -- cannot be composed in CSS in a form tests/theme.test.ts can parse: it
+ * reads bare "H S% L%" triplets and nothing else, so hsl(var(--h) var(--s)
+ * var(--l)) would be invisible to every assertion in the file. An unreadable
+ * tab in Night would have shipped green. The hue is still constant across
+ * palettes so a tab keeps its colour when the theme changes; only the
+ * saturation and lightness move.
+ * ---------------------------------------------------------------------- */
+
+:root,
+[data-palette="paper"] {
+  /* soft and a shade under the near-white card */
+  --tab-basics: 205 34% 83%;
+  --tab-appearance: 275 34% 83%;
+  --tab-personality: 25 34% 83%;
+  --tab-stats: 150 34% 83%;
+  --tab-virtues: 45 34% 83%;
+  --tab-grown-ups: 0 34% 83%;
+}
+
+[data-palette="sepia"] {
+  /* warmer and deeper, so a tint reads against a cream card */
+  --tab-basics: 205 30% 77%;
+  --tab-appearance: 275 30% 77%;
+  --tab-personality: 25 30% 77%;
+  --tab-stats: 150 30% 77%;
+  --tab-virtues: 45 30% 77%;
+  --tab-grown-ups: 0 30% 77%;
+}
+
+[data-palette="night"] {
+  /* dark tints -- a pale tab on this palette would be the brightest thing on screen */
+  --tab-basics: 205 33% 27%;
+  --tab-appearance: 275 33% 27%;
+  --tab-personality: 25 33% 27%;
+  --tab-stats: 150 33% 27%;
+  --tab-virtues: 45 33% 27%;
+  --tab-grown-ups: 0 33% 27%;
+}
+
+[data-palette="contrast"] {
+  /* muted enough that black label text still clears AA on every one */
+  --tab-basics: 205 43% 88.5%;
+  --tab-appearance: 275 43% 88.5%;
+  --tab-personality: 25 43% 88.5%;
+  --tab-stats: 150 43% 88.5%;
+  --tab-virtues: 45 43% 88.5%;
+  --tab-grown-ups: 0 43% 88.5%;
+}
+
+/* ------------------------------------------------------------------------
+ * --action: a button that DOES something rather than submitting.
+ *
+ * Blake asked for the reroll-a-name button to be blue. Written as bg-blue-600
+ * that is a guess about the background -- it fails the CI hardcoded-colour
+ * gate, and it is the same colour in Night, where it becomes the brightest
+ * thing on a dark page. So: blue per palette, with its own foreground, and the
+ * pair checked like every other.
+ * ---------------------------------------------------------------------- */
+
+:root,
+[data-palette="paper"] {
+  /* blue against a warm page, so the reroll reads as an action */
+  --action: 216 60% 42%;
+  --action-foreground: 0 0% 100%;
+}
+
+[data-palette="sepia"] {
+  /* deeper, or it disappears into the cream */
+  --action: 214 58% 38%;
+  --action-foreground: 0 0% 100%;
+}
+
+[data-palette="night"] {
+  /* light on dark, with a dark label -- the palette's own inversion */
+  --action: 214 70% 66%;
+  --action-foreground: 220 12% 10%;
+}
+
+[data-palette="contrast"] {
+  /* near-navy, the only blue that clears AA on white here */
+  --action: 220 100% 28%;
+  --action-foreground: 0 0% 100%;
 }
 
 /* ------------------------------------------------------------------------

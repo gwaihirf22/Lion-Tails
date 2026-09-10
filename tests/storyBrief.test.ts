@@ -8,6 +8,7 @@ import {
   renderBrief,
   resolveStoryFocus,
   statLeakage,
+  skillLeakage,
   SOLO_RETELLING_GUARD,
   type BriefPurpose,
 } from "../server/lib/storyBrief";
@@ -1044,5 +1045,70 @@ describe("how a character appears in a retelling", () => {
   it("ignores a value that is not one of the two", () => {
     expect(characterRoleOf({ characterRole: "sidekick", useTimeTravel: true })).toBe("meets");
     expect(characterRoleOf({ characterRole: "", useTimeTravel: false })).toBe("absent");
+  });
+});
+
+/**
+ * Named skills in the brief.
+ *
+ * The half of the ability block that says something a number cannot. These
+ * assert the two guards that had to move together: skills reach the prompt at
+ * all, and a character with skills but ORDINARY attributes is not suppressed --
+ * which the old predicate, keyed on attribute deviation alone, would have done.
+ */
+describe("skills reach the story", () => {
+  const withSkills = (skills: Array<{ name: string; value: number }>, stats?: CharacterStats) =>
+    buildStoryBrief({ ...base, characterIds: ["c9"] } as StoryRequest, [
+      { id: "c9", name: "Ember", createdAt: "2026-01-01", kind: "dragon", stats, skills } as Character,
+    ]);
+
+  it("says what they are good at", () => {
+    const t = renderBrief(withSkills([{ name: "climbing", value: 5 }]), "single");
+    expect(t).toContain("Ember is good at climbing.");
+  });
+
+  it("grades them, and says the poor ones too", () => {
+    const t = renderBrief(withSkills([{ name: "baking", value: 8 }, { name: "swimming", value: 1 }]), "single");
+    expect(t).toContain("very good at baking");
+    expect(t).toContain("poor at swimming");
+  });
+
+  it("shows up for a character who is ordinary at everything else", () => {
+    // THE GUARD. The block used to render only when an attribute differed from
+    // the baseline, so this character -- five threes and a skill -- would have
+    // had the one interesting thing about them dropped.
+    const t = renderBrief(withSkills([{ name: "climbing", value: 5 }]), "single");
+    expect(t).toContain("WHAT EACH OF THEM CAN DO");
+  });
+
+  it("stays out of the per-chapter prompt, like the numbers", () => {
+    expect(renderBrief(withSkills([{ name: "climbing", value: 5 }]), "chapter"))
+      .not.toContain("climbing");
+  });
+
+  it("says nothing for a skill nobody spent on", () => {
+    // At the baseline it is not a fact about them, and a brief with nothing to
+    // say must still cost nothing.
+    expect(renderBrief(withSkills([{ name: "climbing", value: baseStats().strength }]), "single"))
+      .not.toContain("WHAT EACH OF THEM CAN DO");
+  });
+});
+
+describe("skill names are not turned into regexes", () => {
+  it("catches a skill announced rather than shown", () => {
+    expect(skillLeakage("Her climbing skill was the reason.", ["climbing"])).toHaveLength(1);
+    expect(skillLeakage("She had great skill at baking.", ["baking"])).toHaveLength(1);
+  });
+
+  it("leaves the skill being USED alone", () => {
+    // "She went climbing" is the feature working, not a leak.
+    expect(skillLeakage("She went climbing up the rope.", ["climbing"])).toHaveLength(0);
+  });
+
+  it("cannot be broken by a name full of regex characters", () => {
+    // The reason this is a scan and not a pattern: a name is user text, and
+    // compiling it would be an escaping bug and a denial of service at once.
+    expect(() => skillLeakage("anything at all", ["(a+)+$", "[", "\\"])).not.toThrow();
+    expect(skillLeakage("anything at all", ["(a+)+$"])).toEqual([]);
   });
 });

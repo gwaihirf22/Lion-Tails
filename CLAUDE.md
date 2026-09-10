@@ -329,10 +329,106 @@ feature rather than a detail:
   already-counted request and is not a property of the user. Charge first, then
   pass the result of having charged.
 
+**Two caps, and they are not the same question.** `MAX_FREE_AVATARS` (8)
+counts generations for the lifetime of an ACCOUNT and is about money.
+`avatarCapFor()` bounds how many pictures ONE CHARACTER keeps — five with your
+own key or admin, **one without**, because eight generations spread over five
+slots each would be gone after two characters. Deleting frees a slot and
+refunds nothing, which is what stops delete-and-regenerate being free. The
+client never computes the cap: `GET /api/settings/models` returns `avatarCap`
+from the same helper the route enforces with, the way `canIllustrate` already
+does, so the UI cannot disagree with the server.
+
+Generating takes a `note` (a one-off steer, appended to the prompt for that
+picture) and `remember` (folds it into `canonicalLook` so later pictures keep
+it). The note is appended by `generateAvatar`, never inside
+`buildAvatarPrompt`, so that function stays pure and its tests keep meaning
+what they say. Over the 300-character limit the note is refused rather than
+truncated.
+
+**Generation already survives the tab closing.** Express does not abort a
+handler when the socket does, so the OpenAI call and the write both finish —
+verified by hanging up a client mid-generation and watching the picture land.
+What used to be missing was the UI finding out: `Characters.tsx` holds the
+edited character's **id** and looks the row up from the query, so a refetch
+reaches the open card instead of a snapshot taken when it was opened.
+
 Files go to `public/images/stories/avatars`. That looks like the wrong
 directory and is the right path: the parent is the mount point of the
 `story_images` volume, so anything written there survives a redeploy and
 anything written beside it does not.
+
+## Attributes and Skills
+
+The tab is **Attributes/Skills**. The five fixed values are attributes; skills
+are named and user-added — "good at climbing" tells a story something a number
+cannot, and costs one clause. That is deliberately instead of more built-in
+attributes: the block works because an outlier is a SIGNAL, and a dozen columns
+would bury the two that matter in a wall of baselines (and at eight characters,
+cost ~96 numbers of prompt for background colour).
+
+**The stored key is still `stats`, and that is on purpose.** It lives inside the
+`character_data` jsonb, and `characterSchema` is a `z.object`, which strips
+unknown keys — renaming it without a data migration would silently drop every
+existing character's numbers on their next save. `story_jobs.brief` carries it
+too, frozen at enqueue. This was a vocabulary change; paying a migration to make
+an identifier match a label is the wrong trade. (`AdminStats`,
+`/api/admin/generation-stats` and the usage stats in Settings are a different
+feature — do not sweep them in.)
+
+**Skills spend from the same pool.** A new one is added at `STAT_BASE + 1`, so
+having it costs exactly one point by the arithmetic `pointsSpent` already does —
+no special case anywhere, and `pointsAvailable`, `statsAreAffordable`, the
+notable thresholds and the suppression rule all kept working. Names come from
+`optionsFor("skill")`; Parent Mode's `/custom` routes take anything, as they do
+for every other field. Duplicates and the count are refused server-side.
+
+Two things had to move together in `renderAbilities()`: skills render as prose
+under the table (they are named, so they cannot be columns), and the `touched`
+predicate had to widen — keyed on attribute deviation alone, a character
+ordinary at all five but good at climbing was suppressed entirely.
+
+**Never build a regex from a skill name.** They are user text; compiling one is
+an escaping bug and a denial of service at once. `skillLeakage()` is a plain
+case-insensitive scan for the giveaway phrasing, and the attribute pattern in
+`LEAK_PATTERNS` is built FROM `CHARACTER_STATS` so adding one cannot leave the
+detector checking four of five.
+
+## The character sheet's tabs and badges
+
+Two badges say there is something waiting, because nobody opens a tab to find
+out whether it has anything in it:
+
+- **Stats** (renamed from "Statistics", which read as a record of things done —
+  that is what Virtues is): `pointsAvailable()` above zero, and only when the
+  sheet is switched on. That helper already existed and `CharacterForm` was
+  re-deriving it inline; it now takes an optional live sheet, so the form and
+  the card ask one function.
+- **Virtues**: `unseenVirtues()`. `seenVirtues` is **server-owned** — omitted
+  from all three write schemas, and `PUT /api/characters/:id/virtues/seen`
+  computes the list from the row rather than the body. A client that could
+  write it could silence its own badge, and virtues derive from `adventures`,
+  which the client cannot write either. Both compare on the lowercased, trimmed
+  key `virtueLevels()` builds, or "Courage" would sit unseen against a stored
+  "courage" for ever.
+
+A character with no `seenVirtues` shows a badge once. That is deliberate: those
+virtues genuinely have not been looked at, and pretending otherwise is worse
+than one badge.
+
+**`--tab-*` is twenty-four hand-written values and that is on purpose.** The
+compact version — a hue per tab plus a saturation/lightness knob per palette —
+cannot be composed in CSS in a form `tests/theme.test.ts` can read: it parses
+bare `H S% L%` triplets and nothing else, so `hsl(var(--h) var(--s) var(--l))`
+would be invisible to every assertion in the file and an unreadable tab in
+Night would ship green. The hue stays constant across palettes so a tab keeps
+its colour when the theme changes; only saturation and lightness move. Class
+names are written out in full, never interpolated — see `ci.yml` on the colour
+picker that did nothing for months.
+
+`--action` is the blue reroll button. It was `bg-blue-600`, which failed the
+CI hardcoded-colour gate and would have been the brightest thing on the page in
+Night.
 
 ## Heroes of Faith data
 
@@ -363,6 +459,12 @@ Rules that are easy to break without noticing:
 - Never hardcode a text colour on something that moves between surfaces.
   `.nav-text` was `text-white` and shipped white-on-white in the active nav
   pill, the "More" menu and the whole mobile sheet. See docs/decisions.md 23.
+- `--track` is the unfilled part of a progress bar: a surface, never a text
+  colour, per palette. The stat bars painted the track with `--secondary` and
+  the fill with `--primary` — two brand colours within a few points of the
+  same lightness. `tests/theme.test.ts` now checks the fill separates from the
+  track AND that the track is visible on the card, because a track that
+  vanishes into the card passes the first check alone.
 - A design token is a surface colour OR a text colour, not both. --secondary
   and --accent were each mapped one way and used the other, and both produced
   text that was invisible in some palettes and fine in the one being looked at.

@@ -69,6 +69,9 @@ function parsePalettes(): Record<string, Record<string, [number, number, number]
 const palettes = parsePalettes();
 const NAMES = ["paper", "sepia", "night", "contrast"];
 
+/** Every tab on the character sheet. Kept beside the palettes it is checked against. */
+const TAB_TINTS = ["basics", "appearance", "personality", "stats", "virtues", "grown-ups"] as const;
+
 describe("palette parsing", () => {
   it("finds all four palettes with their tokens", () => {
     // If this file stops parsing, every check below passes vacuously.
@@ -103,6 +106,7 @@ const PAIRS: Array<[string, string, number, string]> = [
   // bar (light pill, bar-coloured text), so both directions are real text.
   ["header-foreground", "header", 7, "nav text on the bar"],
   ["header", "header-foreground", 7, "the active nav pill, which inverts the bar"],
+  ["action-foreground", "action", 4.5, "the reroll button, which is blue in every palette"],
 ];
 
 describe.each(NAMES)("%s palette", (name) => {
@@ -117,6 +121,67 @@ describe.each(NAMES)("%s palette", (name) => {
       Number(r.toFixed(2)),
       `--${fg} on --${bg} in ${name} is ${r.toFixed(2)}:1, needs ${min}:1`,
     ).toBeGreaterThanOrEqual(min);
+  });
+
+  /**
+   * The gap that let an unreadable stat bar ship.
+   *
+   * PAIRS is framed as foreground-on-background, so every row asks "can you
+   * read this text". Nothing asked whether --primary and --secondary could sit
+   * BESIDE each other, which is exactly what a progress bar does -- and in
+   * every palette they were two brand colours within a few points of the same
+   * lightness, separated only by hue.
+   *
+   * Both directions are asserted on purpose. A track that clears the fill by
+   * vanishing into the card would pass the first check on its own, and the bar
+   * would be worse: you could see the fill and not how far it had to go.
+   */
+  /**
+   * Six tabs that are actually six colours, and still readable.
+   *
+   * These are surfaces with --foreground written on them, so both halves
+   * matter: a tint dark enough to be distinct can swallow the label, and a
+   * tint light enough for the label can vanish into the card -- at which point
+   * the tabs are identical again and the whole change bought nothing.
+   *
+   * Iterated by name so a tab added to theme.css without all four palettes, or
+   * a palette missing one, fails here rather than rendering transparent.
+   */
+  it.each(TAB_TINTS)("the %s tab is a colour you can read a label on", (tabName) => {
+    const tokens = v();
+    const tint = tokens[`tab-${tabName}`];
+    expect(tint, `--tab-${tabName} is not defined in ${name}`).toBeDefined();
+
+    const label = contrast(tokens.foreground, tint);
+    expect(
+      Number(label.toFixed(2)),
+      `--foreground on --tab-${tabName} in ${name} is ${label.toFixed(2)}:1, needs 4.5:1`,
+    ).toBeGreaterThanOrEqual(4.5);
+
+    const apart = contrast(tint, tokens.card);
+    expect(
+      Number(apart.toFixed(2)),
+      `--tab-${tabName} on --card in ${name} is ${apart.toFixed(2)}:1 -- the tab does ` +
+        `not separate from the panel, so the strip is one colour again`,
+    ).toBeGreaterThanOrEqual(1.15);
+  });
+
+  it("shows how far a progress bar has to go", () => {
+    const { primary, track, card } = v();
+    expect(track, `--track is not defined in ${name}`).toBeDefined();
+
+    const fillVsTrack = contrast(primary, track);
+    expect(
+      Number(fillVsTrack.toFixed(2)),
+      `--primary on --track in ${name} is ${fillVsTrack.toFixed(2)}:1, needs 3:1`,
+    ).toBeGreaterThanOrEqual(3);
+
+    const trackVsCard = contrast(track, card);
+    expect(
+      Number(trackVsCard.toFixed(2)),
+      `--track on --card in ${name} is ${trackVsCard.toFixed(2)}:1 -- the empty ` +
+        `part of the bar is invisible, so the value has nothing to be read against`,
+    ).toBeGreaterThanOrEqual(1.2);
   });
 
   it("separates a dropdown from the card it opens over", () => {

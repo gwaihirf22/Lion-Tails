@@ -1,9 +1,19 @@
-import { type Character, characterKind } from "@shared/schema";
+import {
+  unseenVirtues,
+  statsEnabledFor,
+  pointsAvailable, type Character, characterKind } from "@shared/schema";
 import { coveringNoun } from "@shared/characterVocab";
 import CharacterAvatar from "./CharacterAvatar";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { CalendarIcon, HeartIcon, PencilIcon, TrashIcon } from "lucide-react";
 
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -27,6 +37,10 @@ export default function CharacterCard({
   // The covering noun follows what they are, so a dragon's card says "Scales"
   // where a child's says "Hair". A character saved before categories existed
   // has none, and falls through to "hair" exactly as the story prompt does.
+  // Stats switched off means nothing to spend, not a badge saying otherwise.
+  const unspent = statsEnabledFor(character) ? Math.max(0, pointsAvailable(character)) : 0;
+  const unseen = unseenVirtues(character).length;
+
   const rows = ([
     [title(coveringNoun(character.category, kind)), character.hair],
     ["Eyes", character.eyes],
@@ -37,7 +51,46 @@ export default function CharacterCard({
   ] as const).filter((r): r is readonly [string, string] => Boolean(r[1]));
 
   return (
-    <Card className={`transition-all duration-200 ${selected ? 'ring-2 ring-primary' : ''}`}>
+    <Card className={cn("relative transition-all duration-200", selected && "ring-2 ring-primary")}>
+      {/*
+        ON THE EDGE, like the tab badges, and for the same reason: a count
+        tucked inside the header reads as another label. Sitting proud of the
+        corner it reads as a notification.
+
+        Each carries a ring in the card's own colour so the overlap looks like
+        a deliberate stack rather than two things colliding, and the later one
+        in the DOM paints on top -- which is why the red one is last.
+      */}
+      {(unspent > 0 || unseen > 0) && (
+        <TooltipProvider>
+          <div className="absolute -right-2 -top-2 z-10 flex -space-x-1.5">
+            {unseen > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-tab-virtues px-1.5 text-xs font-semibold text-foreground ring-2 ring-card">
+                    {unseen}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {unseen} new virtue{unseen === 1 ? "" : "s"} to look at
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {unspent > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-destructive px-1.5 text-xs font-semibold text-destructive-foreground ring-2 ring-card">
+                    {unspent}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {unspent} Attribute/Skill point{unspent === 1 ? "" : "s"}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        </TooltipProvider>
+      )}
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start gap-3">
           <div className="flex items-center gap-3 min-w-0">

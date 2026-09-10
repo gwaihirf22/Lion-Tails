@@ -1,9 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Pencil, Search, Undo2 } from "lucide-react";
 import {
+  type CharacterSkill,
+  skillsOf,
+  MAX_SKILLS,
+  unseenVirtues,
+  statsEnabledFor,
+  pointsAvailable,
+  avatarsOf,
+  MAX_AVATARS,
   characterSchema,
   baseStats,
   statsOf,
@@ -53,6 +61,25 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequestAllowingErrors } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, Sparkles, RefreshCw, RotateCcw, ChevronLeft, ChevronRight, X, Plus, Lock } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useParentMode } from "@/hooks/use-parent-mode";
 import AnimalAutocomplete from "./AnimalAutocomplete";
@@ -170,14 +197,19 @@ type CharacterFormProps = {
    * sends the save to the Parent Mode route. The page decides the endpoint; the
    * form only reports how the values were arrived at.
    */
-  onSubmit: (data: CharacterFormValues, custom: boolean) => void;
+  /**
+   * May return a promise. When it does, the form waits for it and then treats
+   * its own values as the saved ones, which is what lets the Save button go
+   * quiet without the dialog closing to prove the save happened.
+   */
+  onSubmit: (data: CharacterFormValues, custom: boolean) => void | Promise<unknown>;
   loading?: boolean;
   initialCharacter?: Partial<CharacterFormValues>;
   /**
    * The saved row, when editing. Carries the two things the form shows but
    * never writes -- adventures and therefore virtues, which are the server's.
    */
-  saved?: Pick<Character, "adventures">;
+  saved?: Pick<Character, "adventures" | "id" | "avatarUrl" | "avatarPrompt" | "avatars" | "createdAt" | "seenVirtues">;
 };
 
 export default function CharacterForm({
@@ -213,6 +245,7 @@ export default function CharacterForm({
       avatarUrl: initialCharacter?.avatarUrl,
       statsEnabled: initialCharacter?.statsEnabled,
       stats: initialCharacter?.stats,
+      skills: initialCharacter?.skills,
     },
   });
 
@@ -225,8 +258,34 @@ export default function CharacterForm({
   // character has been in is not something the form gets an opinion about.
   const statValues = statsOf({ stats: form.watch("stats") });
   const earned = pointsEarned(saved);
-  const available = earned + STARTING_POINTS - pointsSpent(statValues);
+  // pointsAvailable existed and this re-derived it. The override is what lets
+  // the card ask about the stored sheet and the form about the one being
+  // dragged around right now, from one function.
+  const [skillDraft, setSkillDraft] = useState("");
+  const skillValues = skillsOf({ skills: form.watch("skills") });
+  const available = pointsAvailable(saved ?? {}, statValues, skillValues);
   const levels = virtueLevels(saved);
+
+  const setSkill = (name: string, value: number) => {
+    if (value < STAT_FLOOR || value > STAT_CAP) return;
+    form.setValue("skills", skillValues.map((sk: CharacterSkill) => (sk.name === name ? { ...sk, value } : sk)), {
+      shouldDirty: true,
+    });
+  };
+  const addSkill = (name: string) => {
+    const clean = name.trim();
+    // Refused here AND on the server. A duplicate would cost a second point and
+    // say nothing the first did not.
+    if (!clean || skillValues.some((sk: CharacterSkill) => sk.name.toLowerCase() === clean.toLowerCase())) return;
+    if (skillValues.length >= MAX_SKILLS) return;
+    // One above the baseline, which is what makes having it cost a point --
+    // see pointsSpent, which needs no knowledge that skills exist.
+    form.setValue("skills", [...skillValues, { name: clean, value: STAT_BASE + 1 }], {
+      shouldDirty: true,
+    });
+  };
+  const removeSkill = (name: string) =>
+    form.setValue("skills", skillValues.filter((sk: CharacterSkill) => sk.name !== name), { shouldDirty: true });
 
   const setStat = (stat: CharacterStat, value: number) => {
     if (value < STAT_FLOOR || value > STAT_CAP) return;
@@ -266,7 +325,19 @@ export default function CharacterForm({
     return false;
   };
 
-  const submit = (values: CharacterFormValues) => onSubmit(values, isCustom(values));
+  const submit = async (values: CharacterFormValues) => {
+    try {
+      await onSubmit(values, isCustom(values));
+      // Reset TO THE SUBMITTED VALUES, not to the initial ones: this is what
+      // clears isDirty, and it is why the button can grey out while the card
+      // stays open. Only on success -- a failed save must stay dirty, or the
+      // button goes quiet on work that was never stored.
+      form.reset(values, { keepDefaultValues: false });
+    } catch {
+      // The parent's mutation already toasts. Swallowed here so the promise
+      // rejection does not go unhandled, and so the form stays dirty.
+    }
+  };
 
   /**
    * One list-backed field, with the Parent Mode pencil already attached.
@@ -310,6 +381,220 @@ export default function CharacterForm({
     />
   );
 
+  /**
+   * Ask the server to draw them.
+   *
+   * The allowance is NOT enforced here -- the button only reports what the
+   * server said. A disabled button is a courtesy; the cap is a POST away from
+   * being bypassed, so it lives in the route, and this reads the count back
+   * from the response rather than keeping its own tally that could drift.
+   */
+  /**
+   * Their pictures, and which one is chosen.
+   *
+   * Held here rather than read from `saved` on every render because the routes
+   * return the updated character and this screen should show it immediately --
+   * waiting on a refetch would leave a picture the user just made missing for a
+   * beat. Seeded from the row, then only ever replaced by a server response.
+   */
+  const [gallery, setGallery] = useState(() => avatarsOf(saved));
+  const applyCharacter = (c?: Character) => {
+    if (!c) return;
+    setGallery(avatarsOf(c));
+    form.setValue("avatarUrl", c.avatarUrl);
+  };
+
+  /**
+   * Take the server's word for it whenever the row changes.
+   *
+   * Generation finishes whether or not anyone is listening -- Express does not
+   * abort a handler when the socket closes, and a picture started before the
+   * tab was shut is saved regardless. What was missing is that the open card
+   * never found out. Now the page looks the row up by id on every refetch, and
+   * this adopts it.
+   *
+   * Compared by content, not identity: a refetch returns a new array every
+   * time, and depending on identity would reset the strip on every render.
+   * Skipped mid-draw so the server's answer, not a stale refetch, wins the
+   * race.
+   */
+  const savedShape = JSON.stringify([avatarsOf(saved).map((a) => a.id), saved?.avatarUrl]);
+  useEffect(() => {
+    if (drawing) return;
+    setGallery(avatarsOf(saved));
+    if (saved?.avatarUrl !== form.getValues("avatarUrl")) {
+      form.setValue("avatarUrl", saved?.avatarUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedShape]);
+
+  /**
+   * How many pictures this ACCOUNT may keep per character.
+   *
+   * Read from the server, never worked out here: the generate route enforces
+   * avatarCapFor() and a second opinion in the UI is a thing that can disagree
+   * with it. Defaults to 1 while the query is in flight, which is the cautious
+   * direction -- it shows one slot too few for a moment rather than offering a
+   * slot the server will refuse.
+   */
+  const { data: entitlement } = useQuery<{ avatarCap?: number }>({
+    queryKey: ["/api/settings/models"],
+  });
+  const avatarCap = entitlement?.avatarCap ?? 1;
+
+  const [askOpen, setAskOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [remember, setRemember] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  const [drawing, setDrawing] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const pickAvatar = async (avatarId: string) => {
+    if (!saved?.id) return;
+    const res = await apiRequestAllowingErrors("PUT", `/api/characters/${saved.id}/avatar/${avatarId}`);
+    if (!res.ok) return;
+    applyCharacter(await res.json().catch(() => undefined));
+    void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+  };
+
+  const removeAvatar = async (avatarId: string) => {
+    if (!saved?.id) return;
+    const res = await apiRequestAllowingErrors("DELETE", `/api/characters/${saved.id}/avatar/${avatarId}`);
+    if (!res.ok) return;
+    applyCharacter(await res.json().catch(() => undefined));
+    void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+  };
+
+  const makeAvatar = async () => {
+    if (!saved?.id || drawing) return;
+    setAskOpen(false);
+    setDrawing(true);
+    try {
+      const res = await apiRequestAllowingErrors("POST", `/api/characters/${saved.id}/avatar`, {
+        note: note.trim() || undefined,
+        remember: remember && Boolean(note.trim()),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({
+          title:
+            res.status === 409
+              ? "No room for another picture"
+              : res.status === 403
+                ? "No free pictures left"
+                : "That did not work",
+          description: body?.message ?? "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      // Straight onto the form, so the picture appears without a refetch, and
+      // into the cache so the Characters list agrees with it.
+      applyCharacter(body.character);
+      if (typeof body.remaining === "number") setRemaining(body.remaining);
+      void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+    } catch {
+      toast({ title: "That did not work", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setDrawing(false);
+      setNote("");
+      setRemember(false);
+      // Whatever happened, the row is the truth. A generation that finished
+      // after the client gave up shows up here rather than staying invisible.
+      void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+    }
+  };
+
+  /**
+   * Their portrait. Shown on Basics AND on Appearance.
+   *
+   * Blake wants to see it in both places -- Basics is where you meet the
+   * character, Appearance is where you decide what they look like and so where
+   * the button that draws them belongs. A function returning jsx, not a nested
+   * component: see the note on vocabField about identity changing every render.
+   */
+  const portrait = (size: "md" | "lg") => (
+    <CharacterAvatar
+      size={size}
+      character={{
+        name: form.watch("name") || "This character",
+        kind, category, gender: form.watch("gender"),
+        avatarUrl: form.watch("avatarUrl"),
+      }}
+    />
+  );
+
+  /**
+   * The tabs, in order, and the only definition of that order.
+   *
+   * The arrows step through THIS array, so a tab added to the list without
+   * being added here would be unreachable by the arrows and reachable by
+   * clicking -- which is the kind of half-working nobody notices.
+   */
+  /**
+   * Class names are written out IN FULL, never built from t.value.
+   *
+   * Tailwind's scanner only sees string literals: BookPage once composed its
+   * background class by interpolation and the whole colour picker silently did
+   * nothing for months, because the class was never emitted. ci.yml records it.
+   */
+  const TABS = [
+    { value: "basics", label: "Basics", tint: "bg-tab-basics", edge: "border-t-tab-basics" },
+    { value: "appearance", label: "Appearance", tint: "bg-tab-appearance", edge: "border-t-tab-appearance" },
+    { value: "personality", label: "Personality", tint: "bg-tab-personality", edge: "border-t-tab-personality" },
+    // "Statistics" read as a record of things done, which is what Virtues
+    // actually is. These are what the character CAN do.
+    //
+    // The VALUE stays "stats": it is the key for --tab-stats, the tailwind map
+    // and TAB_TINTS in the theme test, and renaming it would be a coordinated
+    // four-file change buying nothing a label already says.
+    { value: "stats", label: "Attributes/Skills", tint: "bg-tab-stats", edge: "border-t-tab-stats" },
+    { value: "virtues", label: "Virtues", tint: "bg-tab-virtues", edge: "border-t-tab-virtues" },
+    ...(parentMode
+      ? [{ value: "grown-ups", label: "Grown-ups", tint: "bg-tab-grown-ups", edge: "border-t-tab-grown-ups" }]
+      : []),
+  ];
+  /**
+   * What the tab badges are counting.
+   *
+   * Stats stays quiet when the sheet is switched off -- a character nobody is
+   * levelling should not nag -- and when the total is negative, which a Parent
+   * Mode sheet can produce and which is not something to spend.
+   */
+  const unspent = statsEnabledFor({ statsEnabled: form.watch("statsEnabled") })
+    ? Math.max(0, available)
+    : 0;
+  const unseen = unseenVirtues(saved).length;
+
+  const [tab, setTab] = useState("basics");
+  // Parent Mode can be locked while the form is open, taking its tab with it.
+  const tabIndex = Math.max(0, TABS.findIndex((t) => t.value === tab));
+  /**
+   * Opening the Virtues tab is what "seen" means.
+   *
+   * Fired from the tab change rather than a render effect so it cannot run for
+   * a tab nobody looked at, and guarded on there being something unseen so it
+   * is not a write on every visit.
+   */
+  const markVirtuesSeen = async () => {
+    if (!saved?.id || unseen === 0) return;
+    const res = await apiRequestAllowingErrors("PUT", `/api/characters/${saved.id}/virtues/seen`);
+    if (res.ok) void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+  };
+
+  const openTab = (next: string) => {
+    setTab(next);
+    if (next === "virtues") void markVirtuesSeen();
+  };
+
+  const step = (by: number) => {
+    const next = TABS[tabIndex + by];
+    if (next) openTab(next.value);
+  };
+
   const results = kindSearch ? searchKinds(kindSearch, 40) : [];
 
   return (
@@ -332,30 +617,109 @@ export default function CharacterForm({
               form state, so nothing is lost by switching between them
               mid-edit.
             */}
-            <Tabs defaultValue="basics" className="w-full">
-              <TabsList className="w-full justify-start flex-wrap h-auto">
-                <TabsTrigger value="basics">Basics</TabsTrigger>
-                <TabsTrigger value="appearance">Appearance</TabsTrigger>
-                <TabsTrigger value="personality">Personality</TabsTrigger>
-                <TabsTrigger value="stats">Statistics</TabsTrigger>
-                <TabsTrigger value="virtues">Virtues</TabsTrigger>
-                {parentMode && <TabsTrigger value="grown-ups">Grown-ups</TabsTrigger>}
-              </TabsList>
+            <Tabs value={tab} onValueChange={openTab} className="w-full">
+              {/*
+                FOLDER TABS. The default shadcn tab strip is a segmented control
+                -- a grey pill where only the selected item has a surface -- so
+                the unselected ones read as plain text and the strip does not
+                read as tabs at all.
+
+                Each trigger carries its own border and a rounded top, so an
+                unselected tab is still visibly a tab. The selected one takes
+                the card's background, loses its bottom border and is pulled
+                down a pixel over the strip's own border, which is what joins it
+                to the panel below and makes it read as the front folder.
+              */}
+              {/*
+                items-END, not items-stretch. Stretching made TabsList grow to
+                the height of the icon buttons beside it, so its bottom border
+                sat several pixels BELOW the tabs instead of under them -- the
+                selected tab's card-coloured border had nothing to cover, and
+                the line ran straight through the front folder. The arrows now
+                bottom-align with the strip instead of being nudged with a
+                margin.
+              */}
+              <div className="flex items-end gap-1">
+                <Button
+                  type="button" variant="ghost" size="icon"
+                  className="shrink-0"
+                  onClick={() => step(-1)}
+                  disabled={tabIndex === 0}
+                  aria-label="Previous tab"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <TabsList className="flex-1 h-auto flex-wrap justify-start gap-1 rounded-none border-b border-border bg-transparent p-0 pt-1">
+                  {TABS.map((t) => {
+                    const count = t.value === "stats" ? unspent : t.value === "virtues" ? unseen : 0;
+                    return (
+                      <TabsTrigger
+                        key={t.value}
+                        value={t.value}
+                        className={cn(
+                          "relative z-10 -mb-px rounded-b-none rounded-t-md border border-t-2 border-border border-b-transparent px-3 py-1.5 text-foreground data-[state=active]:border-b-card data-[state=active]:bg-card data-[state=active]:shadow-none",
+                          // Its own colour when it is one of the closed folders,
+                          // and the same colour as a top edge when it is the
+                          // open one -- which has to stay bg-card, because that
+                          // is what joins it to the panel below.
+                          t.tint,
+                          t.edge,
+                        )}
+                      >
+                        {t.label}
+                        {count > 0 && (
+                          <span
+                            // A plain title, not a Tooltip: this sits inside a
+                            // modal Dialog, where a portalled Radix layer is
+                            // the thing that has already bitten this file once.
+                            // The card's bubbles are not in a dialog and use a
+                            // real tooltip.
+                            title={
+                              t.value === "stats"
+                                ? `${count} Attribute/Skill point${count === 1 ? "" : "s"}`
+                                : `${count} new virtue${count === 1 ? "" : "s"} to look at`
+                            }
+                            className={cn(
+                              "absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none",
+                              // Red for "there is something here". destructive is
+                              // the only red that follows all four palettes, and
+                              // an attention red sharing a token with a danger
+                              // red is the ordinary convention -- it is not
+                              // saying this is dangerous.
+                              t.value === "stats"
+                                ? "bg-destructive text-destructive-foreground"
+                                : "bg-tab-virtues text-foreground ring-1 ring-border",
+                            )}
+                          >
+                            {count}
+                          </span>
+                        )}
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+
+                <Button
+                  type="button" variant="ghost" size="icon"
+                  className="shrink-0"
+                  onClick={() => step(1)}
+                  disabled={tabIndex >= TABS.length - 1}
+                  aria-label="Next tab"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
 
             <TabsContent value="basics" className="space-y-5 pt-4">
-              {/* Their picture, or a stand-in for one until the avatar work
-                  lands. Here and on the card, which is the minimum. */}
+              {/* Display only here. The button that makes it lives on
+                  Appearance, next to the fields it draws from. */}
               <div className="flex items-center gap-4">
-                <CharacterAvatar
-                  size="lg"
-                  character={{
-                    name: form.watch("name") || "This character",
-                    kind, category, gender: form.watch("gender"),
-                    avatarUrl: form.watch("avatarUrl"),
-                  }}
-                />
+                {portrait("lg")}
                 <p className="text-sm text-muted-foreground">
-                  No picture yet — you will be able to make one soon.
+                  {form.watch("avatarUrl")
+                    ? "You can draw them again on the Appearance tab."
+                    : "No picture yet — make one on the Appearance tab."}
                 </p>
               </div>
 
@@ -513,13 +877,43 @@ export default function CharacterForm({
                       <FormControl>
                         <Input placeholder="What are they called?" {...field} />
                       </FormControl>
-                      {/* Shown for everyone now. It used to appear only for a
-                          boy or a girl, because the only names it had were
-                          fifteen biblical ones -- so most of the catalogue got
-                          no button at all rather than a name that suited it. */}
-                      <Button type="button" variant="outline" onClick={pickRandomName} className="whitespace-nowrap">
-                        Random
-                      </Button>
+                      {/*
+                        CREATING ONLY. Rerolling the name of a character who
+                        already exists is not naming them, it is renaming them --
+                        and the one place you would reach for it is the one place
+                        it does real damage, because stories already written
+                        refer to them by the name they had.
+
+                        `saved` is only passed by the edit dialog, so its absence
+                        is what "new character" means here. Same signal the
+                        picture button uses, rather than a second notion of it.
+
+                        Shown for every kind now. It used to appear only for a
+                        boy or a girl, because the only names it had were fifteen
+                        biblical ones -- so most of the catalogue got no button
+                        at all rather than a name that suited it.
+                      */}
+                      {!saved?.id && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                size="icon"
+                                onClick={pickRandomName}
+                                // The label is the only thing a screen reader
+                                // gets: the tooltip is a hover affordance and
+                                // the button has no text of its own.
+                                aria-label="Generate random name"
+                                className="shrink-0 bg-action text-action-foreground hover:bg-action/90 focus-visible:ring-action"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Generate random name</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                     </div>
                     <FormMessage />
                   </FormItem>
@@ -558,6 +952,118 @@ export default function CharacterForm({
             </TabsContent>
 
             <TabsContent value="appearance" className="space-y-4 pt-4">
+              <div className="flex items-center gap-4 rounded-lg border border-border bg-muted/40 p-4">
+                {portrait("lg")}
+                <div className="space-y-2">
+                  {saved?.id ? (
+                    <>
+                      <Button type="button" variant="outline" size="sm"
+                              onClick={() => setAskOpen(true)}
+                              disabled={drawing || gallery.length >= avatarCap}>
+                        {drawing
+                          ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Drawing…</>
+                          : <><Sparkles className="mr-2 h-4 w-4" />
+                              {form.watch("avatarUrl") ? "Draw a new picture" : "Make a picture"}</>}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        {drawing
+                          ? "This takes about half a minute."
+                          : gallery.length >= avatarCap
+                              ? avatarCap === 1
+                                ? "Delete this one to draw another, or add your own API key in Settings to keep more."
+                                : `${avatarCap} pictures is the most one character can keep — delete one to draw another.`
+                          : remaining === null
+                            ? "Drawn from the fields below, or from how you describe them under Grown-ups."
+                            : `${remaining} free ${remaining === 1 ? "picture" : "pictures"} left.`}
+                      </p>
+                    </>
+                  ) : (
+                    // No id yet, so there is nothing to attach a picture TO.
+                    // Saying why beats a button that fails.
+                    <p className="text-sm text-muted-foreground">
+                      Save them first, then you can make a picture.
+                    </p>
+                  )}
+                </div>
+
+              {/*
+                ALWAYS VISIBLE, even at one picture.
+                
+                It used to hide below two, so a character with a single
+                portrait had nothing on screen saying more were possible. The
+                empty slot IS the affordance: it is the same size as a picture,
+                so the row reads as a set with a gap in it rather than as one
+                image with a button somewhere else.
+                
+                Three across before it folds. The cap is five, so at most two
+                are ever hidden -- but a fifth tile pushes the fields below it
+                off the card on a phone, which is the thing worth avoiding.
+              */}
+              {saved?.id && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {(showAll ? gallery : gallery.slice(0, 3)).map((a: { id: string; url: string }) => {
+                      const chosen = a.url === form.watch("avatarUrl");
+                      return (
+                        <div key={a.id} className="relative">
+                          <button
+                            type="button"
+                            onClick={() => void pickAvatar(a.id)}
+                            aria-label={chosen ? "Chosen picture" : "Use this picture"}
+                            aria-pressed={chosen}
+                            className={cn(
+                              "block h-20 w-20 overflow-hidden rounded-lg border-2 transition-colors",
+                              chosen ? "border-primary" : "border-transparent hover:border-border",
+                            )}
+                          >
+                            <img src={a.url} alt="" className="h-full w-full object-cover" />
+                          </button>
+                          <Button
+                            type="button" variant="secondary" size="icon"
+                            className="absolute -right-2 -top-2 h-6 w-6 rounded-full"
+                            onClick={() => void removeAvatar(a.id)}
+                            aria-label="Delete this picture"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+
+                    {/* The empty slot, or the reason there isn't one. */}
+                    {(showAll || gallery.length < 3) && (
+                      gallery.length < avatarCap ? (
+                        <button
+                          type="button"
+                          onClick={() => setAskOpen(true)}
+                          disabled={drawing}
+                          className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:opacity-50"
+                        >
+                          {drawing
+                            ? <Loader2 className="h-5 w-5 animate-spin" />
+                            : <><Plus className="h-5 w-5" />
+                                <span className="px-1 text-[10px] leading-tight">Add more photos</span></>}
+                        </button>
+                      ) : avatarCap === 1 ? (
+                        // Not a failure, a plan. Say which one they are on.
+                        <div className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border/60 px-1 text-center text-[10px] leading-tight text-muted-foreground">
+                          <Lock className="h-4 w-4" />
+                          <span>Add your own API key for up to {MAX_AVATARS}</span>
+                        </div>
+                      ) : null
+                    )}
+                  </div>
+
+                  {gallery.length > 3 && (
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs"
+                            onClick={() => setShowAll((v) => !v)}>
+                      {showAll ? "Show fewer" : `Show all (${gallery.length})`}
+                    </Button>
+                  )}
+                </div>
+              )}
+              </div>
+
               <div className="grid md:grid-cols-2 gap-4">
                   {vocabField("hair", `${title(covering)} colour`)}
                   {vocabField("eyes", "Eye colour")}
@@ -688,6 +1194,7 @@ export default function CharacterForm({
                 )}
               </div>
 
+              <p className="pt-1 text-sm font-semibold">Attributes</p>
               {CHARACTER_STATS.map((stat) => {
                 const value = statValues[stat];
                 const canRaise = value < STAT_CAP && (available > 0 || parentMode);
@@ -722,6 +1229,119 @@ export default function CharacterForm({
               </p>
 
               {/*
+                SKILLS. The half of this tab that says something a number
+                cannot: "good at climbing" is specific in a way a sixth
+                attribute would not be, and it costs one clause in the prompt.
+
+                They spend from the SAME pool -- a new one starts one above the
+                baseline, so having it costs a point by exactly the arithmetic
+                the attributes already use. That is why nothing here needs its
+                own budget: pointsSpent counts them without knowing they are
+                different.
+              */}
+              <div className="space-y-3 border-t pt-4">
+                <div>
+                  <p className="text-sm font-semibold">Skills</p>
+                  <p className="text-xs text-muted-foreground">
+                    Things they have learned to do. Each one costs a point to have.
+                  </p>
+                </div>
+
+                {skillValues.map((sk: CharacterSkill) => (
+                  <div key={sk.name} className="flex items-center gap-3">
+                    <span className="w-28 truncate text-sm capitalize" title={sk.name}>{sk.name}</span>
+                    <Button
+                      type="button" variant="outline" size="icon" className="h-7 w-7"
+                      disabled={sk.value <= STAT_FLOOR}
+                      onClick={() => setSkill(sk.name, sk.value - 1)}
+                      aria-label={`Lower ${sk.name}`}
+                    >
+                      −
+                    </Button>
+                    <span className="w-6 text-center text-sm tabular-nums">{sk.value}</span>
+                    <Button
+                      type="button" variant="outline" size="icon" className="h-7 w-7"
+                      disabled={sk.value >= STAT_CAP || (available <= 0 && !parentMode)}
+                      onClick={() => setSkill(sk.name, sk.value + 1)}
+                      aria-label={`Raise ${sk.name}`}
+                    >
+                      +
+                    </Button>
+                    <Progress value={(sk.value / STAT_CAP) * 100} className="h-2 flex-1" />
+                    <Button
+                      type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                      onClick={() => removeSkill(sk.name)}
+                      aria-label={`Remove ${sk.name}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+
+                {skillValues.length >= MAX_SKILLS ? (
+                  <p className="text-xs text-muted-foreground">
+                    {MAX_SKILLS} skills is the most one character can keep — a sheet
+                    with more than a handful of notable things stops having anything
+                    notable about it.
+                  </p>
+                ) : available <= 0 && !parentMode ? (
+                  <p className="text-xs text-muted-foreground">
+                    No points left. Finish a story to earn one, or lower something above.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <Select value="" onValueChange={addSkill}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Add a skill…" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {optionsFor("skill")
+                          .filter((o) => !skillValues.some((sk: CharacterSkill) => sk.name === o))
+                          .map((o) => (
+                            <SelectItem key={o} value={o}>{title(o)}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/*
+                      NOT ParentEditable, which every other field here uses.
+                      That component reports on every keystroke, which is right
+                      for a field whose value IS the text and wrong for adding
+                      to a list: typing "climbing" would add "c", then "cl",
+                      then "cli", until it hit the cap. A draft plus an explicit
+                      commit, the same shape pinned canon uses.
+                    */}
+                    {parentMode && (
+                      <div className="flex gap-2">
+                        <Input
+                          value={skillDraft}
+                          onChange={(e) => setSkillDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            // Or it submits the whole character.
+                            e.preventDefault();
+                            addSkill(skillDraft);
+                            setSkillDraft("");
+                          }}
+                          placeholder="Or type anything — breathing fire, whistling…"
+                          className="text-sm"
+                        />
+                        <Button
+                          type="button" variant="outline" size="sm"
+                          disabled={!skillDraft.trim()}
+                          onClick={() => { addSkill(skillDraft); setSkillDraft(""); }}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/*
                 Off altogether. Distinct from "all threes": an untouched sheet
                 is a character who happens to be ordinary, and this is a
                 character the story is never told about in these terms at all.
@@ -738,7 +1358,7 @@ export default function CharacterForm({
                       />
                     </FormControl>
                     <FormLabel className="!mt-0 font-normal">
-                      Use statistics for this character
+                      Use attributes and skills for this character
                     </FormLabel>
                   </FormItem>
                 )}
@@ -852,12 +1472,143 @@ export default function CharacterForm({
             </Tabs>
           </CardContent>
 
-          <CardFooter>
-            <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "Saving…" : initialCharacter ? "Save changes" : "Create character"}
+          <CardFooter className="gap-2">
+            <Button
+              type="submit"
+              disabled={loading || (Boolean(saved?.id) && !form.formState.isDirty)}
+              className="w-full"
+            >
+              {loading
+                ? "Saving…"
+                : !initialCharacter
+                  ? "Create character"
+                  : form.formState.isDirty
+                    ? "Save changes"
+                    : "Saved"}
             </Button>
+            {/*
+              Reset, not cancel. It puts the form back to what is STORED, which
+              is why it is disabled when nothing is dirty -- there would be
+              nothing to undo, and a live button that does nothing teaches people
+              to distrust the ones that do.
+
+              form.reset() with no argument goes back to the values the form was
+              constructed with, and after a successful save those are the saved
+              ones, because submit() resets to what it just sent. So this always
+              means "back to the last save", never "back to when I opened this".
+            */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => form.reset()}
+                      disabled={loading || !form.formState.isDirty}
+                      aria-label="Reset character"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Reset character</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </CardFooter>
         </Card>
+
+        {/*
+          ASK BEFORE SPENDING. A picture costs one of a small lifetime
+          allowance and about half a minute, and the button used to fire on the
+          first click -- so a stray click was a picture nobody wanted.
+          
+          A Dialog rather than an AlertDialog because it holds a text field,
+          and every text input in this app lives in a Dialog. It is nested
+          inside the edit Dialog, which is the supported Radix case (Select
+          already works here) unlike the Popover recorded further up this file
+          -- but the focus trap is the thing to actually try, not assume.
+        */}
+        <Dialog open={askOpen} onOpenChange={setAskOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {gallery.length === 0 ? "Make a picture" : "Draw another picture"} of{" "}
+                {form.watch("name") || "this character"}
+              </DialogTitle>
+              <DialogDescription>
+                {gallery.length === 0
+                  ? "Anything to add about how they look? This is optional."
+                  : "How should this one be different? Leave it blank for another go at the same thing."}
+              </DialogDescription>
+            </DialogHeader>
+
+            <Textarea
+              autoFocus
+              rows={3}
+              maxLength={200}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={gallery.length === 0 ? "Holding a lantern." : "Wearing a blue scarf."}
+            />
+
+            {/*
+              Off by default. A one-off stays one-off unless someone says
+              otherwise, and canonicalLook is a field they can see and edit.
+              Disabled when it will not fit rather than quietly cutting the end
+              off a description somebody wrote.
+            */}
+            {(() => {
+              const merged = [form.watch("canonicalLook"), note.trim()].filter(Boolean).join(" ");
+              const fits = merged.length <= 300;
+              return (
+                <label className={cn("flex items-start gap-2 text-sm", !fits && "opacity-60")}>
+                  <Checkbox
+                    checked={remember && fits}
+                    disabled={!note.trim() || !fits}
+                    onCheckedChange={(c) => setRemember(Boolean(c))}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Remember this for future pictures
+                    <span className="block text-xs text-muted-foreground">
+                      {!fits
+                        ? "Their description is already full — edit “How they look, for pictures” instead."
+                        : "Adds it to their description, so later pictures keep it too."}
+                    </span>
+                  </span>
+                </label>
+              );
+            })()}
+
+            {/*
+              The bit that is not obvious: every new picture is drawn FROM an
+              existing one, which is what keeps them the same character and
+              also what stops a small note changing very much. Say so, rather
+              than letting people conclude the box does not work.
+            */}
+            <p className="text-xs text-muted-foreground">
+              {gallery.length > 0
+                ? "Each new picture is drawn from the one chosen now, so it will stay close to it. For a really different look, change “How they look, for pictures” and delete the old pictures first."
+                : "Drawn from what they look like on this tab."}
+            </p>
+
+            <DialogFooter className="gap-2 sm:justify-between">
+              <span className="self-center text-xs text-muted-foreground">
+                {remaining === null ? "" : `Uses 1 of your ${remaining} free ${remaining === 1 ? "picture" : "pictures"}.`}
+              </span>
+              <span className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setAskOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={makeAvatar} disabled={drawing}>
+                  {drawing ? "Drawing…" : "Make it"}
+                </Button>
+              </span>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </form>
     </Form>
   );
