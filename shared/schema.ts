@@ -1030,6 +1030,35 @@ export function virtueLevels(c?: { adventures?: Character["adventures"] } | null
  * they all count as new. That is one badge on an existing character, cleared
  * the first time the tab is opened -- better than pretending they were read.
  */
+/**
+ * What one character is waiting on: points to spend, virtues to look at.
+ *
+ * ONE definition, because three places ask it now -- the card, the tabs inside
+ * the panel, and the Characters link in the nav bar, which sums it across
+ * everybody. Three copies of "max(0, ...) unless stats are off" is three
+ * chances for the bar to promise something the card does not show.
+ *
+ * Clamped at zero: pointsAvailable is legitimately negative for a sheet Parent
+ * Mode wrote, and "-2 points to spend" is not a thing to put in a bubble.
+ */
+export function characterAlerts(
+  c?:
+    | {
+        stats?: CharacterStats;
+        skills?: CharacterSkill[];
+        adventures?: Character["adventures"];
+        seenVirtues?: string[];
+        statsEnabled?: boolean;
+      }
+    | null,
+): { unspent: number; unseen: number } {
+  if (!c) return { unspent: 0, unseen: 0 };
+  return {
+    unspent: statsEnabledFor(c) ? Math.max(0, pointsAvailable(c)) : 0,
+    unseen: unseenVirtues(c).length,
+  };
+}
+
 export function unseenVirtues(
   c?: { adventures?: Character["adventures"]; seenVirtues?: string[] } | null,
 ): string[] {

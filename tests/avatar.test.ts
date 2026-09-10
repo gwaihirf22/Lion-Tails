@@ -3,6 +3,7 @@ import { buildAvatarPrompt } from "../server/lib/avatar";
 import {
   avatarsOf,
   baseStats,
+  characterAlerts,
   characterSchema,
   MAX_AVATARS,
   pointsAvailable,
@@ -320,5 +321,45 @@ describe("what reaches the story", () => {
   it("is empty for a character with none", () => {
     expect(skillsOf({})).toEqual([]);
     expect(notableSkills(null)).toEqual([]);
+  });
+});
+
+/**
+ * One count, three consumers.
+ *
+ * The card, the tabs inside the panel and the Characters link in the nav bar
+ * all ask this. Three copies of "clamp at zero unless the sheet is off" would
+ * be three chances for the bar to promise something the card does not show.
+ */
+describe("what a character is waiting on", () => {
+  it("counts points to spend and virtues to look at", () => {
+    const c = {
+      adventures: [{ storyId: "s1", theme: "courage" }],
+      stats: { ...baseStats(), strength: STAT_BASE + 1 },
+    };
+    // 2 to start + 1 earned - 1 spent = 2, and one unseen virtue.
+    expect(characterAlerts(c)).toEqual({ unspent: 2, unseen: 1 });
+  });
+
+  it("says nothing about points when the sheet is switched off", () => {
+    const c = { statsEnabled: false, adventures: [{ storyId: "s1", theme: "courage" }] };
+    expect(characterAlerts(c).unspent).toBe(0);
+    // The virtue still counts: turning the sheet off is about attributes, not
+    // about what the character has been through.
+    expect(characterAlerts(c).unseen).toBe(1);
+  });
+
+  it("never reports a negative, whatever Parent Mode wrote", () => {
+    // pointsAvailable is honestly negative for a sheet nobody paid for.
+    // "-4 points to spend" is not a thing to put in a bubble.
+    const lavish = { stats: { ...baseStats(), strength: 10, agility: 10 } };
+    expect(characterAlerts(lavish).unspent).toBe(0);
+  });
+
+  it("is quiet for a brand-new character with nothing earned or unseen", () => {
+    // STARTING_POINTS is real, so a new character DOES have something to spend
+    // -- that is the badge doing its job on day one, not a false alarm.
+    expect(characterAlerts({})).toEqual({ unspent: STARTING_POINTS, unseen: 0 });
+    expect(characterAlerts(null)).toEqual({ unspent: 0, unseen: 0 });
   });
 });

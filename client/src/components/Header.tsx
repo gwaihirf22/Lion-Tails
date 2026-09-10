@@ -11,6 +11,8 @@ import { useEffect, useState, useRef } from "react";
 import { Menu, X, LogOut, User, ChevronDown, MoreHorizontal, Loader2, Settings as SettingsIcon } from "lucide-react";
 import appIcon from "@/assets/app-icon.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useQuery } from "@tanstack/react-query";
+import { characterAlerts, type Character } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { useStoryJobs, describeJob } from "@/hooks/use-story-jobs";
 import { Button } from "@/components/ui/button";
@@ -20,6 +22,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+/**
+ * The surface each badge sits on, as WHOLE class names.
+ *
+ * Never `ring-${x}`: Tailwind's scanner only sees string literals, so an
+ * interpolated class emits no rule and the ring silently does not exist.
+ * ci.yml records a colour picker that did nothing for months for this reason.
+ */
+const RING = {
+  header: "ring-header",
+  popover: "ring-popover",
+  card: "ring-card",
+} as const;
 
 export default function Header() {
   const [location] = useLocation();
@@ -34,6 +49,77 @@ export default function Header() {
   const navContainerRef = useRef<HTMLUListElement>(null);
   const logoContainerRef = useRef<HTMLDivElement>(null);
   const { user, logoutMutation } = useAuth();
+
+  /**
+   * What the Characters link has to say.
+   *
+   * enabled on `user`, so a signed-out visitor does not fire a request that
+   * can only answer 401. The query client here is staleTime: Infinity with no
+   * refetch on focus, so this is one request per session -- and the character
+   * routes already invalidate ["/api/characters"] whenever any of this changes,
+   * which is what keeps the bubble honest without polling.
+   */
+  const { data: characters = [] } = useQuery<Character[]>({
+    queryKey: ["/api/characters"],
+    enabled: Boolean(user),
+  });
+  const alerts = characters.reduce(
+    (n, c) => {
+      const a = characterAlerts(c);
+      return { unspent: n.unspent + a.unspent, unseen: n.unseen + a.unseen };
+    },
+    { unspent: 0, unseen: 0 },
+  );
+  const waiting = alerts.unspent + alerts.unseen;
+
+  /**
+   * The bubbles, at whatever size the surface wants.
+   *
+   * `onDark` is the bar itself, where the ring has to be the bar's colour --
+   * ring-border is a page-surface hairline and disappears against it.
+   */
+  /**
+   * The bubbles, placed for the surface they sit on.
+   *
+   * "corner" hangs them off the top-right of a nav PILL, matching the cards and
+   * the character tabs. That only works where nothing clips: the nav list needs
+   * overflow-x-clip for it, and DropdownMenuContent is overflow-hidden, so a
+   * corner badge in the More menu is simply invisible.
+   *
+   * "row" is for the two full-width menus. A badge hanging off the corner of a
+   * full-width row would sit half outside the menu, so it is pinned to the end
+   * of the row and centred instead -- which is how an unread count reads in a
+   * menu anyway.
+   *
+   * The ring is always the surface BEHIND them, never a fixed colour: the bar,
+   * the popover and the sheet are three different colours and a hairline that
+   * guessed would vanish on at least one. That is the mistake .nav-text made.
+   */
+  const alertBubbles = (place: "corner" | "row", ring: keyof typeof RING) => {
+    if (waiting === 0) return null;
+    const dot = (count: number, tone: string, what: string) => (
+      <span
+        title={`${count} ${what}${count === 1 ? "" : "s"}`}
+        className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none ring-2 ${tone} ${RING[ring]}`}
+      >
+        {count}
+      </span>
+    );
+    return (
+      <span
+        className={
+          place === "corner"
+            ? "absolute -right-1.5 -top-1.5 z-10 flex items-center -space-x-1"
+            : "absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center -space-x-1"
+        }
+      >
+        {alerts.unspent > 0 &&
+          dot(alerts.unspent, "bg-destructive text-destructive-foreground", "Attribute/Skill point")}
+        {alerts.unseen > 0 &&
+          dot(alerts.unseen, "bg-tab-virtues text-foreground", "new virtue")}
+      </span>
+    );
+  };
 
   const navItems = [
     { href: "/", text: "Home" },
@@ -174,28 +260,54 @@ export default function Header() {
               )}
               <button 
                 onClick={() => setMenuOpen(!menuOpen)} 
-                className="z-50 rounded-full p-2 text-header-foreground hover:bg-header-foreground/15 focus:outline-none"
-                aria-label={menuOpen ? "Close menu" : "Open menu"}
+                className="relative z-50 rounded-full p-2 text-header-foreground hover:bg-header-foreground/15 focus:outline-none"
+                aria-label={
+                  menuOpen
+                    ? "Close menu"
+                    : waiting > 0
+                      ? `Open menu — ${waiting} thing${waiting === 1 ? "" : "s"} waiting`
+                      : "Open menu"
+                }
               >
+                {/* On a phone the nav is behind this button, so the count on
+                    the Characters link is invisible until the sheet is open.
+                    A dot says there is something in there to find. Not a
+                    number: which of the two it is belongs to the link. */}
+                {!menuOpen && waiting > 0 && (
+                  <span
+                    aria-hidden
+                    className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-destructive ring-1 ring-header"
+                  />
+                )}
                 {menuOpen ? <X size={24} /> : <Menu size={24} />}
               </button>
             </div>
           ) : (
             <div className="flex items-center">
               <nav className="mr-4 min-w-0">
-                <ul ref={navContainerRef} className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden text-sm md:text-base">
+                <ul
+                  ref={navContainerRef}
+                  /* overflow-x-clip, not overflow-hidden. The list still must
+                     not grow sideways -- measuring that is how it decides which
+                     items fit -- but a badge on a pill corner has to be allowed
+                     OUT vertically. overflow-x:hidden with overflow-y:visible is
+                     not an option: that pair computes to auto and clips anyway.
+                     clip is the one value that does not. */
+                  className="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-clip text-sm md:text-base"
+                >
                   {visibleNavItems.map((item) => (
                     <li key={item.href} className="shrink-0">
                       <Link
                         href={item.href}
                         aria-current={location === item.href ? "page" : undefined}
-                        className={`inline-flex h-9 items-center whitespace-nowrap rounded-full px-3 font-medium transition-colors duration-200 ${
+                        className={`relative inline-flex h-9 items-center whitespace-nowrap rounded-full px-3 font-medium transition-colors duration-200 ${
                           location === item.href
                             ? "bg-header-foreground text-header font-semibold shadow-sm"
                             : "text-header-foreground hover:bg-header-foreground/15"
                         }`}
                       >
                         {item.text}
+                        {item.href === "/characters" && alertBubbles("corner", "header")}
                       </Link>
                     </li>
                   ))}
@@ -221,9 +333,10 @@ export default function Header() {
                               <Link
                                 href={item.href}
                                 aria-current={location === item.href ? "page" : undefined}
-                                className={`w-full cursor-pointer ${location === item.href ? "font-semibold text-primary" : ""}`}
+                                className={`relative w-full cursor-pointer ${location === item.href ? "font-semibold text-primary" : ""}`}
                               >
                                 {item.text}
+                                {item.href === "/characters" && alertBubbles("row", "popover")}
                               </Link>
                             </DropdownMenuItem>
                           ))}
@@ -313,13 +426,14 @@ export default function Header() {
                       <Link
                         href={item.href}
                         aria-current={location === item.href ? "page" : undefined}
-                        className={`block rounded-full px-4 py-3 font-medium transition-colors duration-200 ${
+                        className={`relative block rounded-full px-4 py-3 font-medium transition-colors duration-200 ${
                           location === item.href
                             ? "bg-header font-semibold text-header-foreground shadow-sm"
                             : "text-foreground hover:bg-muted"
                         }`}
                       >
                         {item.text}
+                        {item.href === "/characters" && alertBubbles("row", "card")}
                       </Link>
                     </li>
                   ))}
