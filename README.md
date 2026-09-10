@@ -240,6 +240,12 @@ There is no "make summary" button any more, and no staleness badge. Every story
 in a series rewrites both, so there is nothing to press and nothing that can fall
 behind.
 
+In the library a universe is one card; its page (`/universes/:id`) holds the
+summary, the pinned canon and the world memory behind sections that open
+when asked, and lists its stories as the same cards used everywhere else.
+Taking a story out of a universe and deleting it are two different buttons
+behind two different confirmations.
+
 ## Characters
 
 Up to **8 per story**, ordered — index 0 is the protagonist and gets the full

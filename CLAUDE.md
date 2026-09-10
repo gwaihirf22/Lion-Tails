@@ -636,3 +636,38 @@ Barnabas say "I have no control over this" and, pressed, "The great Lion knows
 no bounds" — once, mysteriously — and forbids the Lion appearing at all. He
 belongs to the guided Quests page, which does not exist yet. The prologue's
 last lines are fixed text and keep him.
+
+## The library
+
+My Stories is four folders, every story one card, every universe one card.
+
+- **The stories are a query** (`client/src/hooks/use-stories.ts`). They were
+  a raw `useEffect` into `useState`, which meant `use-universes`' `moveStory`
+  and `remove` -- which already invalidate `["/api/stories"]` -- were talking
+  to nobody. The hook has no job awareness: `use-story-jobs.tsx` invalidates
+  both `["/api/stories"]` and `["/api/universes"]` when a job finishes, and a
+  second mechanism for the same fact is how this codebase grew six model
+  lists.
+- **`STORY_FOLDERS`** (`client/src/lib/storyFolders.ts`) is one table for the
+  strip, the counts and the contents. There were two copies -- a switch and a
+  filter per trigger -- and a tab the switch had not heard of silently showed
+  the temporary list.
+- **The folder look is two strings** in `client/src/lib/folderTabs.ts`, read
+  by the character sheet AND the library. The tints are the sheet's own
+  `--tab-*` tokens, written out in full; `tests/theme.test.ts` reads every
+  `bg-tab-*` / `border-t-tab-*` literal in `client/src` and fails on one the
+  palettes do not define -- otherwise a typo is a transparent tab and nothing
+  says so.
+- **`StoryCard`** is the one card. Its two `AlertDialog`s are SIBLINGS of the
+  card, never children: the card navigates on click, and React events follow
+  the React tree, so a dialog inside it would open the story on Cancel.
+  "Remove from this universe" and "Delete" are two buttons, two dialogs, two
+  sentences that cannot be mistaken for each other.
+- **A universe's page** (`/universes/:id`, `client/src/pages/Universe.tsx`)
+  selects from the list query; there is no `GET /api/universes/:id`. Its
+  story count is derived from the stories the library can see, never
+  `universe.storyCount` -- the server counts expired rows the library hides,
+  and "3 stories" over a list of 2 looks like a bug in the list.
+- **`builtIn` and `universeId`** on `savedStorySchema` are server-owned and
+  type-only: the server grafts them onto rows; nothing reads them from a
+  request.
