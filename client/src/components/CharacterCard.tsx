@@ -51,7 +51,41 @@ export default function CharacterCard({
   ] as const).filter((r): r is readonly [string, string] => Boolean(r[1]));
 
   return (
-    <Card className={cn("relative transition-all duration-200", selected && "ring-2 ring-primary")}>
+    /*
+      The whole card opens the character, not only the Edit button.
+
+      Modifier keys and non-left clicks fall through, the shape SavedStories
+      already uses -- ctrl-click and middle-click should still do what the
+      browser does. The footer buttons and the notification bubbles stop
+      propagation themselves, so they keep their own behaviour.
+
+      role and tabIndex are not decoration: a click target a keyboard cannot
+      reach is a regression, just an invisible one. Enter and Space open it, as
+      they would on a button.
+    */
+    <Card
+      className={cn(
+        "relative transition-all duration-200",
+        onEdit && "cursor-pointer hover:border-primary/50",
+        selected && "ring-2 ring-primary",
+      )}
+      {...(onEdit
+        ? {
+            role: "button" as const,
+            tabIndex: 0,
+            onClick: (e: React.MouseEvent) => {
+              if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.button !== 0) return;
+              onEdit();
+            },
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key !== "Enter" && e.key !== " ") return;
+              // Or Space scrolls the page out from under them.
+              e.preventDefault();
+              onEdit();
+            },
+          }
+        : {})}
+    >
       {/*
         ON THE EDGE, like the tab badges, and for the same reason: a count
         tucked inside the header reads as another label. Sitting proud of the
@@ -63,7 +97,7 @@ export default function CharacterCard({
       */}
       {(unspent > 0 || unseen > 0) && (
         <TooltipProvider>
-          <div className="absolute -right-2 -top-2 z-10 flex -space-x-1.5">
+          <div className="absolute -right-2 -top-2 z-10 flex -space-x-1.5" onClick={(e) => e.stopPropagation()}>
             {unseen > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -130,7 +164,12 @@ export default function CharacterCard({
         </div>
       </CardContent>
       
-      <CardFooter className="flex justify-between pt-2">
+      {/*
+        The buttons keep their own jobs. Their handlers still run -- the click
+        stops here on the way UP, after they have fired -- so Delete deletes
+        rather than also opening the panel behind the confirmation.
+      */}
+      <CardFooter className="flex justify-between pt-2" onClick={(e) => e.stopPropagation()}>
         {onSelect && (
           <Button onClick={onSelect} variant="default" className="flex-1 mr-2">
             <HeartIcon className="h-4 w-4 mr-2" />

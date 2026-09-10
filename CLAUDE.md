@@ -376,10 +376,13 @@ an identifier match a label is the wrong trade. (`AdminStats`,
 `/api/admin/generation-stats` and the usage stats in Settings are a different
 feature — do not sweep them in.)
 
-**Skills spend from the same pool.** A new one is added at `STAT_BASE + 1`, so
-having it costs exactly one point by the arithmetic `pointsSpent` already does —
-no special case anywhere, and `pointsAvailable`, `statsAreAffordable`, the
-notable thresholds and the suppression rule all kept working. Names come from
+**Skills spend from the same pool, and a skill's cost IS its level.** A new one
+starts at `SKILL_START` (1) and costs one point; level 4 costs four. Attributes
+measure distance from an ordinary 3 because everybody HAS a strength — nobody
+has climbing by default, so there is no baseline for a skill to be a distance
+from. Getting that wrong made a new skill cost four points and a skill at 1
+refund two. `notableSkills()` returns everything for the same reason: there is
+no free level to filter out. Names come from
 `optionsFor("skill")`; Parent Mode's `/custom` routes take anything, as they do
 for every other field. Duplicates and the count are refused server-side.
 
@@ -451,6 +454,28 @@ Rules that are easy to break without noticing:
   few dates fixed by evidence outside Scripture.
 - Verses are **fetched from bible-api.com, never recalled.** A model reciting
   scripture produces text that reads correctly and is not.
+
+## Dropdowns
+
+`ui/select.tsx` sized its scrolling viewport with
+`h-[var(--radix-select-trigger-height)]` — the height of the CLOSED control,
+not the list — so `max-h-96` on the content could never apply and a long list
+rendered without scrolling. Stock shadcn, and wrong for all thirteen dropdowns
+here; the 31-item skill list is only what made it obvious. It is `max-h-72
+overflow-y-auto` now, the idiom `HeroPicker`, `CharacterPicker` and
+`AnimalAutocomplete` already used, with `flex flex-col` on the content so
+Radix's own `flex: 1` can apply.
+
+`SelectItem` styles `data-[highlighted]` as well as `focus` — Radix highlights
+on pointer move, and `focus:` alone left the list with no hover feedback. Both
+halves of the accent pair, always: `findUnpairedAccent` in `tests/theme.test.ts`
+scans `components/ui` too.
+
+**A tabbed dialog must be anchored, not centred.** `DialogContent` is
+`top-[50%] translate-y-[-50%]` with an intrinsic height, so switching to a
+shorter tab moved the whole card, tab strip included. The three dialogs that
+host `CharacterForm` override it with `top-[4vh] translate-y-0`; the other
+seven call sites are fine centred.
 
 ## Conventions
 

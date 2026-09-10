@@ -176,7 +176,13 @@ export default function Characters() {
               Create Character
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {/* Anchored near the top rather than centred. DialogContent is
+              top-[50%] translate-y-[-50%] with an intrinsic height, so every
+              change in content height moved the panel by half the delta -- and
+              this one is TABBED, so switching to a shorter tab slid the whole
+              card, tab strip included. Only the dialogs that host tabs need
+              this; the other eight call sites are fine centred. */}
+            <DialogContent className="max-w-3xl top-[4vh] translate-y-0 max-h-[92vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create a New Character</DialogTitle>
               <DialogDescription>
@@ -230,7 +236,7 @@ export default function Characters() {
 
       {/* Edit Character Dialog */}
       <Dialog open={isEditing} onOpenChange={setIsEditing}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl top-[4vh] translate-y-0 max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Character</DialogTitle>
             <DialogDescription>

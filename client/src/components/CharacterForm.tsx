@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Pencil, Search, Undo2 } from "lucide-react";
 import {
+  SKILL_START,
   type CharacterSkill,
   skillsOf,
   MAX_SKILLS,
@@ -278,9 +279,9 @@ export default function CharacterForm({
     // say nothing the first did not.
     if (!clean || skillValues.some((sk: CharacterSkill) => sk.name.toLowerCase() === clean.toLowerCase())) return;
     if (skillValues.length >= MAX_SKILLS) return;
-    // One above the baseline, which is what makes having it cost a point --
-    // see pointsSpent, which needs no knowledge that skills exist.
-    form.setValue("skills", [...skillValues, { name: clean, value: STAT_BASE + 1 }], {
+    // Level 1, which is what one point buys. A skill's cost IS its level:
+    // nobody has a skill by default, so there is no baseline to measure from.
+    form.setValue("skills", [...skillValues, { name: clean, value: SKILL_START }], {
       shouldDirty: true,
     });
   };
@@ -368,7 +369,7 @@ export default function CharacterForm({
                   <SelectValue placeholder="Not set" />
                 </SelectTrigger>
               </FormControl>
-              <SelectContent>
+              <SelectContent portalled={false}>
                 {optionsFor(name, category).map((o) => (
                   <SelectItem key={o} value={o}>{title(o)}</SelectItem>
                 ))}
@@ -602,9 +603,17 @@ export default function CharacterForm({
       <form onSubmit={form.handleSubmit(submit)} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Make a character</CardTitle>
+            {/*
+              Whose card this is, when it is somebody's. Editing said "Make a
+              character" over a character who already existed, which is the
+              wrong sentence and hides the one thing worth knowing at a glance.
+              `saved` is the same signal the picture button uses.
+            */}
+            <CardTitle>{saved?.id ? form.watch("name") || "This character" : "Make a character"}</CardTitle>
             <CardDescription>
-              Anyone you like — a person, an animal, or something make-believe.
+              {saved?.id
+                ? "Make changes to this character here, and don't forget to apply your Attribute and Skill points."
+                : "Anyone you like — a person, an animal, or something make-believe."}
             </CardDescription>
           </CardHeader>
 
@@ -952,12 +961,23 @@ export default function CharacterForm({
             </TabsContent>
 
             <TabsContent value="appearance" className="space-y-4 pt-4">
-              <div className="flex items-center gap-4 rounded-lg border border-border bg-muted/40 p-4">
+              {/*
+                WRAPS, and the gallery below is the third child of this row --
+                the indentation makes it look like a sibling and it is not.
+                
+                Three things were missing and each one shoved the tiles further
+                past the border on a narrow screen: the row never wrapped, the
+                portrait had no shrink-0 so it squashed first, and the text
+                column had no min-w-0 -- so the longest word in the helper
+                paragraph set a floor the row could not shrink below.
+              */}
+              <div className="flex flex-wrap items-start gap-4 rounded-lg border border-border bg-muted/40 p-4">
                 {portrait("lg")}
-                <div className="space-y-2">
+                <div className="min-w-0 flex-1 space-y-2">
                   {saved?.id ? (
                     <>
                       <Button type="button" variant="outline" size="sm"
+                              className="w-full sm:w-auto"
                               onClick={() => setAskOpen(true)}
                               disabled={drawing || gallery.length >= avatarCap}>
                         {drawing
@@ -1000,7 +1020,7 @@ export default function CharacterForm({
                 off the card on a phone, which is the thing worth avoiding.
               */}
               {saved?.id && (
-                <div className="space-y-2">
+                <div className="w-full space-y-2 sm:w-auto">
                   <div className="flex flex-wrap gap-2">
                     {(showAll ? gallery : gallery.slice(0, 3)).map((a: { id: string; url: string }) => {
                       const chosen = a.url === form.watch("avatarUrl");
@@ -1131,7 +1151,7 @@ export default function CharacterForm({
                             <FormControl>
                               <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent portalled={false}>
                               <SelectItem value="male">He</SelectItem>
                               <SelectItem value="female">She</SelectItem>
                               <SelectItem value="it">It</SelectItem>
@@ -1243,7 +1263,8 @@ export default function CharacterForm({
                 <div>
                   <p className="text-sm font-semibold">Skills</p>
                   <p className="text-xs text-muted-foreground">
-                    Things they have learned to do. Each one costs a point to have.
+                    Things they have learned to do. A skill costs its level — one point
+                    to take it up, and one more for each level after that.
                   </p>
                 </div>
 
@@ -1296,7 +1317,7 @@ export default function CharacterForm({
                           <SelectValue placeholder="Add a skill…" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent>
+                      <SelectContent portalled={false}>
                         {optionsFor("skill")
                           .filter((o) => !skillValues.some((sk: CharacterSkill) => sk.name === o))
                           .map((o) => (
@@ -1420,7 +1441,7 @@ export default function CharacterForm({
                           <FormControl>
                             <SelectTrigger><SelectValue placeholder="Not set — we will say hair" /></SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent portalled={false}>
                             {CHARACTER_CATEGORIES.map((c) => (
                               <SelectItem key={c} value={c}>
                                 {CATEGORY_LABELS[c]} — {coveringNoun(c)}

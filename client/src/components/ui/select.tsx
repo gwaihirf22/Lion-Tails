@@ -65,15 +65,28 @@ const SelectScrollDownButton = React.forwardRef<
 SelectScrollDownButton.displayName =
   SelectPrimitive.ScrollDownButton.displayName
 
+/**
+ * `portalled={false}` renders the list INSIDE the tree it was declared in.
+ *
+ * Radix's Dialog wraps its subtree in react-remove-scroll with DialogContent as
+ * the only allowed shard, and that library installs a document-level wheel
+ * listener which cancels wheel events outside the shard. A portalled list lands
+ * on document.body -- outside it -- so the chevrons still scroll it (they set
+ * scrollTop directly) and the wheel does nothing at all.
+ *
+ * Same family as the kind picker recorded in CharacterForm: a Radix layer
+ * portalled out of a modal dialog stops receiving input. Rendering it in place
+ * removes the cause instead of fighting it.
+ */
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = "popper", ...props }, ref) => (
-  <SelectPrimitive.Portal>
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content> & { portalled?: boolean }
+>(({ className, children, position = "popper", portalled = true, ...props }, ref) => {
+  const content = (
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        "relative z-50 flex max-h-96 min-w-[8rem] flex-col overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className
@@ -84,17 +97,26 @@ const SelectContent = React.forwardRef<
       <SelectScrollUpButton />
       <SelectPrimitive.Viewport
         className={cn(
-          "p-1",
-          position === "popper" &&
-            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
+          // max-h + overflow, NOT a height. The popper variant of this used
+          // h-[var(--radix-select-trigger-height)], which is the height of the
+          // CLOSED CONTROL -- so the scrolling window was sized to the trigger
+          // rather than to the list, and max-h-96 above could never apply. It
+          // is stock shadcn, and it was wrong for all thirteen dropdowns here,
+          // not only the 31-item skill list that made it obvious.
+          //
+          // This is the idiom HeroPicker, CharacterPicker and AnimalAutocomplete
+          // already use for their own scrolling lists.
+          "max-h-72 overflow-y-auto p-1",
+          position === "popper" && "w-full min-w-[var(--radix-select-trigger-width)]"
         )}
       >
         {children}
       </SelectPrimitive.Viewport>
       <SelectScrollDownButton />
     </SelectPrimitive.Content>
-  </SelectPrimitive.Portal>
-))
+  );
+  return portalled ? <SelectPrimitive.Portal>{content}</SelectPrimitive.Portal> : content;
+})
 SelectContent.displayName = SelectPrimitive.Content.displayName
 
 const SelectLabel = React.forwardRef<
@@ -116,7 +138,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[highlighted]:ring-1 data-[highlighted]:ring-inset data-[highlighted]:ring-primary/40 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     {...props}
