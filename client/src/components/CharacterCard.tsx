@@ -1,7 +1,5 @@
 import {
-  unseenVirtues,
-  statsEnabledFor,
-  pointsAvailable, type Character, characterKind } from "@shared/schema";
+  characterAlerts, type Character, characterKind } from "@shared/schema";
 import { coveringNoun } from "@shared/characterVocab";
 import CharacterAvatar from "./CharacterAvatar";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,9 +35,9 @@ export default function CharacterCard({
   // The covering noun follows what they are, so a dragon's card says "Scales"
   // where a child's says "Hair". A character saved before categories existed
   // has none, and falls through to "hair" exactly as the story prompt does.
-  // Stats switched off means nothing to spend, not a badge saying otherwise.
-  const unspent = statsEnabledFor(character) ? Math.max(0, pointsAvailable(character)) : 0;
-  const unseen = unseenVirtues(character).length;
+  // The same sum the nav bar totals across everybody. One definition, or the
+  // bar promises something the card does not show.
+  const { unspent, unseen } = characterAlerts(character);
 
   const rows = ([
     [title(coveringNoun(character.category, kind)), character.hair],
