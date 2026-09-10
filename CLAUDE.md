@@ -275,6 +275,7 @@ are read only through `characterRoleOf()` — the `characterIdsOf()` precedent.
 - `"absent"` — a straight retelling. Nobody is written into the account. The
   default, because being wrong this way gives a plainer story, and being wrong
   the other way puts a child into Scripture.
+- SUPERSEDED: see "The two story tabs" at the end of this file.
 - `"meets"` — they meet the figure and join in. Fun and a little silly in how
   they arrive and help; the real events still happen in order, with the right
   names and outcome. The story gets a short appended note saying the meeting
@@ -524,3 +525,38 @@ deliberately does not overwrite it — keep them in sync by hand.
 
 Never give a container on the shared `paulproxy` network a generic service name.
 See `docs/decisions.md` §10.
+
+## The two story tabs
+
+They mean two different things, and they used to overlap in ways that
+confused everyone:
+
+- **Original** — a story about YOUR character. Optionally set somewhere real,
+  through the "Set it somewhere real" gate: pick a source, then one of the two
+  ways in (`characterRole`).
+- **Historical & Biblical** — the real thing itself. **No user characters at
+  all.** One source, plus questions.
+
+`characterRole` is `"absent" | "travels" | "alongside"` — read ONLY through
+`characterRoleOf()`. Legacy `useTimeTravel: true` resolves to `"travels"`;
+legacy `"meets"` resolves to **`"alongside"`**, not `"travels"`, because those
+requests were made with no journey in them and resolving them the other way
+would put a lantern into a story a reader has already read.
+
+**One source per story.** `biblicalEvent`, `heroOfFaith` and `biblePassage` are
+three columns of one decision, kept apart only because thousands of frozen
+requests carry them. `resolveStorySource()` settles it at enqueue and clears
+the losers — it runs BEFORE `resolveHeroOfFaith`, because normalising after
+`heroId` is stamped would leave that column pointing at somebody the story is
+not about. Precedence keys on whether the event RESOLVES, not on whether the
+field is filled.
+
+**What the server appends** is named in `shared/storyAppendices.ts`, and
+`storyWithoutAppendices()` takes it back off before a story reaches the
+universe summariser — otherwise "Ada is invented" is summarised as an event and
+a disclaimer becomes canon for the next story in that world.
+
+**Digging deeper** (`server/lib/diggingDeeper.ts`) is a second call, after the
+story, never woven into it: a model asked to answer a history question inside a
+scene answers it by inventing history. It never throws — a failed job is
+retried whole, so an exception would regenerate the whole story for free.

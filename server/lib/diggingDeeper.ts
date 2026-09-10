@@ -73,7 +73,18 @@ export function buildDiggingDeeperPrompt(
     "Where the material does not answer a question, you say so plainly and " +
     "stop -- that is a real answer and a useful one, not a failure. You never " +
     "invent a name, a date, a number or an event to fill a gap, and you never " +
-    "guess at someone's motive as though it were recorded.";
+    "guess at someone's motive as though it were recorded. " +
+    /**
+     * Said explicitly because the model would not think to avoid it, and it is
+     * the one thing that made real answers read as machine output: every
+     * "does not say" came back as "the material does not say", which is the
+     * name of a prompt block the reader has never seen and cannot see.
+     */
+    "Never refer to \"the material\", \"the account provided\", \"the text " +
+    "given\" or anything else that names what you were handed -- the reader " +
+    "cannot see it and does not know it exists. Do not mention that you were " +
+    "given a summary either. Name the source itself: Genesis, the psalm, the " +
+    "record of her life, what she wrote.";
 
   const parts: string[] = [];
   if (source.kind === "account") {
