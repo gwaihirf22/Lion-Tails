@@ -65,11 +65,24 @@ const SelectScrollDownButton = React.forwardRef<
 SelectScrollDownButton.displayName =
   SelectPrimitive.ScrollDownButton.displayName
 
+/**
+ * `portalled={false}` renders the list INSIDE the tree it was declared in.
+ *
+ * Radix's Dialog wraps its subtree in react-remove-scroll with DialogContent as
+ * the only allowed shard, and that library installs a document-level wheel
+ * listener which cancels wheel events outside the shard. A portalled list lands
+ * on document.body -- outside it -- so the chevrons still scroll it (they set
+ * scrollTop directly) and the wheel does nothing at all.
+ *
+ * Same family as the kind picker recorded in CharacterForm: a Radix layer
+ * portalled out of a modal dialog stops receiving input. Rendering it in place
+ * removes the cause instead of fighting it.
+ */
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = "popper", ...props }, ref) => (
-  <SelectPrimitive.Portal>
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content> & { portalled?: boolean }
+>(({ className, children, position = "popper", portalled = true, ...props }, ref) => {
+  const content = (
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
@@ -101,8 +114,9 @@ const SelectContent = React.forwardRef<
       </SelectPrimitive.Viewport>
       <SelectScrollDownButton />
     </SelectPrimitive.Content>
-  </SelectPrimitive.Portal>
-))
+  );
+  return portalled ? <SelectPrimitive.Portal>{content}</SelectPrimitive.Portal> : content;
+})
 SelectContent.displayName = SelectPrimitive.Content.displayName
 
 const SelectLabel = React.forwardRef<
@@ -124,7 +138,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[highlighted]:ring-1 data-[highlighted]:ring-inset data-[highlighted]:ring-primary/40 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     {...props}
