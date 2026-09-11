@@ -647,7 +647,22 @@ export default function CharacterForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(submit)} className="space-y-6">
+      {/*
+        min-w-0, and it is the whole reason this dialog used to overflow.
+
+        DialogContent is `display: grid`, so this form is a GRID ITEM -- and a
+        grid item's `min-width` defaults to `auto`, meaning it refuses to
+        shrink below its own min-content. The tab strip's list is `w-max`, and
+        a max-content box still contributes its full width to that minimum even
+        though it sits inside an overflow container. So the column was forced to
+        the width of seven tabs (~840px), the dialog's box was 720px, and every
+        row in the form spilled past the right edge with the whole card
+        scrolling sideways -- on a phone and on a desktop alike.
+
+        Setting it to 0 lets the column take the dialog's width; the strip then
+        shrinks and scrolls inside itself, which is what it was built to do.
+      */}
+      <form onSubmit={form.handleSubmit(submit)} className="min-w-0 space-y-6">
         <Card>
           <CardHeader>
             {/*
