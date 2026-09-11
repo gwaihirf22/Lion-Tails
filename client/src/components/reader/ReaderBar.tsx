@@ -24,6 +24,7 @@ export function ReaderBar({
   onToggleFocus,
   picking,
   onTogglePicture,
+  barRef,
 }: {
   focusArmed: boolean;
   onToggleFocus: () => void;
@@ -36,6 +37,12 @@ export function ReaderBar({
    * editing, when there is no reading surface to highlight.
    */
   onTogglePicture?: () => void;
+  /**
+   * The bar's own element, so something sticking BELOW it can be told how tall
+   * it really is. It wraps to two rows on a phone, so its height is not a
+   * constant anyone else may assume -- see the picking bar in StoryDisplay.
+   */
+  barRef?: (el: HTMLDivElement | null) => void;
 }) {
   const { prefs, setPalette, setFont, setTypeset, setFontStep, fontSizePx } = useReadingPrefs();
   const atMin = prefs.fontStep <= 0;
@@ -43,6 +50,7 @@ export function ReaderBar({
 
   return (
     <div
+      ref={barRef}
       className="reader-chrome sticky top-0 z-30 mx-auto flex w-full max-w-3xl flex-wrap items-center gap-1 px-3 py-2"
       style={{ background: "var(--reader-surface)", color: "var(--reader-fg)" }}
     >
