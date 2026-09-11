@@ -160,14 +160,11 @@ export default function Characters() {
 
   return (
     <div className="container py-8 max-w-7xl">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Your Characters</h1>
-          <p className="text-muted-foreground mt-1">
-            Anyone you want stories written about. Save them once and reuse them
-            across stories — someone you know, or someone invented.
-          </p>
-        </div>
+      {/* The button is above the description on a phone and beside the
+          heading on a desktop -- either way above the text. It used to share a
+          line with the paragraph and squeeze it into a narrow column. */}
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="min-w-0 text-2xl md:text-3xl font-bold">Your Characters</h1>
         
         <Dialog open={isCreating} onOpenChange={setIsCreating}>
           <DialogTrigger asChild>
@@ -182,7 +179,7 @@ export default function Characters() {
               this one is TABBED, so switching to a shorter tab slid the whole
               card, tab strip included. Only the dialogs that host tabs need
               this; the other eight call sites are fine centred. */}
-            <DialogContent className="max-w-3xl top-[4vh] translate-y-0 max-h-[92vh] overflow-y-auto">
+            <DialogContent className="max-w-3xl top-[4vh] translate-y-0 max-h-[92dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create a New Character</DialogTitle>
               <DialogDescription>
@@ -196,6 +193,11 @@ export default function Characters() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <p className="mb-6 text-muted-foreground">
+        Anyone you want stories written about. Save them once and reuse them
+        across stories — someone you know, or someone invented.
+      </p>
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -236,7 +238,7 @@ export default function Characters() {
 
       {/* Edit Character Dialog */}
       <Dialog open={isEditing} onOpenChange={setIsEditing}>
-        <DialogContent className="max-w-3xl top-[4vh] translate-y-0 max-h-[92vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl top-[4vh] translate-y-0 max-h-[92dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Character</DialogTitle>
             <DialogDescription>
