@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { FOLDER_TAB_LIST, FOLDER_TAB_TRIGGER } from "@/lib/folderTabs";
+import { FOLDER_TAB_LIST, FOLDER_TAB_SCROLLER, FOLDER_TAB_TRIGGER } from "@/lib/folderTabs";
 import { STORY_FOLDERS, storyFolder } from "@/lib/storyFolders";
 import StoryCard from "@/components/StoryCard";
 import { useChipSources } from "@/lib/useChipSources";
@@ -79,16 +79,15 @@ export default function SavedStories() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="mb-6 flex justify-between items-center">
-        <h2 className="text-3xl font-heading font-bold text-secondary">Your Saved Stories</h2>
-        <div>
-          <Button onClick={() => navigate("/generate-story")} className="mr-2">
-            Create New Story
-          </Button>
-          <Button variant="outline" onClick={() => navigate("/music")}>
-            Bedtime Songs
-          </Button>
-        </div>
+      {/* flex-wrap and a real gap, so the buttons drop to their own line
+          rather than squeezing the heading into a column. Bedtime Songs is
+          gone: Music is in the nav on every page, and the shortcut was the
+          odd-sized one out. */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="min-w-0 text-2xl md:text-3xl font-heading font-bold text-secondary">
+          Your Saved Stories
+        </h2>
+        <Button onClick={() => navigate("/generate-story")}>Create New Story</Button>
       </div>
 
       {/* Jobs in flight and jobs that failed, above the library.
@@ -182,15 +181,17 @@ export default function SavedStories() {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className={FOLDER_TAB_LIST}>
-          {STORY_FOLDERS.map((f) => (
-            <TabsTrigger key={f.value} value={f.value} className={cn(FOLDER_TAB_TRIGGER, f.tint, f.edge)}>
-              {/* Slot for the lantern on the Timekeeper folder: an
-                  <img className="mr-2 h-4 w-4"> before the label. */}
-              {f.label} ({f.filter ? stories.filter(f.filter).length : universes.length})
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className={FOLDER_TAB_SCROLLER}>
+          <TabsList className={FOLDER_TAB_LIST}>
+            {STORY_FOLDERS.map((f) => (
+              <TabsTrigger key={f.value} value={f.value} className={cn(FOLDER_TAB_TRIGGER, f.tint, f.edge)}>
+                {/* Slot for the lantern on the Timekeeper folder: an
+                    <img className="mr-2 h-4 w-4"> before the label. */}
+                {f.label} ({f.filter ? stories.filter(f.filter).length : universes.length})
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
         <TabsContent value={activeTab} className="pt-4">
           {folder.value === "universes" ? (

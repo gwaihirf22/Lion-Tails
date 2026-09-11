@@ -90,31 +90,30 @@ export default function Story() {
 
   return (
     <div>
+      {/* The buttons are direct children of the wrapping row. They used to sit
+          in a space-x-3 div, and space-x-* only works on one line -- it puts a
+          left margin on every child but the first, so a wrapped row got a
+          stray indent. Bedtime Songs is gone; Music is in the nav. */}
       <div className="reader-chrome mx-auto mb-2 flex w-full max-w-3xl flex-wrap justify-end gap-2 px-3 pt-3">
-        <div className="space-x-3">
-          {/* Continuing is what creates a universe: the parent adopts one if it
-              has none, so the user never has to set one up first. */}
-          {storyId && !builtIn && (
-            <Button onClick={() => navigate(`/generate-story?continues=${storyId}`)}>
-              Continue this story
-            </Button>
-          )}
-          {/* A story in a universe offers the universe, not a blank page:
-              Continue carries this story's cast and outline forward; Add
-              starts a fresh one written against the world's memory. */}
-          {storyId && !builtIn && universeId ? (
-            <Button variant="outline" onClick={() => navigate(`/generate-story?universe=${universeId}`)}>
-              Add to this Universe
-            </Button>
-          ) : (
-            <Button variant="outline" onClick={() => navigate("/generate-story")}>
-              Create New Story
-            </Button>
-          )}
-          <Button variant="outline" onClick={() => navigate("/music")}>
-            Bedtime Songs
+        {/* Continuing is what creates a universe: the parent adopts one if it
+          has none, so the user never has to set one up first. */}
+        {storyId && !builtIn && (
+          <Button onClick={() => navigate(`/generate-story?continues=${storyId}`)}>
+            Continue this story
           </Button>
-        </div>
+        )}
+        {/* A story in a universe offers the universe, not a blank page:
+            Continue carries this story's cast and outline forward; Add
+            starts a fresh one written against the world's memory. */}
+        {storyId && !builtIn && universeId ? (
+          <Button variant="outline" onClick={() => navigate(`/generate-story?universe=${universeId}`)}>
+            Add to this Universe
+          </Button>
+        ) : (
+          <Button variant="outline" onClick={() => navigate("/generate-story")}>
+            Create New Story
+          </Button>
+        )}
       </div>
       
       <StoryDisplay

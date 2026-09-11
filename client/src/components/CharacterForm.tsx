@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -66,7 +66,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { FOLDER_TAB_LIST, FOLDER_TAB_TRIGGER } from "@/lib/folderTabs";
+import { FOLDER_TAB_LIST, FOLDER_TAB_SCROLLER, FOLDER_TAB_TRIGGER } from "@/lib/folderTabs";
 import {
   Dialog,
   DialogContent,
@@ -580,6 +580,8 @@ export default function CharacterForm({
   const unseen = unseenVirtues(saved).length;
 
   const [tab, setTab] = useState("basics");
+  /** The scrolling strip, so a tab stepped to with the arrows can be shown. */
+  const stripRef = useRef<HTMLDivElement>(null);
   // The library, filtered to this character. Cached app-wide; free here.
   const { stories: allStories } = useStories();
   const storiesIn = saved?.id
@@ -605,6 +607,14 @@ export default function CharacterForm({
   const openTab = (next: string) => {
     setTab(next);
     if (next === "virtues") void markVirtuesSeen();
+    // The strip is one row that scrolls, so the arrows can step to a tab that
+    // is off-screen. Bring it into view -- "nearest" so a tab already visible
+    // does not jump, and block:nearest so the dialog itself does not scroll.
+    requestAnimationFrame(() => {
+      stripRef.current
+        ?.querySelector(`[data-state][value="${next}"], [data-radix-collection-item][value="${next}"]`)
+        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
   };
 
   const step = (by: number) => {
@@ -675,55 +685,57 @@ export default function CharacterForm({
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
 
-                <TabsList className={FOLDER_TAB_LIST}>
-                  {TABS.map((t) => {
-                    const count = t.value === "stats" ? unspent : t.value === "virtues" ? unseen : 0;
-                    return (
-                      <TabsTrigger
-                        key={t.value}
-                        value={t.value}
-                        className={cn(
-                          FOLDER_TAB_TRIGGER,
-                          // Its own colour when it is one of the closed folders,
-                          // and the same colour as a top edge when it is the
-                          // open one -- which has to stay bg-card, because that
-                          // is what joins it to the panel below.
-                          t.tint,
-                          t.edge,
-                        )}
-                      >
-                        {t.label}
-                        {count > 0 && (
-                          <span
-                            // A plain title, not a Tooltip: this sits inside a
-                            // modal Dialog, where a portalled Radix layer is
-                            // the thing that has already bitten this file once.
-                            // The card's bubbles are not in a dialog and use a
-                            // real tooltip.
-                            title={
-                              t.value === "stats"
-                                ? `${count} Attribute/Skill point${count === 1 ? "" : "s"}`
-                                : `${count} new virtue${count === 1 ? "" : "s"} to look at`
-                            }
-                            className={cn(
-                              "absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none",
-                              // Red for "there is something here". destructive is
-                              // the only red that follows all four palettes, and
-                              // an attention red sharing a token with a danger
-                              // red is the ordinary convention -- it is not
-                              // saying this is dangerous.
-                              t.value === "stats"
-                                ? "bg-destructive text-destructive-foreground"
-                                : "bg-tab-virtues text-foreground ring-1 ring-border",
-                            )}
-                          >
-                            {count}
-                          </span>
-                        )}
-                      </TabsTrigger>
-                    );
-                  })}
-                </TabsList>
+                <div className={FOLDER_TAB_SCROLLER} ref={stripRef}>
+                  <TabsList className={FOLDER_TAB_LIST}>
+                    {TABS.map((t) => {
+                      const count = t.value === "stats" ? unspent : t.value === "virtues" ? unseen : 0;
+                      return (
+                        <TabsTrigger
+                          key={t.value}
+                          value={t.value}
+                          className={cn(
+                            FOLDER_TAB_TRIGGER,
+                            // Its own colour when it is one of the closed folders,
+                            // and the same colour as a top edge when it is the
+                            // open one -- which has to stay bg-card, because that
+                            // is what joins it to the panel below.
+                            t.tint,
+                            t.edge,
+                          )}
+                        >
+                          {t.label}
+                          {count > 0 && (
+                            <span
+                              // A plain title, not a Tooltip: this sits inside a
+                              // modal Dialog, where a portalled Radix layer is
+                              // the thing that has already bitten this file once.
+                              // The card's bubbles are not in a dialog and use a
+                              // real tooltip.
+                              title={
+                                t.value === "stats"
+                                  ? `${count} Attribute/Skill point${count === 1 ? "" : "s"}`
+                                  : `${count} new virtue${count === 1 ? "" : "s"} to look at`
+                              }
+                              className={cn(
+                                "absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none",
+                                // Red for "there is something here". destructive is
+                                // the only red that follows all four palettes, and
+                                // an attention red sharing a token with a danger
+                                // red is the ordinary convention -- it is not
+                                // saying this is dangerous.
+                                t.value === "stats"
+                                  ? "bg-destructive text-destructive-foreground"
+                                  : "bg-tab-virtues text-foreground ring-1 ring-border",
+                              )}
+                            >
+                              {count}
+                            </span>
+                          )}
+                        </TabsTrigger>
+                      );
+                    })}
+                  </TabsList>
+                </div>
 
                 <Button
                   type="button" variant="ghost" size="icon"
