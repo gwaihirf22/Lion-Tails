@@ -1000,7 +1000,55 @@ have disagreed about it.
   the client's disable cleared React state and the next status poll turned
   Parent Mode back on.
 - Parent Mode gates: custom character fields, a universe's summary, canon,
-  **name**, and **a story's title and text** (`PATCH /api/stories/:id`).
+  **name**, **a story's title and text** (`PATCH /api/stories/:id`), and
+  **creating a share link** (`POST /api/stories/:id/share`). Stopping a share
+  is deliberately NOT gated.
+
+## Sharing a story by link
+
+Blake: *"a link that would allow a person to view the story without having an
+account… and attached to this share page an invitation for them to create
+their own stories."* `/s/:token` is public; everything else about a story is
+not.
+
+- **The public response is an allow-list, never the row.**
+  `sharedStoryView()` in `shared/sharedStory.ts`, and
+  `tests/sharedStory.test.ts` asserts its exact keys. A saved story carries
+  `debugData` (every prompt and raw model reply), `request` (the children),
+  and picture prompts written from the character sheet's APPEARANCE fields —
+  "How they look, for pictures" reaches no story text by design, so publishing
+  a prompt would publish a child's details the story never mentions. Pictures
+  go out rebuilt key by key with `prompt: ""`; spreading one leaks. Adding a
+  field there is a decision to publish it.
+- **`story_shares` is its own table** (migration 0009): token PK (16 CSPRNG
+  bytes, base64url, 22 chars — `SHARE_TOKEN_PATTERN`), `story_id` UNIQUE and
+  CASCADE, so one link per story and a deleted story takes its link with it.
+  Not a column on `user_stories`, so `rowToSavedStory()` is untouched.
+  `createShare` is one statement: it SELECTs from the owner's own row (no
+  link to someone else's story) and `ON CONFLICT … DO UPDATE` returns the
+  existing token (two taps, one link). Stopping and sharing again mints a new
+  token, so a stopped link stays dead.
+- **Visibility is the library's rule**, not `getStoryById`'s (which has none):
+  `is_favorite OR expires_at IS NULL OR expires_at > NOW()`. A lapsed story's
+  link dies with it. One identical 404 for malformed, unknown, stopped and
+  lapsed, so the route never confirms a story exists. `no-store` (a stopped
+  link stops now) and `X-Robots-Tag: noindex` (a child's story is not for
+  search engines).
+- **The page is the ordinary reader**: `StoryDisplay` with no `storyId` (the
+  read-only path) plus `shared`, which hides Favourite and Share. App.tsx's
+  `bareReader` includes `/s/` — WITH the slash, or `/saved-stories` and
+  `/settings` match. The invitation sits after the story's own ending, and its
+  colours fall back to the theme because `--reader-*` only exist while a
+  reader is mounted (the "no longer shared" page has none).
+- **Link previews are server-rendered for `/s/:token` only**, in
+  `server/static.ts` via `renderSharePage()` (`server/lib/pageMeta.ts`, pure):
+  remove the generic tags, append the story's title, first sentence and
+  ABSOLUTE picture URL, all HTML-escaped (a title is model- or parent-written
+  text in raw HTML). URLs come from `req.protocol` + the `Host` header —
+  SWAG's proxy.conf sets `Host $host` and `X-Forwarded-Proto`, and
+  `trust proxy` is on. Not `X-Forwarded-Host`, which SWAG sends with `:443`.
+  Production only; dev serves the generic card. `index.html`'s own
+  `og:image` is absolute too — the spec wants a full URL.
 
 ## Editing what the app wrote
 

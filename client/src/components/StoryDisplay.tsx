@@ -6,6 +6,7 @@ import { useParentMode } from "@/hooks/use-parent-mode";
 import { apiRequestAllowingErrors, queryClient } from "@/lib/queryClient";
 import { splitAppendices } from "@shared/storyAppendices";
 import { EDITED_BY_PARENT, lastEditedAt, type EditLogEntry } from "@shared/editLog";
+import { ShareStoryDialog } from "@/components/ShareStoryDialog";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
@@ -40,9 +41,15 @@ interface StoryDisplayProps {
   onPictures?: (images: StoryPicture[]) => void;
   /** The page holds the story; a saved edit hands the new text back to it. */
   onEdited?: (next: { title: string; content: string; editLog: EditLogEntry[] }) => void;
+  /**
+   * Read through a share link, by someone who may have no account. With no
+   * storyId almost every owner control already hides itself (the old ?data=
+   * path); this hides the rest -- Favourite, and Share itself.
+   */
+  shared?: boolean;
 }
 
-export default function StoryDisplay({ story, storyId, storyType, builtIn, editLog, images, onEdited, onPictures }: StoryDisplayProps) {
+export default function StoryDisplay({ story, storyId, storyType, builtIn, editLog, images, onEdited, onPictures, shared }: StoryDisplayProps) {
   const [isFavorite, setIsFavorite] = useState(false);
   /**
    * A parent editing the title and text, in place.
@@ -304,8 +311,10 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
         </span>
       )}
 
-      <div className="reader-chrome mx-auto flex w-full max-w-3xl items-center gap-1 px-3">
-        {!builtIn && (
+      {/* flex-wrap: Share made this five buttons, which do not fit one line on
+          a phone once Edit is showing too. */}
+      <div className="reader-chrome mx-auto flex w-full max-w-3xl flex-wrap items-center gap-1 px-3">
+        {!builtIn && !shared && (
           <Button
             size="sm"
             variant="ghost"
@@ -323,6 +332,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
           </Button>
         )}
+        {storyId && !builtIn && !shared && <ShareStoryDialog storyId={storyId} title={story.title} />}
         <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={handlePrint}>
           <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print
         </Button>

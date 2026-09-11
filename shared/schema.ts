@@ -199,6 +199,47 @@ export const userStories = pgTable(
   }),
 );
 
+/**
+ * A story somebody has chosen to let others read, without an account.
+ *
+ * Blake: "a share story option which would create a link that would allow a
+ * person to view the story without having an account."
+ *
+ * ITS OWN TABLE, NOT A COLUMN ON user_stories. A share is not part of a story:
+ * nothing about reading, editing or listing one should change because a link
+ * to it exists, and `rowToSavedStory()` -- the one place user_stories' columns
+ * are grafted onto the blob -- stays exactly as it was. Revoking is a DELETE of
+ * a row that means nothing else.
+ *
+ * - `token` is the whole capability: 16 random bytes, base64url. It is NOT the
+ *   story id, which appears in the owner's own urls and is not a secret.
+ * - `storyId` is UNIQUE -- one link per story. Sharing again returns the same
+ *   link; stopping and sharing again issues a new one, so an old link stays
+ *   dead once stopped.
+ * - CASCADE from the story: a deleted story takes its link with it, rather
+ *   than leaving a row that points at nothing.
+ *
+ * Whether the story is still visible (the library's expiry rule) is checked on
+ * every read, in storage, not stored here -- a story that lapses must stop
+ * being readable on the day it lapses.
+ */
+export const storyShares = pgTable(
+  "story_shares",
+  {
+    token: text("token").primaryKey(),
+    storyId: text("story_id")
+      .notNull()
+      .references(() => userStories.storyId, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => ({
+    storyIdx: uniqueIndex("idx_story_shares_story_id").on(table.storyId),
+  }),
+);
+
 export const heroStories = pgTable(
   "hero_stories",
   {

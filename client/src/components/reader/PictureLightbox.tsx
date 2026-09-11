@@ -34,18 +34,23 @@ export function PictureLightbox({
             content. */}
         <DialogTitle className="sr-only">Picture from this story</DialogTitle>
         <DialogDescription className="sr-only">
-          {picture?.prompt ?? "A picture from this story."}
+          {picture?.prompt || "A picture from this story."}
         </DialogDescription>
         {picture && (
           <figure className="m-0">
             <img
               src={picture.url}
-              alt={picture.prompt}
+              alt={picture.prompt || "A picture from this story."}
               className="mx-auto max-h-[85dvh] w-auto max-w-full rounded-lg"
             />
-            <figcaption className="mx-auto mt-3 max-w-2xl rounded-md bg-background/90 px-3 py-2 text-center text-xs text-muted-foreground">
-              {picture.prompt}
-            </figcaption>
+            {/* No caption when there is no prompt: a shared story's pictures are
+                sent without theirs (shared/sharedStory.ts says why), and an
+                empty caption is a small blank box under the picture. */}
+            {picture.prompt && (
+              <figcaption className="mx-auto mt-3 max-w-2xl rounded-md bg-background/90 px-3 py-2 text-center text-xs text-muted-foreground">
+                {picture.prompt}
+              </figcaption>
+            )}
           </figure>
         )}
       </DialogContent>
