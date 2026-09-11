@@ -247,6 +247,26 @@ function nextTokenBudget(current: number, promptTokens?: number): number | null 
  *
  * usage is recorded. Also previously unread at every call site.
  */
+/**
+ * The one instruction that makes a story's picture usable as its reference.
+ *
+ * A STORY'S CHOSEN PICTURE IS ALSO THE LOOK OF ITS BOOK: it is attached to
+ * every later picture drawn from a passage, so that the people the story
+ * invented -- a hero of faith, a shopkeeper, anyone with no character sheet
+ * and therefore no portrait -- are the same person on every page. A picture of
+ * an empty river anchors nobody.
+ *
+ * THE WORDING IS THE WHOLE RISK. "Facing the viewer", "clearly visible" or
+ * "portrait" would turn a storybook cover into a school photograph, which is a
+ * worse picture for the sake of a better reference. "Recognisable" asks for
+ * the minimum that does the job and leaves the composition alone. Measured
+ * before it was written: 34 of 34 covers in a real library already put a named
+ * person in frame doing something, so this is close to a no-op and only
+ * insures against the occasional scenery-only one.
+ */
+export const COVER_SHOWS_PEOPLE =
+  "The people in it should be recognisable -- show their faces rather than only their backs.";
+
 export async function requestModelJson<T>(opts: {
   step: string;
   model: string;
@@ -500,7 +520,7 @@ async function generateShortStorySingleCall(
       "title": "A creative title",
       "content": "The full ${form.noun} text.",
       "applicationQuestions": ["Question 1", "Question 2", "Question 3", "Question 4", "Question 5"],
-      "imagePrompt": "A short description for an illustrator for a key scene."
+      "imagePrompt": "A short description for an illustrator for a key scene. ${COVER_SHOWS_PEOPLE}"
     }
   `;
 
@@ -678,6 +698,8 @@ async function finalizeStoryDetails(
 
     The illustration must match the character, so carry this into the image prompt:
     ${renderBrief(ctx.brief, "image")}
+
+    ${COVER_SHOWS_PEOPLE}
 
     Respond with ONLY a valid JSON object: { "title": "...", "applicationQuestions": ["...", "...", "..."], "imagePrompt": "..." }
   `;

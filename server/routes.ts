@@ -32,7 +32,12 @@ import {
 } from "./lib/storyBrief";
 import { listBiblicalEvents } from "./data/biblicalEvents";
 import { getWordCountFromLength } from "./lib/openai-implementation";
-import { generateStoryImage, illustrationCast, deleteStoryImage } from "./lib/illustration";
+import {
+  generateStoryImage,
+  illustrationCast,
+  deleteStoryImage,
+  readStoryImageFile,
+} from "./lib/illustration";
 import { sceneFromPassage } from "./lib/passageScene";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
@@ -1382,6 +1387,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         prompt = scene ?? passage.data.text;
       }
 
+      /**
+       * The story's chosen picture, as the look of the book.
+       *
+       * It covers everyone the cast does not: a hero of faith has no portrait
+       * to attach (hero.imageUrl is on the schema and empty for all eighty of
+       * them), and an invented shopkeeper has no character sheet, so without
+       * this they are drawn fresh -- and differently -- on every page.
+       *
+       * ONLY FOR A PASSAGE. A redraw supersedes the chosen picture, and
+       * anchoring a redraw to the very picture you are redoing is the one
+       * case where this is exactly backwards.
+       */
+      const storyLook =
+        passage.success && saved.story.imageUrl
+          ? await readStoryImageFile(saved.story.imageUrl)
+          : undefined;
+
       // What the people in it look like, read live off their sheets -- the
       // point of the whole feature, and the reason a story illustrated today
       // matches a portrait drawn after the story was written.
@@ -1389,6 +1411,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         prompt,
         userId,
         await illustrationCast(saved.request, userId, prompt),
+        storyLook,
       );
       if (!imageUrl) {
         // generateStoryImage returns undefined for BOTH "not entitled" and
@@ -1401,10 +1424,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // APPENDED, never replacing. The picture that was there stays in the
-      // gallery and is deleted only when somebody says to.
+      /**
+       * APPENDED, never replacing. The picture that was there stays in the
+       * gallery and is deleted only when somebody says to.
+       *
+       * AND A PASSAGE PICTURE IS A PAGE, NOT A COVER. This used to write
+       * imageUrl unconditionally, so drawing a picture for paragraph 32 also
+       * made it the story's picture -- and it then rendered twice, once in
+       * the text and once at the end. The chosen picture is changed only by
+       * a redraw, or by choosing one from the gallery.
+       */
       const updated = await storage.setStoryImages(req.params.id, userId, {
-        imageUrl,
+        imageUrl: passage.success ? (saved.story.imageUrl ?? null) : imageUrl,
         images: [
           ...gallery,
           {
@@ -1430,7 +1461,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // than returning a URL the story does not actually carry.
         return res.status(500).json({ message: "The picture was made but could not be saved to the story." });
       }
-      res.json({ imageUrl, images: updated.images ?? [], alreadyExisted: false });
+      res.json({
+        // What the story shows at the end, which a passage picture leaves alone.
+        imageUrl: updated.story.imageUrl ?? null,
+        images: updated.images ?? [],
+        alreadyExisted: false,
+      });
     } catch (error) {
       console.error("Error illustrating story:", error);
       res.status(500).json({ message: "Could not create a picture for this story." });

@@ -526,6 +526,33 @@ different child, and the only sign was one line in the log.
     `opacity: 0; pointer-events: none`, taking the close button with it.
   - **Twelve pictures a story**, not the five a character keeps: one is the
     picture at the end and the rest are the pictures in the story.
+  - **A passage picture is a page, not a cover.** It never changes
+    `story.imageUrl`; only a redraw or choosing from the strip does. It used
+    to write it unconditionally, so a picture drawn for paragraph 32 also
+    became the story's picture and then rendered twice.
+  - **The gallery strip is not part of the figure.** It was a figcaption of
+    the end-of-story picture, so a story whose pictures are all inside the
+    text -- now the normal state -- had no strip and no way to delete one.
+  - **The control lives in `ReaderBar`**, not the action row: choosing a
+    passage means scrolling to it, and the bar is the one that comes with you.
+- **The chosen picture is the look of the book.** It is attached as a
+  reference to every picture drawn from a passage, so the people a story
+  invented -- a hero of faith, a shopkeeper, anyone with no character sheet --
+  are the same person on every page. `hero.imageUrl` is on the schema and
+  **empty for all eighty heroes**, so there is nothing else they could be
+  matched against. Verified: Corrie ten Boom came out the same woman across a
+  cover and two independently drawn pages.
+  - Anchored to the CHOSEN picture, never chained to the previous one:
+    picture 9 copying picture 8 copying picture 7 compounds its drift, and
+    the reader already controls which picture is chosen.
+  - Never on a redraw -- that supersedes the chosen picture, and anchoring a
+    redraw to the thing you are redoing is the one case where this is
+    backwards.
+  - `COVER_SHOWS_PEOPLE` asks the auto-generated picture for **recognisable**
+    people, never "facing the viewer" or "portrait": the wording is the whole
+    risk, and those turn a storybook cover into a school photograph. 34 of 34
+    covers in a real library already put a named person in frame, so it is
+    close to a no-op. A test asserts the phrases that must NOT be in it.
 - **Redraw is `{ redraw: true }` on `POST /api/stories/:id/illustrate`**, and
   the entitlement is checked BEFORE any work — admin or own key, derived from
   `isModelAllowedFor` like `canIllustrate`, answering 403 rather than the

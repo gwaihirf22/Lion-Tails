@@ -255,6 +255,12 @@ const STYLE = "Render in a beautiful biblical storybook illustration style with 
 export function composeIllustrationPrompt(
   scenePrompt: string,
   cast: IllustrationMember[] = [],
+  /**
+   * True when the story's chosen picture is attached after the cast, so that
+   * the people the story invented -- a hero of faith, a shopkeeper, anyone
+   * with no character sheet -- look the same from page to page.
+   */
+  hasStoryLook = false,
 ): string {
   const parts = [`${scenePrompt}. ${STYLE}`];
 
@@ -273,13 +279,33 @@ export function composeIllustrationPrompt(
     parts.push(
       "Take each person's face, hair, colouring and clothing from their own reference image and nothing else" +
         " from it — not its background, its framing, its lighting, or anything it happens to be holding.",
-      // WITHOUT THIS, A SPARE FACE GETS USED. First real test: a quest story
-      // about William Tyndale came back with Tyndale drawn as Barnabas --
-      // the scene called for an older man at a desk, a face for an older man
-      // was attached, and the model reached for it. "He need not appear" says
-      // nothing about who else may wear his face.
-      "Everyone else in the picture is a different person and must not be given a face, hair or clothing" +
-        " from any reference image — including whoever the story is about.",
+    );
+  }
+
+  if (hasStoryLook) {
+    // LAST, so every cast number above keeps the value it had. And described
+    // as a PICTURE rather than a person, or the model reads it as one more
+    // face to place in the scene.
+    parts.push(
+      `Reference image ${matched.length + 1} is an earlier picture from this same story, not a person.` +
+        " Anyone in this scene who also appears in it must look the same here as they do there — the same" +
+        " face, the same hair, the same clothes. Take nothing else from it: not its scene, its background," +
+        " its framing or its moment.",
+    );
+  }
+
+  if (matched.length > 0 || hasStoryLook) {
+    // WITHOUT THIS, A SPARE FACE GETS USED. First real test: a quest story
+    // about William Tyndale came back with Tyndale drawn as Barnabas -- the
+    // scene called for an older man at a desk, a face for an older man was
+    // attached, and the model reached for it.
+    //
+    // Phrased against the REFERENCES rather than against a list of names,
+    // because the earlier picture carries people nobody named: the rule is
+    // "if you have not seen them, they are new", which holds either way.
+    parts.push(
+      "Anyone in this scene who appears in none of the reference images is a different person, and must" +
+        " not be given a face, hair or clothing from any of them — including whoever the story is about.",
     );
   }
 
@@ -300,6 +326,13 @@ export async function generateStoryImage(
   imagePrompt: string,
   userId: number = 1,
   cast: IllustrationMember[] = [],
+  /**
+   * The story's chosen picture, so that whoever it contains is the same
+   * person here. The cast covers everybody with a character sheet; this
+   * covers everybody else, which on a historical story is the person the
+   * story is actually about.
+   */
+  storyLook?: PictureFile,
 ): Promise<string | undefined> {
   try {
     // Illustration is premium-only and has no cheap or local tier, so an
@@ -317,12 +350,15 @@ export async function generateStoryImage(
     }
     const filename = `story_${uuidv4()}.png`;
     const filepath = path.join(STORY_IMAGE_DIR, filename);
-    const prompt = composeIllustrationPrompt(imagePrompt, cast);
     const openaiClient = createClient(resolved);
 
-    const references = cast
-      .map((m) => m.reference)
-      .filter((f): f is PictureFile => Boolean(f));
+    // The look reference goes LAST, after every cast member, so the numbering
+    // in the prompt matches the order images.edit receives them in.
+    const references = [
+      ...cast.map((m) => m.reference).filter((f): f is PictureFile => Boolean(f)),
+      ...(storyLook ? [storyLook] : []),
+    ];
+    const prompt = composeIllustrationPrompt(imagePrompt, cast, Boolean(storyLook));
     let response;
     if (references.length > 0) {
       try {
@@ -360,9 +396,13 @@ export async function generateStoryImage(
     if (!response) {
       response = await openaiClient.images.generate({
         model: resolved.model,
+        // No references at all on this path, so nothing may claim to have
+        // any: the cast still describes itself in words, and the story-look
+        // line -- which is about a picture that is not being sent -- goes.
         prompt: composeIllustrationPrompt(
           imagePrompt,
           cast.map(({ reference: _reference, ...rest }) => rest),
+          false,
         ),
         n: 1,
         size: "1024x1024",
@@ -426,18 +466,46 @@ function downloadImage(url: string, filepath: string): Promise<void> {
 }
 
 /**
- * The one place that knows a story picture's filename shape, for deleting a
- * replaced one. Same guard as the avatar delete: the url is ours -- it was
- * built here from a uuid -- but it arrives via the database, so the basename is
- * taken and the directory is not.
+ * A story picture's path on disk, or undefined if that is not what the url is.
+ *
+ * THE ONE PLACE that knows a story picture's filename shape, because two
+ * copies of a traversal guard is how one of them gets relaxed. Same shape as
+ * readAvatarFile's: the url is ours -- it was built here from a uuid -- but it
+ * arrives via the database, so the basename is taken and the directory is not.
  */
+function storyImagePath(url: string): string | undefined {
+  const name = path.basename(url);
+  if (!/^story_[0-9a-f-]+\.png$/i.test(name)) return undefined;
+  return path.join(STORY_IMAGE_DIR, name);
+}
+
+/**
+ * A story's own picture, as a reference for the next one.
+ *
+ * This is what keeps the people a story invented -- a hero of faith, a
+ * shopkeeper, anyone with no character sheet and so no portrait -- looking
+ * like themselves across a book. They have nothing else: hero.imageUrl is on
+ * the schema and empty for all eighty of them, and a fresh description draws
+ * a fresh person every time.
+ */
+export async function readStoryImageFile(url: string): Promise<PictureFile | undefined> {
+  try {
+    const file = storyImagePath(url);
+    if (!file) return undefined;
+    return { data: await fs.promises.readFile(file), filename: path.basename(file), type: "image/png" };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Remove a picture's file. Used only by the delete route, which asks first. */
 export async function deleteStoryImage(url: string): Promise<void> {
   try {
-    const name = path.basename(url);
-    if (!/^story_[0-9a-f-]+\.png$/i.test(name)) return;
-    await fs.promises.rm(path.join(STORY_IMAGE_DIR, name), { force: true });
+    const file = storyImagePath(url);
+    if (!file) return;
+    await fs.promises.rm(file, { force: true });
   } catch (error) {
-    // An orphaned file is not worth failing a redraw over.
-    console.error(`[illustration] could not remove the replaced picture ${url}:`, error);
+    // An orphaned file is not worth failing a delete over.
+    console.error(`[illustration] could not remove the picture ${url}:`, error);
   }
 }

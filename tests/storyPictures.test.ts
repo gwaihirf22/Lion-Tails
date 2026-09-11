@@ -6,6 +6,8 @@ import {
   anchorBlock,
 } from "../client/src/lib/storyContent";
 import { buildPassageScenePrompt } from "../server/lib/passageScene";
+import { composeIllustrationPrompt } from "../server/lib/illustration";
+import { COVER_SHOWS_PEOPLE } from "../server/lib/openai-implementation";
 import {
   MAX_STORY_IMAGES,
   MAX_AVATARS,
@@ -230,5 +232,66 @@ describe("who and where come from different places", () => {
     // One number. A slice here that disagreed with the schema's max would be
     // a silent half-picture on one path and a 400 on the other.
     expect(MAX_PASSAGE_CHARS).toBe(2000);
+  });
+});
+
+describe("the look of the book", () => {
+  /**
+   * The people a story invented have nothing else.
+   *
+   * illustrationCast attaches a portrait for anyone with a character sheet.
+   * A hero of faith has none -- hero.imageUrl is on the schema and empty for
+   * all eighty of them -- and neither does a shopkeeper the model made up, so
+   * without this they are drawn fresh, and differently, on every page.
+   */
+  const cast = [
+    { name: "Mia", look: "Mia, a girl.", reference: { data: Buffer.from("x"), filename: "portrait.png", type: "image/png" } },
+  ];
+
+  it("numbers the story's picture after the cast, so the cast keeps its numbers", () => {
+    const p = composeIllustrationPrompt("A scene", cast, true);
+    expect(p).toContain("Reference image 1 is Mia, a girl.");
+    expect(p).toContain("Reference image 2 is an earlier picture from this same story");
+  });
+
+  it("calls it a picture, not a person", () => {
+    // Described as one more face, the model places it in the scene.
+    expect(composeIllustrationPrompt("A scene", cast, true)).toContain("not a person");
+  });
+
+  it("asks for the people and nothing else from it", () => {
+    const p = composeIllustrationPrompt("A scene", cast, true);
+    expect(p).toMatch(/must look the same here as they do there/);
+    expect(p).toMatch(/Take nothing else from it/);
+  });
+
+  it("still forbids handing its faces to somebody new", () => {
+    // The Barnabas-as-Tyndale rule has to survive the earlier picture being
+    // attached -- and now has to be phrased against the references rather
+    // than a list of names, because that picture carries people nobody named.
+    const p = composeIllustrationPrompt("A scene", cast, true);
+    expect(p).toContain("appears in none of the reference images is a different person");
+  });
+
+  it("says nothing at all when no picture is attached", () => {
+    // The end-of-story picture and the redraw send no story look, and their
+    // prompt must not change because this shipped.
+    const p = composeIllustrationPrompt("A scene", cast, false);
+    expect(p).toBe(composeIllustrationPrompt("A scene", cast));
+    expect(p).not.toMatch(/earlier picture/);
+  });
+});
+
+describe("the cover's instruction", () => {
+  it("asks for recognisable people", () => {
+    expect(COVER_SHOWS_PEOPLE).toMatch(/recognisable/i);
+  });
+
+  it("does not ask for a school photograph", () => {
+    // The wording IS the risk: these are the phrases that produce a posed
+    // cover, which is a worse picture for the sake of a better reference.
+    for (const posed of ["facing the viewer", "clearly visible", "portrait", "posed", "camera"]) {
+      expect(COVER_SHOWS_PEOPLE.toLowerCase()).not.toContain(posed);
+    }
   });
 });

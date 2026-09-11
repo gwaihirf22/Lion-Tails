@@ -122,6 +122,13 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
    * gallery -- with a passage on it. The server writes the anchor; the client
    * never invents one.
    */
+  /**
+   * Whether there is anything to offer. Every condition the server enforces,
+   * plus editing -- the reading surface is unmounted while a parent edits, so
+   * there is no text to highlight.
+   */
+  const canPicture = Boolean(modelInfo?.canIllustrate && !builtIn && storyId && !editing);
+
   const drawPassage = useMutation({
     mutationFn: async (passage: { text: string; blockIndex: number }) => {
       const response = await apiRequest("POST", `/api/stories/${storyId}/illustrate`, { passage });
@@ -247,7 +254,18 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
 
   return (
     <div style={{ background: "var(--reader-bg)", color: "var(--reader-fg)" }}>
-      <ReaderBar focusArmed={focus.armed} onToggleFocus={focus.toggle} />
+      {/* The picture control is in the bar because the bar comes with you
+          down the page, and choosing a passage means scrolling to it. Passed
+          as a prop rather than reached for: canIllustrate and the story's id
+          are known here, and the bar has no business asking. */}
+      <ReaderBar
+        focusArmed={focus.armed}
+        onToggleFocus={focus.toggle}
+        picking={picker.picking}
+        onTogglePicture={
+          canPicture ? (picker.picking ? picker.cancel : picker.start) : undefined
+        }
+      />
 
       {focus.armed && (
         <span className="sr-only" aria-live="polite">
@@ -273,21 +291,6 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
         {canEdit && !editing && (
           <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={startEdit}>
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
-          </Button>
-        )}
-        {/* Only when the server would actually draw one, and never while
-            editing -- the reading surface is unmounted then, so there is
-            nothing to highlight. */}
-        {modelInfo?.canIllustrate && !builtIn && storyId && !editing && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 gap-1 px-2 text-xs"
-            onClick={picker.picking ? picker.cancel : picker.start}
-            aria-pressed={picker.picking}
-          >
-            <ImagePlus className="h-3.5 w-3.5" aria-hidden="true" />
-            {picker.picking ? "Cancel" : "Make a picture"}
           </Button>
         )}
         <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={handlePrint}>

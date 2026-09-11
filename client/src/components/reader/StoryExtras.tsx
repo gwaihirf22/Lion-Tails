@@ -212,30 +212,50 @@ export function StoryExtras({
   const questions = answeredTheirOwn ? [] : (story.applicationQuestions ?? []);
   const further = doc?.furtherLearning ?? [];
 
+  /**
+   * Whether the strip is worth showing.
+   *
+   * More than one picture, OR a single one that is NOT the picture already on
+   * screen above it -- which is exactly the story with one inline picture and
+   * no end-of-story one. A strip of one repeating the picture above it is just
+   * the picture again.
+   */
+  const showGallery =
+    gallery.length > 1 || (gallery.length === 1 && gallery[0].url !== imageUrl);
+
   return (
     <div
       ref={ref}
       className="reader-chrome mx-auto w-full max-w-3xl px-4 pb-16"
       style={{ color: "var(--reader-fg)" }}
     >
-      {/* A picture made FOR this story is part of it, so it is shown rather
-          than filed away: no accordion, nothing to expand. */}
-      {imageUrl && (
-        <figure className="my-8">
-          <img
-            src={imageUrl}
-            alt={story.imagePrompt || `An illustration for ${story.title}`}
-            className="mx-auto max-h-[70vh] w-auto rounded-lg"
-            style={{ border: "1px solid var(--reader-border)" }}
-          />
-          {/*
-            THE GALLERY. Every picture the story has had, oldest first, and
-            nothing here throws one away by itself -- a redraw appends and the
-            bin asks first. Hidden at one picture, because a strip of one is
-            just the picture again.
-          */}
-          {gallery.length > 1 && storyId && (
-            <figcaption className="mt-3 flex flex-wrap justify-center gap-2">
+      {/*
+        THE PICTURES: the one shown at the end, the strip of all of them, and
+        the redraw.
+
+        THE STRIP IS NO LONGER PART OF THE FIGURE, and that is not tidying. It
+        was a figcaption of the picture above it, so a story whose pictures are
+        all INSIDE the text -- the normal state now that a passage picture no
+        longer takes over as the story's picture -- had no strip at all, and
+        therefore no way to delete one.
+      */}
+      {(imageUrl || showGallery) && (
+        <div className="my-8">
+          {/* A picture made FOR this story is part of it, so it is shown
+              rather than filed away: no accordion, nothing to expand. */}
+          {imageUrl && (
+            <figure className="m-0">
+              <img
+                src={imageUrl}
+                alt={story.imagePrompt || `An illustration for ${story.title}`}
+                className="mx-auto max-h-[70vh] w-auto rounded-lg"
+                style={{ border: "1px solid var(--reader-border)" }}
+              />
+            </figure>
+          )}
+
+          {showGallery && storyId && (
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
               {gallery.map((picture) => {
                 const chosen = picture.url === imageUrl;
                 return (
@@ -300,14 +320,20 @@ export function StoryExtras({
                   </span>
                 );
               })}
-            </figcaption>
+            </div>
+          )}
+
+          {!imageUrl && showGallery && (
+            <p className="mt-2 text-center text-xs" style={{ color: "var(--reader-muted)" }}>
+              These pictures are inside the story. Choose one to show it at the end as well.
+            </p>
           )}
 
           {/* Quiet, and under the picture: a redraw spends a generation, so it
               is not a thing to fall over. Shown on the same condition the
               server enforces. */}
           {modelInfo?.canIllustrate && !builtIn && storyId && (
-            <figcaption className="mt-2 text-center">
+            <div className="mt-2 text-center">
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button
@@ -354,9 +380,9 @@ export function StoryExtras({
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-            </figcaption>
+            </div>
           )}
-        </figure>
+        </div>
       )}
 
       {story.bibleVerse && (

@@ -81,7 +81,9 @@ describe("the illustration prompt", () => {
     // Tyndale came back with Tyndale drawn as Barnabas. The scene wanted an
     // older man at a desk and there was one attached.
     const p = composeIllustrationPrompt(SCENE, [member({ reference: file() })]);
-    expect(p).toContain("Everyone else in the picture is a different person");
+    // Phrased against the references rather than a list of names, since the
+    // story's own earlier picture carries people nobody named.
+    expect(p).toContain("appears in none of the reference images is a different person");
   });
 
   it("describes anyone who has no picture instead", () => {
