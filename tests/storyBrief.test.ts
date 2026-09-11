@@ -31,6 +31,7 @@ import {
 } from "../server/lib/storyBrief";
 import {
   characterIdsOf,
+  characterKind,
   characterRoleOf,
   baseStats,
   MAX_STORY_CHARACTERS,
@@ -2037,5 +2038,57 @@ describe("one character is never 'they'", () => {
   it("leaves it out of a retelling with nobody in it", () => {
     const solo = buildStoryBrief({ ...req, biblicalEvent: "noah" } as any, []);
     expect(renderBrief(solo, "single")).not.toContain("is one person, not a group");
+  });
+});
+
+/**
+ * "Human" plus a gender, turned back into the noun a story has always used.
+ *
+ * The UI now offers Human and asks he-or-she separately. The story must still
+ * say "a girl" -- CLAUDE.md: never "a human" -- and must say it exactly as an
+ * existing girl does, or the same child reads differently depending on when
+ * she was made.
+ */
+describe("a Human is still a girl or a boy in the story", () => {
+  it("derives the noun from human, sex and age", () => {
+    expect(characterKind({ kind: "human", sex: "female", age: 8 })).toBe("girl");
+    expect(characterKind({ kind: "human", sex: "female", age: 30 })).toBe("woman");
+    expect(characterKind({ kind: "human", sex: "male", age: 40 })).toBe("man");
+    // An unset age is a child: this is a children's app.
+    expect(characterKind({ kind: "human", sex: "male" })).toBe("boy");
+  });
+
+  it("guesses no gender when none was given", () => {
+    expect(characterKind({ kind: "human" })).toBe("child");
+    expect(characterKind({ kind: "human", age: 40 })).toBe("person");
+  });
+
+  it("leaves every other kind exactly as it was", () => {
+    expect(characterKind({ kind: "girl" })).toBe("girl");
+    expect(characterKind({ gender: "girl" })).toBe("girl");
+    expect(characterKind({ kind: "dog", sex: "female" })).toBe("dog");
+    expect(characterKind({ kind: "elf", sex: "female" })).toBe("elf");
+  });
+
+  const identityOf = (c: Record<string, unknown>) =>
+    renderBrief(buildStoryBrief({ ...base, characterIds: ["c1"] } as StoryRequest, [{ id: "c1", name: "Ellie", ...c } as never]), "single")
+      .split("\n").map((l) => l.trim()).find((l) => l.startsWith("Ellie"));
+
+  it("renders a Human girl exactly as an existing girl renders", () => {
+    const made_now = identityOf({ kind: "human", sex: "female", age: 10 });
+    const made_before = identityOf({ kind: "girl", age: 10 });
+    expect(made_now).toBe("Ellie, aged 10, a girl.");
+    expect(made_now).toBe(made_before);
+  });
+
+  it("puts no pronoun tag after a word that already carries one", () => {
+    // Without this a new Human girl read "a girl (she)." -- the tag was only
+    // ever absent for girls because the form used to hide the question.
+    expect(identityOf({ kind: "human", sex: "female", age: 10 })).not.toContain("(she)");
+    expect(identityOf({ kind: "girl", sex: "female", age: 10 })).not.toContain("(she)");
+  });
+
+  it("does tag one of the folk, whose word carries no gender", () => {
+    expect(identityOf({ kind: "elf", sex: "female", age: 10 })).toBe("Ellie, aged 10, an elf (she).");
   });
 });

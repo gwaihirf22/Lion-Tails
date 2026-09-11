@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
  */
 const PLACEHOLDER: Record<CharacterCategory, string> = {
   human: "🧒",
+  folk: "🧝",
   mammal: "🐾",
   bird: "🐦",
   reptile: "🦎",

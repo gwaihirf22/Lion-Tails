@@ -1378,10 +1378,32 @@ export function storyImagesOf(
   ];
 }
 
+/**
+ * "human" is what a child picks now, with the gender chosen separately as
+ * `sex`. The story still says "a girl" or "a man" -- never "a human" -- so the
+ * pair is turned back into the word here, where every reader of a kind already
+ * comes: the brief, the portrait prompt, the card badge, the picker, search.
+ *
+ * 18 is the line because it is the only one that needs no argument. An unset
+ * age counts as a child: this is a children's app, and every character in it
+ * began life as "boy" or "girl". With no sex it says "child" or "person" rather
+ * than guess one -- the form and the server both refuse to save that, so it is
+ * only reachable through a Parent-Mode custom save.
+ */
 export function characterKind(
-  c?: { kind?: string | null; gender?: string | null } | null,
+  c?: {
+    kind?: string | null;
+    gender?: string | null;
+    sex?: string | null;
+    age?: number | null;
+  } | null,
 ): string | undefined {
-  return c?.kind?.trim() || c?.gender?.trim() || undefined;
+  const kind = c?.kind?.trim() || c?.gender?.trim() || undefined;
+  if (kind !== "human") return kind;
+  const adult = typeof c?.age === "number" && c.age >= 18;
+  if (c?.sex === "female") return adult ? "woman" : "girl";
+  if (c?.sex === "male") return adult ? "man" : "boy";
+  return adult ? "person" : "child";
 }
 
 /**

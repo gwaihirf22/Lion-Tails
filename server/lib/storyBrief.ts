@@ -20,7 +20,7 @@ import {
   type Character,
   type HeroOfFaith,
 } from "@shared/schema";
-import { coveringNoun } from "@shared/characterVocab";
+import { coveringNoun, GENDERED_KINDS } from "@shared/characterVocab";
 import { storage } from "../storage";
 import { getBiblicalEvent } from "../data/biblicalEvents";
 import {
@@ -55,10 +55,17 @@ function article(noun: string): string {
  * How to refer to them, in two words, inside the clause that already exists.
  *
  * Derived from `sex` rather than stored as a pronoun. Absent for every
- * character saved before this, and for "boy" and "girl", where the noun carries
- * it already and a tag would be noise.
+ * character saved before this, and after a noun that carries it already.
+ *
+ * That second rule used to be true only by accident -- the form hid `sex` for
+ * people, so a girl never had one. Now a Human has to have one, and
+ * characterKind() turns human + female into "girl"; without the check a new
+ * character would render "a girl (she)" where every existing girl renders "a
+ * girl", and the same child would read differently depending on when she was
+ * made. So `noun` is the word actually being printed, and it decides.
  */
-function sexTag(sex?: Character["sex"]): string {
+function sexTag(sex?: Character["sex"], noun?: string): string {
+  if (noun && GENDERED_KINDS.has(noun.trim().toLowerCase())) return "";
   if (sex === "male") return " (he)";
   if (sex === "female") return " (she)";
   if (sex === "it") return " (it)";
@@ -979,7 +986,7 @@ export function buildStoryBrief(
   // hard fact a story must not contradict, unlike brown fur, and it occupies
   // exactly the slot "a girl" already filled -- so a cast of eight non-humans
   // costs one clause each rather than a share of the colour ration below.
-  if (isSet(kind)) who.push(`${article(kind!)} ${kind}${sexTag(details?.sex)}`);
+  if (isSet(kind)) who.push(`${article(kind!)} ${kind}${sexTag(details?.sex, kind)}`);
   const identity = anonymous
     ? sourceMaterial!.kind === "hero-of-faith"
       ? `${sourceMaterial!.label}, and the people around them.`
@@ -1164,7 +1171,7 @@ export function buildStoryBrief(
       // hard fact about her silently gone, because `gender` was empty and
       // nothing else was consulted.
       const ckind = characterKind(c);
-      if (isSet(ckind)) who.push(`${article(ckind!)} ${ckind}${sexTag(c.sex)}`);
+      if (isSet(ckind)) who.push(`${article(ckind!)} ${ckind}${sexTag(c.sex, ckind)}`);
       const trait = isSet(c.personality)
         ? `a ${c.personality} nature`
         : isSet(c.hair)
