@@ -698,10 +698,31 @@ async function generateStoryChapter(
         }\n`
       : "";
 
+  /**
+   * AND THE SAME PROBLEM ON THE OTHER SIDE.
+   *
+   * A Joseph quest used the stone exactly as written -- dark in her pocket at
+   * the cistern, warm again outside Potiphar's house, "two years passed, the
+   * stone stayed cold" -- and Joseph never once noticed the girl who kept
+   * turning up across twenty years and had not grown. CANON.seenAgain reached
+   * the outline and the single-call path, because that is where the canon is
+   * rendered; the chapter projection carries world.anchor and nothing else.
+   *
+   * So it is sent with the chapters it belongs to, which is every chapter but
+   * the first: there is nobody to be seen again until they have been seen
+   * once. The first chapter gets the opening rule instead, and neither is in
+   * the anchor, whose 110 words repeat on every chapter and are spent on the
+   * rules that have to.
+   */
+  const seenBefore =
+    storySoFar && ctx.brief.world
+      ? `\n      IF THEY MEET SOMEONE THEY HAVE ALREADY MET: ${CANON.seenAgain}\n`
+      : "";
+
   const systemPrompt = `${ctx.systemPrompt} Continue writing a story based on the context provided. Focus ONLY on writing the current part of the story. Do NOT summarize or add titles/questions.`;
   const userPrompt = `
       ${renderBrief(ctx.brief, "chapter")}
-${opensTheQuest}
+${opensTheQuest}${seenBefore}
       Here is the story so far:
       ---
       ${storySoFar || "This is the very first chapter."}

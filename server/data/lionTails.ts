@@ -197,22 +197,43 @@ export const DEVICE = {
   /**
    * How it behaves once someone is through.
    *
-   * The first half was PROMOTED FROM INVENTION TO CANON: the model reached
-   * for "the lantern went dark behind them" in every test story, and left
-   * unwritten it would keep being reinvented, eventually differently. The
-   * second half REPLACES an earlier rule that the lantern "lights again when
-   * it is time to come back" -- which contradicted the way home the universe
-   * actually uses (see CANON.wayBack): a threshold on the far side.
+   * IT BECOMES A STONE, and that is not decoration. A child cannot carry a lit
+   * lantern through a cistern, a prison and a throne room without the story
+   * having to account for it every scene. Blake: "it is odd to have a
+   * character holding a lantern all the time. and so the magic lantern being
+   * magic forms itself into a small stone that the character keeps with them."
+   * The prologue -- fixed text in every library, and canon a reader can check
+   * -- has Barnabas hold out a LANTERN and the reader follow him through, so
+   * the stone is what it becomes afterwards, never what it was given as.
    *
-   * The lantern GOES with them. A first draft of this said it did not, and
-   * the first quest written against it had the traveller carrying it through
-   * every threshold anyway -- as Barnabas does in the prologue, which is
-   * canon a reader can check. The data was wrong, not the story.
+   * AND IT MOVES THEM AGAIN. The first version of this said the lantern went
+   * dark and stayed dark, one crossing only. That broke on the accounts
+   * themselves: Joseph is seventeen in the cistern and about thirty before
+   * Pharaoh, and a traveller who may only see one afternoon sees him thrown
+   * into a pit and never sees him weep over his brothers. The alternative --
+   * letting them simply stand there for twenty years -- is worse, and is the
+   * classic time-travel wrench: nothing in the story can explain the child who
+   * does not grow.
+   *
+   * So the stone flares when it is time, and only ever WITHIN the account they
+   * were sent to. That keeps a quest one story: a lantern that could reach
+   * anywhere is what turned a quest about C. S. Lewis into a tour of Oxford in
+   * 1931, a BBC microphone in 1941 and the Narnia years.
+   *
+   * NEVER AT THEIR ASKING. This is the half of the old rule that survives
+   * intact, and the reason it existed: a device the traveller can work is an
+   * escape hatch, and a story where the child can leave whenever it gets hard
+   * is a story with nothing at stake. What decides is withheld -- see
+   * CANON.lion, and the doc.
    */
   rules:
-    "Once someone is through, the lantern goes dark and stays dark, however " +
-    "far they carry it. It is not a door to walk back through whenever they " +
-    "like. The way back, when it is time, is a threshold on the far side.",
+    "Once through, the lantern goes dark and closes into a small smooth " +
+    "stone the traveller keeps in a pocket. When it is time to see another " +
+    "part of the same account, the stone warms and opens back into the " +
+    "lantern; they take hold of it and the story moves around them, forward " +
+    "or back, to somewhere else in that account. It decides, they do not, " +
+    "and it never answers being asked. It will not reach another story and " +
+    "will not take them home early.",
 } as const;
 
 /**
@@ -228,8 +249,8 @@ export const CANON = {
     "forgotten. There are others; this story has one.",
   forgetting:
     "What is going wrong in the world is not time but memory. People remember " +
-    "that wars were fought and forget courage; that people suffered and " +
-    "forget sacrifice; that someone spoke the truth and forget what it cost. " +
+    "that wars were fought and forget courage; that someone spoke the truth " +
+    "and forget what it cost. " +
     "Every journey is into a story that holds something that must be " +
     "remembered, and the traveller is not told what.",
   /**
@@ -261,22 +282,42 @@ export const CANON = {
     "there is asking something of them -- a temptation to be unkind, a wait " +
     "they are impatient with, a slight they would like to repay. A moment, " +
     "not a crisis: nothing is broken and nobody needs rescuing. The story " +
-    "they are sent to bears on that same thing, and NOTHING ever says so -- " +
-    "not the narrator, not the Timekeeper, not the traveller. Then the shop " +
-    "is there, where a shop could not be: the end of a corridor, a gap " +
-    "between two houses. Sudden, or so quiet they half expected it. Always " +
-    "the same shop, the same sign and the same man; only where and how it " +
-    "arrives is new. Only they see it -- anyone else passing sees a " +
-    "second-hand shop, an empty building, or nothing worth looking at.",
+    "they are sent to bears on that same thing, and NOTHING ever says so. " +
+    "Then the shop is there, where a shop could not be, sudden or so quiet " +
+    "they half expected it: always the same shop and the same man, only the " +
+    "place new. Only they see it -- anyone else passing sees an empty " +
+    "building, or nothing worth looking at.",
   arrival:
     "Arrival always has a cause, even when the traveller does not understand " +
     "it; it is never arbitrary teleportation. The boundary between times goes " +
-    "thin first -- a familiar door, a lantern where no lantern should be, a " +
-    "bell, a voice saying their name, a reflection in a window.",
+    "thin first -- a familiar door, a bell, a voice saying their name.",
   wayBack:
     "The way back is a threshold, never an announcement: a doorway, a road, a " +
     "shop window, a brass bell. The story ends when it has given the " +
     "traveller what they were sent to find.",
+  /**
+   * BEING SEEN AGAIN, which is what the stone buys that a single crossing
+   * could not.
+   *
+   * If the traveller turns up three times across twenty years of somebody's
+   * life, the somebody notices. Blake: "they are still a real character
+   * interacting with the historical figure. there could even be humour or awe
+   * by the historical figure in seeing the character suddenly in their life
+   * again." That is the difference between a montage and a relationship, and
+   * it costs one sentence.
+   *
+   * AND NOBODY EXPLAINS IT. The child has not aged and there is no account of
+   * why; the figure may be delighted, unnerved, or quietly certain it means
+   * something, and is never given the answer -- the same rule the lantern
+   * lives under. A story that explains this has decided what is behind it,
+   * which is not ours to spend here.
+   */
+  seenAgain:
+    "A traveller may appear in the same person's life more than once, years " +
+    "apart, and that person remembers them -- recognition, gladness, " +
+    "suspicion, a joke, something close to awe. The traveller has not grown " +
+    "older in between and nobody explains that. Let it be strange and leave " +
+    "it strange.",
   ending:
     "Afterwards Barnabas asks what they found -- never whether they learned " +
     "something -- and if the answer is too easy, he asks again. He may appear " +
@@ -358,11 +399,10 @@ export const FRAMING_APPROACHES: readonly FramingApproach[] = [
     label: "a question asked and not answered",
     opening:
       "Open with a question already sitting in them, put badly or not out " +
-      "loud -- something about what they are supposed to do, or why somebody " +
-      "else does not have to. They are still carrying it when the shop turns " +
-      `up in front of them. Inside, they put it to ${KEEPER.shortName}, who ` +
-      "could answer it in a sentence if he chose to. He does not choose to. " +
-      "He hands them the lantern instead.",
+      "loud -- what they are supposed to do, or why somebody else does not " +
+      "have to. They are still carrying it when the shop turns up. Inside, " +
+      `they put it to ${KEEPER.shortName}, who could answer in a sentence and ` +
+      "does not. He hands them the lantern instead.",
     closing:
       "At the end, return to the question. They may answer it themselves, or " +
       "find it was the wrong question. Do not have him explain it to them.",
@@ -484,11 +524,12 @@ export function worldCanon(frame: FramingApproach): string[] {
     `What he keeps is ${DEVICE.brief} ${DEVICE.rules}`,
     CANON.forgetting,
     CANON.arrival,
+    CANON.seenAgain,
     CANON.wayBack,
     CANON.ending,
     `On the shelves: ${SHOP.shelf.join("; ")}; and ` +
-      `${SHOP.underTheCloth}. One of these may be noticed in passing. None of ` +
-      "them has to be. Never the thing under the cloth.",
+      `${SHOP.underTheCloth}. One may be noticed in passing; none has to be. ` +
+      "Never the thing under the cloth.",
     KEEPER.never,
     CANON.lion,
     CANON.boundaries,

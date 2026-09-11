@@ -1012,6 +1012,35 @@ export function buildStoryBrief(
   // Placed in premise rather than craft because it is WHAT the story is about,
   // not how it is written, and premise is what the outline is planned from.
   const focus = request.storyFocus;
+  /**
+   * A whole life, on a quest, is a SHAPE and not a summary.
+   *
+   * The instruction below covers one episode. Its absence used to cover
+   * nothing at all, and that is the case the scope rule was written about --
+   * "a story about Corrie ten Boom gets a life summary, born here, did this,
+   * died there". A quest about C. S. Lewis with no episode chosen came back as
+   * a tour of Oxford in 1931, a BBC microphone in 1941 and the Narnia years.
+   *
+   * Allowed rather than refused, because the lantern-stone gave a whole life a
+   * mechanism it did not have: it wakes and carries them elsewhere in the same
+   * account, and the figure meets the same traveller years apart and remembers
+   * them (DEVICE.rules, CANON.seenAgain). Three real scenes across a life is
+   * that device working, not the failure it used to be. What is refused is the
+   * thing in between -- narrating the years to join the scenes up.
+   *
+   * QUEST ONLY: world is set for "travels" and nothing else, and on an
+   * ordinary retelling a whole life has no stone to move through it.
+   */
+  const wholeLifeQuest = world && (!focus || focus.mode === "whole" || !isSet(focus.text));
+  if (wholeLifeQuest && sourceMaterial?.kind === "hero-of-faith") {
+    premise.push(
+      "This story covers more than one moment of their life. Choose two or " +
+        "three, far apart, that belong together, and play each as a real scene " +
+        "-- somewhere, with someone, something happening. Do not narrate the " +
+        "years between them: the stone carries the traveller across, and the " +
+        "gap is felt rather than explained.",
+    );
+  }
   if (focus && focus.mode !== "whole" && isSet(focus.text)) {
     premise.push(
       `This story covers ONE episode${focus.reference ? ` (${focus.reference})` : ""}: ${focus.text}`,

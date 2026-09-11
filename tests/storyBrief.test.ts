@@ -4,6 +4,7 @@ import {
   CANON,
   KEEPER,
   SHOP,
+  DEVICE,
   FRAMING_APPROACHES,
   worldCanon,
   questFamiliarity,
@@ -1592,14 +1593,25 @@ describe("the world of a quest", () => {
     // sentence added to lionTails.ts is measured here rather than felt later.
     const b = quest();
     expect(b.world).toBeDefined();
-    // 925, raised from 750 when CANON.beginning was added -- the rule that a
-    // quest starts in the traveller's own life and the shop comes to them.
-    // The reason for a ceiling is unchanged: lore that outweighs the account
-    // gets written instead of it. The NUMBER was chosen when the account was
-    // the only other thing in the prompt, and is not sacred; it is set just
-    // above what the frames actually render (907 at the widest) so that the
-    // next sentence added has to be argued for rather than absorbed.
-    expect(words(b.world!.canon.join(" "))).toBeLessThanOrEqual(925);
+    /**
+     * 1000, from 925, from 750.
+     *
+     * THE CAP IS A RATCHET, NOT A BUDGET. Its job is to make somebody stop and
+     * justify the lore the next time it grows, which is exactly what happened
+     * here -- the stone, the traveller being seen again and the rule that a
+     * quest starts in their own life are all deliberate, all asked for, and
+     * about 130 words of genuine fat came out before the number moved.
+     *
+     * WHAT IT IS GUARDING, measured on a Joseph quest rather than assumed:
+     * the whole brief is 1607 words, of which THE WORLD THIS HAPPENS IN is
+     * 984 (61%) and the account, its verse and its cautions are 330 (21%).
+     * The Timekeeper's furniture already outweighs the account three to one,
+     * and the model reads all of it before it reads a word about Joseph.
+     *
+     * That ratio is the thing to watch, not this number. Raise it again when
+     * there is a reason; look at the ratio first.
+     */
+    expect(words(b.world!.canon.join(" "))).toBeLessThanOrEqual(1000);
     // 450, from 350, for the same field and the same reason.
     expect(words(Object.values(CANON).join(" "))).toBeLessThanOrEqual(450);
     // UNCHANGED, and the tightest budget in the system: this one repeats on
@@ -1616,7 +1628,7 @@ describe("the world of a quest", () => {
       expect(
         words(worldCanon(frame).join(" ")),
         `the "${frame.id}" frame renders too much world`,
-      ).toBeLessThanOrEqual(925);
+      ).toBeLessThanOrEqual(1000);
     }
   });
 
@@ -1751,5 +1763,107 @@ describe("how long a quest has to be", () => {
   it("refuses nothing and nonsense", () => {
     expect(questLengthAllowed(undefined)).toBe(false);
     expect(questLengthAllowed("enormous")).toBe(false);
+  });
+});
+
+describe("the stone, and being seen again", () => {
+  /**
+   * A quest about C. S. Lewis came back as a tour -- Oxford 1931, a BBC
+   * microphone in 1941, the Narnia years -- moving between them by lighting
+   * the lantern again, which DEVICE.rules forbade outright. The first attempt
+   * at a fix said one crossing only, and broke on the accounts themselves:
+   * Joseph is seventeen in the cistern and about thirty before Pharaoh.
+   *
+   * Blake's answer was better than either. The lantern closes into a stone,
+   * the stone wakes when IT decides, and it moves them elsewhere in the SAME
+   * account -- so the years pass without the child standing in them, and the
+   * figure meets the same traveller twice.
+   */
+  it("becomes a stone, and opens again", () => {
+    expect(DEVICE.rules).toMatch(/closes into a small smooth stone/);
+    expect(DEVICE.rules).toMatch(/opens back into the lantern/);
+  });
+
+  it("stays inside the account it was sent to", () => {
+    // The boundary that stops the tour coming back.
+    expect(DEVICE.rules).toMatch(/somewhere else in that account/);
+    expect(DEVICE.rules).toMatch(/will not reach another story/);
+  });
+
+  it("is never at the traveller's asking, which is the half of the old rule that mattered", () => {
+    // A device the child can work is an escape hatch, and a story they can
+    // leave whenever it gets hard has nothing at stake.
+    expect(DEVICE.rules).toMatch(/It decides, they do not/);
+    expect(DEVICE.rules).toMatch(/never answers being asked/);
+    expect(DEVICE.rules).toMatch(/will not take them home early/);
+  });
+
+  it("lets the figure remember them, and explains nothing", () => {
+    expect(CANON.seenAgain).toMatch(/more than once, years apart/);
+    expect(CANON.seenAgain).toMatch(/has not grown older/);
+    expect(CANON.seenAgain).toMatch(/nobody explains that/);
+  });
+
+  it("never tells the model who holds the lantern", () => {
+    // The whole of lionTails.ts is what a model may read. Naming what decides
+    // spends Movement IV in chapter two; it lives in the doc instead, and
+    // CANON.lion is the most that may be said.
+    const everything = JSON.stringify({ CANON, DEVICE, KEEPER });
+    expect(everything).not.toMatch(/tame lion/i);
+    expect(everything).not.toMatch(/Lion (controls|holds|decides|chooses|sends)/i);
+    // And what IS allowed: the name, once, in his mouth, with nothing behind it.
+    expect(CANON.lion).toMatch(/The great Lion knows no bounds/);
+    expect(CANON.lion).toMatch(/the Lion does not appear/);
+  });
+});
+
+describe("a whole life, on a quest", () => {
+  /**
+   * Allowed, not refused. The lantern-stone gave a whole life a mechanism it
+   * did not have -- it wakes and moves them elsewhere in the same account, and
+   * the figure remembers them years apart -- so three scenes across a life is
+   * that device working. What is refused is narrating the years between.
+   */
+  const heroQuest = (focus?: { mode: string; text: string }) =>
+    renderBrief(
+      buildStoryBrief(
+        { characterIds: ["c1"], characterRole: "travels", heroOfFaith: "polycarp", travelFrame: "errand", storyFocus: focus } as any,
+        [{ id: "c1", name: "Mia", kind: "girl", createdAt: "2026-01-01" } as any],
+        undefined,
+        { id: "polycarp", name: "Polycarp", description: "A bishop of Smyrna.", contribution: "Stood firm.", timePeriod: "2nd century", keyEvents: [] } as any,
+      ),
+      "single",
+    );
+
+  it("asks for scenes, not a summary, when no episode is chosen", () => {
+    const b = heroQuest();
+    expect(b).toMatch(/covers more than one moment of their life/);
+    expect(b).toMatch(/play each as a real scene/);
+    expect(b).toMatch(/Do not narrate the years between them/);
+  });
+
+  it("treats an explicit whole life the same as none at all", () => {
+    expect(heroQuest({ mode: "whole", text: "" })).toMatch(/covers more than one moment/);
+  });
+
+  it("says nothing of the sort once an episode is chosen", () => {
+    // The one-episode instruction takes over, and the two must not both fire.
+    const b = heroQuest({ mode: "chosen", text: "his last day in the arena" });
+    expect(b).toMatch(/covers ONE episode/);
+    expect(b).not.toMatch(/covers more than one moment/);
+  });
+
+  it("does not reach an ordinary retelling", () => {
+    // No quest, no stone to carry anybody across the years.
+    const plain = renderBrief(
+      buildStoryBrief(
+        { characterIds: ["c1"], characterRole: "absent", heroOfFaith: "polycarp" } as any,
+        [{ id: "c1", name: "Mia", kind: "girl", createdAt: "2026-01-01" } as any],
+        undefined,
+        { id: "polycarp", name: "Polycarp", description: "A bishop.", contribution: "Stood firm.", timePeriod: "2nd century", keyEvents: [] } as any,
+      ),
+      "single",
+    );
+    expect(plain).not.toMatch(/covers more than one moment/);
   });
 });
