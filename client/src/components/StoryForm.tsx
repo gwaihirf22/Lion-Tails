@@ -40,6 +40,7 @@ import { saveCharacter } from "@/lib/saveCharacter";
 import { useToast } from "@/hooks/use-toast";
 import PromptEditor from "./PromptEditor";
 import { ROLE_OPTIONS } from "@/lib/characterRole";
+import { questLengthAllowed, QUEST_PREFERRED_LENGTH } from "@shared/quests";
 import { QUEST_SERIES_TITLE } from "@shared/quests";
 import { cn } from "@/lib/utils";
 import barnabasSign from "@/assets/barnabas-sign.webp";
@@ -378,6 +379,16 @@ export default function StoryForm({
       // actually sent. There is a case built from these defaults now.
     },
   });
+
+  /**
+   * Is this a Quest with the Timekeeper?
+   *
+   * Read off the FIELD rather than off bringInHero, because the field is what
+   * is frozen onto the request and what the server will judge -- and because
+   * the two modes behind that switch are 'travels' and 'alongside', only one
+   * of which is a quest.
+   */
+  const isQuest = form.watch("characterRole") === "travels";
 
   /**
    * The chosen hero's key events, which are the focus options.
@@ -1113,6 +1124,13 @@ export default function StoryForm({
                         // Switching on commits to a mode straight away, so the
                         // request never carries a source with nobody in it.
                         form.setValue("characterRole", "travels");
+                        // And moves the length up if it is one a quest cannot
+                        // use. Done HERE rather than on submit: a picker that
+                        // silently rewrites the answer at the last moment is
+                        // how somebody gets a story they did not ask for.
+                        if (!questLengthAllowed(form.getValues("storyLength"))) {
+                          form.setValue("storyLength", QUEST_PREFERRED_LENGTH);
+                        }
                       } else {
                         // And switching off clears BOTH, so a source picked and
                         // then abandoned cannot ride along on the request.
@@ -1313,8 +1331,17 @@ export default function StoryForm({
                             <SelectValue placeholder="Select story length" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="very-short">Very Short (2-4 minutes)</SelectItem>
-                            <SelectItem value="short">Short (5-7 minutes)</SelectItem>
+                            {/* A quest cannot fit in the short ones -- the way
+                                in and the account both have to happen. Disabled
+                                rather than hidden, so the option does not
+                                silently vanish and leave the picker looking
+                                broken; the description below says why. */}
+                            <SelectItem value="very-short" disabled={isQuest}>
+                              Very Short (2-4 minutes)
+                            </SelectItem>
+                            <SelectItem value="short" disabled={isQuest}>
+                              Short (5-7 minutes)
+                            </SelectItem>
                             <SelectItem value="medium">Medium (8-12 minutes)</SelectItem>
                             <SelectItem value="long">Long (13-20 minutes)</SelectItem>
                             <SelectItem value="extended">Extended (20+ minutes)</SelectItem>
@@ -1323,7 +1350,9 @@ export default function StoryForm({
                       </div>
                     </FormControl>
                     <FormDescription>
-                      Select the desired length for the story.
+                      {isQuest
+                        ? "A quest needs room for the journey and the account it visits, so the shorter lengths are not available."
+                        : "Select the desired length for the story."}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
+import { questLengthAllowed, QUEST_PREFERRED_LENGTH } from "@shared/quests";
 import {
   CANON,
   KEEPER,
   SHOP,
   FRAMING_APPROACHES,
   worldCanon,
+  questFamiliarity,
   framingApproachOf,
   pickFramingApproach,
   worldAnchor,
@@ -1590,11 +1592,18 @@ describe("the world of a quest", () => {
     // sentence added to lionTails.ts is measured here rather than felt later.
     const b = quest();
     expect(b.world).toBeDefined();
-    // 750: about twice a hero's biography. The old lore was ~300 and the
-    // complaint was too little context; past this the account is no longer
-    // the biggest thing in the prompt. A ceiling, not a target.
-    expect(words(b.world!.canon.join(" "))).toBeLessThanOrEqual(750);
-    expect(words(Object.values(CANON).join(" "))).toBeLessThanOrEqual(350);
+    // 925, raised from 750 when CANON.beginning was added -- the rule that a
+    // quest starts in the traveller's own life and the shop comes to them.
+    // The reason for a ceiling is unchanged: lore that outweighs the account
+    // gets written instead of it. The NUMBER was chosen when the account was
+    // the only other thing in the prompt, and is not sacred; it is set just
+    // above what the frames actually render (907 at the widest) so that the
+    // next sentence added has to be argued for rather than absorbed.
+    expect(words(b.world!.canon.join(" "))).toBeLessThanOrEqual(925);
+    // 450, from 350, for the same field and the same reason.
+    expect(words(Object.values(CANON).join(" "))).toBeLessThanOrEqual(450);
+    // UNCHANGED, and the tightest budget in the system: this one repeats on
+    // every chapter, so nothing above was allowed to leak into it.
     expect(words(b.world!.anchor)).toBeLessThanOrEqual(110);
   });
 
@@ -1607,7 +1616,7 @@ describe("the world of a quest", () => {
       expect(
         words(worldCanon(frame).join(" ")),
         `the "${frame.id}" frame renders too much world`,
-      ).toBeLessThanOrEqual(750);
+      ).toBeLessThanOrEqual(925);
     }
   });
 
@@ -1621,5 +1630,126 @@ describe("the world of a quest", () => {
     expect(renderBrief(old, "single")).not.toContain("THE WORLD THIS HAPPENS IN");
     expect(renderBrief(old, "chapter")).not.toContain(KEEPER.shortName);
     expect(renderBrief(old, "chapter")).not.toContain("does not die");
+  });
+});
+
+/**
+ * Who has been to the shop before.
+ *
+ * Blake: "if this is the character's first time going. and if ANY of the
+ * characters it is their first time it should be noteworthy, and the 2nd time
+ * is worth noting as well. but after that the characters should respond with
+ * some knowledge of barnabas and the shop, the 'magic'."
+ */
+describe("how well the travellers know the shop", () => {
+  const words = (t: string) => t.trim().split(/\s+/).filter(Boolean).length;
+  const one = (visits: number) => questFamiliarity([{ name: "Sam", visits }]);
+
+  it("makes a first visit the weight of the opening", () => {
+    const f = one(0);
+    expect(f).toContain("has never been");
+    expect(f).toMatch(/weight of the opening/);
+    // And forbids the thing a model reaches for instead: explaining it.
+    expect(f).toMatch(/do not have anyone give them a tour/i);
+  });
+
+  it("makes a second visit a recognition, not a discovery", () => {
+    const f = one(1);
+    expect(f).toContain("has been once");
+    expect(f).toMatch(/not sure it will be there again/);
+    expect(f).not.toMatch(/never been/);
+  });
+
+  it("stops explaining after that", () => {
+    const f = one(4);
+    expect(f).toMatch(/knows the shop, the man and what the lantern does/);
+    expect(f).toMatch(/Explain none of it to them again/);
+    expect(f).not.toMatch(/never been|been once/);
+  });
+
+  it("gives a mixed cast to the one who has never been", () => {
+    const f = questFamiliarity([
+      { name: "Ada", visits: 3 },
+      { name: "Ben", visits: 0 },
+    ]);
+    expect(f).toContain("Ben has never been");
+    expect(f).toContain("Ada knows the shop");
+    expect(f).toContain("Let the one who has never been see it the way the others no longer can.");
+  });
+
+  it("says nothing about newcomers when there are none", () => {
+    const f = questFamiliarity([{ name: "Ada", visits: 2 }, { name: "Ben", visits: 5 }]);
+    expect(f).toContain("Ada and Ben know");
+    expect(f).not.toMatch(/never been/);
+  });
+
+  it("stays small even at a full cast", () => {
+    // Its own budget, because it is the one part of the world block that grows
+    // with the cast -- the canon's cap must not have to absorb eight of these.
+    const full = Array.from({ length: MAX_STORY_CHARACTERS }, (_, i) => ({
+      name: `Character${i}`,
+      visits: i % 3,
+    }));
+    expect(words(questFamiliarity(full))).toBeLessThanOrEqual(150);
+  });
+
+  it("is nothing at all for nobody", () => {
+    expect(questFamiliarity([])).toBe("");
+  });
+});
+
+describe("a quest does not begin in the shop", () => {
+  it("no frame opens there", () => {
+    // Four of five long quests opened inside the shop. CANON.beginning owns
+    // the arrival now, so a frame that starts there is a frame fighting it.
+    for (const frame of FRAMING_APPROACHES) {
+      expect(frame.opening, `the "${frame.id}" frame starts in the shop`).not.toMatch(
+        /^(Open )?(in |with )?the shop|opens? in the shop/i,
+      );
+    }
+  });
+
+  it("the canon says where a quest starts, and that nobody says why", () => {
+    expect(CANON.beginning).toMatch(/own life, never in the shop/);
+    expect(CANON.beginning).toMatch(/a moment, not a/i);
+    expect(CANON.beginning).toMatch(/NOTHING ever says so/);
+    expect(CANON.beginning).toMatch(/Only they see it/);
+  });
+
+  it("says the shop may appear where it could not be exactly once", () => {
+    // It used to live in wayBack, where the model only read it at the END --
+    // which is most of why every story started at the shop's front door.
+    const all = Object.values(CANON).join(" ");
+    expect(all.match(/where a shop could not be|could not logically be/g)?.length ?? 0).toBe(1);
+  });
+});
+
+describe("how long a quest has to be", () => {
+  /**
+   * A quest has to fit two stories: the way in, which now gets a part of its
+   * own, and the account itself. Short leaves 667 words for the second of
+   * those, and very-short is written in one call with no outline at all, so
+   * the way in has no budget to be given.
+   */
+  it("refuses the two lengths that cannot hold one", () => {
+    expect(questLengthAllowed("very-short")).toBe(false);
+    expect(questLengthAllowed("short")).toBe(false);
+  });
+
+  it("allows medium, which was verified end to end rather than assumed", () => {
+    expect(questLengthAllowed("medium")).toBe(true);
+    expect(questLengthAllowed("long")).toBe(true);
+    expect(questLengthAllowed("extended")).toBe(true);
+  });
+
+  it("offers a length it allows", () => {
+    // The form moves to this one when the quest switch goes on, so a preferred
+    // length that the server would refuse is a form that argues with itself.
+    expect(questLengthAllowed(QUEST_PREFERRED_LENGTH)).toBe(true);
+  });
+
+  it("refuses nothing and nonsense", () => {
+    expect(questLengthAllowed(undefined)).toBe(false);
+    expect(questLengthAllowed("enormous")).toBe(false);
   });
 });

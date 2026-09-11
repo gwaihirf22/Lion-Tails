@@ -803,6 +803,31 @@ export class DbStorage implements IStorage {
     }
   }
   
+  async getStoryRequests(userId: number): Promise<StoryRequest[]> {
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in getStoryRequests(${userId}).`);
+      return [];
+    }
+    try {
+      // The request only. Selecting * here would pull every story's full text
+      // to count a handful of rows, on every enqueue.
+      const { rows } = await pool!.query(
+        `SELECT story_data->'request' AS request
+           FROM user_stories
+          WHERE user_id = $1
+            AND (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
+          ORDER BY created_at DESC`,
+        [userId],
+      );
+      return rows.map((r) => r.request).filter(Boolean) as StoryRequest[];
+    } catch (error) {
+      // A count that cannot be read is a story that treats everyone as new,
+      // which is a duller opening and not a broken one.
+      console.error(`Error reading story requests for user ${userId}:`, error);
+      return [];
+    }
+  }
+
   async setStoryImages(
     storyId: string,
     userId: number,

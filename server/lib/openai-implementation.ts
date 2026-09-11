@@ -27,7 +27,7 @@ type StoryContext = {
   resolved: ResolvedModel;
 };
 import { getBibleVerseByTheme } from "../data/bibleVerses";
-import { DEVICE, KEEPER, questTitleRule } from "../data/lionTails";
+import { CANON, DEVICE, KEEPER, questTitleRule } from "../data/lionTails";
 import { storage } from "../storage";
 import {
   StoryGenerationError,
@@ -273,6 +273,34 @@ function nextTokenBudget(current: number, promptTokens?: number): number | null 
  * the same question.
  */
 const titleRuleFor = (brief: StoryBrief): string => (brief.world ? questTitleRule() : "");
+
+/**
+ * What a quest's FIRST part is for, told to the outline.
+ *
+ * The instruction to open in the traveller's own life was reaching the outline
+ * and being obeyed -- and the story still began inside the account, because
+ * the outline packed the whole way in AND the first act of the account into
+ * part one. A real example, at roughly 570 words a chapter: "Ella begins with
+ * a small trouble in her own day ... the library is gone ... Mr Barnabas
+ * behind a counter ... he lends her the lantern ... the glow opens into a
+ * field ... she helps gather fallen sheaves and hears Joseph tell his brothers
+ * about his dream ... their faces harden." Given a third of the words and all
+ * of that to cover, the model dropped the half it was told to write and
+ * started at the field.
+ *
+ * So this is a BUDGET, not another instruction: the way in gets a part of its
+ * own, and the account starts in the next one. Nothing else in the prompt can
+ * buy the first half of a quest the room to happen.
+ */
+const questShape = (brief: StoryBrief): string =>
+  brief.world
+    ? `
+    This is a quest. Part 1 is the way in and nothing else: the moment in their
+    own life, the shop arriving where it could not be, going inside, and
+    stepping through. END part 1 as they cross over. The account itself begins
+    in part 2 -- put none of it in part 1.
+`
+    : "";
 
 export const COVER_SHOWS_PEOPLE =
   "The people in it should be recognisable -- show their faces rather than only their backs.";
@@ -593,7 +621,7 @@ async function generateStoryOutline(
 
     Instructions:
     Create a detailed outline with EXACTLY ${numberOfChapters} parts. Each part must be a distinct scene that moves the problem forward -- something must change or be at risk in each one.
-
+${questShape(ctx.brief)}
     Respond with ONLY a valid JSON object in the format: { "outline": ["Chapter 1...", "Chapter 2...", ...] }
   `;
 
@@ -647,10 +675,33 @@ async function generateStoryChapter(
 ): Promise<string> {
 
 
+  /**
+   * THE FIRST CHAPTER OF A QUEST OPENS IN THEIR LIFE, and only the first.
+   *
+   * The chapter projection carries world.anchor -- 110 words, the tightest
+   * budget in the system, repeated on every chapter -- and the anchor is about
+   * what is TRUE during a journey, not about how one starts. So the chapter
+   * writer never learned the rule, and the first real test showed exactly
+   * that: the outline's chapter one was "Mia is in the middle of waiting for
+   * her rabbit to stop nibbling a purple crayon", which is the shape asked
+   * for, and the chapter came back "The traders carried Joseph into Egypt".
+   * The plan knew; the pen did not.
+   *
+   * Sent once, on the chapter that needs it, rather than added to the anchor
+   * where it would repeat five times and crowd out the rules that have to.
+   * `storySoFar` being empty is already how this function knows it is first.
+   */
+  const opensTheQuest =
+    !storySoFar && ctx.brief.world
+      ? `\n      HOW THIS STORY STARTS: ${CANON.beginning}${
+          ctx.brief.world.familiarity ? " " + ctx.brief.world.familiarity : ""
+        }\n`
+      : "";
+
   const systemPrompt = `${ctx.systemPrompt} Continue writing a story based on the context provided. Focus ONLY on writing the current part of the story. Do NOT summarize or add titles/questions.`;
   const userPrompt = `
       ${renderBrief(ctx.brief, "chapter")}
-
+${opensTheQuest}
       Here is the story so far:
       ---
       ${storySoFar || "This is the very first chapter."}

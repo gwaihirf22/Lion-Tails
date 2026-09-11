@@ -29,6 +29,7 @@ import {
   pickFramingApproach,
   worldAnchor,
   worldCanon,
+  questFamiliarity,
 } from "../data/lionTails";
 
 export type CustomPrompts = {
@@ -162,6 +163,37 @@ export function resolveStoryFocus(request: StoryRequest, hero?: HeroOfFaith): vo
  *
  * Mutates deliberately: routes.ts freezes the request immediately after.
  */
+/**
+ * How many quests each of these characters has already been on.
+ *
+ * COUNTED IN TYPESCRIPT, not in SQL. Which stories are quests, and who is in
+ * them, are answered by characterRoleOf() and characterIdsOf() -- the two
+ * helpers that know characterRole/useTimeTravel and characterIds/characterId
+ * are each one fact under two names. A jsonb predicate would be a second copy
+ * of both, and the older spelling is precisely what it would miss.
+ *
+ * The prologue does not count. It is second person, shared by every library,
+ * and belongs to no character.
+ *
+ * A deleted story lowers a count, and that is the right answer: the library is
+ * what the reader has, and a quest they can no longer find is not one they
+ * remember being on.
+ */
+export async function countQuestsFor(
+  userId: number,
+  characterIds: string[],
+): Promise<Record<string, number>> {
+  const visits: Record<string, number> = Object.fromEntries(characterIds.map((id) => [id, 0]));
+  if (characterIds.length === 0) return visits;
+  const requests = await storage.getStoryRequests(userId);
+  for (const request of requests) {
+    if (characterRoleOf(request) !== "travels") continue;
+    const cast = new Set(characterIdsOf(request));
+    for (const id of characterIds) if (cast.has(id)) visits[id] += 1;
+  }
+  return visits;
+}
+
 export function resolveTravelFrame(request: StoryRequest): void {
   request.travelFrame =
     characterRoleOf(request) === "travels" ? pickFramingApproach().id : undefined;
@@ -645,7 +677,20 @@ export type StoryBrief = {
    * other kind of story, and for every brief frozen before this existed --
    * those render exactly as they did.
    */
-  world?: { canon: string[]; anchor: string };
+  world?: {
+    canon: string[];
+    anchor: string;
+    /**
+     * Who among THIS cast has been to the shop before, and what that changes
+     * about the opening. Per story, unlike the canon, which is why it is a
+     * field of its own rather than another canon line -- and why the canon's
+     * word cap is not asked to absorb a cast of eight.
+     *
+     * Absent on every brief frozen before it existed, and those render exactly
+     * as they did.
+     */
+    familiarity?: string;
+  };
   /**
    * The per-chapter form of the rules a character in a real account lives by:
    * stays on their mission, does not die, does not change history. The full
@@ -703,6 +748,16 @@ export function buildStoryBrief(
   characters: Character[],
   continuity?: StoryBrief["continuity"],
   hero?: HeroOfFaith,
+  /**
+   * How many quests each character has already been on, by id. Counted and
+   * FROZEN at enqueue like everything else here: a character's fifth quest
+   * must still read as their fifth if the job is retried next week.
+   *
+   * Optional, and omitted by every caller that does not have it -- the brief
+   * then says nothing about who has been before, which is how it read until
+   * now and is what keeps the golden fixtures for non-quest cases still.
+   */
+  visits?: Record<string, number>,
 ): StoryBrief {
   // The LEAD. Everything below this line that builds identity and colour is
   // unchanged from the single-character version, deliberately: a request with
@@ -936,6 +991,20 @@ export function buildStoryBrief(
     premise.push(...p.lines);
     participationAnchor = p.anchor;
     world = p.world;
+    /**
+     * Who has been before. Attached HERE rather than inside
+     * participationPremise, which knows only the lead's name -- the whole cast
+     * matters, because a newcomer beside a veteran is the point.
+     *
+     * Omitted entirely when the caller has no counts, so a brief built without
+     * them is the brief that was built before this existed.
+     */
+    if (world && visits) {
+      const familiarity = questFamiliarity(
+        characters.map((c) => ({ name: c.name, visits: visits[c.id] ?? 0 })),
+      );
+      if (familiarity) world = { ...world, familiarity };
+    }
   }
 
   // Scope. Without it, "a story about Corrie ten Boom" gets a life summary --
@@ -1427,6 +1496,9 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     out.push("");
     out.push("THE WORLD THIS HAPPENS IN");
     out.push(...brief.world.canon);
+    // After the canon, because it is about THIS cast rather than about the
+    // world, and last so it is the most recent thing said before the account.
+    if (brief.world.familiarity) out.push(brief.world.familiarity);
   }
 
   out.push("");
