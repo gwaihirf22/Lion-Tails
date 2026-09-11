@@ -715,12 +715,18 @@ export const MAX_AVATARS = 5;
  * A redraw does not throw the old one away -- "the chances are that the old
  * one may be better than the last with AI" -- so a story collects pictures the
  * way a character collects portraits, and the one on the page is the one that
- * was chosen. Five, the same as MAX_AVATARS, and for the same reason: a cap
- * that is the feature rather than a detail. Past it the redraw is REFUSED and
- * says to delete one, because silently dropping the oldest is exactly the
- * automatic discard this exists to stop.
+ * was chosen. Past the cap a new picture is REFUSED and the answer says to
+ * delete one, because silently dropping the oldest is exactly the automatic
+ * discard this exists to stop.
+ *
+ * TWELVE, not the five a character keeps, because these are not all the same
+ * job any more: one is the picture at the end, and the rest are the pictures
+ * IN the story. Twelve is a picture every few paragraphs of a long story --
+ * a picture book rather than an illustration -- and at roughly 1.9MB each it
+ * is about 23MB for a heavily drawn story in the story_images volume. A
+ * character has one face and needs no such range.
  */
-export const MAX_STORY_IMAGES = 5;
+export const MAX_STORY_IMAGES = 12;
 
 /**
  * One generated picture: what it is, and what made it.
@@ -738,6 +744,70 @@ export const generatedPictureSchema = z.object({
 });
 
 export type GeneratedPicture = z.infer<typeof generatedPictureSchema>;
+
+/**
+ * WHERE a picture belongs in the story it was drawn for.
+ *
+ * A QUOTE FIRST AND A POSITION SECOND, which is the web-annotation shape and
+ * the only one that survives what this app does to a story. The reader's
+ * blocks have no identity at all -- `StoryContent` keys them by array index
+ * and `parseStoryContent` rebuilds the array from scratch whenever the text
+ * changes -- and a parent edit rewrites the whole body through a textarea
+ * with no concurrency control anywhere on the path. An index alone would
+ * silently point at the wrong paragraph the first time somebody adds one.
+ *
+ * So: find the block whose text still contains `quote`; failing that, trust
+ * `blockIndex` if it is still in range; failing that, place the picture
+ * NOWHERE. It stays in the gallery either way -- a lost anchor must never be
+ * a lost picture.
+ */
+export const pictureAnchorSchema = z.object({
+  /** Enough of the chosen passage to find it again. */
+  quote: z.string().max(300),
+  /** Where it was when it was drawn. The fallback, never the first answer. */
+  blockIndex: z.number().int().min(0),
+});
+
+export type PictureAnchor = z.infer<typeof pictureAnchorSchema>;
+
+/**
+ * A story's picture: a generated picture that may also know where it goes.
+ *
+ * The anchor is what makes a story a picture book rather than a story with an
+ * illustration at the end. Absent on the end-of-story picture, and on every
+ * picture drawn before this existed.
+ *
+ * A character's portraits keep the bare shape: an avatar has no story to sit
+ * in, and a field that means nothing to half its users is how one schema
+ * becomes two.
+ */
+export const storyPictureSchema = generatedPictureSchema.extend({
+  anchor: pictureAnchorSchema.optional(),
+});
+
+export type StoryPicture = z.infer<typeof storyPictureSchema>;
+
+/**
+ * A passage a reader highlighted and wants a picture of.
+ *
+ * Validated as a REQUEST body, unlike everything else about a picture, which
+ * is server-owned: this is the one thing about an illustration a person
+ * actually chooses. Both fields are only ever used to find the passage again
+ * -- the text is sent to a model and stored as the anchor's quote, and the
+ * index is the fallback -- so neither can do anything but point somewhere.
+ *
+ * Capped at MAX_PASSAGE_CHARS, which is the most passage worth spending
+ * prompt on: a page, not a chapter. Over it the request is refused rather
+ * than truncated, so nobody gets a picture of half of what they chose.
+ */
+export const MAX_PASSAGE_CHARS = 2000;
+
+export const storyPassageSchema = z.object({
+  text: z.string().trim().min(1).max(MAX_PASSAGE_CHARS),
+  blockIndex: z.number().int().min(0),
+});
+
+export type StoryPassage = z.infer<typeof storyPassageSchema>;
 
 /**
  * Named skills one character may keep.
@@ -1241,7 +1311,7 @@ export function storyImagesOf(
   story?: Partial<Pick<SavedStory, "images" | "createdAt">> & {
     story?: { imageUrl?: string; imagePrompt?: string } | null;
   } | null,
-): GeneratedPicture[] {
+): StoryPicture[] {
   if (story?.images?.length) return story.images;
   if (!story?.story?.imageUrl) return [];
   return [
@@ -1838,7 +1908,7 @@ export const savedStorySchema = z.object({
    * field would have needed a backfill to keep them showing a picture.
    * storyImagesOf() folds those rows in instead.
    */
-  images: z.array(generatedPictureSchema).max(MAX_STORY_IMAGES).optional(),
+  images: z.array(storyPictureSchema).max(MAX_STORY_IMAGES).optional(),
 
   // Search and relationship metadata
   heroId: z.string().optional(), // ID of the Hero of Faith if story is related to one

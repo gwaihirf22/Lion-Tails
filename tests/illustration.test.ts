@@ -283,8 +283,11 @@ describe("a story's pictures", () => {
     expect(storyImagesOf(null)).toEqual([]);
   });
 
-  it("keeps as many as a character keeps portraits", () => {
-    // Two caps that answer the same question should not disagree by accident.
-    expect(MAX_STORY_IMAGES).toBe(MAX_AVATARS);
+  it("keeps more than a character does, because they are not the same job", () => {
+    // They were equal when every story picture was THE picture. Now one of
+    // them is the picture at the end and the rest are the pictures IN the
+    // story, so a story needs a picture-book's worth and a character still
+    // has one face. Asserted as a relationship rather than left to drift.
+    expect(MAX_STORY_IMAGES).toBeGreaterThan(MAX_AVATARS);
   });
 });

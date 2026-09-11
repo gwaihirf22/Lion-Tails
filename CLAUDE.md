@@ -486,6 +486,46 @@ different child, and the only sign was one line in the log.
 - **Only `DELETE /api/stories/:id/image/:imageId` removes a picture**, and the
   reader asks first. Deleting the chosen one promotes the newest of what is
   left, and the file goes only AFTER the row no longer points at it.
+- **A picture can be IN the story, not only at the end.** Highlight a
+  passage in the reader, and `POST /api/stories/:id/illustrate` takes a
+  `passage` alongside everything it already does — one route, one gate, one
+  cap, one gallery.
+  - **The scene is written by the same call the end-of-story picture uses.**
+    `server/lib/passageScene.ts` (built like `diggingDeeper`: a second call
+    in its own module) sends the passage plus `renderBrief(brief, "image")`,
+    with the brief **rebuilt** through `resolveHeroOfFaith` +
+    `buildStoryBrief` rather than restated. Blake: "it is just a bit in the
+    AI face HEY, WE WANT A PICTURE OF THIS SPECIFIC MOMENT. with all the same
+    parameters as before." **The brief says WHO, the passage says WHERE** —
+    the image projection is "<the lead> — a scene from <the account>", so the
+    setting rides along with the cast, and the first real generation put a
+    moment set in Barnabas's shop "in the world of William Tyndale". The
+    prompt now says so out loud.
+  - **The anchor is a quote first and an index second**
+    (`pictureAnchorSchema`). The reader's blocks have no identity —
+    `StoryContent` keys them by array index and the array is rebuilt whenever
+    the text changes — and a parent edit rewrites the whole body through a
+    textarea with **no concurrency control anywhere on that path**. So
+    `anchorBlock()` finds the block that still contains the quote (nearest
+    the remembered index, because a story for children repeats itself), falls
+    back to the index, and otherwise returns -1. A lost anchor is never a
+    lost picture: it stays in the gallery and simply is not in the text.
+  - **Nothing anchors into the appendices.** `bodyBlocks` is a second parse
+    of `splitAppendices(content).body`, which is cheaper and more honest
+    than teaching the parser about them.
+  - **The figure floats and the text wraps it**, alternating sides down the
+    page, full width below 32rem — "except small phone". `data-block` goes
+    ON the block element, never a wrapper: every rule in `reader.css` is a
+    direct-child or adjacent-sibling selector, and a div between the body and
+    its paragraphs takes the spacing, the indents and the drop cap with it.
+    `figure + p` restores the indent that `p + p` no longer matches.
+  - **No new `Block` kind**: the figures render from a `pictures` prop
+    beside the blocks, so `storyToPrintHtml` and `ContinuationContext` are
+    untouched and the parser stays a pure function of the text.
+  - The lightbox carries **no `.reader-chrome`** — focus mode fades that to
+    `opacity: 0; pointer-events: none`, taking the close button with it.
+  - **Twelve pictures a story**, not the five a character keeps: one is the
+    picture at the end and the rest are the pictures in the story.
 - **Redraw is `{ redraw: true }` on `POST /api/stories/:id/illustrate`**, and
   the entitlement is checked BEFORE any work — admin or own key, derived from
   `isModelAllowedFor` like `canIllustrate`, answering 403 rather than the

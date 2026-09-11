@@ -20,7 +20,7 @@ import { ImagePlus, Loader2, RefreshCw } from "lucide-react";
 import { DebugPanel } from "@/components/DebugPanel";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { StoryResponse, HeroOfFaith, SavedStory, GeneratedPicture } from "@shared/schema";
+import type { StoryResponse, HeroOfFaith, SavedStory, StoryPicture } from "@shared/schema";
 import { MAX_STORY_IMAGES } from "@shared/schema";
 import { Trash2 } from "lucide-react";
 import type { StoryDoc } from "@/lib/storyContent";
@@ -42,6 +42,7 @@ export function StoryExtras({
   focusHidden,
   builtIn,
   images,
+  onPictures,
 }: {
   story: StoryResponse;
   storyId?: string;
@@ -51,7 +52,13 @@ export function StoryExtras({
   /** Ships with the app: the server refuses to illustrate or link it. */
   builtIn?: boolean;
   /** Every picture this story has had. The chosen one is story.imageUrl. */
-  images?: GeneratedPicture[];
+  images?: StoryPicture[];
+  /**
+   * The list changed here. It has to leave this component, because the same
+   * pictures are drawn INSIDE the story: deleting an anchored one from this
+   * strip must take it out of the text as well, and a local copy cannot.
+   */
+  onPictures?: (images: StoryPicture[]) => void;
 }) {
   const { toast } = useToast();
   const ref = useRef<HTMLDivElement>(null);
@@ -109,7 +116,7 @@ export function StoryExtras({
   // And every picture it has had. A redraw APPENDS -- nothing here throws a
   // picture away except the delete below, which asks first. Blake: "the
   // chances are that the old one may be better than the last with AI."
-  const [gallery, setGallery] = useState<GeneratedPicture[]>(images ?? []);
+  const [gallery, setGallery] = useState<StoryPicture[]>(images ?? []);
   useEffect(() => setGallery(images ?? []), [images]);
 
   /**
@@ -122,11 +129,14 @@ export function StoryExtras({
   const illustrate = useMutation({
     mutationFn: async (redraw: boolean = false) => {
       const response = await apiRequest("POST", `/api/stories/${storyId}/illustrate`, { redraw });
-      return (await response.json()) as { imageUrl: string; images?: GeneratedPicture[] };
+      return (await response.json()) as { imageUrl: string; images?: StoryPicture[] };
     },
     onSuccess: (data) => {
       setImageUrl(data.imageUrl);
-      if (data.images) setGallery(data.images);
+      if (data.images) {
+        setGallery(data.images);
+        onPictures?.(data.images);
+      }
       queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
       toast({ title: "Picture added", description: "It is saved with the story." });
@@ -144,11 +154,12 @@ export function StoryExtras({
   const choosePicture = useMutation({
     mutationFn: async (imageId: string) => {
       const response = await apiRequest("PUT", `/api/stories/${storyId}/image/${imageId}`, {});
-      return (await response.json()) as { imageUrl: string; images: GeneratedPicture[] };
+      return (await response.json()) as { imageUrl: string; images: StoryPicture[] };
     },
     onSuccess: (data) => {
       setImageUrl(data.imageUrl);
       setGallery(data.images);
+      onPictures?.(data.images);
       queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
     },
@@ -165,11 +176,12 @@ export function StoryExtras({
   const deletePicture = useMutation({
     mutationFn: async (imageId: string) => {
       const response = await apiRequest("DELETE", `/api/stories/${storyId}/image/${imageId}`, {});
-      return (await response.json()) as { imageUrl: string | null; images: GeneratedPicture[] };
+      return (await response.json()) as { imageUrl: string | null; images: StoryPicture[] };
     },
     onSuccess: (data) => {
       setImageUrl(data.imageUrl ?? undefined);
       setGallery(data.images);
+      onPictures?.(data.images);
       queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
       toast({ title: "Picture deleted" });

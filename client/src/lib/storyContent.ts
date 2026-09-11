@@ -283,3 +283,76 @@ export function storyToPrintHtml(
   }
   return parts.join("\n");
 }
+
+/**
+ * A block as plain text, with none of its emphasis.
+ *
+ * The reader renders a paragraph's lines joined with a space (a newline inside
+ * a prose block is the model soft-wrapping, not a line anybody meant), so this
+ * joins them the same way -- otherwise a quote taken off the screen would not
+ * match the block it came from.
+ *
+ * Pure, and the thing anchoring is built on: `quote` in a picture's anchor is
+ * matched against this.
+ */
+export function blockText(block: Block): string {
+  switch (block.kind) {
+    case "paragraph":
+    case "verse":
+      return block.lines.map((line) => line.map((p) => p.v).join("")).join(" ");
+    case "heading":
+      return block.content.map((p) => p.v).join("");
+    case "list":
+      return block.items.map((item) => item.map((p) => p.v).join("")).join(" ");
+    case "sceneBreak":
+      return "";
+  }
+}
+
+/**
+ * Whitespace flattened, for comparing a quote to a block.
+ *
+ * Case is KEPT. A quote is a span of this story's own text, so a
+ * case-insensitive match buys nothing and would make two different sentences
+ * collide more often, not less.
+ */
+export const normaliseQuote = (s: string): string => s.replace(/\s+/g, " ").trim();
+
+/**
+ * Which block a picture belongs above, or -1 if it no longer belongs anywhere.
+ *
+ * THE QUOTE WINS. A parent editing a story rewrites the whole body in a
+ * textarea -- every block index can move, and nothing on the path detects it --
+ * so the text is the durable half of the anchor and the index is only what
+ * settles a tie or rescues a passage that was itself edited.
+ *
+ * Ties go to the block NEAREST the remembered index: a repeated sentence
+ * ("He waited.") is common in a story for children, and the copy the picture
+ * was drawn for is the one it was next to.
+ *
+ * Returns -1 rather than guessing when the quote is gone and the index is out
+ * of range. The picture is still in the story's gallery; it simply is not in
+ * the text. A lost anchor must never be a lost picture.
+ */
+export function anchorBlock(
+  blocks: Block[],
+  anchor: { quote: string; blockIndex: number },
+  /** Anything at or past this is an appendix, and nothing may anchor there. */
+  limit = blocks.length,
+): number {
+  const end = Math.min(limit, blocks.length);
+  const quote = normaliseQuote(anchor.quote);
+
+  if (quote) {
+    let best = -1;
+    for (let i = 0; i < end; i++) {
+      if (!normaliseQuote(blockText(blocks[i])).includes(quote)) continue;
+      if (best === -1 || Math.abs(i - anchor.blockIndex) < Math.abs(best - anchor.blockIndex)) {
+        best = i;
+      }
+    }
+    if (best !== -1) return best;
+  }
+
+  return anchor.blockIndex >= 0 && anchor.blockIndex < end ? anchor.blockIndex : -1;
+}

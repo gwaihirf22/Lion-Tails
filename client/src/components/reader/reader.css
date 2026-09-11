@@ -191,6 +191,74 @@
   height: 1.5em;
 }
 
+/* ---------------------------------------------------------------- figure --
+   A picture INSIDE the story, with the text running around it.
+
+   A FLOAT, which is why StoryContent renders the figure immediately BEFORE
+   the block it is anchored to: a float is out of flow, and what wraps it is
+   whatever follows it in the source. So the anchored paragraph and the ones
+   after it are the text beside the picture.
+
+   Sized in em, not px or vw, so it tracks the reader's own size control for
+   free -- the same reason .reader-surface sets its measure in ch. 45% of a
+   66ch measure is about 30 characters of text left beside it, which is a
+   readable column in a serif at this size.
+
+   BELOW 32rem THE FLOAT IS OFF and the picture is full width. Blake: wrapped
+   "even on small screens (except small phone probably)". A 45% float on a
+   390px phone leaves roughly 20 characters a line, which is not reading, it
+   is a word ladder. One number, one place. The drop cap sets the precedent
+   for a rendering constraint living here rather than in the preference
+   model. */
+.reader-surface .reader-figure {
+  margin: 0.35em 0 1em;
+  width: 100%;
+}
+.reader-surface .reader-figure-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--reader-border);
+  border-radius: 0.4em;
+  overflow: hidden;
+  background: none;
+  cursor: zoom-in;
+}
+.reader-surface .reader-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@media (min-width: 32rem) {
+  .reader-surface .reader-figure {
+    width: 45%;
+    max-width: 22em;
+  }
+  .reader-surface .reader-figure[data-side="right"] {
+    float: right;
+    margin-left: 1.25em;
+  }
+  .reader-surface .reader-figure[data-side="left"] {
+    float: left;
+    margin-right: 1.25em;
+  }
+}
+
+/* A picture belongs to its passage, not to the rest of the story: a heading or
+   a scene break ends the section, so nothing may hang past one. */
+.reader-surface .reader-heading,
+.reader-surface .reader-scene-break {
+  clear: both;
+}
+
+/* A figure is out of flow, but it is still a DOM sibling -- so it breaks the
+   p + p adjacency that indents continuing paragraphs, and without this the
+   paragraph beside every picture silently loses its indent. */
+[data-typeset="classic"] .reader-body > figure + p {
+  text-indent: var(--reader-para-indent);
+}
+
 /* Verse. One span per line, with a hanging indent, so a long line that WRAPS
    hangs visibly rather than masquerading as a new line of the poem. */
 .reader-surface .reader-verse {

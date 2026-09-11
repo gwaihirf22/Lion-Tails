@@ -27,11 +27,13 @@ import {
   resolveTravelFrame,
   resolveStorySource,
   resolveHeroOfFaith,
+  renderBrief,
   serialiseBrief,
 } from "./lib/storyBrief";
 import { listBiblicalEvents } from "./data/biblicalEvents";
 import { getWordCountFromLength } from "./lib/openai-implementation";
 import { generateStoryImage, illustrationCast, deleteStoryImage } from "./lib/illustration";
+import { sceneFromPassage } from "./lib/passageScene";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
 import {
@@ -52,7 +54,7 @@ import {
   summarySystemPrompt,
   SUMMARY_TARGET_WORDS,
 } from "./lib/universeSummary";
-import { resolveModel } from "./lib/modelPolicy";
+import { resolveModel, createClient } from "./lib/modelPolicy";
 import { MODEL_CONTEXT_LIMIT } from "./lib/openai-implementation";
 import {
   getModelStats,
@@ -69,7 +71,8 @@ import {
   storyAllowance,
   statsOf,
   virtueLevels,
-  avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
+  avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, characterIdsOf,
+  type SavedStory, type Character, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
@@ -1242,6 +1245,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // API endpoint to associate a story with a hero of faith
   /**
+   * A description of one moment, written against this story's own brief.
+   *
+   * THE BRIEF IS REBUILT, NOT RESTATED. resolveHeroOfFaith + buildStoryBrief
+   * are what the enqueue path uses, so what reaches the model here is the
+   * same "image" projection the end-of-story picture was written from --
+   * the lead's identity and the account it is a scene from. A second,
+   * hand-rolled version of that sentence is how this codebase grew six model
+   * lists. The frozen brief on story_jobs would be closer still, but a job is
+   * documented as prunable operational state and a permanent feature must not
+   * read from a table that invites deletion.
+   *
+   * Returns undefined on anything at all: no entitlement, no model, a bad
+   * reply. The caller then draws the passage itself.
+   */
+  async function describePassage(
+    saved: SavedStory,
+    text: string,
+    userId: number,
+  ): Promise<string | undefined> {
+    try {
+      const resolved = await resolveModel(userId, "chat");
+      if (!resolved) return undefined;
+
+      let brief: string | undefined;
+      try {
+        const ids = characterIdsOf(saved.request);
+        const characters = (
+          await Promise.all(ids.map((id) => storage.getCharacterById(id, userId)))
+        ).filter((c): c is Character => Boolean(c));
+        const hero = await resolveHeroOfFaith(saved.request);
+        brief = renderBrief(buildStoryBrief(saved.request, characters, undefined, hero), "image");
+      } catch (error) {
+        // A picture with no cast line is worse than one with it, and far
+        // better than no picture. The faces are reference images either way.
+        console.error("[illustrate] could not rebuild the brief for a passage:", error);
+      }
+
+      return await sceneFromPassage(createClient(resolved), resolved.model, {
+        title: saved.story.title,
+        passage: text,
+        brief,
+      });
+    } catch (error) {
+      console.error("[illustrate] could not describe a passage:", error);
+      return undefined;
+    }
+  }
+
+  /**
    * Add an illustration to a story that was saved without one -- or, with
    * `redraw`, replace the one it has.
    *
@@ -1263,7 +1315,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       if (refuseBuiltIn(req, res)) return;
       const userId = (req.user as any).id;
-      const redraw = req.body?.redraw === true;
+      const passage = storyPassageSchema.safeParse(req.body?.passage);
+      if (req.body?.passage !== undefined && !passage.success) {
+        return res.status(400).json({ message: fromZodError(passage.error).message });
+      }
+      // A picture FOR A PASSAGE is always a new picture: the story may already
+      // have one at the end, and this one goes somewhere else entirely.
+      const redraw = req.body?.redraw === true || passage.success;
       if (redraw) {
         const ownKey = await storage.getUserOpenAIKey(userId);
         const allowed = isModelAllowedFor(DEFAULTS.image, "image", {
@@ -1299,12 +1357,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // The prompt the model wrote for this story when it was generated. Older
-      // rows may not have one, so fall back to something derived from the
-      // story itself rather than refusing.
-      const prompt =
+      /**
+       * What to draw.
+       *
+       * Without a passage: the prompt the model wrote for this story when it
+       * was generated. Older rows may not have one, so fall back to something
+       * derived from the story itself rather than refusing.
+       *
+       * With one: a fresh description of THAT MOMENT, written by the same
+       * call the end-of-story picture uses, against the same brief. The brief
+       * is REBUILT rather than restated -- resolveHeroOfFaith then
+       * buildStoryBrief, the actual prompter -- because "with all the same
+       * parameters as before" means the same parameters, not a second set
+       * that looks like them.
+       */
+      let prompt =
         saved.story.imagePrompt ||
         `An illustration for a story titled "${saved.story.title}"`;
+
+      if (passage.success && passage.data) {
+        const scene = await describePassage(saved, passage.data.text, userId);
+        // A failed sentence is not worth failing the picture over: the passage
+        // itself draws a worse picture, and draws one.
+        prompt = scene ?? passage.data.text;
+      }
 
       // What the people in it look like, read live off their sheets -- the
       // point of the whole feature, and the reason a story illustrated today
@@ -1331,7 +1407,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         imageUrl,
         images: [
           ...gallery,
-          { id: uuidv4(), url: imageUrl, prompt, createdAt: new Date().toISOString() },
+          {
+            id: uuidv4(),
+            url: imageUrl,
+            prompt,
+            createdAt: new Date().toISOString(),
+            // Where it goes, when it goes anywhere. The quote is the durable
+            // half: see pictureAnchorSchema.
+            ...(passage.success && passage.data
+              ? {
+                  anchor: {
+                    quote: passage.data.text.slice(0, 300),
+                    blockIndex: passage.data.blockIndex,
+                  },
+                }
+              : {}),
+          },
         ],
       });
       if (!updated) {

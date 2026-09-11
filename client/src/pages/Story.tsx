@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import StoryDisplay from "@/components/StoryDisplay";
 import { StoryResponse, StoryRequest } from "@shared/schema";
 import type { EditLogEntry } from "@shared/editLog";
-import { storyImagesOf, type GeneratedPicture } from "@shared/schema";
+import { storyImagesOf, type StoryPicture } from "@shared/schema";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 
 export default function Story() {
@@ -23,7 +23,7 @@ export default function Story() {
   const [editLog, setEditLog] = useState<EditLogEntry[]>([]);
   // Every picture this story has had. Through storyImagesOf, so a story
   // illustrated before galleries existed still shows the one it has.
-  const [images, setImages] = useState<GeneratedPicture[]>([]);
+  const [images, setImages] = useState<StoryPicture[]>([]);
 
   useEffect(() => {
     // Scroll to the top of the page when component mounts
@@ -128,6 +128,10 @@ export default function Story() {
         builtIn={builtIn}
         editLog={editLog}
         images={images}
+        // The page owns the list, because two places change it: the picker in
+        // the reading surface and the gallery strip in the extras. One piece
+        // of state, or the strip and the text disagree about what exists.
+        onPictures={setImages}
         onEdited={(next) => {
           setStoryData({ ...storyData, title: next.title, content: next.content });
           setEditLog(next.editLog);
