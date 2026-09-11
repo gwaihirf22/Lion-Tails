@@ -28,7 +28,7 @@ import { v4 as uuidv4 } from "uuid";
 import { coveringNoun } from "@shared/characterVocab";
 import { characterKind, type Character } from "@shared/schema";
 import { toFile } from "openai";
-import { resolveModel, createClient } from "./modelPolicy";
+import { resolveModel, createClient, inputFidelityFor } from "./modelPolicy";
 
 /** Where portraits live. See the note above about why it is under `stories`. */
 export const AVATAR_DIR = path.join(process.cwd(), "public", "images", "stories", "avatars");
@@ -42,8 +42,11 @@ const AVATAR_URL_PREFIX = "/public/images/stories/avatars";
  * database, so the basename is taken and the directory is not: joining a stored
  * string onto a path is how "../../etc" gets read. Anything that is not a plain
  * file in AVATAR_DIR returns undefined and the caller generates fresh.
+ *
+ * Exported for the story illustration, which loads the same files for the same
+ * reason. There is one traversal guard in this app and this is it.
  */
-async function readAvatarFile(url: string): Promise<Buffer | undefined> {
+export async function readAvatarFile(url: string): Promise<Buffer | undefined> {
   try {
     const name = path.basename(url);
     if (!/^avatar_[0-9a-f-]+\.png$/i.test(name)) return undefined;
@@ -76,6 +79,34 @@ const isSet = (v: unknown): v is string =>
  * book because their hobby is reading.
  */
 export function buildAvatarPrompt(character: Character): string {
+  return [
+    `A friendly head-and-shoulders portrait of ${describeCharacter(character)}`,
+    "Warm, gentle storybook illustration. Soft colours, plain background,",
+    "facing the viewer, kind expression. No text, no words, no letters in the image.",
+  ]
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Who they are and what they look like, in one or two sentences.
+ *
+ * Lifted out of buildAvatarPrompt because a story illustration needs exactly
+ * this and nothing else of the portrait: the head-and-shoulders framing, the
+ * plain background and the kind expression are a PORTRAIT's instructions, and
+ * pasting them into a scene asks for a mugshot in the middle of the Red Sea.
+ * One definition of how a character looks, two prompts that use it.
+ *
+ * `canonicalLook` leads when it exists. It is the field a person wrote
+ * specifically to say how this character looks, it is capped at 300 characters,
+ * and it reaches NO story prompt -- which is exactly what lets it be as
+ * detailed as someone likes. Everything else here is a fallback assembled from
+ * the sheet, for a character nobody has described.
+ *
+ * Ends with a full stop and no trailing space, so a caller can concatenate.
+ */
+export function describeCharacter(character: Character): string {
   const kind = characterKind(character) ?? "child";
   const covering = coveringNoun(character.category, kind);
 
@@ -97,16 +128,7 @@ export function buildAvatarPrompt(character: Character): string {
       ? `They have ${looks.join(" and ")}.`
       : "";
 
-  return [
-    `A friendly head-and-shoulders portrait of ${character.name}, a ${who.join(" ")}.`,
-    described,
-    "Warm, gentle storybook illustration. Soft colours, plain background,",
-    "facing the viewer, kind expression. No text, no words, no letters in the image.",
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return `${character.name}, a ${who.join(" ")}.${described ? ` ${described}` : ""}`;
 }
 
 export type AvatarResult = { url: string; prompt: string };
@@ -180,6 +202,11 @@ export async function generateAvatar(
           model: resolved.model,
           image: await toFile(reference, "reference.png", { type: "image/png" }),
           prompt: `${prompt} Keep the same character: the same face, colouring and markings as the picture provided.`,
+          // Asks the model to match FACES rather than style and mood, on the
+          // models that take it. Through the catalogue, never literally:
+          // gpt-image-2 refuses the parameter with a 400, and there is no
+          // fallback on this path -- the portrait would simply fail.
+          ...inputFidelityFor(resolved.model),
           n: 1,
           size: "1024x1024",
         })

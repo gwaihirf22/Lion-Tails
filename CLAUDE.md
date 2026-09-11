@@ -393,6 +393,172 @@ directory and is the right path: the parent is the mount point of the
 `story_images` volume, so anything written there survives a redeploy and
 anything written beside it does not.
 
+## The picture at the end of a story
+
+`server/lib/illustration.ts` is the only place a story is drawn.
+`generateStoryImage` moved here out of `openai-implementation.ts`, with
+`downloadImage`, and it now takes a CAST.
+
+**A description will not reproduce a person.** Ask an image model twice for
+"an 8-year-old girl with brown hair" and you get two different girls — which
+is why the story's picture never matched the character sheet, silently, with
+nothing to see in a log. So the picture is drawn FROM the portrait:
+`images.edit` with the avatars as reference images. `avatar.ts` has drawn
+second portraits this way all along; the same mechanism now points at the
+story.
+
+**`input_fidelity` goes through the catalogue, never literally.**
+`gpt-image-2` answers **400** to it, whatever the SDK's doc comment says, so
+`inputFidelityFor(model)` is spread in — `temperatureFor`'s shape, and the
+same rule: request shape is a property of the model. Sending it literally
+cost this feature its first real test. The 400 fell through to a plain
+`images.generate`, which threw away every reference image and drew a
+different child, and the only sign was one line in the log.
+
+- **`describeCharacter()` is the one definition of how somebody looks**, in
+  `avatar.ts`. `buildAvatarPrompt` is that sentence plus the portrait's own
+  framing. A character with no portrait is described with it; a character
+  with one is described with it AND matched against the file. If those two
+  ever disagree, the picture stops matching the portrait, which is the whole
+  bug.
+- **Text is the fallback, not the mechanism.** Every cast member carries
+  `look` whether or not they have a `reference`, so a failed `images.edit`
+  falls back to `images.generate` with everyone still described rather than
+  losing the picture.
+- **An empty cast renders byte-for-byte what it always did.** A retelling
+  with nobody in it, a cast with no portraits, an older row — those pictures
+  must not change because this shipped, and a test holds the string.
+- **Nobody is drawn into a story they are not in.**
+  `charactersAreInTheStory()` is deliberately NOT `storyBrief`'s
+  `anonymous`: that keys on a source that RESOLVES, this keys on a source
+  field being filled at all, because the two mistakes do not cost the same.
+  A missing face is a generic picture; a wrong face in a biblical scene is
+  the Esther bug with a camera.
+- **At most three faces**, which is the rule the brief's `"image"`
+  projection already states in words.
+- **The Timekeeper has one face and it is a file.**
+  `public/images/barnabas-timekeeper.png`, named by `KEEPER_FACE_FILE` in
+  `lionTails.ts` — a separate export, never a `KEEPER` field, because
+  `worldCanon()` renders `KEEPER` into the brief and a filename has no
+  business in a story prompt. **Where it lives is load-bearing**: `public/`
+  ships, but the `story_images` volume mounts over `public/images/stories`
+  only, so a file beside that directory survives a redeploy and a file inside
+  it is shadowed at runtime. `attached_assets/` is not in the runtime image
+  at all. `KEEPER.look` is the sentence that stands in if the file cannot be
+  read; `worldCanon()` does not render it.
+- **Shipped artwork is webp, and the source PNG stays in `attached_assets`.**
+  These renders are photographic, which PNG is the wrong container for: 2.2MB
+  against 167KB for the same picture at 1024px. The images API takes png,
+  webp and jpg, and `mimeFor()` follows the extension — a reference sent
+  under the wrong type is a 400 that costs the whole picture. There is no
+  image tooling in this container and none in the repo; convert with a
+  throwaway install rather than adding a native dependency to `package.json`
+  for an occasional job:
+
+  ```bash
+  npm i --prefix /tmp/imgtools sharp
+  node -e "require('/tmp/imgtools/node_modules/sharp')('attached_assets/X.png')
+    .resize(1024,1024).webp({quality:88}).toFile('public/images/x.webp')"
+  ```
+
+- **He is attached ONLY when the scene names him**, and that is the second
+  answer. The first attached him to every quest and marked him optional
+  ("need not appear"), so a scene calling him "the old shopkeeper" could not
+  slip past. What came back was **William Tyndale wearing Barnabas's face and
+  coat**: the scene wanted an older man at a desk, an older man's face was in
+  the request, and the model used it — twice, including after the prompt was
+  told everyone else is a different person. The failures are not equal. Not
+  attaching him to a scene he is quietly in costs one generic old man;
+  attaching him to a scene he is not in draws a real historical figure as a
+  fictional character, in an app whose point is that the history is true.
+- **A story keeps its pictures.** A redraw APPENDS — Blake: "the chances are
+  that the old one may be better than the last with AI" — up to
+  `MAX_STORY_IMAGES` (5, the same as `MAX_AVATARS`), past which it is
+  **refused** with a 409 rather than dropping the oldest, because a silent
+  drop is the automatic discard the gallery exists to stop.
+  `savedStory.images` is the list, `story.imageUrl` stays the CHOSEN one and
+  the field everything else reads, and `storyImagesOf()` folds a pre-gallery
+  row into a list of one exactly as `avatarsOf()` does. Both use one
+  `generatedPictureSchema`. `setStoryImages()` writes the pair in ONE leaf
+  merge (`editStory`'s rule: never `jsonb_set`, which returns NULL into a
+  missing key and erases the row); its null branch `#-` removes `imageUrl`
+  rather than writing JSON null, which the schema would refuse to parse.
+- **Only `DELETE /api/stories/:id/image/:imageId` removes a picture**, and the
+  reader asks first. Deleting the chosen one promotes the newest of what is
+  left, and the file goes only AFTER the row no longer points at it.
+- **A picture can be IN the story, not only at the end.** Highlight a
+  passage in the reader, and `POST /api/stories/:id/illustrate` takes a
+  `passage` alongside everything it already does — one route, one gate, one
+  cap, one gallery.
+  - **The scene is written by the same call the end-of-story picture uses.**
+    `server/lib/passageScene.ts` (built like `diggingDeeper`: a second call
+    in its own module) sends the passage plus `renderBrief(brief, "image")`,
+    with the brief **rebuilt** through `resolveHeroOfFaith` +
+    `buildStoryBrief` rather than restated. Blake: "it is just a bit in the
+    AI face HEY, WE WANT A PICTURE OF THIS SPECIFIC MOMENT. with all the same
+    parameters as before." **The brief says WHO, the passage says WHERE** —
+    the image projection is "<the lead> — a scene from <the account>", so the
+    setting rides along with the cast, and the first real generation put a
+    moment set in Barnabas's shop "in the world of William Tyndale". The
+    prompt now says so out loud.
+  - **The anchor is a quote first and an index second**
+    (`pictureAnchorSchema`). The reader's blocks have no identity —
+    `StoryContent` keys them by array index and the array is rebuilt whenever
+    the text changes — and a parent edit rewrites the whole body through a
+    textarea with **no concurrency control anywhere on that path**. So
+    `anchorBlock()` finds the block that still contains the quote (nearest
+    the remembered index, because a story for children repeats itself), falls
+    back to the index, and otherwise returns -1. A lost anchor is never a
+    lost picture: it stays in the gallery and simply is not in the text.
+  - **Nothing anchors into the appendices.** `bodyBlocks` is a second parse
+    of `splitAppendices(content).body`, which is cheaper and more honest
+    than teaching the parser about them.
+  - **The figure floats and the text wraps it**, alternating sides down the
+    page, full width below 32rem — "except small phone". `data-block` goes
+    ON the block element, never a wrapper: every rule in `reader.css` is a
+    direct-child or adjacent-sibling selector, and a div between the body and
+    its paragraphs takes the spacing, the indents and the drop cap with it.
+    `figure + p` restores the indent that `p + p` no longer matches.
+  - **No new `Block` kind**: the figures render from a `pictures` prop
+    beside the blocks, so `storyToPrintHtml` and `ContinuationContext` are
+    untouched and the parser stays a pure function of the text.
+  - The lightbox carries **no `.reader-chrome`** — focus mode fades that to
+    `opacity: 0; pointer-events: none`, taking the close button with it.
+  - **Twelve pictures a story**, not the five a character keeps: one is the
+    picture at the end and the rest are the pictures in the story.
+  - **A passage picture is a page, not a cover.** It never changes
+    `story.imageUrl`; only a redraw or choosing from the strip does. It used
+    to write it unconditionally, so a picture drawn for paragraph 32 also
+    became the story's picture and then rendered twice.
+  - **The gallery strip is not part of the figure.** It was a figcaption of
+    the end-of-story picture, so a story whose pictures are all inside the
+    text -- now the normal state -- had no strip and no way to delete one.
+  - **The control lives in `ReaderBar`**, not the action row: choosing a
+    passage means scrolling to it, and the bar is the one that comes with you.
+- **The chosen picture is the look of the book.** It is attached as a
+  reference to every picture drawn from a passage, so the people a story
+  invented -- a hero of faith, a shopkeeper, anyone with no character sheet --
+  are the same person on every page. `hero.imageUrl` is on the schema and
+  **empty for all eighty heroes**, so there is nothing else they could be
+  matched against. Verified: Corrie ten Boom came out the same woman across a
+  cover and two independently drawn pages.
+  - Anchored to the CHOSEN picture, never chained to the previous one:
+    picture 9 copying picture 8 copying picture 7 compounds its drift, and
+    the reader already controls which picture is chosen.
+  - Never on a redraw -- that supersedes the chosen picture, and anchoring a
+    redraw to the thing you are redoing is the one case where this is
+    backwards.
+  - `COVER_SHOWS_PEOPLE` asks the auto-generated picture for **recognisable**
+    people, never "facing the viewer" or "portrait": the wording is the whole
+    risk, and those turn a storybook cover into a school photograph. 34 of 34
+    covers in a real library already put a named person in frame, so it is
+    close to a no-op. A test asserts the phrases that must NOT be in it.
+- **Redraw is `{ redraw: true }` on `POST /api/stories/:id/illustrate`**, and
+  the entitlement is checked BEFORE any work — admin or own key, derived from
+  `isModelAllowedFor` like `canIllustrate`, answering 403 rather than the
+  503 that comes out the far end. Blake: "that is a farming method
+  otherwise."
+
 ## Attributes and Skills
 
 The tab is **Attributes/Skills**. The five fixed values are attributes; skills
@@ -615,6 +781,26 @@ that re-describes the man or the lantern; edit the field it belongs to. The
 rendered section is capped by a test (750 words) because the constraint is
 attention, not context — lore that outweighs the account gets written instead
 of it.
+
+**A quest is not named after its furniture.** Every quest long enough to be
+written in chapters was coming back "The Lantern and the ..." -- four in a
+row, across four different framing approaches. The frames were not at fault:
+their openings genuinely differ. The title was asked for with **no guidance at
+all** (`{ "title": "..." }` on the chaptered path) while the lantern was the
+most repeated noun in the story, and the outline handed the model the shape
+ready-made by calling its own first chapter "The Lantern and the Trenches".
+`questTitleRule()` composes the rule from `DEVICE`, `SHOP` and `KEEPER` --
+the three props in every quest, which is the whole test: a title that would
+fit any of these stories is not a title for one of them. Applied at both title
+sites, gated on `brief.world`, which IS the fact "this is a quest" and is
+already on the frozen brief. Ordinary stories get nothing: there is no lantern
+in one.
+
+**The word cap is per FRAME, not per brief.** `worldCanon(frame)` renders five
+different documents and the cap test measured one of them -- it passed while
+`wrong-arrival` rendered at 752 against a ceiling of 750. It now asserts every
+frame, which is the "what would this check have done had the thing been
+broken" rule applied to the check that was already there.
 
 **It reaches every chapter.** `StoryBrief.world` renders as `THE WORLD THIS
 HAPPENS IN` in the full brief and as `world.anchor` in the chapter

@@ -131,7 +131,47 @@ export const KEEPER = {
   never:
     "He never goes with them. He never explains the lantern. He never says " +
     "what someone is about to see, and never, afterwards, what it meant.",
+  /**
+   * FOR PICTURES ONLY, and only when the drawing cannot be read.
+   *
+   * worldCanon() does not render this and must not start: the story is told
+   * what he is LIKE (`who`), which is the fact a story can use, and a list of
+   * garments is prompt weight spent on nothing. The real answer for a picture
+   * is KEEPER_FACE_FILE; this is the sentence that stands in for it if the file
+   * is missing, and it describes the same man.
+   */
+  look:
+    "a man with grey-white hair and a full grey beard, in a heavy dark brown " +
+    "coat over an embroidered waistcoat, carrying a brass lantern.",
 } as const;
+
+/**
+ * HIS FACE, and there is only one.
+ *
+ * A separate export rather than a field on KEEPER, because KEEPER is the text
+ * a model is allowed to read and worldCanon() renders it into the brief -- a
+ * filename has no business anywhere near a story prompt.
+ *
+ * It is a file and not a description on purpose. "Silver in his hair and
+ * clothes from a century nobody could name" is enough for a sentence and
+ * nowhere near enough for a picture: an image model asked twice draws two
+ * different men. The drawing is passed to the image model as a reference so
+ * that every Barnabas who appears is this Barnabas.
+ *
+ * WHERE IT LIVES IS LOAD-BEARING. public/ is copied into the runtime image,
+ * but the story_images volume mounts over public/images/stories -- so a file
+ * beside that directory ships and survives a redeploy, and a file inside it is
+ * shadowed by the volume and simply is not there. attached_assets/ (where the
+ * artwork was committed) is not in the runtime image at all.
+ *
+ * WEBP, NOT THE SOURCE PNG. The artwork is a 1254px photographic render and
+ * PNG is the wrong container for one: 2.2MB, in every clone and every layer of
+ * the image, against 167KB at 1024px in webp -- which the images API takes
+ * alongside png and jpg. The full-size PNG stays in attached_assets as the
+ * master. Replace this file to change his face; nothing reads its bytes but
+ * the image call, and mimeFor() follows the extension.
+ */
+export const KEEPER_FACE_FILE = "barnabas-timekeeper.webp";
 
 /**
  * The device. A lantern, and one place to change it.
@@ -310,9 +350,9 @@ export const FRAMING_APPROACHES: readonly FramingApproach[] = [
     label: "not where they meant to be",
     opening:
       "Open in the present day and make the arrival go wrong -- the wrong day, " +
-      "some distance from where the account happens, or early enough that they " +
-      "have to wait. They walk into the account rather than landing in the " +
-      "middle of it, and what they see on the way there matters.",
+      "some distance from the account, or early enough to wait. They walk INTO " +
+      "the account rather than landing in the middle of it, and what they see " +
+      "on the way matters.",
     closing:
       "At the end they have to get back to where they arrived, and the way " +
       "back is not the way they came.",
@@ -321,6 +361,36 @@ export const FRAMING_APPROACHES: readonly FramingApproach[] = [
 
 /** The approach used when a frozen request names one that no longer exists. */
 const FALLBACK_APPROACH = FRAMING_APPROACHES[0];
+
+/**
+ * What a quest may not be named after.
+ *
+ * Every quest story was coming back called "The Lantern and the ...": four in
+ * a row, across four different framing approaches, on every story long enough
+ * to be written in chapters. The cause is not the frames -- those vary, and
+ * the openings they produce genuinely differ -- it is that the title is asked
+ * for with no guidance at all while the lantern is the most repeated noun in
+ * the story, and the outline hands the model the shape ready-made by calling
+ * its own first chapter "The Lantern and the Trenches".
+ *
+ * So the rule names the three props that are in EVERY quest and rules them
+ * out, which is the whole test: a title that would fit any of these stories
+ * is not a title for one of them. Composed from the canon rather than typed
+ * again, so renaming the shop cannot leave this banning a word nobody uses.
+ *
+ * Not applied to an ordinary story. There is no lantern in one, and a rule
+ * about furniture that is not there is prompt spent on nothing.
+ */
+export function questTitleRule(): string {
+  const device = DEVICE.name.replace(/^the /i, "");
+  return [
+    `Title it from what happens in THIS story -- the account they walk into, what it costs them,`,
+    `what they carry back. NOT after ${DEVICE.name}, ${SHOP.name}, or ${KEEPER.shortName}: those are in`,
+    `every one of these stories, so a title built on them would fit any of them and belongs to none.`,
+    `Do not use the word "${device}" in the title at all.`,
+    `Suggest rather than summarise -- make a reader curious instead of explaining the story before it starts.`,
+  ].join(" ");
+}
 
 /**
  * Choose one, at enqueue.

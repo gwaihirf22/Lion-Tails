@@ -710,6 +710,106 @@ export function storyAllowance(
 export const MAX_AVATARS = 5;
 
 /**
+ * Pictures one story keeps.
+ *
+ * A redraw does not throw the old one away -- "the chances are that the old
+ * one may be better than the last with AI" -- so a story collects pictures the
+ * way a character collects portraits, and the one on the page is the one that
+ * was chosen. Past the cap a new picture is REFUSED and the answer says to
+ * delete one, because silently dropping the oldest is exactly the automatic
+ * discard this exists to stop.
+ *
+ * TWELVE, not the five a character keeps, because these are not all the same
+ * job any more: one is the picture at the end, and the rest are the pictures
+ * IN the story. Twelve is a picture every few paragraphs of a long story --
+ * a picture book rather than an illustration -- and at roughly 1.9MB each it
+ * is about 23MB for a heavily drawn story in the story_images volume. A
+ * character has one face and needs no such range.
+ */
+export const MAX_STORY_IMAGES = 12;
+
+/**
+ * One generated picture: what it is, and what made it.
+ *
+ * Shared by a character's portraits and a story's illustrations, because they
+ * are the same fact in two places and drifted apart would be two shapes for
+ * one thing.
+ */
+export const generatedPictureSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  /** What made it. Reused verbatim, and shown to nobody. */
+  prompt: z.string(),
+  createdAt: z.string(),
+});
+
+export type GeneratedPicture = z.infer<typeof generatedPictureSchema>;
+
+/**
+ * WHERE a picture belongs in the story it was drawn for.
+ *
+ * A QUOTE FIRST AND A POSITION SECOND, which is the web-annotation shape and
+ * the only one that survives what this app does to a story. The reader's
+ * blocks have no identity at all -- `StoryContent` keys them by array index
+ * and `parseStoryContent` rebuilds the array from scratch whenever the text
+ * changes -- and a parent edit rewrites the whole body through a textarea
+ * with no concurrency control anywhere on the path. An index alone would
+ * silently point at the wrong paragraph the first time somebody adds one.
+ *
+ * So: find the block whose text still contains `quote`; failing that, trust
+ * `blockIndex` if it is still in range; failing that, place the picture
+ * NOWHERE. It stays in the gallery either way -- a lost anchor must never be
+ * a lost picture.
+ */
+export const pictureAnchorSchema = z.object({
+  /** Enough of the chosen passage to find it again. */
+  quote: z.string().max(300),
+  /** Where it was when it was drawn. The fallback, never the first answer. */
+  blockIndex: z.number().int().min(0),
+});
+
+export type PictureAnchor = z.infer<typeof pictureAnchorSchema>;
+
+/**
+ * A story's picture: a generated picture that may also know where it goes.
+ *
+ * The anchor is what makes a story a picture book rather than a story with an
+ * illustration at the end. Absent on the end-of-story picture, and on every
+ * picture drawn before this existed.
+ *
+ * A character's portraits keep the bare shape: an avatar has no story to sit
+ * in, and a field that means nothing to half its users is how one schema
+ * becomes two.
+ */
+export const storyPictureSchema = generatedPictureSchema.extend({
+  anchor: pictureAnchorSchema.optional(),
+});
+
+export type StoryPicture = z.infer<typeof storyPictureSchema>;
+
+/**
+ * A passage a reader highlighted and wants a picture of.
+ *
+ * Validated as a REQUEST body, unlike everything else about a picture, which
+ * is server-owned: this is the one thing about an illustration a person
+ * actually chooses. Both fields are only ever used to find the passage again
+ * -- the text is sent to a model and stored as the anchor's quote, and the
+ * index is the fallback -- so neither can do anything but point somewhere.
+ *
+ * Capped at MAX_PASSAGE_CHARS, which is the most passage worth spending
+ * prompt on: a page, not a chapter. Over it the request is refused rather
+ * than truncated, so nobody gets a picture of half of what they chose.
+ */
+export const MAX_PASSAGE_CHARS = 2000;
+
+export const storyPassageSchema = z.object({
+  text: z.string().trim().min(1).max(MAX_PASSAGE_CHARS),
+  blockIndex: z.number().int().min(0),
+});
+
+export type StoryPassage = z.infer<typeof storyPassageSchema>;
+
+/**
  * Named skills one character may keep.
  *
  * Six, because each one costs a point and a sheet with more than a handful of
@@ -929,18 +1029,7 @@ export const characterSchema = z.object({
    * before this has an avatarUrl and no list, and a derived field would have
    * needed a backfill to keep them showing a picture.
    */
-  avatars: z
-    .array(
-      z.object({
-        id: z.string(),
-        url: z.string(),
-        /** What made it. Reused verbatim, and shown to nobody. */
-        prompt: z.string(),
-        createdAt: z.string(),
-      }),
-    )
-    .max(MAX_AVATARS)
-    .optional(),
+  avatars: z.array(generatedPictureSchema).max(MAX_AVATARS).optional(),
 
   avatarUrl: optionalText(500),
 
@@ -1206,6 +1295,31 @@ export function avatarsOf(
       url: character.avatarUrl,
       prompt: character.avatarPrompt ?? "",
       createdAt: character.createdAt ?? new Date().toISOString(),
+    },
+  ];
+}
+
+/**
+ * What pictures a story has, counting the one saved before galleries.
+ *
+ * avatarsOf()'s counterpart, and deliberately the same shape: a row written by
+ * the first version of illustration has story.imageUrl and no list, and
+ * reading the list straight off the row would show that story no pictures
+ * while its picture was on screen.
+ */
+export function storyImagesOf(
+  story?: Partial<Pick<SavedStory, "images" | "createdAt">> & {
+    story?: { imageUrl?: string; imagePrompt?: string } | null;
+  } | null,
+): StoryPicture[] {
+  if (story?.images?.length) return story.images;
+  if (!story?.story?.imageUrl) return [];
+  return [
+    {
+      id: "legacy",
+      url: story.story.imageUrl,
+      prompt: story.story.imagePrompt ?? "",
+      createdAt: story.createdAt ?? new Date().toISOString(),
     },
   ];
 }
@@ -1783,6 +1897,18 @@ export const savedStorySchema = z.object({
    * Optional because every story written before it existed has none.
    */
   editLog: z.array(editLogEntrySchema).optional(),
+
+  /**
+   * Every picture this story has had, oldest first. SERVER-OWNED.
+   *
+   * `story.imageUrl` stays the CHOSEN one and the field everything else reads
+   * -- the card's thumbnail, the reader, the library. Keeping it rather than
+   * deriving it from this list is the same decision `avatarUrl` made: every
+   * story illustrated before this has an imageUrl and no list, and a derived
+   * field would have needed a backfill to keep them showing a picture.
+   * storyImagesOf() folds those rows in instead.
+   */
+  images: z.array(storyPictureSchema).max(MAX_STORY_IMAGES).optional(),
 
   // Search and relationship metadata
   heroId: z.string().optional(), // ID of the Hero of Faith if story is related to one

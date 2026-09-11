@@ -1,4 +1,4 @@
-import { Minus, Plus, Type, Palette, Sparkles, Maximize2 } from "lucide-react";
+import { Minus, Plus, Type, Palette, Sparkles, Maximize2, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useReadingPrefs } from "@/hooks/use-reading-prefs";
@@ -7,18 +7,35 @@ import { PALETTE_META, READER_FONT_META } from "./fonts";
 import FontPicker from "./FontPicker";
 
 /**
- * The reading controls: size, palette, font, classic styling, focus.
+ * The reading controls: size, palette, font, classic styling, pictures, focus.
  *
  * They live here rather than only on the Settings page because reading settings
  * are adjusted WHILE reading -- you find out the text is too small by trying to
  * read it. Settings carries the same controls for completeness.
+ *
+ * "Make a picture" is here rather than in the action row below for the same
+ * class of reason: choosing a passage means SCROLLING to it, and this bar is
+ * the one that comes with you. The row with Favourite and Print does not --
+ * it is at the top of the page, several screens above the paragraph you
+ * wanted drawn.
  */
 export function ReaderBar({
   focusArmed,
   onToggleFocus,
+  picking,
+  onTogglePicture,
 }: {
   focusArmed: boolean;
   onToggleFocus: () => void;
+  /** Mid-choice: the button says Cancel and reads as pressed. */
+  picking?: boolean;
+  /**
+   * Start or stop choosing a passage. ABSENT means no control at all -- a
+   * story that cannot be illustrated, one the app ships with, the
+   * just-generated view with no row to attach a picture to, or a parent
+   * editing, when there is no reading surface to highlight.
+   */
+  onTogglePicture?: () => void;
 }) {
   const { prefs, setPalette, setFont, setTypeset, setFontStep, fontSizePx } = useReadingPrefs();
   const atMin = prefs.fontStep <= 0;
@@ -107,6 +124,22 @@ export function ReaderBar({
         <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
         Classic{prefs.typeset === "classic" ? "" : " off"}
       </Button>
+
+      {/* Between Classic and Focus, which needs no positioning of its own:
+          Focus carries ml-auto, so anything before it joins the left group. */}
+      {onTogglePicture && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 gap-1 px-2 text-xs"
+          aria-pressed={Boolean(picking)}
+          onClick={onTogglePicture}
+          title="Highlight a part of the story and draw a picture of it"
+        >
+          <ImagePlus className="h-3.5 w-3.5" aria-hidden="true" />
+          {picking ? "Cancel" : "Make a picture"}
+        </Button>
+      )}
 
       <Button
         size="sm"

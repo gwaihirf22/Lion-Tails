@@ -63,6 +63,21 @@ type ModelSpec = {
    * parameter rather than send a value that will be refused. Defaults to true.
    */
   fixedTemperature?: boolean;
+  /**
+   * Whether this IMAGE model accepts `input_fidelity`, the parameter that asks
+   * an edit to match the faces in its reference images rather than only their
+   * style. It defaults to "low" where it exists at all.
+   *
+   * The SDK's own doc comment says "gpt-image-1 and gpt-image-1.5 and later
+   * models". That is wrong about the model this app actually runs:
+   *   400 The model 'gpt-image-2' does not support the 'input_fidelity'
+   *       parameter.
+   * Found by sending it -- and caught only because the story illustration
+   * falls back to a plain generate, which silently threw the reference images
+   * away and drew a different child. Defaults to false, so a new image model
+   * has to say it takes this rather than being assumed to.
+   */
+  inputFidelity?: boolean;
 };
 
 export const MODEL_CATALOG: Record<string, ModelSpec> = {
@@ -140,6 +155,9 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
     provider: "openai",
     kinds: ["image"],
     label: "GPT Image 2",
+    // Refuses input_fidelity outright; the reference images still work, and
+    // the prompt is what has to carry "match these faces".
+    inputFidelity: false,
   },
 };
 
@@ -295,6 +313,18 @@ export function tokenLimitFor(model: string, limit: number): Record<string, numb
  */
 export function temperatureFor(model: string, temperature: number): Record<string, number> {
   return MODEL_CATALOG[model]?.fixedTemperature ? {} : { temperature };
+}
+
+/**
+ * The face-matching parameter for an image model, spread into an edit request.
+ *
+ * Returns nothing at all for a model that refuses it, exactly as
+ * temperatureFor does -- sending it to gpt-image-2 is a 400, and a 400 here
+ * means the reference images are dropped and the picture is of somebody else.
+ * Request shape is a property of the model and belongs in the catalogue.
+ */
+export function inputFidelityFor(model: string, level: "high" | "low" = "high"): Record<string, string> {
+  return MODEL_CATALOG[model]?.inputFidelity ? { input_fidelity: level } : {};
 }
 
 /** Models a given user may select, for the settings UI. */

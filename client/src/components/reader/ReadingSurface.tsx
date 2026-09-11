@@ -2,6 +2,7 @@ import { useReadingPrefs } from "@/hooks/use-reading-prefs";
 import { READER_FONT_STEPS } from "@shared/schema";
 import StoryContent from "./StoryContent";
 import type { StoryDoc } from "@/lib/storyContent";
+import type { StoryPicture } from "@shared/schema";
 
 /**
  * The reading surface: the article, and the four axes applied to it.
@@ -16,9 +17,17 @@ export function ReadingSurface({
   title,
   doc,
   note,
+  pictures,
+  bodyBlocks,
+  onOpenPicture,
 }: {
   title: string;
   doc: StoryDoc;
+  /** The story's pictures. Only the anchored ones are drawn in the text. */
+  pictures?: StoryPicture[];
+  /** Anything at or past this block is an appendix; nothing anchors there. */
+  bodyBlocks?: number;
+  onOpenPicture?: (picture: StoryPicture) => void;
   /**
    * A line under the title -- "Edited by a parent · 3 Sep 2026". Inside the
    * article, because the reader's tokens are scoped to it (see above) and a
@@ -52,7 +61,12 @@ export function ReadingSurface({
           {note}
         </p>
       )}
-      <StoryContent doc={doc} />
+      <StoryContent
+        doc={doc}
+        pictures={pictures}
+        bodyBlocks={bodyBlocks}
+        onOpenPicture={onOpenPicture}
+      />
     </article>
   );
 }

@@ -27,10 +27,18 @@ import {
   resolveTravelFrame,
   resolveStorySource,
   resolveHeroOfFaith,
+  renderBrief,
   serialiseBrief,
 } from "./lib/storyBrief";
 import { listBiblicalEvents } from "./data/biblicalEvents";
-import { getWordCountFromLength , generateStoryImage } from "./lib/openai-implementation";
+import { getWordCountFromLength } from "./lib/openai-implementation";
+import {
+  generateStoryImage,
+  illustrationCast,
+  deleteStoryImage,
+  readStoryImageFile,
+} from "./lib/illustration";
+import { sceneFromPassage } from "./lib/passageScene";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
 import {
@@ -51,7 +59,7 @@ import {
   summarySystemPrompt,
   SUMMARY_TARGET_WORDS,
 } from "./lib/universeSummary";
-import { resolveModel } from "./lib/modelPolicy";
+import { resolveModel, createClient } from "./lib/modelPolicy";
 import { MODEL_CONTEXT_LIMIT } from "./lib/openai-implementation";
 import {
   getModelStats,
@@ -68,7 +76,8 @@ import {
   storyAllowance,
   statsOf,
   virtueLevels,
-  avatarsOf, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
+  avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, characterIdsOf,
+  type SavedStory, type Character, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
@@ -1241,35 +1250,169 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // API endpoint to associate a story with a hero of faith
   /**
-   * Add an illustration to a story that was saved without one.
+   * A description of one moment, written against this story's own brief.
+   *
+   * THE BRIEF IS REBUILT, NOT RESTATED. resolveHeroOfFaith + buildStoryBrief
+   * are what the enqueue path uses, so what reaches the model here is the
+   * same "image" projection the end-of-story picture was written from --
+   * the lead's identity and the account it is a scene from. A second,
+   * hand-rolled version of that sentence is how this codebase grew six model
+   * lists. The frozen brief on story_jobs would be closer still, but a job is
+   * documented as prunable operational state and a permanent feature must not
+   * read from a table that invites deletion.
+   *
+   * Returns undefined on anything at all: no entitlement, no model, a bad
+   * reply. The caller then draws the passage itself.
+   */
+  async function describePassage(
+    saved: SavedStory,
+    text: string,
+    userId: number,
+  ): Promise<string | undefined> {
+    try {
+      const resolved = await resolveModel(userId, "chat");
+      if (!resolved) return undefined;
+
+      let brief: string | undefined;
+      try {
+        const ids = characterIdsOf(saved.request);
+        const characters = (
+          await Promise.all(ids.map((id) => storage.getCharacterById(id, userId)))
+        ).filter((c): c is Character => Boolean(c));
+        const hero = await resolveHeroOfFaith(saved.request);
+        brief = renderBrief(buildStoryBrief(saved.request, characters, undefined, hero), "image");
+      } catch (error) {
+        // A picture with no cast line is worse than one with it, and far
+        // better than no picture. The faces are reference images either way.
+        console.error("[illustrate] could not rebuild the brief for a passage:", error);
+      }
+
+      return await sceneFromPassage(createClient(resolved), resolved.model, {
+        title: saved.story.title,
+        passage: text,
+        brief,
+      });
+    } catch (error) {
+      console.error("[illustrate] could not describe a passage:", error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Add an illustration to a story that was saved without one -- or, with
+   * `redraw`, replace the one it has.
    *
    * Stories generated on the free tier never get a picture: illustration is
    * premium and has no cheap or local equivalent, so generation skips it
    * rather than failing the whole story. This lets someone who later adds
    * their own key illustrate a story they already have, instead of having to
    * regenerate it and lose the text they liked.
+   *
+   * REDRAW IS GATED BEFORE ANY WORK, and says so in the answer. Blake:
+   * "it needs either admin or API key privileges. that is a farming method
+   * otherwise." resolveModel would refuse a moment later anyway -- but as a
+   * 503 after the story has been loaded and the old file considered, which
+   * reads like a broken feature rather than a closed door. Derived from the
+   * policy, never restated as "admin or own key", so it cannot drift from
+   * canIllustrate.
    */
   app.post("/api/stories/:id/illustrate", requireAuth, async (req, res) => {
     try {
       if (refuseBuiltIn(req, res)) return;
       const userId = (req.user as any).id;
+      const passage = storyPassageSchema.safeParse(req.body?.passage);
+      if (req.body?.passage !== undefined && !passage.success) {
+        return res.status(400).json({ message: fromZodError(passage.error).message });
+      }
+      // A picture FOR A PASSAGE is always a new picture: the story may already
+      // have one at the end, and this one goes somewhere else entirely.
+      const redraw = req.body?.redraw === true || passage.success;
+      if (redraw) {
+        const ownKey = await storage.getUserOpenAIKey(userId);
+        const allowed = isModelAllowedFor(DEFAULTS.image, "image", {
+          isAdmin: Boolean((req.user as any).isAdmin),
+          hasOwnKey: Boolean(ownKey),
+        });
+        if (!allowed) {
+          return res.status(403).json({
+            message:
+              "Drawing a new picture needs an admin account or your own OpenAI API key, which you can add in Settings.",
+            code: "not_entitled",
+          });
+        }
+      }
       const saved = await storage.getStoryById(req.params.id, userId);
       if (!saved) {
         return res.status(404).json({ message: "Story not found" });
       }
-      // Idempotent: a double-click, or two tabs, must not spend twice.
-      if (saved.story.imageUrl) {
+      // Idempotent: a double-click, or two tabs, must not spend twice. A
+      // redraw is a deliberate second spend and says so.
+      if (saved.story.imageUrl && !redraw) {
         return res.json({ imageUrl: saved.story.imageUrl, alreadyExisted: true });
       }
+      // The gallery is full, and the way past it is a DELIBERATE deletion.
+      // Dropping the oldest to make room is the automatic discard this gallery
+      // exists to stop: "the chances are that the old one may be better than
+      // the last with AI."
+      const gallery = storyImagesOf(saved);
+      if (gallery.length >= MAX_STORY_IMAGES) {
+        return res.status(409).json({
+          message: `This story already has ${MAX_STORY_IMAGES} pictures. Delete one you do not want before drawing another.`,
+          code: "gallery_full",
+        });
+      }
 
-      // The prompt the model wrote for this story when it was generated. Older
-      // rows may not have one, so fall back to something derived from the
-      // story itself rather than refusing.
-      const prompt =
+      /**
+       * What to draw.
+       *
+       * Without a passage: the prompt the model wrote for this story when it
+       * was generated. Older rows may not have one, so fall back to something
+       * derived from the story itself rather than refusing.
+       *
+       * With one: a fresh description of THAT MOMENT, written by the same
+       * call the end-of-story picture uses, against the same brief. The brief
+       * is REBUILT rather than restated -- resolveHeroOfFaith then
+       * buildStoryBrief, the actual prompter -- because "with all the same
+       * parameters as before" means the same parameters, not a second set
+       * that looks like them.
+       */
+      let prompt =
         saved.story.imagePrompt ||
         `An illustration for a story titled "${saved.story.title}"`;
 
-      const imageUrl = await generateStoryImage(prompt, userId);
+      if (passage.success && passage.data) {
+        const scene = await describePassage(saved, passage.data.text, userId);
+        // A failed sentence is not worth failing the picture over: the passage
+        // itself draws a worse picture, and draws one.
+        prompt = scene ?? passage.data.text;
+      }
+
+      /**
+       * The story's chosen picture, as the look of the book.
+       *
+       * It covers everyone the cast does not: a hero of faith has no portrait
+       * to attach (hero.imageUrl is on the schema and empty for all eighty of
+       * them), and an invented shopkeeper has no character sheet, so without
+       * this they are drawn fresh -- and differently -- on every page.
+       *
+       * ONLY FOR A PASSAGE. A redraw supersedes the chosen picture, and
+       * anchoring a redraw to the very picture you are redoing is the one
+       * case where this is exactly backwards.
+       */
+      const storyLook =
+        passage.success && saved.story.imageUrl
+          ? await readStoryImageFile(saved.story.imageUrl)
+          : undefined;
+
+      // What the people in it look like, read live off their sheets -- the
+      // point of the whole feature, and the reason a story illustrated today
+      // matches a portrait drawn after the story was written.
+      const imageUrl = await generateStoryImage(
+        prompt,
+        userId,
+        await illustrationCast(saved.request, userId, prompt),
+        storyLook,
+      );
       if (!imageUrl) {
         // generateStoryImage returns undefined for BOTH "not entitled" and
         // "the image call failed", and the caller cannot tell them apart --
@@ -1281,16 +1424,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const updated = await storage.setStoryImageUrl(req.params.id, imageUrl, userId);
+      /**
+       * APPENDED, never replacing. The picture that was there stays in the
+       * gallery and is deleted only when somebody says to.
+       *
+       * AND A PASSAGE PICTURE IS A PAGE, NOT A COVER. This used to write
+       * imageUrl unconditionally, so drawing a picture for paragraph 32 also
+       * made it the story's picture -- and it then rendered twice, once in
+       * the text and once at the end. The chosen picture is changed only by
+       * a redraw, or by choosing one from the gallery.
+       */
+      const updated = await storage.setStoryImages(req.params.id, userId, {
+        imageUrl: passage.success ? (saved.story.imageUrl ?? null) : imageUrl,
+        images: [
+          ...gallery,
+          {
+            id: uuidv4(),
+            url: imageUrl,
+            prompt,
+            createdAt: new Date().toISOString(),
+            // Where it goes, when it goes anywhere. The quote is the durable
+            // half: see pictureAnchorSchema.
+            ...(passage.success && passage.data
+              ? {
+                  anchor: {
+                    quote: passage.data.text.slice(0, 300),
+                    blockIndex: passage.data.blockIndex,
+                  },
+                }
+              : {}),
+          },
+        ],
+      });
       if (!updated) {
         // The picture exists on disk but could not be attached. Say so rather
         // than returning a URL the story does not actually carry.
         return res.status(500).json({ message: "The picture was made but could not be saved to the story." });
       }
-      res.json({ imageUrl, alreadyExisted: false });
+      res.json({
+        // What the story shows at the end, which a passage picture leaves alone.
+        imageUrl: updated.story.imageUrl ?? null,
+        images: updated.images ?? [],
+        alreadyExisted: false,
+      });
     } catch (error) {
       console.error("Error illustrating story:", error);
       res.status(500).json({ message: "Could not create a picture for this story." });
+    }
+  });
+
+  /**
+   * Choose which of a story's pictures is the one it shows.
+   *
+   * No model call, no spend, no entitlement: picking between pictures that
+   * already exist is not generation. CharacterForm's avatar selector is the
+   * same shape.
+   */
+  app.put("/api/stories/:id/image/:imageId", requireAuth, async (req, res) => {
+    try {
+      if (refuseBuiltIn(req, res)) return;
+      const userId = (req.user as any).id;
+      const saved = await storage.getStoryById(req.params.id, userId);
+      if (!saved) return res.status(404).json({ message: "Story not found" });
+
+      const gallery = storyImagesOf(saved);
+      const chosen = gallery.find((p) => p.id === req.params.imageId);
+      if (!chosen) return res.status(404).json({ message: "No such picture" });
+
+      // The list is written back as well as the url: a legacy row has no list
+      // until something writes one, and selecting is the moment it gets one.
+      const updated = await storage.setStoryImages(req.params.id, userId, {
+        imageUrl: chosen.url,
+        images: gallery,
+      });
+      if (!updated) return res.status(500).json({ message: "Could not change the picture." });
+      res.json({ imageUrl: chosen.url, images: updated.images ?? [] });
+    } catch (error) {
+      console.error("Error selecting a story picture:", error);
+      res.status(500).json({ message: "Could not change the picture." });
+    }
+  });
+
+  /**
+   * Delete one of a story's pictures, and its file.
+   *
+   * The ONLY thing that removes a picture. A redraw appends; this is the
+   * deliberate act, and the client asks before calling it. Deleting the chosen
+   * one promotes the newest of what is left, so a story is never left pointing
+   * at a file that has gone.
+   */
+  app.delete("/api/stories/:id/image/:imageId", requireAuth, async (req, res) => {
+    try {
+      if (refuseBuiltIn(req, res)) return;
+      const userId = (req.user as any).id;
+      const saved = await storage.getStoryById(req.params.id, userId);
+      if (!saved) return res.status(404).json({ message: "Story not found" });
+
+      const gallery = storyImagesOf(saved);
+      const doomed = gallery.find((p) => p.id === req.params.imageId);
+      if (!doomed) return res.status(404).json({ message: "No such picture" });
+
+      const remaining = gallery.filter((p) => p.id !== doomed.id);
+      const imageUrl =
+        saved.story.imageUrl === doomed.url
+          ? (remaining[remaining.length - 1]?.url ?? null)
+          : (saved.story.imageUrl ?? null);
+
+      const updated = await storage.setStoryImages(req.params.id, userId, {
+        imageUrl,
+        images: remaining,
+      });
+      if (!updated) return res.status(500).json({ message: "Could not delete the picture." });
+      // AFTER the row no longer points at it, never before: the other order
+      // leaves a story showing a file that is gone if the write fails.
+      await deleteStoryImage(doomed.url);
+      res.json({ imageUrl, images: updated.images ?? [] });
+    } catch (error) {
+      console.error("Error deleting a story picture:", error);
+      res.status(500).json({ message: "Could not delete the picture." });
     }
   });
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Star, Printer, Download, Pencil } from "lucide-react";
+import { Star, Printer, Download, Pencil, ImagePlus, Loader2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useParentMode } from "@/hooks/use-parent-mode";
@@ -11,12 +11,15 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useReadingPrefs } from "@/hooks/use-reading-prefs";
-import type { StoryRequest, StoryResponse } from "@shared/schema";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import type { StoryRequest, StoryResponse, StoryPicture } from "@shared/schema";
 import { parseStoryContent, storyToPrintHtml } from "@/lib/storyContent";
 import ReaderBar from "@/components/reader/ReaderBar";
 import ReadingSurface from "@/components/reader/ReadingSurface";
 import StoryExtras from "@/components/reader/StoryExtras";
 import { useFocusMode } from "@/components/reader/useFocusMode";
+import { usePassagePicker } from "@/components/reader/usePassagePicker";
+import PictureLightbox from "@/components/reader/PictureLightbox";
 
 interface StoryDisplayProps {
   story: StoryResponse;
@@ -31,11 +34,15 @@ interface StoryDisplayProps {
   builtIn?: boolean;
   /** What a parent changed by hand, for the line under the title. */
   editLog?: EditLogEntry[];
+  /** Every picture this story has had; the chosen one is story.imageUrl. */
+  images?: StoryPicture[];
+  /** A picture was drawn or removed: the page re-reads the row. */
+  onPictures?: (images: StoryPicture[]) => void;
   /** The page holds the story; a saved edit hands the new text back to it. */
   onEdited?: (next: { title: string; content: string; editLog: EditLogEntry[] }) => void;
 }
 
-export default function StoryDisplay({ story, storyId, storyType, builtIn, editLog, onEdited }: StoryDisplayProps) {
+export default function StoryDisplay({ story, storyId, storyType, builtIn, editLog, images, onEdited, onPictures }: StoryDisplayProps) {
   const [isFavorite, setIsFavorite] = useState(false);
   /**
    * A parent editing the title and text, in place.
@@ -80,6 +87,68 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
     () => parseStoryContent(story.content, isVerse ? { verse: true } : undefined),
     [story.content, isVerse],
   );
+
+  /**
+   * How many blocks are the STORY, as opposed to what the server appended.
+   *
+   * A second parse, of the body alone, rather than a change to the parser:
+   * splitAppendices already knows where the disclaimer starts, and parsing
+   * what it returns is the cheapest honest way to learn how many blocks come
+   * before it. Memoised on the same key as the document itself.
+   */
+  const bodyBlocks = useMemo(
+    () =>
+      parseStoryContent(
+        splitAppendices(story.content ?? "").body,
+        isVerse ? { verse: true } : undefined,
+      ).blocks.length,
+    [story.content, isVerse],
+  );
+
+  const picker = usePassagePicker({ bodyBlocks });
+  const [lightbox, setLightbox] = useState<StoryPicture | null>(null);
+
+  // Whether this account may draw at all. The same policy call the server
+  // enforces with, so a control is never offered for something it will refuse.
+  const { data: modelInfo } = useQuery<{ canIllustrate?: boolean }>({
+    queryKey: ["/api/settings/models"],
+    enabled: Boolean(storyId) && !builtIn,
+  });
+
+  /**
+   * Draw the highlighted passage.
+   *
+   * The same route the end-of-story picture uses -- one gate, one cap, one
+   * gallery -- with a passage on it. The server writes the anchor; the client
+   * never invents one.
+   */
+  /**
+   * Whether there is anything to offer. Every condition the server enforces,
+   * plus editing -- the reading surface is unmounted while a parent edits, so
+   * there is no text to highlight.
+   */
+  const canPicture = Boolean(modelInfo?.canIllustrate && !builtIn && storyId && !editing);
+
+  const drawPassage = useMutation({
+    mutationFn: async (passage: { text: string; blockIndex: number }) => {
+      const response = await apiRequest("POST", `/api/stories/${storyId}/illustrate`, { passage });
+      return (await response.json()) as { images: StoryPicture[] };
+    },
+    onSuccess: (data) => {
+      onPictures?.(data.images ?? []);
+      queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+      picker.cancel();
+      toast({ title: "Picture added", description: "It is in the story, and in the gallery." });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not make a picture",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handlePrint = useCallback(() => {
     const w = window.open("", "_blank");
@@ -185,7 +254,18 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
 
   return (
     <div style={{ background: "var(--reader-bg)", color: "var(--reader-fg)" }}>
-      <ReaderBar focusArmed={focus.armed} onToggleFocus={focus.toggle} />
+      {/* The picture control is in the bar because the bar comes with you
+          down the page, and choosing a passage means scrolling to it. Passed
+          as a prop rather than reached for: canIllustrate and the story's id
+          are known here, and the bar has no business asking. */}
+      <ReaderBar
+        focusArmed={focus.armed}
+        onToggleFocus={focus.toggle}
+        picking={picker.picking}
+        onTogglePicture={
+          canPicture ? (picker.picking ? picker.cancel : picker.start) : undefined
+        }
+      />
 
       {focus.armed && (
         <span className="sr-only" aria-live="polite">
@@ -220,6 +300,68 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
           <Download className="h-3.5 w-3.5" aria-hidden="true" /> Save
         </Button>
       </div>
+
+      {/*
+        THE PICKING BAR. Sticky, because choosing a passage means scrolling
+        through the story, and a confirm button that scrolls away with the
+        toolbar is one you have to hunt for with a highlight already made --
+        and any tap that misses it clears the selection.
+
+        NOT .reader-chrome: focus mode fades that to nothing, and a reader who
+        armed focus mode mid-highlight would lose the bar and the only way to
+        cancel with it.
+      */}
+      {picker.picking && (
+        <div
+          className="sticky top-12 z-20 mx-auto mt-2 w-full max-w-3xl rounded-md border px-3 py-2"
+          style={{ borderColor: "var(--reader-border)", background: "var(--reader-surface)" }}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="min-w-0 flex-1 text-sm">
+              {picker.refused ? (
+                <span className="text-destructive">{picker.refused}</span>
+              ) : picker.passage ? (
+                <>
+                  <span className="opacity-70">Draw this: </span>
+                  <span className="italic">
+                    &ldquo;{picker.passage.text.slice(0, 90)}
+                    {picker.passage.text.length > 90 ? "…" : ""}&rdquo;
+                  </span>
+                </>
+              ) : (
+                "Highlight the part of the story you want a picture of."
+              )}
+            </p>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                size="sm"
+                className="h-8 gap-1 px-3 text-xs"
+                disabled={!picker.passage || drawPassage.isPending}
+                onClick={() => picker.passage && drawPassage.mutate(picker.passage)}
+              >
+                {drawPassage.isPending ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Painting…
+                  </>
+                ) : (
+                  <>
+                    <ImagePlus className="h-3.5 w-3.5" aria-hidden="true" /> Draw this
+                  </>
+                )}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 w-8 p-0"
+                aria-label="Stop choosing a passage"
+                onClick={picker.cancel}
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showExpiryAlert && storyId && !isFavorite && !builtIn && (
         <Alert
@@ -262,10 +404,27 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
           </div>
         </div>
       ) : (
-        <ReadingSurface title={story.title} doc={doc} note={editedNote} />
+        <ReadingSurface
+          title={story.title}
+          doc={doc}
+          note={editedNote}
+          pictures={images}
+          bodyBlocks={bodyBlocks}
+          onOpenPicture={setLightbox}
+        />
       )}
 
-      <StoryExtras story={story} storyId={storyId} doc={doc} focusHidden={focus.hidden} builtIn={builtIn} />
+      <PictureLightbox picture={lightbox} onClose={() => setLightbox(null)} />
+
+      <StoryExtras
+        story={story}
+        storyId={storyId}
+        doc={doc}
+        focusHidden={focus.hidden}
+        builtIn={builtIn}
+        images={images}
+        onPictures={onPictures}
+      />
     </div>
   );
 }
