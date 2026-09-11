@@ -67,9 +67,9 @@ export async function readAvatarFile(url: string): Promise<Buffer | undefined> {
 /**
  * The most we will accept as an uploaded photograph.
  *
- * Generous, because the client has already shrunk it: `pngFromFile` scales to
- * fit 1024x1024 and re-encodes, which is what a phone camera's 12-megapixel
- * JPEG becomes before it is ever sent. A detailed photograph at that size is
+ * Generous, because the client has already shrunk it: the cropper frames it as
+ * a 1024x1024 square and `croppedPng` re-encodes it, which is what a phone
+ * camera's 12-megapixel JPEG becomes before it is ever sent. A detailed photograph at that size is
  * 2-3MB as PNG, so this is headroom rather than a target, and it exists to
  * bound what a client that ISN'T ours can post.
  */

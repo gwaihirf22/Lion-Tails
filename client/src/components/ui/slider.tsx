@@ -15,7 +15,11 @@ const Slider = React.forwardRef<
     )}
     {...props}
   >
-    <SliderPrimitive.Track className="relative h-2 w-full grow overflow-hidden rounded-full bg-secondary">
+    {/* bg-track, not the stock bg-secondary: --secondary sits within a few
+        points of --primary in some palettes, which made the stat bars' fill
+        vanish into their track. --track is the token that exists for the
+        unfilled part of a bar, and theme.test.ts checks it against the fill. */}
+    <SliderPrimitive.Track className="relative h-2 w-full grow overflow-hidden rounded-full bg-track">
       <SliderPrimitive.Range className="absolute h-full bg-primary" />
     </SliderPrimitive.Track>
     <SliderPrimitive.Thumb className="block h-5 w-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50" />
