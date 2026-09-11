@@ -293,3 +293,68 @@ describe("a story's pictures", () => {
     expect(MAX_STORY_IMAGES).toBeGreaterThan(MAX_AVATARS);
   });
 });
+
+/**
+ * A photograph is a likeness, not a medium to copy.
+ *
+ * Once a parent can upload a real photo as a character's portrait, that file
+ * becomes the reference image for every story that character is drawn into.
+ * With `images.edit` and a photographic reference, the default outcome is a
+ * lightly retouched photograph -- a real child's face, in Egypt, in a
+ * children's storybook. This line is what stops that, so these assert it says
+ * so, says it about the right person, and stays out of every other picture.
+ */
+describe("a reference that is a photograph", () => {
+  it("says so, and asks for a drawing rather than a reproduction", () => {
+    const p = composeIllustrationPrompt(SCENE, [
+      member({ reference: file(), fromPhoto: true }),
+    ]);
+    expect(p).toContain("Reference image 1 is a photograph, not a drawing.");
+    expect(p).toMatch(/never reproduce the photograph/i);
+  });
+
+  it("names the right image when only one of three is a photograph", () => {
+    // The failure this prevents: telling the model all three references are
+    // photographs, and getting a photographic Barnabas beside a drawn child.
+    const p = composeIllustrationPrompt(SCENE, [
+      member({ name: "Mia", look: "Mia, a girl.", reference: file() }),
+      member({ name: "Ben", look: "Ben, a boy.", reference: file(), fromPhoto: true }),
+      member({ name: "Ada", look: "Ada, a woman.", reference: file() }),
+    ]);
+    expect(p).toContain("Reference image 2 is a photograph");
+    expect(p).not.toContain("Reference image 1 is a photograph");
+    expect(p).not.toContain("Reference image 3 is a photograph");
+  });
+
+  it("leaves the numbering of every other instruction alone", () => {
+    const p = composeIllustrationPrompt(SCENE, [
+      member({ name: "Mia", look: "Mia, a girl.", reference: file(), fromPhoto: true }),
+      member({ name: "Ben", look: "Ben, a boy.", reference: file() }),
+    ]);
+    expect(p).toContain("Reference image 1 is Mia, a girl.");
+    expect(p).toContain("Reference image 2 is Ben, a boy.");
+  });
+
+  it("says NOTHING about photographs in a picture that has none", () => {
+    // The other half of "an empty cast renders what it always did": a cast of
+    // drawings must not gain a line about a medium nobody uploaded.
+    const drawn = composeIllustrationPrompt(SCENE, [
+      member({ reference: file() }),
+      member({ name: "Ben", look: "Ben, a boy.", reference: file() }),
+    ]);
+    expect(drawn).not.toMatch(/photograph/i);
+
+    // And the exact-string guard, which is the one that would actually catch a
+    // stray space or a reordered clause.
+    expect(
+      composeIllustrationPrompt(SCENE, [member({ reference: file(), fromPhoto: false })]),
+    ).toBe(composeIllustrationPrompt(SCENE, [member({ reference: file() })]));
+  });
+
+  it("ignores the flag on somebody with no reference image at all", () => {
+    // fromPhoto describes a FILE. With no file there is no photograph to
+    // caution anyone about, and `described` members never get numbered lines.
+    const p = composeIllustrationPrompt(SCENE, [member({ fromPhoto: true })]);
+    expect(p).not.toMatch(/photograph/i);
+  });
+});

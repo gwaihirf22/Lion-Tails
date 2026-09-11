@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { buildAvatarPrompt } from "../server/lib/avatar";
+import {
+  buildAvatarPrompt,
+  buildPhotoAvatarPrompt,
+  isPngImage,
+  looksLikeRefusal,
+} from "../server/lib/avatar";
 import {
   avatarsOf,
+  chosenAvatarIsPhoto,
   baseStats,
   characterAlerts,
   characterSchema,
@@ -361,5 +367,192 @@ describe("what a character is waiting on", () => {
     // -- that is the badge doing its job on day one, not a false alarm.
     expect(characterAlerts({})).toEqual({ unspent: STARTING_POINTS, unseen: 0 });
     expect(characterAlerts(null)).toEqual({ unspent: 0, unseen: 0 });
+  });
+});
+
+/**
+ * A portrait drawn FROM a photograph.
+ *
+ * The rule these enforce is the surprising one: this prompt deliberately
+ * carries LESS of the character sheet than `buildAvatarPrompt` does. A
+ * photograph is a more precise description of a face than any field, and
+ * feeding the model both means feeding it a contradiction whenever they
+ * disagree -- which is most of the time, because nobody updates "hair: brown"
+ * before uploading a picture.
+ */
+describe("the portrait prompt for a photograph", () => {
+  it("names them and says what kind of thing they are", () => {
+    const p = buildPhotoAvatarPrompt(mk({ name: "Mia", kind: "girl" }));
+    expect(p).toContain("Mia");
+    expect(p).toContain("a girl");
+  });
+
+  it("says the picture is drawn from the photograph provided", () => {
+    expect(buildPhotoAvatarPrompt(mk({ kind: "boy" }))).toMatch(
+      /drawn from the photograph provided/i,
+    );
+  });
+
+  it("insists on a drawing, because the default outcome is a retouched photo", () => {
+    expect(buildPhotoAvatarPrompt(mk({ kind: "boy" }))).toMatch(/not a photograph/i);
+  });
+
+  it("takes NOTHING about their looks off the sheet", () => {
+    // Every one of these would contradict the photograph.
+    const p = buildPhotoAvatarPrompt(
+      mk({
+        kind: "girl",
+        age: 8,
+        hair: "brown",
+        eyes: "green",
+        canonicalLook: "A red cloak and a wooden sword.",
+      }),
+    );
+    expect(p).not.toMatch(/brown/i);
+    expect(p).not.toMatch(/green/i);
+    expect(p).not.toMatch(/cloak|sword/i);
+    expect(p).not.toMatch(/8-year-old/i);
+  });
+
+  it("keeps the same no-text rule as every other portrait", () => {
+    expect(buildPhotoAvatarPrompt(mk({ kind: "boy" }))).toMatch(/no text/i);
+  });
+
+  it("is stable: the same character gives the same string", () => {
+    const c = mk({ kind: "dragon", category: "mythical" });
+    expect(buildPhotoAvatarPrompt(c)).toBe(buildPhotoAvatarPrompt(c));
+  });
+});
+
+/**
+ * Everything in AVATAR_DIR is a png, and this is what keeps it true.
+ *
+ * Not a security check -- the bytes are written and served back as an image
+ * either way. It protects an invariant two other modules rely on:
+ * `readAvatarFile` only matches `avatar_<uuid>.png`, and `illustration.ts`
+ * hands these files to the images API declaring `image/png`. A jpeg under a
+ * .png name fails at the far end of a story generation, not here.
+ */
+describe("recognising a png", () => {
+  const png = (extra = 16) =>
+    Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(extra),
+    ]);
+
+  it("accepts the png signature", () => {
+    expect(isPngImage(png())).toBe(true);
+  });
+
+  it("rejects a jpeg", () => {
+    expect(isPngImage(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0]))).toBe(false);
+  });
+
+  it("rejects a webp", () => {
+    expect(isPngImage(Buffer.from("RIFF????WEBPVP8 ", "binary"))).toBe(false);
+  });
+
+  it("rejects an empty buffer and a bare signature with no image after it", () => {
+    expect(isPngImage(Buffer.alloc(0))).toBe(false);
+    expect(isPngImage(png(0))).toBe(false);
+  });
+
+  it("rejects text that merely starts with PNG", () => {
+    expect(isPngImage(Buffer.from("PNG is a format for images"))).toBe(false);
+  });
+});
+
+/**
+ * Which portrait is a photograph, and therefore what a story may do with it.
+ *
+ * Keyed on the CHOSEN one. A character holding a photograph and a drawing at
+ * once has one reference a story will be drawn from, and choosing the drawing
+ * has to stop the photograph mattering -- otherwise the only way to undo
+ * "this is a photograph" is to delete the file.
+ */
+describe("telling a photograph from a drawing", () => {
+  const photo = { id: "p", url: "/p/photo.png", prompt: "", createdAt: "2026-01-01", source: "photo" as const };
+  const drawn = { id: "d", url: "/p/drawn.png", prompt: "x", createdAt: "2026-01-02" };
+
+  it("is false for a character with no picture at all", () => {
+    expect(chosenAvatarIsPhoto({})).toBe(false);
+    expect(chosenAvatarIsPhoto(undefined)).toBe(false);
+    expect(chosenAvatarIsPhoto(null)).toBe(false);
+  });
+
+  it("is false for a row written before `source` existed", () => {
+    // The whole reason the field is optional: every one of these is a drawing.
+    expect(
+      chosenAvatarIsPhoto({ avatarUrl: "/p/old.png", avatarPrompt: "a dragon", createdAt: "2026-01-01" }),
+    ).toBe(false);
+  });
+
+  it("is true when the chosen picture is the photograph", () => {
+    expect(chosenAvatarIsPhoto({ avatarUrl: photo.url, avatars: [drawn, photo] })).toBe(true);
+  });
+
+  it("is FALSE when they hold a photograph but have chosen the drawing", () => {
+    expect(chosenAvatarIsPhoto({ avatarUrl: drawn.url, avatars: [photo, drawn] })).toBe(false);
+  });
+
+  it("survives the schema, which strips keys it does not declare", () => {
+    // The trap this codebase warns about: characterSchema is a z.object, so a
+    // `source` the schema has not heard of is dropped silently on the way to
+    // the database and nothing fails.
+    const parsed = characterSchema.parse({
+      id: "c1",
+      name: "Mia",
+      createdAt: "2026-01-01",
+      avatarUrl: photo.url,
+      avatars: [photo],
+    });
+    expect(parsed.avatars?.[0]?.source).toBe("photo");
+    expect(chosenAvatarIsPhoto(parsed)).toBe(true);
+  });
+});
+
+/**
+ * A refusal and an outage need opposite advice.
+ *
+ * "Try again" is wrong when the model has declined to draw a copyrighted
+ * character, and "describe them in your own words" is insulting when OpenAI is
+ * down. The tight reading is deliberate in BOTH directions -- see especially
+ * the input_fidelity case, which is this codebase's own known 400 on this
+ * exact call and must never be reported to a parent as their fault.
+ */
+describe("telling a refusal from a failure", () => {
+  it("believes an explicit moderation code", () => {
+    expect(looksLikeRefusal({ status: 400, code: "moderation_blocked" })).toBe(true);
+    expect(looksLikeRefusal({ error: { code: "content_policy_violation" } })).toBe(true);
+  });
+
+  it("reads a 400 that talks about the safety system", () => {
+    expect(
+      looksLikeRefusal({
+        status: 400,
+        // Verbatim from gpt-image-2 on 2026-09-11, asked for Yoshi -- the case
+        // Blake hit (request req_e075ab41c93f4e35907aa58bcdc46cd6).
+        message:
+          "400 Your request was rejected by the safety system. If you believe this is an error, contact us at help.openai.com and include the request ID req_e075ab41c93f4e35907aa58bcdc46cd6.",
+      }),
+    ).toBe(true);
+  });
+
+  it("does NOT blame the user for our own bad request shape", () => {
+    // gpt-image-2 answering 400 to input_fidelity: a 400, about this call, and
+    // entirely ours. See docs/decisions.md and illustration.ts.
+    expect(
+      looksLikeRefusal({
+        status: 400,
+        message: "Unknown parameter: 'input_fidelity'.",
+      }),
+    ).toBe(false);
+  });
+
+  it("does not read an outage as a refusal", () => {
+    expect(looksLikeRefusal({ status: 500, message: "internal server error" })).toBe(false);
+    expect(looksLikeRefusal({ status: 429, message: "rate limited" })).toBe(false);
+    expect(looksLikeRefusal(new Error("socket hang up"))).toBe(false);
+    expect(looksLikeRefusal(undefined)).toBe(false);
   });
 });

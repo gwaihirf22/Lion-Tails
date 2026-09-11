@@ -1,6 +1,10 @@
 import { parentModeActive, type ParentModeSession } from "@shared/parentMode";
 import { splitAppendices } from "@shared/storyAppendices";
 import { builtInStoryById, refuseBuiltIn, withBuiltInStories } from "./lib/builtInStories";
+// `express` itself, not only its types: the photo-upload route attaches its own
+// body parser (express.raw) rather than raising the global JSON limit for every
+// other route in this file.
+import express from "express";
 import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
 import { isModelAllowedFor, listSelectableModels, MODEL_CATALOG, DEFAULTS,
@@ -86,7 +90,14 @@ import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
 import { randomUUID } from "crypto";
 import { promises as fsp } from "fs";
 import path from "path";
-import { generateAvatar, AVATAR_DIR } from "./lib/avatar";
+import {
+  generateAvatar,
+  storeAvatarFile,
+  readAvatarFile,
+  isPngImage,
+  MAX_AVATAR_UPLOAD_BYTES,
+  AVATAR_DIR,
+} from "./lib/avatar";
 import { statsAreAffordable } from "@shared/schema";
 import { z, ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
@@ -137,6 +148,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     note: z.string().trim().max(200).optional(),
     remember: z.boolean().optional(),
   });
+
+  /**
+   * What to do with an uploaded photograph, and the only two answers.
+   *
+   * `drawing` -- draw a storybook portrait FROM it, keep the drawing, and never
+   * write the photograph anywhere. `photo` -- keep the photograph itself as the
+   * portrait. They cost different things, which is why the route branches on
+   * this rather than inferring anything.
+   */
+  const photoModeSchema = z.object({ mode: z.enum(["drawing", "photo"]) });
+
+  /**
+   * The two ways an image model can fail to give us a picture.
+   *
+   * Blake: "we can make a note that sometimes the image generator fails
+   * because of copyright things, and it just will send back a fail. because I
+   * tried to generate Yoshi, and it wouldn't work." A refusal and an outage
+   * need opposite advice -- change what you asked for, or ask again unchanged
+   * -- so the message follows `looksLikeRefusal` rather than covering both with
+   * a vague sentence. Shared by both routes that generate a portrait.
+   */
+  const avatarFailureBody = (refused: boolean) =>
+    refused
+      ? {
+          code: "avatar_refused",
+          message:
+            "The drawing tool would not draw that. It refuses characters it " +
+            "recognises from films, games or books — try describing them in " +
+            "your own words instead.",
+        }
+      : {
+          code: "avatar_generation_failed",
+          message: "The picture could not be made just now. Please try again.",
+        };
 
   /** What a child may send. id and createdAt are the server's to assign. */
   const characterWriteSchema = characterSchema.omit({
@@ -457,12 +502,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         note,
       });
 
-      if (!result) {
+      if (!result.ok) {
         await storage.refundAvatarGeneration(userId);
-        return res.status(502).json({
-          code: "avatar_generation_failed",
-          message: "The picture could not be made just now. Please try again.",
-        });
+        return res.status(502).json(avatarFailureBody(result.refused));
       }
 
       // Appended AND selected. A picture you just asked for is the one you
@@ -512,6 +554,203 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error generating character avatar:", error);
       res.status(500).json({ message: "Failed to generate a picture" });
     }
+  });
+
+  /**
+   * A photograph becomes a portrait -- drawn from, or kept as it is.
+   *
+   * RAW BYTES, NOT BASE64 IN JSON. `pages/ImageAnalysis.tsx` does the latter
+   * through `express.json()`, whose default limit is 100kb, so it cannot have
+   * worked on a photograph from a real camera since the day it was written.
+   * The body parser is attached to this route alone: raising the global JSON
+   * limit to fit an image would raise it for all fifty-odd other routes.
+   *
+   * `image/png` only, and the client converts before sending (`pngFromFile`).
+   * That keeps ONE format in AVATAR_DIR -- see `isPngImage` on why that
+   * invariant is load-bearing -- and it means a phone's 12-megapixel photo is
+   * resized in the browser rather than posted whole.
+   *
+   * WHAT IT COSTS IS THE DIFFERENCE BETWEEN THE TWO MODES:
+   *
+   * - `photo` keeps the file. There is no model call, so nothing is charged
+   *   against the free allowance -- that allowance bounds what the owner
+   *   spends, and this spends nothing. The per-character cap still applies,
+   *   because that one bounds what a character holds.
+   * - `drawing` is a generation like any other and is charged and refunded
+   *   exactly like `POST /api/characters/:id/avatar`.
+   *
+   * No `note` and no `remember`: the photograph is the description. Anyone who
+   * wants it different can press "Draw a picture" afterwards, which draws from
+   * the portrait they now have.
+   */
+  app.post(
+    "/api/characters/:id/avatar/photo",
+    requireAuth,
+    express.raw({ type: "image/png", limit: MAX_AVATAR_UPLOAD_BYTES }),
+    async (req, res) => {
+      try {
+        const userId = (req.user as any).id;
+        const character = await storage.getCharacterById(req.params.id, userId);
+        if (!character) {
+          return res.status(404).json({ message: "Character not found" });
+        }
+
+        const { mode } = photoModeSchema.parse(req.query ?? {});
+
+        /**
+         * express.raw leaves req.body as `{}` -- not a Buffer -- when the
+         * Content-Type does not match, so this is the type check AND the
+         * "you sent something else" check. 415 rather than 400: the request
+         * was well-formed, its payload was the wrong kind of thing.
+         */
+        const photo = req.body;
+        if (!Buffer.isBuffer(photo) || photo.length === 0 || !isPngImage(photo)) {
+          return res.status(415).json({
+            code: "avatar_not_an_image",
+            message: "That file could not be read as a picture. Please try another one.",
+          });
+        }
+
+        const isAdmin = Boolean((req.user as any).isAdmin);
+        const hasOwnKey = Boolean(await storage.getUserOpenAIKey(userId).catch(() => null));
+        const unlimited = hasUnlimitedUse({ isAdmin, hasOwnKey });
+
+        // Before anything is spent or written, and before the two modes part
+        // company: a full character is full whichever way the picture arrived.
+        const cap = avatarCapFor({ isAdmin, hasOwnKey });
+        if (avatarsOf(character).length >= cap) {
+          return res.status(409).json({
+            code: "avatar_limit",
+            message:
+              cap === 1
+                ? `${character.name} already has a picture. Delete it to add another, or ` +
+                  "add your own OpenAI API key in Settings to keep up to " +
+                  `${MAX_AVATARS}.`
+                : `${character.name} already has ${cap} pictures. Delete one to make room.`,
+            limit: cap,
+          });
+        }
+
+        let url: string;
+        let prompt: string;
+        let remaining: number | null = null;
+
+        if (mode === "photo") {
+          // Kept exactly as uploaded. Nothing is generated, so nothing is
+          // charged. The prompt field records what made this picture, and what
+          // made it was a person with a file.
+          url = await storeAvatarFile(photo);
+          prompt = "";
+          remaining = unlimited
+            ? null
+            : avatarsRemaining(await storage.getAvatarCount(userId), { isAdmin, hasOwnKey });
+        } else {
+          const used = await storage.getAvatarCount(userId);
+          if (avatarsRemaining(used, { isAdmin, hasOwnKey }) <= 0) {
+            return res.status(403).json({
+              code: "avatar_allowance_spent",
+              message:
+                `You have used all ${MAX_FREE_AVATARS} of your free pictures. ` +
+                "Add your own OpenAI API key in Settings to make more.",
+              used,
+              limit: MAX_FREE_AVATARS,
+            });
+          }
+
+          // The check and the charge in one statement, as the generate route
+          // does and for the same reason: a cap two requests can both pass is
+          // not a cap.
+          const charged = await storage.chargeAvatarGeneration(
+            userId,
+            unlimited ? Infinity : MAX_FREE_AVATARS,
+          );
+          if (!charged) {
+            return res.status(403).json({
+              code: "avatar_allowance_spent",
+              message: `You have used all ${MAX_FREE_AVATARS} of your free pictures.`,
+              used,
+              limit: MAX_FREE_AVATARS,
+            });
+          }
+
+          const result = await generateAvatar(character, userId, {
+            grantedByAllowance: !unlimited,
+            photo,
+          });
+          if (!result.ok) {
+            await storage.refundAvatarGeneration(userId);
+            return res.status(502).json(avatarFailureBody(result.refused));
+          }
+          url = result.url;
+          prompt = result.prompt;
+          remaining = unlimited
+            ? null
+            : avatarsRemaining(used + 1, { isAdmin, hasOwnKey });
+        }
+
+        /**
+         * `source` is what lets a story tell a photograph from a drawing.
+         *
+         * Only the kept-as-it-is mode sets it. A cartoonised photo IS a
+         * drawing by the time it is stored -- the photograph is already gone --
+         * and marking it otherwise would put the "this is a photograph" line
+         * into a story prompt whose reference is a drawing.
+         */
+        const entry = {
+          id: randomUUID(),
+          url,
+          prompt,
+          createdAt: new Date().toISOString(),
+          ...(mode === "photo" ? { source: "photo" as const } : {}),
+        };
+
+        const updated = await storage.updateCharacter(req.params.id, userId, {
+          avatars: [...avatarsOf(character), entry].slice(-cap),
+          avatarUrl: url,
+          avatarPrompt: prompt,
+        });
+        if (!updated) {
+          // Deleted mid-upload. Do not refund a generation: it was spent.
+          return res.status(404).json({ message: "Character not found" });
+        }
+
+        res.json({ character: updated, remaining });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return res.status(400).json({ message: fromZodError(error).message });
+        }
+        console.error("Error saving a character photo:", error);
+        res.status(500).json({ message: "Failed to save that picture" });
+      }
+    },
+  );
+
+  /**
+   * Serve a portrait, to someone signed in.
+   *
+   * REGISTERED HERE RATHER THAN LEFT TO `express.static`, and the ordering is
+   * the whole mechanism: `server/index.ts` mounts `/public` statically AFTER
+   * this function runs, so this route sees the request first. Move that mount
+   * back above `registerRoutes` and every portrait silently becomes public
+   * again, with nothing failing to say so.
+   *
+   * Why only this one directory: a person may now upload a photograph of a real
+   * child. A random uuid makes a url unguessable, which is not the same promise
+   * as a login, and it is not the promise to make about somebody's family. The
+   * story illustrations beside it stay static -- drawings, and a separate
+   * question.
+   *
+   * `readAvatarFile` does the path work: its `avatar_<uuid>.png` regex is the
+   * one traversal guard in this app, and writing a second `path.join` here is
+   * exactly how a second definition starts.
+   *
+   * `private` on the cache header is not decoration. SWAG proxies this, and a
+   * shared cache holding one family's portrait is the thing being prevented.
+   */
+  app.get("/public/images/stories/avatars/:file", requireAuth, async (req, res) => {
+    const data = await readAvatarFile(req.params.file);
+    if (!data) return res.status(404).end();
+    res.type("png").set("Cache-Control", "private, max-age=86400").send(data);
   });
 
   /**
