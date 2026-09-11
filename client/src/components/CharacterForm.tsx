@@ -171,7 +171,8 @@ function ParentEditable({
 
   return (
     <div className="flex gap-2 items-start">
-      <div className="flex-1">
+      {/* min-w-0, or the Input's ~20ch minimum stops this column shrinking. */}
+      <div className="min-w-0 flex-1">
         {typing ? (
           <Input
             autoFocus
@@ -607,13 +608,33 @@ export default function CharacterForm({
   const openTab = (next: string) => {
     setTab(next);
     if (next === "virtues") void markVirtuesSeen();
-    // The strip is one row that scrolls, so the arrows can step to a tab that
-    // is off-screen. Bring it into view -- "nearest" so a tab already visible
-    // does not jump, and block:nearest so the dialog itself does not scroll.
+    /**
+     * The strip is one row that scrolls, so the arrows can step to a tab
+     * that is off-screen. Bring it into view by moving THIS element's
+     * scrollLeft and nothing else.
+     *
+     * NOT scrollIntoView: it walks every scrollable ancestor, and the
+     * dialog is one of them -- its overflow-y-auto makes the x axis auto
+     * too (CSS never pairs visible with a non-visible value), so
+     * inline:"nearest" would scroll the whole card sideways.
+     *
+     * BY INDEX, not by a value attribute. Radix destructures `value` out
+     * of the trigger's props and never renders it, so the obvious
+     * `[value="..."]` selector matches nothing and fails silently -- which
+     * is how the first version of this shipped doing nothing at all.
+     */
     requestAnimationFrame(() => {
-      stripRef.current
-        ?.querySelector(`[data-state][value="${next}"], [data-radix-collection-item][value="${next}"]`)
-        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      const strip = stripRef.current;
+      const index = TABS.findIndex((t) => t.value === next);
+      const el = strip?.querySelectorAll<HTMLElement>('[role="tab"]')[index];
+      if (!strip || !el) return;
+      // Rects, not offsetLeft: the trigger's offsetParent is whichever
+      // positioned ancestor happens to be nearest, which is not the strip.
+      const view = strip.getBoundingClientRect();
+      const tab = el.getBoundingClientRect();
+      // A tab already fully visible does not move.
+      if (tab.left < view.left) strip.scrollLeft -= view.left - tab.left + 8;
+      else if (tab.right > view.right) strip.scrollLeft += tab.right - view.right + 8;
     });
   };
 
@@ -643,7 +664,7 @@ export default function CharacterForm({
             </CardDescription>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             {/*
               Tabs rather than one long scroll. The sheet has grown past what
               fits in a dialog, and the sections answer genuinely different
@@ -911,7 +932,11 @@ export default function CharacterForm({
                   <FormItem>
                     <FormLabel>Name</FormLabel>
                     <div className="flex gap-2">
-                      <FormControl>
+                      {/* min-w-0: an input's intrinsic minimum is about twenty
+                          characters, and w-full does not override it -- without
+                          this the row cannot shrink below ~250px and pushes the
+                          whole dialog wider than the phone. */}
+                      <FormControl className="min-w-0 flex-1">
                         <Input placeholder="What are they called?" {...field} />
                       </FormControl>
                       {/*
@@ -1248,7 +1273,7 @@ export default function CharacterForm({
                 const canRaise = value < STAT_CAP && (available > 0 || parentMode);
                 return (
                   <div key={stat} className="flex items-center gap-3">
-                    <span className="w-28 text-sm capitalize">{stat}</span>
+                    <span className="w-20 sm:w-28 shrink-0 text-sm capitalize">{stat}</span>
                     <Button
                       type="button" variant="outline" size="icon" className="h-7 w-7"
                       disabled={value <= STAT_FLOOR}
@@ -1298,7 +1323,7 @@ export default function CharacterForm({
 
                 {skillValues.map((sk: CharacterSkill) => (
                   <div key={sk.name} className="flex items-center gap-3">
-                    <span className="w-28 truncate text-sm capitalize" title={sk.name}>{sk.name}</span>
+                    <span className="w-20 sm:w-28 shrink-0 truncate text-sm capitalize" title={sk.name}>{sk.name}</span>
                     <Button
                       type="button" variant="outline" size="icon" className="h-7 w-7"
                       disabled={sk.value <= STAT_FLOOR}
@@ -1436,7 +1461,7 @@ export default function CharacterForm({
                     .sort((a, b) => b[1] - a[1])
                     .map(([virtue, level]) => (
                       <div key={virtue} className="flex items-center gap-2">
-                        <span className="w-28 text-sm capitalize">{virtue}</span>
+                        <span className="w-20 sm:w-28 shrink-0 text-sm capitalize">{virtue}</span>
                         <Badge variant="secondary">Level {level}</Badge>
                       </div>
                     ))}

@@ -153,7 +153,7 @@ const AnimalAutocomplete: React.FC<AnimalAutocompleteProps> = ({
           onBlur={handleInputBlur}
           onKeyDown={handleInputKeyDown}
           placeholder={placeholder}
-          className="pl-10 pr-20"
+          className="pl-10 pr-16"
         />
         <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
           {inputValue && (
