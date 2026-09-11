@@ -63,6 +63,10 @@ export interface IStorage {
    * exactly what it would miss.
    */
   getStoryRequests(userId: number): Promise<StoryRequest[]>;
+  /** Stamp a story as looked at. Idempotent: the first time is the one kept. */
+  markStorySeen(storyId: string, userId: number): Promise<void>;
+  /** How many stories are written and not yet opened. One number, no bodies. */
+  countUnseenStories(userId: number): Promise<number>;
 
   /**
    * Character methods. EVERY ONE TAKES THE OWNER.
@@ -594,6 +598,9 @@ export class MemStorage implements IStorage {
       isFavorite: false,
       expiresAt: expiryDate.toISOString(),
       heroId, // Link to Hero of Faith if provided
+      // Written explicitly, as DbStorage does: the PRESENCE of this key is
+      // what says the row is one the unseen bubble knows about.
+      seenAt: null,
       // Read off the story object, exactly as DbStorage does, so the two
       // implementations cannot disagree about where this fact lives. They have
       // already diverged once -- searchMetadata is populated here and written
@@ -655,6 +662,16 @@ export class MemStorage implements IStorage {
   
   async getStoryRequests(userId: number): Promise<StoryRequest[]> {
     return (await this.getUserStories(userId)).map((s) => s.request);
+  }
+
+  async markStorySeen(storyId: string, userId: number): Promise<void> {
+    const story = await this.getStoryById(storyId, userId);
+    if (!story || story.seenAt !== null) return;
+    this.stories.set(storyId, { ...story, seenAt: new Date().toISOString() });
+  }
+
+  async countUnseenStories(userId: number): Promise<number> {
+    return (await this.getUserStories(userId)).filter((s) => s.seenAt === null).length;
   }
 
   async setStoryImages(

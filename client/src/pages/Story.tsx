@@ -5,7 +5,8 @@ import StoryDisplay from "@/components/StoryDisplay";
 import { StoryResponse, StoryRequest } from "@shared/schema";
 import type { EditLogEntry } from "@shared/editLog";
 import { storyImagesOf, type StoryPicture } from "@shared/schema";
-import { apiRequestAllowingErrors } from "@/lib/queryClient";
+import { apiRequestAllowingErrors, queryClient } from "@/lib/queryClient";
+import { UNSEEN_STORIES_KEY } from "@/lib/unseenStories";
 
 export default function Story() {
   const [location, navigate] = useLocation();
@@ -61,6 +62,20 @@ export default function Story() {
             setUniverseId(saved.universeId ?? null);
             setEditLog(saved.editLog ?? []);
             setImages(storyImagesOf(saved));
+            /**
+             * They are looking at it, so the nav bubble should stop saying so.
+             *
+             * Fired here rather than on mount: this is the point at which a
+             * real row came back, so a broken id or a story belonging to
+             * somebody else never clears anything. Not awaited and never
+             * surfaced -- a bubble that fails to clear must not interrupt
+             * somebody reading.
+             */
+            if (saved.seenAt === null) {
+              void apiRequestAllowingErrors("POST", `/api/stories/${idParam}/seen`)
+                .then(() => queryClient.invalidateQueries({ queryKey: UNSEEN_STORIES_KEY }))
+                .catch(() => {});
+            }
             // s.storyType is set on stories generated after this shipped;
             // saved.request.storyType is present on every row that already
             // exists, which is why no backfill is needed. The parser's own

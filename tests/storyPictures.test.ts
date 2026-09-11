@@ -16,6 +16,8 @@ import {
   storyPassageSchema,
   storyImagesOf,
   MAX_PASSAGE_CHARS,
+  storyIsUnseen,
+  savedStorySchema,
 } from "@shared/schema";
 import {
   MEETING_NOTE_HEADING,
@@ -327,5 +329,40 @@ describe("what a quest may be called", () => {
     // Rename the shop and this must follow, or it bans a word nobody uses.
     expect(rule).not.toContain("Barnabas & Co.".replace("Barnabas", "Barnabus"));
     expect(rule.includes(SHOP.name)).toBe(true);
+  });
+});
+
+describe("a story nobody has read yet", () => {
+  /**
+   * THREE STATES, and they are what let this ship without a migration or a
+   * backfill: undefined is a story written before any of this existed and is
+   * treated as seen, null is written-and-not-opened, a date is opened.
+   *
+   * The alternative -- unseen meaning "no seenAt" -- would have counted
+   * somebody's entire library on the day it shipped, which is a notification
+   * that tells you nothing and trains you to ignore the next one.
+   */
+  it("counts a story that was written and not opened", () => {
+    expect(storyIsUnseen({ seenAt: null })).toBe(true);
+  });
+
+  it("does not count one written before this existed", () => {
+    expect(storyIsUnseen({})).toBe(false);
+    expect(storyIsUnseen(undefined)).toBe(false);
+    expect(storyIsUnseen(null)).toBe(false);
+  });
+
+  it("does not count one already opened", () => {
+    expect(storyIsUnseen({ seenAt: "2026-09-11T11:17:00.251Z" })).toBe(false);
+  });
+
+  it("accepts all three on the schema", () => {
+    // The field itself, not a whole row: what matters is that null is a legal
+    // value and not merely an absent one, because the difference between them
+    // is the entire mechanism.
+    for (const seenAt of [undefined, null, "2026-09-11T11:17:00.251Z"]) {
+      expect(savedStorySchema.shape.seenAt.safeParse(seenAt).success).toBe(true);
+    }
+    expect(savedStorySchema.shape.seenAt.safeParse(123).success).toBe(false);
   });
 });

@@ -1307,6 +1307,17 @@ export function avatarsOf(
  * reading the list straight off the row would show that story no pictures
  * while its picture was on screen.
  */
+/**
+ * Has this story been generated and not yet looked at?
+ *
+ * Strictly `seenAt === null`: undefined is a story from before this existed
+ * and is treated as seen. Read through this and never off the field, so the
+ * three-state rule lives in one place.
+ */
+export function storyIsUnseen(story?: { seenAt?: string | null } | null): boolean {
+  return story?.seenAt === null;
+}
+
 export function storyImagesOf(
   story?: Partial<Pick<SavedStory, "images" | "createdAt">> & {
     story?: { imageUrl?: string; imagePrompt?: string } | null;
@@ -1945,6 +1956,30 @@ export const savedStorySchema = z.object({
    * storyImagesOf() folds those rows in instead.
    */
   images: z.array(storyPictureSchema).max(MAX_STORY_IMAGES).optional(),
+
+  /**
+   * When the reader first opened it, or null if they have not.
+   *
+   * SERVER-OWNED, and stamped by POST /api/stories/:id/seen -- the seenVirtues
+   * precedent, which is an explicit route rather than a side effect of reading
+   * so that a GET stays a GET.
+   *
+   * THE THREE STATES ARE THE POINT, and they are what makes this need no
+   * migration and no backfill:
+   *
+   *   undefined  a story written before any of this existed. Seen. There is no
+   *              honest way to say otherwise, and a bubble counting somebody's
+   *              whole library on the day this ships is worse than useless.
+   *   null       written since, and not opened yet. This is what the bubble
+   *              counts.
+   *   a date     opened, then.
+   *
+   * saveStory writes null explicitly for exactly this reason: the PRESENCE of
+   * the key is what marks a row as one this feature knows about. Same trick as
+   * avatarsOf and storyImagesOf, where an absent list means "from before" and
+   * is folded in rather than treated as empty.
+   */
+  seenAt: z.string().nullable().optional(),
 
   // Search and relationship metadata
   heroId: z.string().optional(), // ID of the Hero of Faith if story is related to one
