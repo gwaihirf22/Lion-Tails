@@ -163,8 +163,15 @@ export const KEEPER = {
  * beside that directory ships and survives a redeploy, and a file inside it is
  * shadowed by the volume and simply is not there. attached_assets/ (where the
  * artwork was committed) is not in the runtime image at all.
+ *
+ * WEBP, NOT THE SOURCE PNG. The artwork is a 1254px photographic render and
+ * PNG is the wrong container for one: 2.2MB, in every clone and every layer of
+ * the image, against 167KB at 1024px in webp -- which the images API takes
+ * alongside png and jpg. The full-size PNG stays in attached_assets as the
+ * master. Replace this file to change his face; nothing reads its bytes but
+ * the image call, and mimeFor() follows the extension.
  */
-export const KEEPER_FACE_FILE = "barnabas-timekeeper.png";
+export const KEEPER_FACE_FILE = "barnabas-timekeeper.webp";
 
 /**
  * The device. A lantern, and one place to change it.

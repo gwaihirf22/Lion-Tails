@@ -60,13 +60,35 @@ const SHIPPED_IMAGE_DIR = path.join(process.cwd(), "public", "images");
  * disk -- so if the reference call fails the same cast still describes itself
  * to the plain generate call.
  */
+/**
+ * A file on its way to the images API, carrying what the API needs to know
+ * about it.
+ *
+ * The type travels WITH the bytes rather than being assumed at the call site:
+ * a character's portrait is always a png (readAvatarFile's guard says so) and
+ * the Timekeeper's face is a webp, and a reference sent under the wrong type
+ * is a 400 that costs the picture its likeness and says nothing useful.
+ */
+export type PictureFile = { data: Buffer; filename: string; type: string };
+
+/** The three the images API takes. Anything else is not a reference image. */
+const MIME: Record<string, string> = {
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+};
+
+const mimeFor = (filename: string): string | undefined =>
+  MIME[path.extname(filename).toLowerCase()];
+
 export type IllustrationMember = {
   /** How the prompt names them. */
   name: string;
   /** What they look like, in words. Always present. */
   look: string;
   /** Their picture, when there is one. This is what actually works. */
-  reference?: Buffer;
+  reference?: PictureFile;
 };
 
 /**
@@ -116,13 +138,28 @@ const KEEPER_PATTERN = new RegExp(
 );
 const mentionsKeeper = (scenePrompt: string): boolean => KEEPER_PATTERN.test(scenePrompt);
 
-/** Read the Timekeeper's one canon face. */
-async function readKeeperFace(): Promise<Buffer | undefined> {
+/** Read the Timekeeper's one canon face, whatever format it is shipped in. */
+async function readKeeperFace(): Promise<PictureFile | undefined> {
+  const type = mimeFor(KEEPER_FACE_FILE);
+  // A face in a format the API will not take is worse than no face: the whole
+  // call fails and the story loses its picture rather than one likeness.
+  if (!type) {
+    console.error(`[illustration] ${KEEPER_FACE_FILE} is not a format the images API takes.`);
+    return undefined;
+  }
   try {
-    return await fs.promises.readFile(path.join(SHIPPED_IMAGE_DIR, KEEPER_FACE_FILE));
+    const data = await fs.promises.readFile(path.join(SHIPPED_IMAGE_DIR, KEEPER_FACE_FILE));
+    return { data, filename: KEEPER_FACE_FILE, type };
   } catch {
     return undefined;
   }
+}
+
+/** A character's chosen portrait as a file the images API will accept. */
+async function portraitFile(avatarUrl?: string): Promise<PictureFile | undefined> {
+  if (!avatarUrl) return undefined;
+  const data = await readAvatarFile(avatarUrl);
+  return data ? { data, filename: "portrait.png", type: "image/png" } : undefined;
 }
 
 /**
@@ -157,8 +194,9 @@ export async function illustrationCast(
         name: character.name,
         look: describeCharacter(character),
         // The CHOSEN avatar, not the newest: avatarUrl is the one the sheet
-        // shows and the one a parent picked.
-        reference: character.avatarUrl ? await readAvatarFile(character.avatarUrl) : undefined,
+        // shows and the one a parent picked. Always a png -- readAvatarFile
+        // will not return anything else.
+        reference: await portraitFile(character.avatarUrl),
       });
     }
   }
@@ -282,15 +320,21 @@ export async function generateStoryImage(
     const prompt = composeIllustrationPrompt(imagePrompt, cast);
     const openaiClient = createClient(resolved);
 
-    const references = cast.map((m) => m.reference).filter((b): b is Buffer => Boolean(b));
+    const references = cast
+      .map((m) => m.reference)
+      .filter((f): f is PictureFile => Boolean(f));
     let response;
     if (references.length > 0) {
       try {
         response = await openaiClient.images.edit({
           model: resolved.model,
           image: await Promise.all(
-            references.map((buf, i) =>
-              toFile(buf, `reference-${i + 1}.png`, { type: "image/png" }),
+            references.map((file, i) =>
+              // Numbered to match the prompt, which is the only thing that
+              // says which reference is whom -- the API cannot name them.
+              toFile(file.data, `reference-${i + 1}${path.extname(file.filename)}`, {
+                type: file.type,
+              }),
             ),
           ),
           prompt,

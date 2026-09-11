@@ -32,6 +32,13 @@ const member = (o: Partial<IllustrationMember>): IllustrationMember => ({
   ...o,
 });
 
+/** A stand-in for a portrait on disk. */
+const file = (name = "portrait.png") => ({
+  data: Buffer.from("x"),
+  filename: name,
+  type: "image/png",
+});
+
 const SCENE = "A child on a hilltop at dawn";
 /** What the app produced before any of this, and must still produce. */
 const PLAIN =
@@ -47,14 +54,14 @@ describe("the illustration prompt", () => {
   });
 
   it("starts with the scene and the style, whoever is in it", () => {
-    const p = composeIllustrationPrompt(SCENE, [member({ reference: Buffer.from("x") })]);
+    const p = composeIllustrationPrompt(SCENE, [member({ reference: file() })]);
     expect(p.startsWith(PLAIN)).toBe(true);
   });
 
   it("numbers the reference images and demands the faces match", () => {
     const p = composeIllustrationPrompt(SCENE, [
-      member({ name: "Mia", look: "Mia, an 8-year-old girl.", reference: Buffer.from("a") }),
-      member({ name: "Ben", look: "Ben, a 6-year-old boy.", reference: Buffer.from("b") }),
+      member({ name: "Mia", look: "Mia, an 8-year-old girl.", reference: file() }),
+      member({ name: "Ben", look: "Ben, a 6-year-old boy.", reference: file() }),
     ]);
     expect(p).toContain("Reference image 1 is Mia, an 8-year-old girl.");
     expect(p).toContain("Reference image 2 is Ben, a 6-year-old boy.");
@@ -64,7 +71,7 @@ describe("the illustration prompt", () => {
   it("takes the person from the reference and nothing else from it", () => {
     // Barnabas's canon face is a whole scene -- a shop, shelves, a lit lantern.
     // Without this the reference is a background as much as a man.
-    const p = composeIllustrationPrompt(SCENE, [member({ reference: Buffer.from("a") })]);
+    const p = composeIllustrationPrompt(SCENE, [member({ reference: file() })]);
     expect(p).toMatch(/nothing else/i);
     expect(p).toMatch(/background/i);
   });
@@ -73,7 +80,7 @@ describe("the illustration prompt", () => {
     // The defect the first real generation found: a quest story about William
     // Tyndale came back with Tyndale drawn as Barnabas. The scene wanted an
     // older man at a desk and there was one attached.
-    const p = composeIllustrationPrompt(SCENE, [member({ reference: Buffer.from("a") })]);
+    const p = composeIllustrationPrompt(SCENE, [member({ reference: file() })]);
     expect(p).toContain("Everyone else in the picture is a different person");
   });
 
@@ -87,7 +94,7 @@ describe("the illustration prompt", () => {
 
   it("never collapses into blank space or 'undefined'", () => {
     const p = composeIllustrationPrompt(SCENE, [
-      member({ reference: Buffer.from("a") }),
+      member({ reference: file() }),
       member({ name: "Ben", look: "Ben, a boy." }),
     ]);
     expect(p).not.toContain("undefined");
@@ -168,9 +175,23 @@ describe("the Timekeeper's face", () => {
     // Asserted as an invariant rather than a path typed twice: the constant
     // names it, and a picture prompt that quietly loses its reference is the
     // silent failure this whole module exists to stop.
-    const file = path.join(process.cwd(), "public", "images", KEEPER_FACE_FILE);
-    expect(fs.existsSync(file)).toBe(true);
-    expect(fs.statSync(file).size).toBeGreaterThan(1024);
+    const shipped = path.join(process.cwd(), "public", "images", KEEPER_FACE_FILE);
+    expect(fs.existsSync(shipped)).toBe(true);
+    expect(fs.statSync(shipped).size).toBeGreaterThan(1024);
+  });
+
+  it("is in a format the images API will take", () => {
+    // png, webp or jpg. He ships as webp -- the artwork is a photographic
+    // render, and PNG costs 2.2MB against 167KB for the same picture -- so
+    // the extension is not decoration and the API is told what it is being
+    // handed. Sent under the wrong type it is a 400, and a 400 costs the
+    // whole picture rather than one likeness.
+    expect(KEEPER_FACE_FILE).toMatch(/\.(png|webp|jpe?g)$/i);
+  });
+
+  it("is small enough to ship in every clone and every image layer", () => {
+    const shipped = path.join(process.cwd(), "public", "images", KEEPER_FACE_FILE);
+    expect(fs.statSync(shipped).size).toBeLessThan(400 * 1024);
   });
 
   it("is not shipped inside the volume that shadows it", () => {

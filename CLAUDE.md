@@ -446,6 +446,21 @@ different child, and the only sign was one line in the log.
   it is shadowed at runtime. `attached_assets/` is not in the runtime image
   at all. `KEEPER.look` is the sentence that stands in if the file cannot be
   read; `worldCanon()` does not render it.
+- **Shipped artwork is webp, and the source PNG stays in `attached_assets`.**
+  These renders are photographic, which PNG is the wrong container for: 2.2MB
+  against 167KB for the same picture at 1024px. The images API takes png,
+  webp and jpg, and `mimeFor()` follows the extension — a reference sent
+  under the wrong type is a 400 that costs the whole picture. There is no
+  image tooling in this container and none in the repo; convert with a
+  throwaway install rather than adding a native dependency to `package.json`
+  for an occasional job:
+
+  ```bash
+  npm i --prefix /tmp/imgtools sharp
+  node -e "require('/tmp/imgtools/node_modules/sharp')('attached_assets/X.png')
+    .resize(1024,1024).webp({quality:88}).toFile('public/images/x.webp')"
+  ```
+
 - **He is attached ONLY when the scene names him**, and that is the second
   answer. The first attached him to every quest and marked him optional
   ("need not appear"), so a scene calling him "the old shopkeeper" could not
