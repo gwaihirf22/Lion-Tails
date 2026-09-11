@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { questLengthAllowed, QUEST_PREFERRED_LENGTH } from "@shared/quests";
+import { questLengthAllowed, QUEST_PREFERRED_LENGTH, QUEST_LENGTHS } from "@shared/quests";
+import { storyTakesAWhile, SLOW_STORY_LENGTHS } from "@shared/schema";
 import {
   CANON,
   KEEPER,
@@ -1925,5 +1926,31 @@ describe("a traveller is in the account, not watching it", () => {
       "chapter",
     );
     expect(plain).not.toMatch(/is IN this and not watching it/);
+  });
+});
+
+describe("how long a story takes to write", () => {
+  /**
+   * A story is written a chapter at a time, so the length IS the wait. Nothing
+   * is broken while it happens, and a reader who does not know that thinks it
+   * has hung.
+   */
+  it("warns for long and up", () => {
+    expect(storyTakesAWhile("long")).toBe(true);
+    expect(storyTakesAWhile("extended")).toBe(true);
+    expect(storyTakesAWhile("epic")).toBe(true);
+  });
+
+  it("says nothing for the quick ones", () => {
+    expect(storyTakesAWhile("very-short")).toBe(false);
+    expect(storyTakesAWhile("short")).toBe(false);
+    expect(storyTakesAWhile("medium")).toBe(false);
+    expect(storyTakesAWhile(undefined)).toBe(false);
+  });
+
+  it("is its own list, not the quest floor wearing a hat", () => {
+    // They match today and answer different questions. Tying them together
+    // means moving the quest floor silently changes who gets warned.
+    expect(SLOW_STORY_LENGTHS).not.toBe(QUEST_LENGTHS);
   });
 });

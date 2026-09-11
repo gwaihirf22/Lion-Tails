@@ -1357,6 +1357,25 @@ export function characterSearchText(c: Character): string {
 
 // Schema for story generation with optional fields
 /** The most characters one story can hold. */
+/**
+ * Lengths that are worth warning somebody about before they wait for one.
+ *
+ * A story is written a chapter at a time, so the wait scales with the length:
+ * long is five model calls and epic is seven, and an epic measured at 208
+ * seconds even after the chapters were made bigger. Nothing is broken while
+ * that happens, and a reader who does not know that thinks it is.
+ *
+ * SEPARATE FROM QUEST_LENGTHS even though the two lists currently match. They
+ * answer different questions -- "will this take a while" and "can a quest fit
+ * in this" -- and tying them together means moving the quest floor silently
+ * changes who gets warned.
+ */
+export const SLOW_STORY_LENGTHS = ["long", "extended", "epic"] as const;
+
+export function storyTakesAWhile(storyLength?: string | null): boolean {
+  return SLOW_STORY_LENGTHS.includes((storyLength ?? "") as (typeof SLOW_STORY_LENGTHS)[number]);
+}
+
 export const MAX_STORY_CHARACTERS = 8;
 
 

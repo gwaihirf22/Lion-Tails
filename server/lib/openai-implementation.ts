@@ -53,6 +53,28 @@ import { generateStoryImage, illustrationCast } from "./illustration";
 
 // Helper function to get word count from length setting
 /**
+ * Words per chapter, and the reason it is not 500 any more.
+ *
+ * 500 was chosen for the models this app was built on, which lost the thread
+ * over a longer stretch. The current ones do not, and the cost of pretending
+ * otherwise is paid twice: a 5000-word story was twelve model calls and three
+ * and a half minutes, and every chapter after the first carries the ENTIRE
+ * story so far in its prompt -- so halving the chapter count roughly quarters
+ * the tokens spent re-reading it.
+ *
+ * 1000 and not more. TOKEN_BUDGET.chapter is 4096 output tokens and a
+ * 1000-word chapter is about 1350, which leaves the same headroom a 500-word
+ * one had. Past that the budget, not the model, becomes the limit.
+ *
+ * WHAT THIS COSTS A QUEST, because it is not free: part one is the way in and
+ * the account gets the rest, so fewer parts means the fixed part is a bigger
+ * share. At long that is 3 parts rather than 5 -- the account drops from 80%
+ * of the words to 67% -- while the words themselves are unchanged. Measured
+ * on a real quest before this shipped, not assumed.
+ */
+const WORDS_PER_CHAPTER = 1000;
+
+/**
  * How many chapters a story of this length is planned as.
  *
  * Single source: the outline prompt, the outline's length validation and the
@@ -63,7 +85,7 @@ import { generateStoryImage, illustrationCast } from "./illustration";
  * structural 33% undershoot before the model was even involved.
  */
 function getChapterCount(targetWordCount: number): number {
-  return Math.max(3, Math.ceil(targetWordCount / 500));
+  return Math.max(3, Math.ceil(targetWordCount / WORDS_PER_CHAPTER));
 }
 
 /**
