@@ -75,7 +75,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Sparkles, RefreshCw, RotateCcw, X, Plus, Lock } from "lucide-react";
+import { Loader2, Sparkles, RefreshCw, RotateCcw, X, Plus, Lock, ImagePlus, Upload } from "lucide-react";
+import { pngFromFile, AVATAR_FILE_ACCEPT } from "@/lib/imageFile";
 import {
   Tooltip,
   TooltipContent,
@@ -474,6 +475,33 @@ export default function CharacterForm({
     void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
   };
 
+  /**
+   * Why a picture did not arrive, in the words of the thing that refused.
+   *
+   * One function for all three ways of asking, because the failures are the
+   * same failures -- and because the server is the only thing that knows which
+   * one happened. The description is ALWAYS the server's own message; the title
+   * only sorts it into a kind. `avatar_refused` earns its own title: "that did
+   * not work" invites pressing the button again, and pressing it again is
+   * exactly what will not help when the model has declined to draw something.
+   */
+  const reportAvatarFailure = (status: number, body: { code?: string; message?: string }) => {
+    toast({
+      title:
+        status === 409
+          ? "No room for another picture"
+          : status === 403
+            ? "No free pictures left"
+            : status === 415
+              ? "That file was not a picture"
+              : body?.code === "avatar_refused"
+                ? "It would not draw that"
+                : "That did not work",
+      description: body?.message ?? "Please try again.",
+      variant: "destructive",
+    });
+  };
+
   const makeAvatar = async () => {
     if (!saved?.id || drawing) return;
     setAskOpen(false);
@@ -485,16 +513,7 @@ export default function CharacterForm({
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast({
-          title:
-            res.status === 409
-              ? "No room for another picture"
-              : res.status === 403
-                ? "No free pictures left"
-                : "That did not work",
-          description: body?.message ?? "Please try again.",
-          variant: "destructive",
-        });
+        reportAvatarFailure(res.status, body);
         return;
       }
       // Straight onto the form, so the picture appears without a refetch, and
@@ -512,6 +531,77 @@ export default function CharacterForm({
       // after the client gave up shows up here rather than staying invisible.
       void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
     }
+  };
+
+  /**
+   * A picked file becomes this character's portrait.
+   *
+   * `mode` is the whole difference, and it is the server's word for it:
+   * `drawing` sends the photograph to be drawn from and KEEPS NOTHING of it --
+   * Blake asked for the source image to be discarded, and the route never
+   * writes it anywhere -- while `photo` keeps the file as the portrait.
+   *
+   * A PLAIN `fetch`, not apiRequestAllowingErrors, which JSON-stringifies its
+   * body and would post the string "[object Blob]". Same origin, so the session
+   * cookie is sent by default; the Bearer header the other helper adds is
+   * omitted deliberately, because nothing on the server reads one -- `grep -rn
+   * Authorization server/` finds nothing, and auth here is passport's session.
+   *
+   * Shares the single `drawing` flag with the draw button, so all three
+   * controls disable together. Two of them cost money and none of them should
+   * be pressable twice.
+   */
+  const uploadPhoto = async (file: File, mode: "drawing" | "photo") => {
+    if (!saved?.id || drawing) return;
+    setDrawing(true);
+    try {
+      // Converted here, not on the server: see client/src/lib/imageFile.ts.
+      // Throws a sentence worth showing when the browser cannot read the file.
+      const png = await pngFromFile(file);
+
+      const res = await fetch(`/api/characters/${saved.id}/avatar/photo?mode=${mode}`, {
+        method: "POST",
+        headers: { "Content-Type": "image/png" },
+        body: png,
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        reportAvatarFailure(res.status, body);
+        return;
+      }
+      applyCharacter(body.character);
+      if (typeof body.remaining === "number") setRemaining(body.remaining);
+      void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+    } catch (error) {
+      // A decode failure says something specific and useful ("try a JPEG or
+      // PNG"); anything else is a network fault and says the generic thing.
+      toast({
+        title: "That did not work",
+        description:
+          error instanceof Error && error.message
+            ? error.message
+            : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDrawing(false);
+      void queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+    }
+  };
+
+  /**
+   * One file input for two buttons.
+   *
+   * The mode is held in a ref rather than state because it is set immediately
+   * before `.click()`, and a state update is not applied by the time the
+   * synchronous click runs -- the picker would open carrying the PREVIOUS
+   * button's mode. A ref is written at once.
+   */
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const photoMode = useRef<"drawing" | "photo">("drawing");
+  const pickPhoto = (mode: "drawing" | "photo") => {
+    photoMode.current = mode;
+    photoInputRef.current?.click();
   };
 
   /**
@@ -983,25 +1073,119 @@ export default function CharacterForm({
                 <div className="min-w-0 flex-1 space-y-2">
                   {saved?.id ? (
                     <>
-                      <Button type="button" variant="outline" size="sm"
-                              className="w-full sm:w-auto"
-                              onClick={() => setAskOpen(true)}
-                              disabled={drawing || gallery.length >= avatarCap}>
-                        {drawing
-                          ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Drawing…</>
-                          : <><Sparkles className="mr-2 h-4 w-4" />
-                              {form.watch("avatarUrl") ? "Draw a new picture" : "Make a picture"}</>}
-                      </Button>
+                      {/*
+                        THREE WAYS TO GET A PICTURE, all three on screen.
+
+                        Blake asked for this shape: "we need to make it clear
+                        what these different buttons will do, and that you can
+                        just upload an image." Folding the two uploads behind
+                        the draw button would have made the tab tidier and
+                        hidden the thing he wanted discoverable -- nobody
+                        presses "Make a picture" to find out whether it takes
+                        one they already have.
+
+                        Stacked rather than in a row: three labels this long do
+                        not share a line on a phone, and the middle one is a
+                        sentence.
+
+                        `full` is off `busy`, not off each button's own state,
+                        so pressing any one of them disables all three. Two of
+                        them spend money.
+                      */}
+                      {(() => {
+                        const full = gallery.length >= avatarCap;
+                        const busy = drawing || full;
+                        return (
+                          <div className="space-y-3">
+                            <div className="space-y-1">
+                              <Button type="button" variant="outline" size="sm"
+                                      className="w-full justify-start sm:w-auto"
+                                      onClick={() => setAskOpen(true)}
+                                      disabled={busy}>
+                                {drawing
+                                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Working…</>
+                                  : <><Sparkles className="mr-2 h-4 w-4" />
+                                      {form.watch("avatarUrl") ? "Draw a new picture" : "Draw a picture"}</>}
+                              </Button>
+                              <p className="text-xs text-muted-foreground">
+                                From how you describe them below.
+                              </p>
+                            </div>
+
+                            <div className="space-y-1">
+                              <Button type="button" variant="outline" size="sm"
+                                      className="w-full justify-start sm:w-auto"
+                                      onClick={() => pickPhoto("drawing")}
+                                      disabled={busy}>
+                                <ImagePlus className="mr-2 h-4 w-4" />
+                                Turn a photo into a drawing
+                              </Button>
+                              <p className="text-xs text-muted-foreground">
+                                Your photo is used once and then thrown away. Only the drawing is kept.
+                              </p>
+                            </div>
+
+                            <div className="space-y-1">
+                              <Button type="button" variant="outline" size="sm"
+                                      className="w-full justify-start sm:w-auto"
+                                      onClick={() => pickPhoto("photo")}
+                                      disabled={busy}>
+                                <Upload className="mr-2 h-4 w-4" />
+                                Use a photo as it is
+                              </Button>
+                              <p className="text-xs text-muted-foreground">
+                                Kept exactly as you upload it. It does not have to be a person — a
+                                favourite toy works just as well.
+                              </p>
+                            </div>
+
+                            {/*
+                              Said once, under both uploads, and said accurately.
+                              Portraits ARE behind the login now (routes.ts
+                              serves this directory itself, ahead of the static
+                              mount) -- but a link is still a link, and somebody
+                              deciding whether to upload a photograph of their
+                              child deserves the real shape of it rather than
+                              the word "private".
+                            */}
+                            <p className="text-xs text-muted-foreground">
+                              Uploaded pictures are stored on this server behind your login, at
+                              their own address. Treat that address like an unlisted link rather
+                              than a locked drawer.
+                            </p>
+                          </div>
+                        );
+                      })()}
+
+                      {/*
+                        ONE input for both upload buttons; pickPhoto() sets
+                        which mode before opening it. Reset to "" afterwards so
+                        that picking the SAME file twice fires change again --
+                        without it, a person who uploads a photo, deletes it,
+                        and picks the same file gets nothing and no error.
+                      */}
+                      <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept={AVATAR_FILE_ACCEPT}
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = "";
+                          if (file) void uploadPhoto(file, photoMode.current);
+                        }}
+                      />
+
                       <p className="text-xs text-muted-foreground">
                         {drawing
                           ? "This takes about half a minute."
                           : gallery.length >= avatarCap
                               ? avatarCap === 1
-                                ? "Delete this one to draw another, or add your own API key in Settings to keep more."
-                                : `${avatarCap} pictures is the most one character can keep — delete one to draw another.`
+                                ? "Delete this one to add another, or add your own API key in Settings to keep more."
+                                : `${avatarCap} pictures is the most one character can keep — delete one to add another.`
                           : remaining === null
-                            ? "Drawn from the fields below, or from how you describe them under Grown-ups."
-                            : `${remaining} free ${remaining === 1 ? "picture" : "pictures"} left.`}
+                            ? ""
+                            : `${remaining} free ${remaining === 1 ? "picture" : "pictures"} left. Uploading one as it is costs nothing.`}
                       </p>
                     </>
                   ) : (
@@ -1647,6 +1831,17 @@ export default function CharacterForm({
               {gallery.length > 0
                 ? "Each new picture is drawn from the one chosen now, so it will stay close to it. For a really different look, change “How they look, for pictures” and delete the old pictures first."
                 : "Drawn from what they look like on this tab."}
+            </p>
+
+            {/*
+              Here, because here is where somebody is about to type "Yoshi".
+              Blake hit exactly that and got back a bare failure. The refusal
+              now has its own message when it happens; this is the half that
+              saves the attempt, and the wasted picture, in the first place.
+            */}
+            <p className="text-xs text-muted-foreground">
+              Naming a character from a film, a game or a book will often be refused — describe
+              them in your own words instead.
             </p>
 
             <DialogFooter className="gap-2 sm:justify-between">

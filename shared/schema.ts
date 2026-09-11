@@ -741,6 +741,26 @@ export const generatedPictureSchema = z.object({
   /** What made it. Reused verbatim, and shown to nobody. */
   prompt: z.string(),
   createdAt: z.string(),
+  /**
+   * Where the picture came from, when that changes how it may be used.
+   *
+   * OPTIONAL, AND ABSENT MEANS "drawn" -- which is what every row written
+   * before this existed already says, so there is nothing to migrate. Only an
+   * uploaded-and-kept photograph sets it; a photograph that was cartoonised is
+   * a drawing by the time it is stored.
+   *
+   * It exists for one reader: `illustrationCast` passes it to the illustration
+   * prompt, so a story drawn from a real face is told to draw a person rather
+   * than reproduce a photograph. Do not remove it as unused without checking
+   * `chosenAvatarIsPhoto`.
+   *
+   * This field MUST be declared here to survive a write. Every character write
+   * goes through `characterSchema`, which is a `z.object` and therefore strips
+   * keys it does not know about -- a `source` set in a route and missing from
+   * this schema would be dropped silently, on the way to the database, with
+   * the route's own tests still passing.
+   */
+  source: z.enum(["drawn", "photo"]).optional(),
 });
 
 export type GeneratedPicture = z.infer<typeof generatedPictureSchema>;
@@ -1297,6 +1317,29 @@ export function avatarsOf(
       createdAt: character.createdAt ?? new Date().toISOString(),
     },
   ];
+}
+
+/**
+ * Is the portrait this character is currently WEARING a photograph?
+ *
+ * Keyed on `avatarUrl` -- the chosen one -- and not on "do they have a
+ * photograph anywhere", because a character can hold a photograph and a drawing
+ * at once and only one of them is the reference a story will be drawn from.
+ * Choosing the drawing must stop the photograph mattering.
+ *
+ * False for every row written before `source` existed, which is correct: those
+ * are all drawings. False, too, for a character with no portrait at all, where
+ * there is no reference image and the question does not arise.
+ */
+export function chosenAvatarIsPhoto(
+  character?: Partial<
+    Pick<Character, "avatars" | "avatarUrl" | "avatarPrompt" | "createdAt">
+  > | null,
+): boolean {
+  if (!character?.avatarUrl) return false;
+  return avatarsOf(character).some(
+    (a) => a.url === character.avatarUrl && a.source === "photo",
+  );
 }
 
 /**

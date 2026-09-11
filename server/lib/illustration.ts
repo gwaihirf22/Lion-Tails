@@ -40,6 +40,7 @@ import { toFile } from "openai";
 import {
   characterIdsOf,
   characterRoleOf,
+  chosenAvatarIsPhoto,
   type Character,
   type StoryRequest,
 } from "@shared/schema";
@@ -89,6 +90,12 @@ export type IllustrationMember = {
   look: string;
   /** Their picture, when there is one. This is what actually works. */
   reference?: PictureFile;
+  /**
+   * True when that picture is a PHOTOGRAPH somebody uploaded, rather than a
+   * drawing this app made. It changes what the prompt asks for -- take the
+   * face, do not take the medium -- and nothing else.
+   */
+  fromPhoto?: boolean;
 };
 
 /**
@@ -197,6 +204,10 @@ export async function illustrationCast(
         // shows and the one a parent picked. Always a png -- readAvatarFile
         // will not return anything else.
         reference: await portraitFile(character.avatarUrl),
+        // Read from the SAME field the reference came from, so the two cannot
+        // drift: a character holding both a photograph and a drawing is only
+        // "from a photo" while the photograph is the one chosen.
+        fromPhoto: chosenAvatarIsPhoto(character),
       });
     }
   }
@@ -275,6 +286,25 @@ export function composeIllustrationPrompt(
     // to label an input image, so the prompt is what says which is which.
     matched.forEach((m, i) => {
       parts.push(`Reference image ${i + 1} is ${m.look}`);
+      /**
+       * A photograph is a likeness, not a style to copy.
+       *
+       * Said per-member and immediately after that member's own line, so the
+       * numbering every other instruction depends on is untouched, and so a
+       * cast of three with one photograph does not tell the model that all
+       * three are photographs.
+       *
+       * Emitted ONLY when a photograph is actually in the cast. Every story
+       * without one must render the string this function has always rendered
+       * -- the promise in the note above, and there is a test on it.
+       */
+      if (m.fromPhoto) {
+        parts.push(
+          `Reference image ${i + 1} is a photograph, not a drawing.` +
+            " Take the face, hair and colouring from it, but draw this person" +
+            " in the storybook style — never reproduce the photograph.",
+        );
+      }
     });
     parts.push(
       "Take each person's face, hair, colouring and clothing from their own reference image and nothing else" +

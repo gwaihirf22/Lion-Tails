@@ -393,6 +393,70 @@ directory and is the right path: the parent is the mount point of the
 `story_images` volume, so anything written there survives a redeploy and
 anything written beside it does not.
 
+### From a photograph
+
+Blake: *"turns a real life image into an avatar… doesn't keep the image… And I
+also just want to have where you can upload an image and leave the image there.
+So it is what it is."* Three buttons on the Appearance tab, each saying what it
+does: **Draw a picture**, **Turn a photo into a drawing**, **Use a photo as it
+is**. One route, `POST /api/characters/:id/avatar/photo?mode=drawing|photo`.
+
+- **`drawing` never writes the photograph.** It is a Buffer handed to
+  `generateAvatar({ photo })` as the `images.edit` reference and dropped — the
+  way to make "discarded" true is for no code on that path to be able to write
+  it. Charged and refunded exactly like a generation, because it is one.
+  Verified: one upload, one new file in the directory, and it is the drawing.
+- **`photo` keeps the file and charges nothing.** There is no model call, and
+  `MAX_FREE_AVATARS` bounds what the owner spends. The per-character cap still
+  binds both modes; that one bounds what a character holds.
+- **Raw bytes, `image/png` only, via `express.raw` on that route alone.** The
+  browser converts first (`client/src/lib/imageFile.ts`: EXIF-rotated, fitted to
+  1024, re-encoded) so there is no `sharp` in the build and ONE format in
+  `AVATAR_DIR` — `readAvatarFile` only reads `avatar_<uuid>.png`, and
+  `illustration.ts` sends these declaring `image/png`. `isPngImage` checks the
+  magic bytes, never the header. **Do not copy `pages/ImageAnalysis.tsx`**: it
+  posts base64 through `express.json()`'s 100kb default and cannot have worked
+  on a real photo.
+- **`storeAvatarFile` is the one place a portrait is named and written.**
+  `generateAvatar` uses it too. A file named any other way is served fine and
+  then silently skipped the first time a story tries to draw that character.
+- **`source: "photo"` marks a kept photograph**, on `generatedPictureSchema`,
+  optional, absent means drawn — so no migration. It **must** be declared there:
+  `characterSchema` is a `z.object` and strips unknown keys, so a `source` set in
+  the route and missing from the schema is dropped on the way to the database
+  with every route test still green. A cartoonised photo is NOT marked: by the
+  time it is stored it is a drawing.
+- **A story is told when its reference is a photograph.**
+  `chosenAvatarIsPhoto()` — keyed on the CHOSEN portrait, so choosing a drawing
+  stops a photograph mattering — sets `fromPhoto` in `illustrationCast`, and
+  `composeIllustrationPrompt` adds one line straight after that member's own:
+  *"Reference image N is a photograph, not a drawing… never reproduce the
+  photograph."* Per member, so the numbering is untouched; only when a photo is
+  in the cast, so every other picture renders the string it always did.
+- **A refusal is not a failure.** `looksLikeRefusal()` → `avatar_refused` →
+  "it will not draw that, describe them in your own words", instead of "try
+  again". Blake hit it asking for Yoshi; OpenAI's real answer is `400 Your
+  request was rejected by the safety system`. Deliberately tight: a 400 whose
+  message is not about moderation — `input_fidelity`, say — is ours, and must
+  not be reported to a parent as theirs.
+
+### Portraits are behind the login
+
+`GET /public/images/stories/avatars/:file` is a `requireAuth` route in
+`routes.ts`, serving through `readAvatarFile` (the one traversal guard) with
+`Cache-Control: private` so SWAG cannot hand one family's portrait to another.
+Story illustrations beside it stay static.
+
+**It works only because of where the static mount is.** `server/index.ts`
+mounts `/public` statically AFTER `registerRoutes`, because `setupAuth` runs
+inside it. **Moving that line back above `registerRoutes` is silent**: nothing
+errors, no test fails, and every portrait answers 200 without a session again.
+Check with `curl` — an avatar url with no cookie must be 401.
+
+This is possible at all because **the client's Bearer header is vestigial**:
+nothing in `server/` reads `Authorization`, auth is the passport session
+cookie, and an `<img>` sends that on a same-origin request.
+
 ## The picture at the end of a story
 
 `server/lib/illustration.ts` is the only place a story is drawn.

@@ -53,9 +53,6 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
 
-  // Serve static files from the public directory
-  app.use("/public", express.static(path.join(process.cwd(), "public")));
-
   app.use((req, res, next) => {
     const start = Date.now();
     const reqPath = req.path;
@@ -103,6 +100,22 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   }
 
   const server = await registerRoutes(app);
+
+  /**
+   * Serve static files from the public directory.
+   *
+   * AFTER registerRoutes, and that is the whole of how character portraits are
+   * protected. `setupAuth` runs inside registerRoutes, so a guard registered
+   * before this point has no session to read; and express.static answers the
+   * first matching request, so a static mount above the routes would serve
+   * every portrait to anybody with the url before the guard was ever consulted.
+   *
+   * Moving this line back up is silent: nothing errors, no test fails, and
+   * `/public/images/stories/avatars/...` simply starts answering 200 without a
+   * session again. Everything registered in registerRoutes is `/api/*` or that
+   * one avatar path, so nothing else competes for these urls.
+   */
+  app.use("/public", express.static(path.join(process.cwd(), "public")));
 
   // Seed reference data before we start listening, so the app never serves a
   // half-populated Heroes of Faith list. Resolves quickly when there is no
