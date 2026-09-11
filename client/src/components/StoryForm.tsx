@@ -41,12 +41,62 @@ import { useToast } from "@/hooks/use-toast";
 import PromptEditor from "./PromptEditor";
 import { ROLE_OPTIONS } from "@/lib/characterRole";
 import { QUEST_SERIES_TITLE } from "@shared/quests";
+import { cn } from "@/lib/utils";
+import barnabasSign from "@/assets/barnabas-sign.webp";
+import lantern from "@/assets/lantern.webp";
+
+/**
+ * The box a group of questions sits in.
+ *
+ * The wrapper was written out three times. The tint is what makes the groups
+ * read as different KINDS of question rather than one long form -- the reader
+ * should be able to see that "Set it somewhere real" is not the same sort of
+ * thing as "Part of a series?" without reading either.
+ *
+ * The headers are deliberately NOT folded in here. The three differ in shape --
+ * one carries a Switch, one a link, one conditional prose -- and abstracting
+ * them would mean three optional slots each used once, which is the kind of
+ * API this codebase has been bitten by before.
+ *
+ * `tint` is a COMPLETE class string and is never interpolated. Tailwind only
+ * ever sees literals, and `tests/theme.test.ts` greps this source for every
+ * `bg-tab-*` it is expected to know about; `lib/storyFolders.ts` follows the
+ * same rule for the same reason. See ci.yml on the colour picker that did
+ * nothing for months.
+ */
+function FormSection({
+  tint,
+  className,
+  children,
+}: {
+  tint: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn("rounded-lg border border-border p-4", tint, className)}>
+      {children}
+    </div>
+  );
+}
 
 /**
  * The radio itself, so neither tab owns the markup.
  *
  * Takes value and onChange rather than a react-hook-form field object, so it
  * cannot silently accept the wrong controller.
+ *
+ * `travels` is dressed and the others are not, and that asymmetry is the point.
+ * The section used to be branded "Quests of the Timekeeper" as a whole, which
+ * over-promised: `alongside` has no journey, no lantern and no Barnabas in it
+ * -- it is only similar in that it puts the character in the past. Moving the
+ * shop sign, the lantern and the gold onto the option that actually uses them
+ * makes the Timekeeper MORE prominent, not less, and leaves "they were always
+ * there" quietly distinct without needing any decoration of its own.
+ *
+ * Both images are decorative: the eyebrow says "Quests of the Timekeeper" in
+ * text right beside the sign, so announcing them again to a screen reader would
+ * be noise.
  */
 function RoleChoices({
   value,
@@ -67,17 +117,55 @@ function RoleChoices({
       className="space-y-2"
       disabled={disabled}
     >
-      {options.map((key) => (
-        <FormItem key={key} className="flex items-start space-x-3 space-y-0">
-          <FormControl>
-            <RadioGroupItem value={key} className="mt-1" disabled={disabled} />
-          </FormControl>
-          <div className="space-y-1 leading-none">
-            <FormLabel className="font-medium">{ROLE_OPTIONS[key].label}</FormLabel>
-            <FormDescription>{ROLE_OPTIONS[key].description}</FormDescription>
+      {options.map((key) => {
+        const isQuest = key === "travels";
+        return (
+          <div
+            key={key}
+            className={cn(
+              "rounded-lg border p-3",
+              isQuest
+                ? "border-tab-virtues bg-tab-virtues/40"
+                : "border-border bg-card/60",
+            )}
+          >
+            {isQuest && (
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span className="brand-wordmark text-xs uppercase tracking-wide text-muted-foreground">
+                  {QUEST_SERIES_TITLE}
+                </span>
+                <img
+                  src={barnabasSign}
+                  alt=""
+                  aria-hidden="true"
+                  loading="lazy"
+                  className="h-10 w-auto shrink-0 sm:h-12"
+                />
+              </div>
+            )}
+            <FormItem className="flex items-start space-x-3 space-y-0">
+              <FormControl>
+                <RadioGroupItem value={key} className="mt-1" disabled={disabled} />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel className="flex items-center gap-2 font-medium">
+                  {isQuest && (
+                    <img
+                      src={lantern}
+                      alt=""
+                      aria-hidden="true"
+                      loading="lazy"
+                      className="h-6 w-auto shrink-0"
+                    />
+                  )}
+                  {ROLE_OPTIONS[key].label}
+                </FormLabel>
+                <FormDescription>{ROLE_OPTIONS[key].description}</FormDescription>
+              </div>
+            </FormItem>
           </div>
-        </FormItem>
-      ))}
+        );
+      })}
     </RadioGroup>
   );
 }
@@ -541,7 +629,7 @@ export default function StoryForm({
                 the same question and there was nothing to say that a name typed
                 here is thrown away when the story is written. */}
             {formType === "original" && showChildFields && characterIdsOf(form.watch()).length === 0 && (
-              <div className="space-y-4 rounded-lg border border-border bg-muted/40 p-4">
+              <FormSection tint="bg-tab-basics/40" className="space-y-4">
                 <div className="space-y-1">
                   <h3 className="text-sm font-semibold">Quick Character</h3>
                   <p className="text-xs text-muted-foreground">
@@ -657,7 +745,7 @@ export default function StoryForm({
                     )}
                   />
                 )}
-              </div>
+              </FormSection>
             )}
             
             {formType === "original" && (
@@ -817,7 +905,7 @@ export default function StoryForm({
                 story know who appeared and what is now true, so it is opt-in --
                 a one-off story should not pay for it. A CONTINUATION implies it
                 without the box, which is why the box hides itself there. */}
-            <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
+            <FormSection tint="bg-tab-stories/40" className="space-y-3">
               <h3 className="text-sm font-semibold">Part of a series?</h3>
 
               {isContinuation ? (
@@ -876,7 +964,7 @@ export default function StoryForm({
                   )}
                 />
               )}
-            </div>
+            </FormSection>
 
             
             {/* Character selection has been moved to the top of the form */}
@@ -1002,14 +1090,15 @@ export default function StoryForm({
                 could meet Caleb and never see the ark. The lantern exists for
                 the ark. */}
             {formType === "original" && showHeroOfFaith && (
-              <div className="space-y-3 rounded-lg border border-border bg-muted/40 p-4">
+              <FormSection tint="bg-muted/40" className="space-y-3">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
-                    {/* Slot for the shop sign: a wide image, h-8 to h-10, on
-                        the right of this eyebrow, when the file is in the repo. */}
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      {QUEST_SERIES_TITLE}
-                    </p>
+                    {/* The eyebrow that used to be here said "Quests of the
+                        Timekeeper" over BOTH ways in, and only one of them is
+                        one. It now sits on the quest option itself, in
+                        RoleChoices, with the shop sign beside it. This heading
+                        is the honest name for the gate: what it turns on is a
+                        real setting, and the Timekeeper is one way into it. */}
                     <h3 className="text-sm font-semibold">Set it somewhere real</h3>
                     <p className="text-xs text-muted-foreground">
                       Put your character into an event that happened, or beside
@@ -1082,7 +1171,7 @@ export default function StoryForm({
                     )}
                   />
                 </div>
-              </div>
+              </FormSection>
             )}
 
 
