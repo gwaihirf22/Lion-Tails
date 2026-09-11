@@ -532,7 +532,7 @@ describe("story focus aims a life at one episode", () => {
     const text = withFocus({ mode: "chosen", text: "Arrested and sent to Ravensbruck", reference: "1944" });
     expect(text).toContain("This story covers ONE episode (1944): Arrested and sent to Ravensbruck");
     // The instruction that actually prevents a life summary.
-    expect(text).toContain("do not open with where they were born");
+    expect(text).toContain("do not open with a birth");
   });
 
   it("ignores a mode with no text", () => {
@@ -1116,7 +1116,7 @@ describe("a retelling requested with a real character's name", () => {
    */
   it("tells an alongside story the hero stays on mission and the character lives", () => {
     const t = renderBrief(brief({ characterRole: "alongside" }), "single");
-    expect(t).toContain("stays on their mission");
+    expect(t).toContain("stays on that mission");
     expect(t).toContain("does not die");
     expect(t).toContain("never the one standing in the way");
     expect(t).toContain("the same events");
@@ -1139,8 +1139,8 @@ describe("a retelling requested with a real character's name", () => {
       [], undefined, { ...hero, famousQuote: "Give me this hill country." } as HeroOfFaith,
     );
     const t = renderBrief(withQuote, "single");
-    expect(t).not.toContain("Quiets the people In their own words");
-    expect(t).toContain("Numbers 13:30: Quiets the people. In their own words:");
+    expect(t).not.toContain("Quiets the people In Caleb's own words");
+    expect(t).toContain("Numbers 13:30: Quiets the people. In Caleb's own words:");
   });
 });
 
@@ -1580,11 +1580,11 @@ describe("the world of a quest", () => {
     expect(travels).toContain(worldAnchor());
     expect(travels).toContain("the Lion does not appear");
     expect(travels).toContain("does not die");
-    expect(travels).toContain("do not let them change what happened");
+    expect(travels).toContain("does not change what happened");
 
     const alongside = renderBrief(quest({ characterRole: "alongside" }), "chapter");
     expect(alongside).not.toContain(KEEPER.shortName);
-    expect(alongside).toContain("stays on their mission");
+    expect(alongside).toContain("stays on that mission");
     expect(alongside).toContain("does not die");
   });
 
@@ -1663,20 +1663,20 @@ describe("how well the travellers know the shop", () => {
     expect(f).toContain("has never been");
     expect(f).toMatch(/weight of the opening/);
     // And forbids the thing a model reaches for instead: explaining it.
-    expect(f).toMatch(/do not have anyone give them a tour/i);
+    expect(f).toMatch(/do not have anyone give a tour/i);
   });
 
   it("makes a second visit a recognition, not a discovery", () => {
     const f = one(1);
     expect(f).toContain("has been once");
-    expect(f).toMatch(/not sure it will be there again/);
+    expect(f).toMatch(/no knowing whether it will be there again/);
     expect(f).not.toMatch(/never been/);
   });
 
   it("stops explaining after that", () => {
     const f = one(4);
     expect(f).toMatch(/knows the shop, the man and what the lantern does/);
-    expect(f).toMatch(/Explain none of it to them again/);
+    expect(f).toMatch(/Explain none of it again/);
     expect(f).not.toMatch(/never been|been once/);
   });
 
@@ -1726,7 +1726,7 @@ describe("a quest does not begin in the shop", () => {
     expect(CANON.beginning).toMatch(/own life, never in the shop/);
     expect(CANON.beginning).toMatch(/a moment, not a/i);
     expect(CANON.beginning).toMatch(/NOTHING ever says so/);
-    expect(CANON.beginning).toMatch(/Only they see it/);
+    expect(CANON.beginning).toMatch(/Only the traveller sees it/);
   });
 
   it("says the shop may appear where it could not be exactly once", () => {
@@ -1802,9 +1802,9 @@ describe("the stone, and being seen again", () => {
   it("is never at the traveller's asking, which is the half of the old rule that mattered", () => {
     // A device the child can work is an escape hatch, and a story they can
     // leave whenever it gets hard has nothing at stake.
-    expect(DEVICE.rules).toMatch(/It decides, they do not/);
+    expect(DEVICE.rules).toMatch(/It decides, the traveller does not/);
     expect(DEVICE.rules).toMatch(/never answers being asked/);
-    expect(DEVICE.rules).toMatch(/will not take them home early/);
+    expect(DEVICE.rules).toMatch(/will not take the traveller home early/);
   });
 
   it("lets the figure remember them, and explains nothing", () => {
@@ -1846,9 +1846,9 @@ describe("a whole life, on a quest", () => {
 
   it("asks for scenes, not a summary, when no episode is chosen", () => {
     const b = heroQuest();
-    expect(b).toMatch(/covers more than one moment of their life/);
+    expect(b).toMatch(/covers more than one moment of .+'s life/);
     expect(b).toMatch(/play each as a real scene/);
-    expect(b).toMatch(/Do not narrate the years between them/);
+    expect(b).toMatch(/Do not narrate the years between those moments/);
   });
 
   it("treats an explicit whole life the same as none at all", () => {
@@ -1897,7 +1897,7 @@ describe("a traveller is in the account, not watching it", () => {
   it("tells them what they MAY do, and first", () => {
     const c = questChapter();
     expect(c).toMatch(/Mia is IN this and not watching it/);
-    expect(c).toMatch(/speak and are spoken to/);
+    expect(c).toMatch(/speaks and is spoken to/);
     // Before the prohibitions, not after them.
     expect(c.indexOf("is IN this")).toBeLessThan(c.indexOf("do not invent history"));
   });
@@ -1912,8 +1912,8 @@ describe("a traveller is in the account, not watching it", () => {
     // saying the character was invented, and that note stops being true the
     // moment the recorded events needed them.
     const c = questChapter();
-    expect(c).toMatch(/happens anyway, and never because of them/);
-    expect(c).toMatch(/do not let them change what happened/);
+    expect(c).toMatch(/happens anyway, and never because of /);
+    expect(c).toMatch(/does not change what happened/);
   });
 
   it("says none of it when there is no account to be in", () => {
@@ -1952,5 +1952,90 @@ describe("how long a story takes to write", () => {
     // They match today and answer different questions. Tying them together
     // means moving the quest floor silently changes who gets warned.
     expect(SLOW_STORY_LENGTHS).not.toBe(QUEST_LENGTHS);
+  });
+});
+
+/**
+ * One character is never "they".
+ *
+ * A story for two girls came back with "'You're being annoying,' they snapped"
+ * about one of them. The brief had said "Ellie, aged 10, a girl." plainly, so
+ * this was never missing data: storyBrief.ts and lionTails.ts between them
+ * wrote singular "they" about sixty times -- in the anchor that reprints every
+ * chapter and in the world canon -- and the model wrote back in the register it
+ * was handed.
+ *
+ * The prose is rewritten to name the person, and ONE_PERSON_PRONOUNS states the
+ * rule. This test is what stops either sliding back, because both are ordinary
+ * English sentences that anyone editing a prompt could reintroduce without
+ * noticing.
+ *
+ * The allowlist is the point. A blanket "no they/them/their" assertion cannot
+ * work -- several are correct plurals -- so every occurrence must match a known
+ * plural referent. A new singular one matches nothing and fails; a genuinely
+ * new plural means adding a line here, which is the deliberate act it should be.
+ */
+describe("one character is never 'they'", () => {
+  const lead: any = { id: "c1", name: "Mia", kind: "girl", age: 8, hair: "brown", eyes: "green" };
+  const req: any = { storyLength: "medium", storyType: "regular", useAnimal: true, theme: "kindness" };
+  const ruth: any = {
+    id: "bible-ruth", name: "Ruth", description: "A Moabite widow.", contribution: "Stayed.",
+    timePeriod: "Judges", keyEvents: [{ description: "Went with Naomi." }],
+    bibleVerse: { text: "x", reference: "Ruth 1:16" },
+  };
+
+  /** Occurrences that refer to something genuinely plural. */
+  const PLURAL_REFERENTS = [
+    "calls for them",             // the appearance details
+    "introduce them as a list",   // the appearance details
+    "do not make them",           // the common mistakes
+    "the account gives them",     // the real events
+    "not what happens to them", // the characters, plural
+    "the choices they make",    // the characters, plural
+  ];
+
+  const oneCast = (role: string, hero?: unknown) =>
+    buildStoryBrief(
+      { ...req, characterIds: ["c1"], ...(hero ? { heroOfFaith: "bible-ruth", characterRole: role } : {}) },
+      [lead],
+      undefined,
+      hero as any,
+    );
+
+  const purposes: BriefPurpose[] = ["single", "outline", "chapter", "image"];
+  const cases: Array<[string, ReturnType<typeof buildStoryBrief>]> = [
+    ["a quest", oneCast("travels", ruth)],
+    ["alongside", oneCast("alongside", ruth)],
+    ["no source at all", oneCast("absent")],
+  ];
+
+  for (const [label, brief] of cases) {
+    for (const purpose of purposes) {
+      it(`${label}, ${purpose}: every they/them/their is plural`, () => {
+        // The rule QUOTES the words it forbids, so the rule itself has to come
+        // out before scanning or it fails its own test.
+        const text = renderBrief(brief, purpose).replace(
+          /Each character named here is one person[\s\S]*?rather than a pronoun\./,
+          "",
+        );
+        const stray = [...text.matchAll(/\b(they|them|their|themselves)\b/gi)]
+          .map((m) => text.slice(Math.max(0, m.index! - 60), m.index! + 40).replace(/\s+/g, " "))
+          .filter((ctx) => !PLURAL_REFERENTS.some((ok) => ctx.includes(ok)));
+        expect(stray).toEqual([]);
+      });
+    }
+  }
+
+  it("states the rule wherever a character is named", () => {
+    for (const [, brief] of cases) {
+      for (const purpose of ["single", "outline"] as BriefPurpose[]) {
+        expect(renderBrief(brief, purpose)).toContain("is one person, not a group");
+      }
+    }
+  });
+
+  it("leaves it out of a retelling with nobody in it", () => {
+    const solo = buildStoryBrief({ ...req, biblicalEvent: "noah" } as any, []);
+    expect(renderBrief(solo, "single")).not.toContain("is one person, not a group");
   });
 });

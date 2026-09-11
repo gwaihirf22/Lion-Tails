@@ -58,7 +58,7 @@ const generateDefaultSystemPrompt = (storyRequest: StoryRequest) => {
 
   return `You are a Christian storyteller who creates engaging, faith-based stories that teach valuable lessons. Your stories should be:
 
-1. Written for a reader ${targetAge}, and willing to trust them with a hard thing
+1. Written for a reader ${targetAge}, and willing to trust that reader with a hard thing
 2. Incorporate biblical values and Christian themes naturally
 3. Feature relatable characters and situations
 4. Include a clear moral lesson or spiritual truth
@@ -132,7 +132,7 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
       // field exists to make impossible.
       const role = characterRoleOf(storyRequest);
       // The same words the radio shows -- one definition, not a paraphrase.
-      if (role !== "absent") prompt += `How they get there: ${ROLE_OPTIONS[role].label}\n`;
+      if (role !== "absent") prompt += `How the character gets there: ${ROLE_OPTIONS[role].label}\n`;
       if (storyRequest.biblePassage) prompt += `Bible Passage: ${storyRequest.biblePassage}\n`;
       if (storyRequest.biblicalEvent) prompt += `Biblical Event: ${storyRequest.biblicalEvent}\n`;
       

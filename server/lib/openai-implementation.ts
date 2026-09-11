@@ -320,9 +320,9 @@ const titleRuleFor = (brief: StoryBrief): string => (brief.world ? questTitleRul
 const questShape = (brief: StoryBrief): string =>
   brief.world
     ? `
-    This is a quest. Part 1 is the way in and nothing else: the moment in their
-    own life, the shop arriving where it could not be, going inside, and
-    stepping through. END part 1 as they cross over. The account itself begins
+    This is a quest. Part 1 is the way in and nothing else: the moment in the
+    traveller's own life, the shop arriving where it could not be, going inside,
+    and stepping through. END part 1 at the crossing over. The account itself begins
     in part 2 -- put none of it in part 1.
 `
     : "";
@@ -1142,7 +1142,7 @@ async function runGeneration(
       const invented =
         role === "travels"
           ? ` ${who} was added so it could be told as a quest -- ${KEEPER.name}, ${KEEPER.title}, ${DEVICE.name}, the journey and that meeting are all made up.`
-          : ` ${who} is invented. Nobody like them was there; everything that happens around them is what the account records.`;
+          : ` ${who} is invented. Nobody like ${who} was there; everything that happens around ${who} is what the account records.`;
       finalDetails.content +=
         `\n\n${MEETING_NOTE_HEADING} ${account.label} really lived, and what happens ` +
         `in this story is what the account records.` +

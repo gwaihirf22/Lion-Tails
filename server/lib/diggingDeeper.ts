@@ -125,7 +125,7 @@ export function buildDiggingDeeperPrompt(
   parts.push(
     `Answer each one in about ${WORDS_PER_ANSWER} words, in plain prose. ` +
       "Give the chapter and verse, or the year, whenever the answer has one. " +
-      "Do not retell the story back at them; they have just read it.",
+      "Do not retell the story back to the reader, who has just read it.",
   );
   parts.push("");
   parts.push(

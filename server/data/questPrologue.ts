@@ -251,7 +251,7 @@ export const QUEST_PROLOGUE: SavedStory & { builtIn: true } = {
       "“When people forget a story, it does not mean the story disappears. Sometimes it simply becomes harder to find.” Is there a story in your family that almost got forgotten? Who kept it?",
       `${B} answers “What is it?” with “A lantern.” Why do you think he answers questions the way he does?`,
       "He says you are not going into history -- you are going into a story. What is the difference?",
-      "“Not something. Someone.” Why does it matter to remember a person, and not only what they did?",
+      "“Not something. Someone.” Why does it matter to remember a person, and not only what that person did?",
     ],
   },
   // A real request, the way db-storage builds one for a corrupt row: the

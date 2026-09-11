@@ -185,8 +185,8 @@ they do not contradict this one?
 
 Record three kinds of thing:
 
-  character  Anyone who appeared and was named, with one line saying who they
-             are. Include people the story invented, not only the ones it was
+  character  Anyone who appeared and was named, with one line saying who each
+             one is. Include people the story invented, not only the ones it was
              given -- a character who was there is a character whose name must
              not change in the next story. Do not record unnamed extras: "a boy
              in her class", "the shopkeeper".
