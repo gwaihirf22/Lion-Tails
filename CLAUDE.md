@@ -782,6 +782,26 @@ rendered section is capped by a test (750 words) because the constraint is
 attention, not context — lore that outweighs the account gets written instead
 of it.
 
+**A quest is not named after its furniture.** Every quest long enough to be
+written in chapters was coming back "The Lantern and the ..." -- four in a
+row, across four different framing approaches. The frames were not at fault:
+their openings genuinely differ. The title was asked for with **no guidance at
+all** (`{ "title": "..." }` on the chaptered path) while the lantern was the
+most repeated noun in the story, and the outline handed the model the shape
+ready-made by calling its own first chapter "The Lantern and the Trenches".
+`questTitleRule()` composes the rule from `DEVICE`, `SHOP` and `KEEPER` --
+the three props in every quest, which is the whole test: a title that would
+fit any of these stories is not a title for one of them. Applied at both title
+sites, gated on `brief.world`, which IS the fact "this is a quest" and is
+already on the frozen brief. Ordinary stories get nothing: there is no lantern
+in one.
+
+**The word cap is per FRAME, not per brief.** `worldCanon(frame)` renders five
+different documents and the cap test measured one of them -- it passed while
+`wrong-arrival` rendered at 752 against a ceiling of 750. It now asserts every
+frame, which is the "what would this check have done had the thing been
+broken" rule applied to the check that was already there.
+
 **It reaches every chapter.** `StoryBrief.world` renders as `THE WORLD THIS
 HAPPENS IN` in the full brief and as `world.anchor` in the chapter
 projection; `StoryBrief.participationAnchor` carries both modes' "stays on

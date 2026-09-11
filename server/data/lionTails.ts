@@ -350,9 +350,9 @@ export const FRAMING_APPROACHES: readonly FramingApproach[] = [
     label: "not where they meant to be",
     opening:
       "Open in the present day and make the arrival go wrong -- the wrong day, " +
-      "some distance from where the account happens, or early enough that they " +
-      "have to wait. They walk into the account rather than landing in the " +
-      "middle of it, and what they see on the way there matters.",
+      "some distance from the account, or early enough to wait. They walk INTO " +
+      "the account rather than landing in the middle of it, and what they see " +
+      "on the way matters.",
     closing:
       "At the end they have to get back to where they arrived, and the way " +
       "back is not the way they came.",
@@ -361,6 +361,36 @@ export const FRAMING_APPROACHES: readonly FramingApproach[] = [
 
 /** The approach used when a frozen request names one that no longer exists. */
 const FALLBACK_APPROACH = FRAMING_APPROACHES[0];
+
+/**
+ * What a quest may not be named after.
+ *
+ * Every quest story was coming back called "The Lantern and the ...": four in
+ * a row, across four different framing approaches, on every story long enough
+ * to be written in chapters. The cause is not the frames -- those vary, and
+ * the openings they produce genuinely differ -- it is that the title is asked
+ * for with no guidance at all while the lantern is the most repeated noun in
+ * the story, and the outline hands the model the shape ready-made by calling
+ * its own first chapter "The Lantern and the Trenches".
+ *
+ * So the rule names the three props that are in EVERY quest and rules them
+ * out, which is the whole test: a title that would fit any of these stories
+ * is not a title for one of them. Composed from the canon rather than typed
+ * again, so renaming the shop cannot leave this banning a word nobody uses.
+ *
+ * Not applied to an ordinary story. There is no lantern in one, and a rule
+ * about furniture that is not there is prompt spent on nothing.
+ */
+export function questTitleRule(): string {
+  const device = DEVICE.name.replace(/^the /i, "");
+  return [
+    `Title it from what happens in THIS story -- the account they walk into, what it costs them,`,
+    `what they carry back. NOT after ${DEVICE.name}, ${SHOP.name}, or ${KEEPER.shortName}: those are in`,
+    `every one of these stories, so a title built on them would fit any of them and belongs to none.`,
+    `Do not use the word "${device}" in the title at all.`,
+    `Suggest rather than summarise -- make a reader curious instead of explaining the story before it starts.`,
+  ].join(" ");
+}
 
 /**
  * Choose one, at enqueue.

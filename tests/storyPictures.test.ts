@@ -8,6 +8,7 @@ import {
 import { buildPassageScenePrompt } from "../server/lib/passageScene";
 import { composeIllustrationPrompt } from "../server/lib/illustration";
 import { COVER_SHOWS_PEOPLE } from "../server/lib/openai-implementation";
+import { questTitleRule, DEVICE, SHOP, KEEPER } from "../server/data/lionTails";
 import {
   MAX_STORY_IMAGES,
   MAX_AVATARS,
@@ -293,5 +294,38 @@ describe("the cover's instruction", () => {
     for (const posed of ["facing the viewer", "clearly visible", "portrait", "posed", "camera"]) {
       expect(COVER_SHOWS_PEOPLE.toLowerCase()).not.toContain(posed);
     }
+  });
+});
+
+describe("what a quest may be called", () => {
+  /**
+   * Four quests in a row came back "The Lantern and the ...", across four
+   * different framing approaches. The frames were not the problem -- their
+   * openings genuinely differ -- the title was asked for with no guidance at
+   * all while the lantern was the most repeated noun in the story.
+   */
+  const rule = questTitleRule();
+
+  it("rules out the three props that are in every quest", () => {
+    // The test the rule embodies: a title that would fit any of these stories
+    // is not a title for one of them.
+    expect(rule).toContain(DEVICE.name);
+    expect(rule).toContain(SHOP.name);
+    expect(rule).toContain(KEEPER.shortName);
+  });
+
+  it("bans the bare word, not just the phrase", () => {
+    // "The Lantern and the Word" does not contain "the lantern".
+    expect(rule).toContain('"lantern"');
+  });
+
+  it("asks for a title that suggests rather than explains", () => {
+    expect(rule).toMatch(/suggest rather than summarise/i);
+  });
+
+  it("is composed from the canon, not typed again", () => {
+    // Rename the shop and this must follow, or it bans a word nobody uses.
+    expect(rule).not.toContain("Barnabas & Co.".replace("Barnabas", "Barnabus"));
+    expect(rule.includes(SHOP.name)).toBe(true);
   });
 });

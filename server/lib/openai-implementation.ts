@@ -27,7 +27,7 @@ type StoryContext = {
   resolved: ResolvedModel;
 };
 import { getBibleVerseByTheme } from "../data/bibleVerses";
-import { DEVICE, KEEPER } from "../data/lionTails";
+import { DEVICE, KEEPER, questTitleRule } from "../data/lionTails";
 import { storage } from "../storage";
 import {
   StoryGenerationError,
@@ -264,6 +264,16 @@ function nextTokenBudget(current: number, promptTokens?: number): number | null 
  * person in frame doing something, so this is close to a no-op and only
  * insures against the occasional scenery-only one.
  */
+/**
+ * The title guidance for this story, which is none unless it is a quest.
+ *
+ * `brief.world` is set by participationPremise only on the "travels" branch,
+ * so it IS the fact "this is a Quest of the Timekeeper" -- already on the
+ * frozen brief, already at both call sites, and not a second way of asking
+ * the same question.
+ */
+const titleRuleFor = (brief: StoryBrief): string => (brief.world ? questTitleRule() : "");
+
 export const COVER_SHOWS_PEOPLE =
   "The people in it should be recognisable -- show their faces rather than only their backs.";
 
@@ -515,6 +525,8 @@ async function generateShortStorySingleCall(
 
     CRITICAL INSTRUCTION: ${form.lengthPhrase(wordCount)}
 
+    ${titleRuleFor(ctx.brief)}
+
     Respond with a single, valid JSON object with the following structure:
     {
       "title": "A creative title",
@@ -700,6 +712,8 @@ async function finalizeStoryDetails(
     ${renderBrief(ctx.brief, "image")}
 
     ${COVER_SHOWS_PEOPLE}
+
+    ${titleRuleFor(ctx.brief)}
 
     Respond with ONLY a valid JSON object: { "title": "...", "applicationQuestions": ["...", "...", "..."], "imagePrompt": "..." }
   `;

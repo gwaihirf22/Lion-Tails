@@ -4,6 +4,7 @@ import {
   KEEPER,
   SHOP,
   FRAMING_APPROACHES,
+  worldCanon,
   framingApproachOf,
   pickFramingApproach,
   worldAnchor,
@@ -1595,6 +1596,19 @@ describe("the world of a quest", () => {
     expect(words(b.world!.canon.join(" "))).toBeLessThanOrEqual(750);
     expect(words(Object.values(CANON).join(" "))).toBeLessThanOrEqual(350);
     expect(words(b.world!.anchor)).toBeLessThanOrEqual(110);
+  });
+
+  it("stays under the cap on EVERY frame, not just the one a brief happened to pick", () => {
+    // This measured one rendering of five, and passed while "wrong-arrival"
+    // rendered at 752. A frame's opening and closing are part of the canon,
+    // so each of them is a different document and each has to fit. The old
+    // version could not have failed for the frame that was actually broken.
+    for (const frame of FRAMING_APPROACHES) {
+      expect(
+        words(worldCanon(frame).join(" ")),
+        `the "${frame.id}" frame renders too much world`,
+      ).toBeLessThanOrEqual(750);
+    }
   });
 
   it("renders a brief frozen before the world existed exactly as it did", () => {
