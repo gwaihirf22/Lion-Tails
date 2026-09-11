@@ -292,8 +292,31 @@ function clearStoryFocus(request: StoryRequest): void {
 const HISTORY_FIXED =
   "The real events still happen exactly as the account gives them, in that " +
   "order, with those names and that outcome. Invent the journey and the " +
-  "arrival; do not invent history, do not let them change what happened, and " +
-  "do not have them rescue anyone from it.";
+  "arrival; do not invent history. The invented character does not change what " +
+  "happened and does not rescue anyone from it.";
+
+/**
+ * One character is never "they".
+ *
+ * A story written for two girls came back calling one of them "they" -- "'You're
+ * being annoying,' they snapped" -- and the cause was not missing data: the
+ * brief said "Ellie, aged 10, a girl." plainly. It was that this file and
+ * lionTails.ts between them wrote singular "they" about sixty times, in the
+ * anchor that reprints in every chapter and in the world canon, so the prompt
+ * demonstrated the construction it wanted to forbid. Those are rewritten to name
+ * the person; this line is the rule stated out loud, because prose alone is a
+ * convention and a model needs the instruction.
+ *
+ * Deliberately does NOT branch on `sex`. It is optional and usually unset, and
+ * most kinds -- dragon, dog, robot -- imply nothing, so a rule keyed on it would
+ * need a fallback for the ordinary case anyway. Naming the character covers
+ * every case in one sentence and no code.
+ */
+const ONE_PERSON_PRONOUNS =
+  "Each character named here is one person, not a group. Write each one as he " +
+  'or she, as the description above gives; never write "they", "them" or ' +
+  '"their" about a single character. Where the description does not say, use ' +
+  "the character's name again rather than a pronoun.";
 
 /**
  * WHAT THEY MAY DO, which nothing used to say.
@@ -320,11 +343,11 @@ const HISTORY_FIXED =
  * They may try and fail. Failing is allowed to matter.
  */
 const partOfIt = (name: string) =>
-  `${name} is IN this and not watching it: they speak and are spoken to, they ` +
-  "help, they get in the way, they are noticed. Let them act where the account " +
+  `${name} is IN this and not watching it: ${name} speaks and is spoken to, ` +
+  `helps, gets in the way, is noticed. Let ${name} act where the account ` +
   "is silent -- who carried the water, who sat with him, who was told to move " +
   "along -- and let trying and failing cost something. What the account does " +
-  "record happens anyway, and never because of them.";
+  `record happens anyway, and never because of ${name}.`;
 
 /**
  * The mission: given a sympathetic character who thinks the hero's choice is
@@ -333,9 +356,9 @@ const partOfIt = (name: string) =>
  * that is the whole point of putting someone there to argue with him.
  */
 const missionHolds = (name: string) =>
-  "The person the account is about stays on their mission. They are not " +
-  `talked out of it, and they do not change course because of ${name}. ` +
-  "They may listen, and they may answer.";
+  "The person the account is about stays on that mission, is not talked out " +
+  `of it, and does not change course because of ${name}. That person may ` +
+  "listen, and may answer.";
 
 /**
  * The death: a character the reader made is going to be in accounts where
@@ -345,7 +368,7 @@ const missionHolds = (name: string) =>
  */
 const neverDies = (name: string) =>
   `${name} does not die, whatever happens to anybody else in this account, ` +
-  "and is never the one standing in the way. They are never the villain of " +
+  `and is never the one standing in the way. ${name} is never the villain of ` +
   "this story.";
 
 type Participation = {
@@ -415,7 +438,7 @@ function participationPremise(
       out.push(
         `Once there, ${name} is part of what happens -- not a visitor watching ` +
           "it happen. Let the journey itself be fun and surprising; let what " +
-          "they find at the end of it be as serious as it actually was.",
+          `${name} finds at the end of it be as serious as it actually was.`,
       );
       out.push(HISTORY_FIXED);
     }
@@ -434,21 +457,21 @@ function participationPremise(
 
   // role === "alongside". They were always there.
   out.push(
-    `${name} was there. Not a visitor and not a traveller: they belong to that ` +
-      "time and that place and always did. Do not have them arrive, do not " +
-      "give them anything from another century, and do not put a frame around " +
-      "the story.",
+    `${name} was there. Not a visitor and not a traveller: ${name} belongs to ` +
+      `that time and that place and always did. Do not have ${name} arrive, do ` +
+      `not give ${name} anything from another century, and do not put a frame ` +
+      "around the story.",
   );
   if (!hasSource) return { lines: out, anchor: neverDies(name) };
 
   out.push(
-    `${name} matters to what happens. They are not a bystander and not a ` +
-      "rescuer. They help, they ask hard questions, and they push back when " +
-      "the choice in front of them looks mad from where they are standing.",
+    `${name} matters to what happens -- not a bystander and not a rescuer. ` +
+      `${name} helps, asks hard questions, and pushes back when the choice ` +
+      `in front of ${name} looks mad from where ${name} is standing.`,
   );
   out.push(
     "The account still happens exactly as it is recorded -- the same events, " +
-      "in the same order, at the same cost. Nothing they do changes it.",
+      `in the same order, at the same cost. Nothing ${name} does changes it.`,
   );
   /**
    * LOAD-BEARING, both of them, and they are here because a model reaching for
@@ -623,7 +646,7 @@ function moralOutcomeInstruction(outcome: string | undefined): string | undefine
     case "positive":
       return "End well: the character's good choice leads somewhere good.";
     case "learning":
-      return "End with the character understanding something they did not understand at the start. The change in them is the ending.";
+      return "End with the character understanding something not understood at the start. That change is the ending.";
     case "consequences":
       return "A poor choice should lead to a real consequence the character has to face. Do not soften it into a happy ending, and do not moralise about it.";
     case "creative":
@@ -888,14 +911,14 @@ export function buildStoryBrief(
         // The events list has no terminator of its own, so without this the
         // account read "...the springs she asks for In their own words:".
         events && `Key events -- ${events}.`.replace(/\.\.$/, "."),
-        hero.famousQuote && `In their own words: "${hero.famousQuote}"`,
+        hero.famousQuote && `In ${hero.name}'s own words: "${hero.famousQuote}"`,
       ]
         .filter(Boolean)
         .join(" "),
       keyVerse: hero.bibleVerse,  // no translation: see note in renderBrief
       cautions: [
-        `${hero.name} was a real person who really lived. Do not invent events for them that did not happen, and do not move them to another century or country.`,
-        "Their faith is what the story is for. Do not reduce them to a list of achievements.",
+        `${hero.name} was a real person who really lived. Do not invent events for ${hero.name} that did not happen, and do not move ${hero.name} to another century or country.`,
+        `${hero.name}'s faith is what the story is for. Do not reduce ${hero.name} to a list of achievements.`,
         /**
          * What they got wrong, where the data says it plainly.
          *
@@ -1069,11 +1092,11 @@ export function buildStoryBrief(
   const wholeLifeQuest = world && (!focus || focus.mode === "whole" || !isSet(focus.text));
   if (wholeLifeQuest && sourceMaterial?.kind === "hero-of-faith") {
     premise.push(
-      "This story covers more than one moment of their life. Choose two or " +
-        "three, far apart, that belong together, and play each as a real scene " +
-        "-- somewhere, with someone, something happening. Do not narrate the " +
-        "years between them: the stone carries the traveller across, and the " +
-        "gap is felt rather than explained.",
+      `This story covers more than one moment of ${sourceMaterial.label}'s ` +
+        "life. Choose two or three, far apart, that belong together, and play " +
+        "each as a real scene -- somewhere, with someone, something happening. " +
+        "Do not narrate the years between those moments: the stone carries the " +
+        "traveller across, and the gap is felt rather than explained.",
     );
   }
   if (focus && focus.mode !== "whole" && isSet(focus.text)) {
@@ -1082,8 +1105,8 @@ export function buildStoryBrief(
     );
     premise.push(
       "Tell that episode properly -- the lead-up, what happened, and what it " +
-        "cost. Do not summarise the rest of their life around it, and do not " +
-        "open with where they were born or close with how they died.",
+        "cost. Do not summarise the rest of that life around it, and do not " +
+        "open with a birth or close with a death.",
     );
   }
   // Suppressed for a retelling. moralOutcome is chosen at random when the user
@@ -1250,7 +1273,7 @@ const STAT_LABELS: Record<CharacterStat, string> = {
 /** How a single notable stat reads, when written out rather than tabulated. */
 const HIGH_PHRASE: Record<CharacterStat, string> = {
   strength: "stronger than most",
-  agility: "quick on their feet",
+  agility: "quick on the feet",
   constitution: "able to keep going long after others stop",
   wisdom: "quick to notice and work things out",
   heart: "steady when things are frightening",
@@ -1497,6 +1520,9 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     );
     for (const c of others) out.push(`  - ${[c.identity, c.colour].filter(Boolean).join(" ")}`);
   }
+  // Straight after the names, because that is what it is about. See
+  // ONE_PERSON_PRONOUNS.
+  if (!brief.soloRetelling) out.push(ONE_PERSON_PRONOUNS);
   if (lead.colour || others.some((c) => c.colour)) {
     // The single most important line in the brief. Without it these details are
     // read as requirements and the story becomes a tour of the character sheet.
@@ -1573,7 +1599,7 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     out.push(
       isBible
         ? "This really happened and is recorded in Scripture. Retell it. Do not invent a different version of it, and do not write a modern story that is merely inspired by it."
-        : "This is a real person who really lived. Retell what they actually did.",
+        : "This is a real person who really lived. Retell what that person actually did.",
     );
     out.push("");
     out.push("THE ACCOUNT -- follow this. It is what happened:");
@@ -1621,14 +1647,14 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     // cautions covered it, because it is not specific to any one event.
     out.push(
       "Do NOT invent a name, an age or a number for anyone the account leaves " +
-        "unnamed or unspecified. Refer to them by their relationship instead -- " +
+        "unnamed or unspecified. Name each one by relationship instead -- " +
         "\"Noah's wife\", \"his eldest son\" -- and say nothing about how old " +
-        "they were.",
+        "anyone's age.",
     );
   } else {
     out.push("WHAT IT IS ABOUT");
     out.push(...brief.premise);
-    out.push("Invent the events yourself. The section above is who they are, not what happens to them.");
+    out.push("Invent the events yourself. The section above is who the characters are, not what happens to them.");
   }
 
   out.push("");
@@ -1640,8 +1666,9 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     brief.sourceMaterial
       ? "Let the danger and the cost in the account be felt rather than summarised -- " +
           "but do not add peril that is not there. Avoid a tidy lesson stated by the narrator."
-      : "Give them a real problem with something at stake, and let their choices " +
-          "change what happens. Avoid a tidy lesson stated by the narrator.",
+      : "Give the characters a real problem with something at stake, and let " +
+          "the choices they make change what happens. Avoid a tidy lesson " +
+          "stated by the narrator.",
   );
 
   if (brief.continuity) {
@@ -1773,7 +1800,7 @@ export function buildSystemPrompt(request: StoryRequest): string {
 function audienceLine(request: StoryRequest): string {
   return (
     `Your reader is ${readingLevelAges(request.readingLevel)}. Write so a reader that ` +
-    "age can follow you, and then trust them. Hard things are allowed to happen " +
+    "age can follow you, and then trust that reader. Hard things are allowed to happen " +
     "in your stories and are allowed to cost something: grief, fear, a wrong " +
     "that is not put right by the last page. Do not soften an ending that was " +
     "not soft. What you never do is dwell on suffering for its own sake, or " +
@@ -1798,7 +1825,7 @@ function storytellerPersona(request: StoryRequest): string {
   const trueStory = !retelling && isSet(request.heroOfFaith);
   if (trueStory) {
     return request.storyType === "poem"
-      ? "You are a Christian poet who puts the lives of real Christians into verse. You are faithful to what they actually did -- you never invent events for a real person. You write in verse -- rhythmic, rhyming lines -- never in prose paragraphs."
+      ? "You are a Christian poet who puts the lives of real Christians into verse. You are faithful to what each of them really did -- you never invent events for a real person. You write in verse -- rhythmic, rhyming lines -- never in prose paragraphs."
       : "You are a Christian storyteller who tells the true stories of real Christians. You are faithful to what actually happened -- the events, the dates, the places and the people. Where the record is silent you may imagine a scene; you never invent events for a real person.";
   }
 

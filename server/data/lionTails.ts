@@ -108,7 +108,7 @@ export const KEEPER = {
     "hair and clothes from a century nobody could name; kind, dry, and " +
     "entirely unsurprised by any of this. He has been doing whatever this is " +
     "for a very long time. He asks better questions than he answers, and he " +
-    "notices what a person is actually asking rather than what they said.",
+    "notices what a person is actually asking rather than the words used.",
   /**
    * Why he lends it. He is not a mechanism; he chooses -- but he chooses the
    * PERSON, never the destination. That distinction is the universe's, and it
@@ -129,7 +129,7 @@ export const KEEPER = {
    * does is take the journey for them.
    */
   never:
-    "He never goes with them. He never explains the lantern. He never says " +
+    "He never goes with the traveller. He never explains the lantern. He never says " +
     "what someone is about to see, and never, afterwards, what it meant.",
   /**
    * FOR PICTURES ONLY, and only when the drawing cannot be read.
@@ -230,10 +230,10 @@ export const DEVICE = {
     "Once through, the lantern goes dark and closes into a small smooth " +
     "stone the traveller keeps in a pocket. When it is time to see another " +
     "part of the same account, the stone warms and opens back into the " +
-    "lantern; they take hold of it and the story moves around them, forward " +
-    "or back, to somewhere else in that account. It decides, they do not, " +
-    "and it never answers being asked. It will not reach another story and " +
-    "will not take them home early.",
+    "lantern; the traveller takes hold of it and the story moves, forward " +
+    "or back, to somewhere else in that account. It decides, the traveller " +
+    "does not, and it never answers being asked. It will not reach another " +
+    "story and will not take the traveller home early.",
 } as const;
 
 /**
@@ -279,22 +279,22 @@ export const CANON = {
    */
   beginning:
     "A quest begins in the traveller's own life, never in the shop. Something " +
-    "there is asking something of them -- a temptation to be unkind, a wait " +
-    "they are impatient with, a slight they would like to repay. A moment, " +
+    "there is asking something of the traveller -- a temptation to be unkind, " +
+    "a wait to be impatient with, a slight to repay. A moment, " +
     "not a crisis: nothing is broken and nobody needs rescuing. The story " +
-    "they are sent to bears on that same thing, and NOTHING ever says so. " +
+    "the traveller is sent to bears on that same thing, and NOTHING ever says so. " +
     "Then the shop is there, where a shop could not be, sudden or so quiet " +
-    "they half expected it: always the same shop and the same man, only the " +
-    "place new. Only they see it -- anyone else passing sees an empty " +
+    "it was half expected: always the same shop and the same man, only the " +
+    "place new. Only the traveller sees it -- anyone else passing sees an empty " +
     "building, or nothing worth looking at.",
   arrival:
     "Arrival always has a cause, even when the traveller does not understand " +
     "it; it is never arbitrary teleportation. The boundary between times goes " +
-    "thin first -- a familiar door, a bell, a voice saying their name.",
+    "thin first -- a familiar door, a bell, a voice saying the traveller's name.",
   wayBack:
     "The way back is a threshold, never an announcement: a doorway, a road, a " +
     "shop window, a brass bell. The story ends when it has given the " +
-    "traveller what they were sent to find.",
+    "traveller what was sent for.",
   /**
    * BEING SEEN AGAIN, which is what the stone buys that a single crossing
    * could not.
@@ -314,13 +314,13 @@ export const CANON = {
    */
   seenAgain:
     "A traveller may appear in the same person's life more than once, years " +
-    "apart, and that person remembers them -- recognition, gladness, " +
+    "apart, and that person remembers the traveller -- recognition, gladness, " +
     "suspicion, a joke, something close to awe. The traveller has not grown " +
     "older in between and nobody explains that. Let it be strange and leave " +
     "it strange.",
   ending:
-    "Afterwards Barnabas asks what they found -- never whether they learned " +
-    "something -- and if the answer is too easy, he asks again. He may appear " +
+    "Afterwards Barnabas asks what the traveller found -- never whether " +
+    "anything was learned -- and if the answer is too easy, he asks again. He may appear " +
     "before the journey, during it, or at its end, purposefully and never " +
     "conveniently, and he is not omniscient.",
   /**
@@ -386,37 +386,37 @@ export const FRAMING_APPROACHES: readonly FramingApproach[] = [
     label: "an errand interrupted",
     opening:
       "Something ordinary is already underway and not yet finished -- a job " +
-      "half done, somewhere they were supposed to be, a promise made that " +
+      "half done, somewhere the traveller was supposed to be, a promise made that " +
       "morning and now inconvenient. The shop is on the way, on a stretch of " +
       "the way that has never had a shop on it. Do not resolve the unfinished " +
-      "thing before they go.",
+      "thing before the journey.",
     closing:
-      "At the end, come back to the unfinished thing. They still have to " +
-      "finish it, and they are not the same person doing it.",
+      "At the end, come back to the unfinished thing. It still has to be " +
+      "finished, and the person finishing it is not the same person who left it.",
   },
   {
     id: "question",
     label: "a question asked and not answered",
     opening:
-      "Open with a question already sitting in them, put badly or not out " +
-      "loud -- what they are supposed to do, or why somebody else does not " +
-      "have to. They are still carrying it when the shop turns up. Inside, " +
-      `they put it to ${KEEPER.shortName}, who could answer in a sentence and ` +
-      "does not. He hands them the lantern instead.",
+      "Open with a question already sitting in the traveller, put badly or not " +
+      "out loud -- what to do, or why somebody else does not " +
+      "have to. It is still there when the shop turns up. Inside, " +
+      `the traveller puts it to ${KEEPER.shortName}, who could answer in a sentence and ` +
+      "does not. He hands over the lantern instead.",
     closing:
-      "At the end, return to the question. They may answer it themselves, or " +
-      "find it was the wrong question. Do not have him explain it to them.",
+      "At the end, return to the question. The traveller may answer it alone, or " +
+      "find it was the wrong question. Do not have him explain it.",
   },
   {
     id: "brought-back",
     label: "something brought back",
     opening:
-      "Open briefly -- one small moment in their day where something is being " +
-      "asked of them and they have not answered it yet -- and get them " +
-      "travelling quickly. The shop is simply there, and they go in without " +
+      "Open briefly -- one small moment in the traveller's day where something " +
+      "is being asked and has not been answered yet -- and get the journey " +
+      "started quickly. The shop is simply there, and the traveller goes in without " +
       "much fuss. The weight of this one is at the end.",
     closing:
-      "They come back carrying something they did not leave with -- an object, " +
+      "The traveller comes back carrying something that was not there before -- an object, " +
       "a habit, a piece of knowledge, a mark. Close on it, and on somebody " +
       "noticing. Do not explain what it means.",
   },
@@ -424,27 +424,27 @@ export const FRAMING_APPROACHES: readonly FramingApproach[] = [
     id: "someone-else-first",
     label: "someone was here first",
     opening:
-      "Open in their day with something small they would rather not have to " +
-      "do well. When the shop arrives and they are inside it, there is " +
+      "Open in the traveller's day with something small that would rather not be " +
+      "done well. Once the shop arrives and the traveller is inside it, there is " +
       "evidence that someone else has been here recently -- a name, a date, " +
       `an object left where it should not be. ${KEEPER.name} sees it and says ` +
       "nothing useful. Do not resolve who it was; this story is not about that.",
     closing:
-      "At the end, the evidence is still there and still unexplained. Let them " +
-      "notice it again.",
+      "At the end, the evidence is still there and still unexplained. Let the " +
+      "traveller notice it again.",
   },
   {
     id: "wrong-arrival",
-    label: "not where they meant to be",
+    label: "not where the traveller meant to be",
     opening:
-      "Open with them mid-something that is testing their patience or their " +
+      "Open with the traveller mid-something that is testing patience or " +
       "temper, and let the shop appear at the least convenient moment. Then " +
       "make the arrival go wrong -- the wrong day, some distance from the " +
-      "account, or early enough to wait. They walk INTO the account rather " +
-      "than landing in the middle of it, and what they see on the way matters.",
+      "account, or early enough to wait. The traveller walks INTO the account rather " +
+      "than landing in the middle of it, and what is seen on the way matters.",
     closing:
-      "At the end they have to get back to where they arrived, and the way " +
-      "back is not the way they came.",
+      "At the end the traveller has to get back to the arrival point, and the way " +
+      "back is not the way that led in.",
   },
 ];
 
@@ -473,8 +473,8 @@ const FALLBACK_APPROACH = FRAMING_APPROACHES[0];
 export function questTitleRule(): string {
   const device = DEVICE.name.replace(/^the /i, "");
   return [
-    `Title it from what happens in THIS story -- the account they walk into, what it costs them,`,
-    `what they carry back. NOT after ${DEVICE.name}, ${SHOP.name}, or ${KEEPER.shortName}: those are in`,
+    `Title it from what happens in THIS story -- the account the traveller walks into, what it costs,`,
+    `what is carried back. NOT after ${DEVICE.name}, ${SHOP.name}, or ${KEEPER.shortName}: those are in`,
     `every one of these stories, so a title built on them would fit any of them and belongs to none.`,
     `Do not use the word "${device}" in the title at all.`,
     `Suggest rather than summarise -- make a reader curious instead of explaining the story before it starts.`,
@@ -572,27 +572,30 @@ export function questFamiliarity(travellers: readonly Traveller[]): string {
   const out: string[] = [];
 
   if (newcomers.length > 0) {
-    const they = newcomers.length === 1 ? "has" : "have";
+    const verb = newcomers.length === 1 ? "has" : "have";
+    const who = newcomers.length === 1 ? "that traveller" : "those travellers";
     out.push(
-      `${list(newcomers)} ${they} never been. The shop is new, ${KEEPER.shortName} is a ` +
+      `${list(newcomers)} ${verb} never been. The shop is new, ${KEEPER.shortName} is a ` +
         "stranger, and nothing about any of it has been explained. Make that the weight " +
-        "of the opening: let them work out where they are, and do not have anyone give " +
-        "them a tour of it.",
+        `of the opening: let ${who} work out where the shop is, and do not have anyone ` +
+        "give a tour of it.",
     );
   }
   if (returning.length > 0) {
-    const they = returning.length === 1 ? "has" : "have";
+    const verb = returning.length === 1 ? "has" : "have";
+    const who = returning.length === 1 ? "that traveller" : "those travellers";
     out.push(
-      `${list(returning)} ${they} been once. They know the shop is real and are not ` +
-        "sure it will be there again. Let them notice that it is.",
+      `${list(returning)} ${verb} been once -- the shop is real, and there is no ` +
+        `knowing whether it will be there again. Let ${who} notice that it is.`,
     );
   }
   if (seasoned.length > 0) {
-    const they = seasoned.length === 1 ? "knows" : "know";
+    const verb = seasoned.length === 1 ? "knows" : "know";
+    const who = seasoned.length === 1 ? "that traveller" : "those travellers";
     out.push(
-      `${list(seasoned)} ${they} the shop, the man and what the lantern does. Explain ` +
-        "none of it to them again, and do not have them marvel at the shop itself; " +
-        "whatever is strange this time is strange to them too.",
+      `${list(seasoned)} ${verb} the shop, the man and what the lantern does. Explain ` +
+        `none of it again, and do not have ${who} marvel at the shop itself; ` +
+        `whatever is strange this time is strange to ${who} too.`,
     );
   }
   if (newcomers.length > 0 && seasoned.length + returning.length > 0) {
@@ -619,7 +622,7 @@ export function worldAnchor(): string {
     "lantern where none should be -- and nothing is arbitrary. The lantern " +
     "stays dark on the far side; the way back is a threshold, never an " +
     "announcement, and the story ends when it has given what it was sent to " +
-    `give. ${KEEPER.shortName} asks what they found and never says what it ` +
+    `give. ${KEEPER.shortName} asks what the traveller found and never says what it ` +
     "meant. He is not God; invent no doctrine and contradict no Scripture. " +
     "The great Lion is a name he may say once and never explain; the Lion " +
     "does not appear."
