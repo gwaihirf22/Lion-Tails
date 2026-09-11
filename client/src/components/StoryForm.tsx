@@ -76,7 +76,7 @@ function FormSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("rounded-lg border border-border p-4", tint, className)}>
+    <div className={cn("rounded-lg border border-border p-3 sm:p-4", tint, className)}>
       {children}
     </div>
   );
@@ -569,8 +569,24 @@ export default function StoryForm({
 
   return (
     <>
-    <Card className={`content-container rounded-2xl shadow-lg ${formType === "historical" ? "border-warning" : "border-border"}`}>
-      <CardContent className="p-6">
+    {/*
+      FLUSH ON A PHONE. This is a card inside the app shell's card inside the
+      tab panel -- three surfaces, all --card, each charging for a border and
+      padding nobody can see. Below 640px only the shell's card is drawn and
+      the form sits directly in it; everything returns at sm:.
+
+      The background is left alone rather than made transparent:
+      .content-container sets it as a plain declaration in @layer utilities,
+      so bg-transparent is the same specificity and which wins depends on
+      stylesheet order. It does not matter -- the parent is the same colour.
+
+      The historical border returns at sm: too. On a phone that signal is
+      carried by the tab, which is already data-[state=active]:bg-warning-surface.
+    */}
+    <Card
+      className={`content-container border-0 shadow-none rounded-none sm:border sm:shadow-lg sm:rounded-2xl ${formType === "historical" ? "sm:border-warning" : "sm:border-border"}`}
+    >
+      <CardContent className="p-0 sm:p-6">
         {/* Only show child fields when needed */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
