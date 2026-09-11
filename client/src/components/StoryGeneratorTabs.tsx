@@ -71,7 +71,11 @@ export default function StoryGeneratorTabs({
         
         <TabsContent 
           value="original"
-          className="rounded-xl p-4"
+          // No frame below 640px. It was 16px a side showing a
+          // bg-primary/5 tint over a background image that is not in the
+          // build -- /assets/children-background.jpg, while Vite's public dir
+          // is client/public and the file lives in the repo's own public/.
+          className="rounded-xl p-0 sm:p-4"
           style={{ 
             backgroundImage: 'url("/assets/children-background.jpg")',
             backgroundSize: 'cover',
@@ -103,7 +107,11 @@ export default function StoryGeneratorTabs({
         
         <TabsContent 
           value="historical"
-          className="rounded-xl p-4"
+          // No frame below 640px. It was 16px a side showing a
+          // bg-primary/5 tint over a background image that is not in the
+          // build -- /assets/children-background.jpg, while Vite's public dir
+          // is client/public and the file lives in the repo's own public/.
+          className="rounded-xl p-0 sm:p-4"
           style={{ 
             backgroundImage: 'url("/assets/historical-background.jpg")',
             backgroundSize: 'cover',

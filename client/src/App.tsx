@@ -88,14 +88,20 @@ function App() {
               className={
                 bareReader
                   ? "flex-grow relative z-10"
-                  : "flex-grow container mx-auto p-4 md:px-8 md:py-6 relative z-10"
+                  : // 12px to the screen edge below 640px rather than 16.
+                    // Small on its own; it is one of six layers that between
+                    // them took 91px a side off a 390px phone.
+                    "flex-grow container mx-auto p-3 sm:p-4 md:px-8 md:py-6 relative z-10"
               }
             >
               <div
                 className={
                   bareReader
                     ? ""
-                    : "content-container rounded-2xl shadow-sm p-4 md:p-6 border border-border"
+                    : // THE page surface. Every page renders inside this one
+                      // card -- which is why a page drawing its own is drawing
+                      // the same colour twice and charging for the border.
+                      "content-container rounded-2xl shadow-sm p-3 sm:p-4 md:p-6 border border-border"
                 }
               >
                 <Router />
