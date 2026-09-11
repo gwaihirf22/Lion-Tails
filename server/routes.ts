@@ -40,6 +40,7 @@ import {
   readStoryImageFile,
 } from "./lib/illustration";
 import { sceneFromPassage } from "./lib/passageScene";
+import { questLengthAllowed } from "@shared/quests";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
 import {
@@ -715,6 +716,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // And which framing a travelling story opens with, for the same reason
       // and at the same moment: picked here, frozen with the request, so the
       // frame is recoverable from the story rather than re-rolled on replay.
+      /**
+       * A quest needs room for two stories, and the short ones do not have it.
+       *
+       * REFUSED rather than quietly raised: length is what the user asked for
+       * (decisions.md 16), and upgrading it behind their back would also spend
+       * more of the owner's money than they chose to. The floor and its
+       * arithmetic live in shared/quests.ts, so the form and this agree.
+       */
+      if (
+        characterRoleOf(validatedData) === "travels" &&
+        !questLengthAllowed(validatedData.storyLength)
+      ) {
+        return res.status(400).json({
+          code: "quest_too_short",
+          message:
+            "A Quest with the Timekeeper needs room for the journey and the account it visits. Choose Medium or longer.",
+        });
+      }
+
       resolveTravelFrame(validatedData);
       // And how many quests each of them has already been on, for the same
       // reason and at the same moment: the shop should not be a revelation to

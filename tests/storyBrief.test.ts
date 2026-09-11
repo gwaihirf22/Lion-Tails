@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { questLengthAllowed, QUEST_PREFERRED_LENGTH } from "@shared/quests";
 import {
   CANON,
   KEEPER,
@@ -1720,5 +1721,35 @@ describe("a quest does not begin in the shop", () => {
     // which is most of why every story started at the shop's front door.
     const all = Object.values(CANON).join(" ");
     expect(all.match(/where a shop could not be|could not logically be/g)?.length ?? 0).toBe(1);
+  });
+});
+
+describe("how long a quest has to be", () => {
+  /**
+   * A quest has to fit two stories: the way in, which now gets a part of its
+   * own, and the account itself. Short leaves 667 words for the second of
+   * those, and very-short is written in one call with no outline at all, so
+   * the way in has no budget to be given.
+   */
+  it("refuses the two lengths that cannot hold one", () => {
+    expect(questLengthAllowed("very-short")).toBe(false);
+    expect(questLengthAllowed("short")).toBe(false);
+  });
+
+  it("allows medium, which was verified end to end rather than assumed", () => {
+    expect(questLengthAllowed("medium")).toBe(true);
+    expect(questLengthAllowed("long")).toBe(true);
+    expect(questLengthAllowed("extended")).toBe(true);
+  });
+
+  it("offers a length it allows", () => {
+    // The form moves to this one when the quest switch goes on, so a preferred
+    // length that the server would refuse is a form that argues with itself.
+    expect(questLengthAllowed(QUEST_PREFERRED_LENGTH)).toBe(true);
+  });
+
+  it("refuses nothing and nonsense", () => {
+    expect(questLengthAllowed(undefined)).toBe(false);
+    expect(questLengthAllowed("enormous")).toBe(false);
   });
 });
