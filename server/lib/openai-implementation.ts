@@ -44,10 +44,7 @@ import {
   FURTHER_LEARNING_HEADING,
 } from "@shared/storyAppendices";
 import { generateDiggingDeeper, type DiggingSource } from "./diggingDeeper";
-import * as fs from "fs";
-import * as path from "path";
-import * as https from "https";
-import { v4 as uuidv4 } from "uuid";
+import { generateStoryImage, illustrationCast } from "./illustration";
 
 // Credentials, provider and model are decided exclusively by
 // resolveModel() in ./modelPolicy. Nothing here should read
@@ -964,7 +961,14 @@ async function runGeneration(
     // ReferenceError on every generation -- after all the paid calls had
     // already been made.
     try {
-      imageUrl = await generateStoryImage(finalDetails.imagePrompt, userId);
+      // The cast is resolved HERE and not inside the image call, because it
+      // reads the database and the image call must stay a thing that can fail
+      // without taking a story with it.
+      imageUrl = await generateStoryImage(
+        finalDetails.imagePrompt,
+        userId,
+        await illustrationCast(request, userId),
+      );
     } catch (imageError) {
       console.error("Error generating story image:", imageError);
     }
@@ -1222,98 +1226,6 @@ function buildDebugHeader(
 // Moved to ./storyAppendices, which is the one place that knows what the
 // server adds -- so the universe summariser can strip what it adds without
 // holding a second copy of the strings.
-
-export async function generateStoryImage(
-  imagePrompt: string,
-  userId: number = 1,
-): Promise<string | undefined> {
-  // ... this function remains the same ...
-  try {
-    // Illustration is premium-only and has no cheap or local tier, so an
-    // unentitled user simply gets a story without a picture rather than an
-    // error -- and never silently bills the server owner.
-    const resolved = await resolveModel(userId, "image");
-    if (!resolved) {
-      console.log(
-        "Skipping illustration: image generation requires an admin account or your own OpenAI API key.",
-      );
-      return undefined;
-    }
-    const imagesDir = path.join(process.cwd(), "public", "images", "stories");
-    if (!fs.existsSync(imagesDir)) {
-      fs.mkdirSync(imagesDir, { recursive: true });
-    }
-    const filename = `story_${uuidv4()}.png`;
-    const filepath = path.join(imagesDir, filename);
-    // A STYLE, not an audience. "Child-friendly" was doing both jobs and the
-    // second one is what flattened these illustrations; "storybook" keeps the
-    // warmth and the soft palette without telling the model who is looking.
-    const enhancedPrompt = `${imagePrompt}. Render in a beautiful biblical storybook illustration style with soft colors.`;
-    const openaiClient = createClient(resolved);
-    const response = await openaiClient.images.generate({
-      model: resolved.model,
-      prompt: enhancedPrompt,
-      n: 1,
-      size: "1024x1024",
-    });
-    // openai 7.x made ImagesResponse.data optional (`data?: Array<Image>`), so
-    // indexing it directly throws at runtime on a response that carries none --
-    // this is a real guard, not a cast to satisfy the compiler.
-    const image = response.data?.[0];
-
-    // The GPT image models ALWAYS return base64 and never a URL, and they do
-    // not accept response_format at all. Swapping dall-e-3 for gpt-image-2
-    // without this would have kept the bug alive in a new shape: data[0].url
-    // is simply undefined, so the function would return undefined and the
-    // reader would go on showing the stock lion with nothing logged.
-    if (image?.b64_json) {
-      await fs.promises.writeFile(filepath, Buffer.from(image.b64_json, "base64"));
-      return `/public/images/stories/${filename}`;
-    }
-    // Kept for any model that does return a URL. Those links expire in about an
-    // hour, which is why the file is downloaded rather than stored as a link.
-    if (image?.url) {
-      await downloadImage(image.url, filepath);
-      return `/public/images/stories/${filename}`;
-    }
-
-    console.error(
-      `Image generation returned no image data (model ${resolved.model}). ` +
-        "Nothing to save; the story keeps the stock picture.",
-    );
-    return undefined;
-  } catch (error) {
-    console.error("Error generating story illustration:", error);
-    return undefined;
-  }
-}
-
-function downloadImage(url: string, filepath: string): Promise<void> {
-  // ... this function remains the same ...
-  return new Promise((resolve, reject) => {
-    https
-      .get(url, (response) => {
-        if (response.statusCode !== 200) {
-          return reject(
-            new Error(`Failed to download image: ${response.statusCode}`),
-          );
-        }
-        const fileStream = fs.createWriteStream(filepath);
-        response.pipe(fileStream);
-        fileStream.on("finish", () => {
-          fileStream.close();
-          resolve();
-        });
-        fileStream.on("error", (err) => {
-          fs.unlink(filepath, () => {});
-          reject(err);
-        });
-      })
-      .on("error", (err) => {
-        reject(err);
-      });
-  });
-}
 
 export async function analyzeImageWithOpenAI(
   imageBase64: string,

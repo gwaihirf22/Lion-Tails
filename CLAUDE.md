@@ -393,6 +393,64 @@ directory and is the right path: the parent is the mount point of the
 `story_images` volume, so anything written there survives a redeploy and
 anything written beside it does not.
 
+## The picture at the end of a story
+
+`server/lib/illustration.ts` is the only place a story is drawn.
+`generateStoryImage` moved here out of `openai-implementation.ts`, with
+`downloadImage`, and it now takes a CAST.
+
+**A description will not reproduce a person.** Ask an image model twice for
+"an 8-year-old girl with brown hair" and you get two different girls — which
+is why the story's picture never matched the character sheet, silently, with
+nothing to see in a log. So the picture is drawn FROM the portrait:
+`images.edit` with the avatars as reference images and **`input_fidelity:
+"high"`**, the parameter that asks the model to match "the style and
+features, especially facial features, of input images". It defaults to
+`"low"`, which is a style hint. `avatar.ts` has drawn second portraits this
+way all along; the same mechanism now points at the story, and the avatar
+path gained the `input_fidelity` it should always have had.
+
+- **`describeCharacter()` is the one definition of how somebody looks**, in
+  `avatar.ts`. `buildAvatarPrompt` is that sentence plus the portrait's own
+  framing. A character with no portrait is described with it; a character
+  with one is described with it AND matched against the file. If those two
+  ever disagree, the picture stops matching the portrait, which is the whole
+  bug.
+- **Text is the fallback, not the mechanism.** Every cast member carries
+  `look` whether or not they have a `reference`, so a failed `images.edit`
+  falls back to `images.generate` with everyone still described rather than
+  losing the picture.
+- **An empty cast renders byte-for-byte what it always did.** A retelling
+  with nobody in it, a cast with no portraits, an older row — those pictures
+  must not change because this shipped, and a test holds the string.
+- **Nobody is drawn into a story they are not in.**
+  `charactersAreInTheStory()` is deliberately NOT `storyBrief`'s
+  `anonymous`: that keys on a source that RESOLVES, this keys on a source
+  field being filled at all, because the two mistakes do not cost the same.
+  A missing face is a generic picture; a wrong face in a biblical scene is
+  the Esther bug with a camera.
+- **At most three faces**, which is the rule the brief's `"image"`
+  projection already states in words.
+- **The Timekeeper has one face and it is a file.**
+  `public/images/barnabas-timekeeper.png`, named by `KEEPER_FACE_FILE` in
+  `lionTails.ts` — a separate export, never a `KEEPER` field, because
+  `worldCanon()` renders `KEEPER` into the brief and a filename has no
+  business in a story prompt. **Where it lives is load-bearing**: `public/`
+  ships, but the `story_images` volume mounts over `public/images/stories`
+  only, so a file beside that directory survives a redeploy and a file inside
+  it is shadowed at runtime. `attached_assets/` is not in the runtime image
+  at all. He is attached to EVERY quest story and marked optional ("need not
+  appear"), never guessed from the scene text — the model writes that text,
+  and the one that says "the old shopkeeper" would be a different man.
+  `KEEPER.look` is the sentence that stands in if the file cannot be read;
+  `worldCanon()` does not render it.
+- **Redraw is `{ redraw: true }` on `POST /api/stories/:id/illustrate`**, and
+  the entitlement is checked BEFORE any work — admin or own key, derived from
+  `isModelAllowedFor` like `canIllustrate`, answering 403 rather than the
+  503 that comes out the far end. Blake: "that is a farming method
+  otherwise." The replaced file is deleted only AFTER the new one is
+  attached.
+
 ## Attributes and Skills
 
 The tab is **Attributes/Skills**. The five fixed values are attributes; skills

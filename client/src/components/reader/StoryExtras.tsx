@@ -5,7 +5,18 @@ import { DIGGING_DEEPER_HEADING } from "@shared/storyAppendices";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { ImagePlus, Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { ImagePlus, Loader2, RefreshCw } from "lucide-react";
 import { DebugPanel } from "@/components/DebugPanel";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -91,9 +102,16 @@ export function StoryExtras({
   const [imageUrl, setImageUrl] = useState<string | undefined>(story.imageUrl);
   useEffect(() => setImageUrl(story.imageUrl), [story.imageUrl]);
 
+  /**
+   * Make a picture, or make a different one.
+   *
+   * ONE mutation for both, because they are one route and one spend. A redraw
+   * replaces the file the story has -- the server deletes the old one only
+   * after the new one is attached -- so it asks first.
+   */
   const illustrate = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", `/api/stories/${storyId}/illustrate`, {});
+    mutationFn: async (redraw: boolean = false) => {
+      const response = await apiRequest("POST", `/api/stories/${storyId}/illustrate`, { redraw });
       return (await response.json()) as { imageUrl: string };
     },
     onSuccess: (data) => {
@@ -144,6 +162,50 @@ export function StoryExtras({
             className="mx-auto max-h-[70vh] w-auto rounded-lg"
             style={{ border: "1px solid var(--reader-border)" }}
           />
+          {/* Quiet, and under the picture: a redraw spends a generation and
+              throws away the picture that is on screen, so it is not a thing
+              to fall over. Shown on the same condition the server enforces. */}
+          {modelInfo?.canIllustrate && !builtIn && storyId && (
+            <figcaption className="mt-2 text-center">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={illustrate.isPending}
+                    style={{ color: "var(--reader-muted)" }}
+                  >
+                    {illustrate.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Painting…
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Draw it again
+                      </>
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Draw a new picture?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This makes a new picture for &ldquo;{story.title}&rdquo; and the one
+                      here now is deleted. The story itself is not changed.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep this one</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => illustrate.mutate(true)}>
+                      Draw it again
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </figcaption>
+          )}
         </figure>
       )}
 
@@ -199,7 +261,7 @@ export function StoryExtras({
                 <div className="mt-4 flex justify-center">
                   <Button
                     size="sm"
-                    onClick={() => illustrate.mutate()}
+                    onClick={() => illustrate.mutate(false)}
                     disabled={illustrate.isPending || !storyId}
                   >
                     {illustrate.isPending ? (

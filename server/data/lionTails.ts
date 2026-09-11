@@ -131,7 +131,40 @@ export const KEEPER = {
   never:
     "He never goes with them. He never explains the lantern. He never says " +
     "what someone is about to see, and never, afterwards, what it meant.",
+  /**
+   * FOR PICTURES ONLY, and only when the drawing cannot be read.
+   *
+   * worldCanon() does not render this and must not start: the story is told
+   * what he is LIKE (`who`), which is the fact a story can use, and a list of
+   * garments is prompt weight spent on nothing. The real answer for a picture
+   * is KEEPER_FACE_FILE; this is the sentence that stands in for it if the file
+   * is missing, and it describes the same man.
+   */
+  look:
+    "a man with grey-white hair and a full grey beard, in a heavy dark brown " +
+    "coat over an embroidered waistcoat, carrying a brass lantern.",
 } as const;
+
+/**
+ * HIS FACE, and there is only one.
+ *
+ * A separate export rather than a field on KEEPER, because KEEPER is the text
+ * a model is allowed to read and worldCanon() renders it into the brief -- a
+ * filename has no business anywhere near a story prompt.
+ *
+ * It is a file and not a description on purpose. "Silver in his hair and
+ * clothes from a century nobody could name" is enough for a sentence and
+ * nowhere near enough for a picture: an image model asked twice draws two
+ * different men. The drawing is passed to the image model as a reference so
+ * that every Barnabas who appears is this Barnabas.
+ *
+ * WHERE IT LIVES IS LOAD-BEARING. public/ is copied into the runtime image,
+ * but the story_images volume mounts over public/images/stories -- so a file
+ * beside that directory ships and survives a redeploy, and a file inside it is
+ * shadowed by the volume and simply is not there. attached_assets/ (where the
+ * artwork was committed) is not in the runtime image at all.
+ */
+export const KEEPER_FACE_FILE = "barnabas-timekeeper.png";
 
 /**
  * The device. A lantern, and one place to change it.

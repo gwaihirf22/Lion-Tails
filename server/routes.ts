@@ -30,7 +30,8 @@ import {
   serialiseBrief,
 } from "./lib/storyBrief";
 import { listBiblicalEvents } from "./data/biblicalEvents";
-import { getWordCountFromLength , generateStoryImage } from "./lib/openai-implementation";
+import { getWordCountFromLength } from "./lib/openai-implementation";
+import { generateStoryImage, illustrationCast, deleteStoryImage } from "./lib/illustration";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
 import {
@@ -1241,24 +1242,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // API endpoint to associate a story with a hero of faith
   /**
-   * Add an illustration to a story that was saved without one.
+   * Add an illustration to a story that was saved without one -- or, with
+   * `redraw`, replace the one it has.
    *
    * Stories generated on the free tier never get a picture: illustration is
    * premium and has no cheap or local equivalent, so generation skips it
    * rather than failing the whole story. This lets someone who later adds
    * their own key illustrate a story they already have, instead of having to
    * regenerate it and lose the text they liked.
+   *
+   * REDRAW IS GATED BEFORE ANY WORK, and says so in the answer. Blake:
+   * "it needs either admin or API key privileges. that is a farming method
+   * otherwise." resolveModel would refuse a moment later anyway -- but as a
+   * 503 after the story has been loaded and the old file considered, which
+   * reads like a broken feature rather than a closed door. Derived from the
+   * policy, never restated as "admin or own key", so it cannot drift from
+   * canIllustrate.
    */
   app.post("/api/stories/:id/illustrate", requireAuth, async (req, res) => {
     try {
       if (refuseBuiltIn(req, res)) return;
       const userId = (req.user as any).id;
+      const redraw = req.body?.redraw === true;
+      if (redraw) {
+        const ownKey = await storage.getUserOpenAIKey(userId);
+        const allowed = isModelAllowedFor(DEFAULTS.image, "image", {
+          isAdmin: Boolean((req.user as any).isAdmin),
+          hasOwnKey: Boolean(ownKey),
+        });
+        if (!allowed) {
+          return res.status(403).json({
+            message:
+              "Drawing a new picture needs an admin account or your own OpenAI API key, which you can add in Settings.",
+            code: "not_entitled",
+          });
+        }
+      }
       const saved = await storage.getStoryById(req.params.id, userId);
       if (!saved) {
         return res.status(404).json({ message: "Story not found" });
       }
-      // Idempotent: a double-click, or two tabs, must not spend twice.
-      if (saved.story.imageUrl) {
+      // Idempotent: a double-click, or two tabs, must not spend twice. A
+      // redraw is a deliberate second spend and says so.
+      if (saved.story.imageUrl && !redraw) {
         return res.json({ imageUrl: saved.story.imageUrl, alreadyExisted: true });
       }
 
@@ -1269,7 +1295,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         saved.story.imagePrompt ||
         `An illustration for a story titled "${saved.story.title}"`;
 
-      const imageUrl = await generateStoryImage(prompt, userId);
+      // What the people in it look like, read live off their sheets -- the
+      // point of the whole feature, and the reason a story illustrated today
+      // matches a portrait drawn after the story was written.
+      const imageUrl = await generateStoryImage(
+        prompt,
+        userId,
+        await illustrationCast(saved.request, userId),
+      );
       if (!imageUrl) {
         // generateStoryImage returns undefined for BOTH "not entitled" and
         // "the image call failed", and the caller cannot tell them apart --
@@ -1281,12 +1314,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      const replaced = saved.story.imageUrl;
       const updated = await storage.setStoryImageUrl(req.params.id, imageUrl, userId);
       if (!updated) {
         // The picture exists on disk but could not be attached. Say so rather
         // than returning a URL the story does not actually carry.
         return res.status(500).json({ message: "The picture was made but could not be saved to the story." });
       }
+      // AFTER the new one is attached, never before: a redraw that failed to
+      // save would otherwise leave the story with no picture at all. Skipped
+      // when nothing changed, so a no-op cannot delete a story's only picture.
+      if (replaced && replaced !== imageUrl) await deleteStoryImage(replaced);
       res.json({ imageUrl, alreadyExisted: false });
     } catch (error) {
       console.error("Error illustrating story:", error);
