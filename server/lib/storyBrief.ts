@@ -296,6 +296,37 @@ const HISTORY_FIXED =
   "do not have them rescue anyone from it.";
 
 /**
+ * WHAT THEY MAY DO, which nothing used to say.
+ *
+ * Every line the chapter prompt carried about being in a real account was a
+ * prohibition -- HISTORY_FIXED's four, and "does not die". Told only what they
+ * may not do, a model writes somebody who does nothing: in a Joseph quest that
+ * used the lantern-stone perfectly, the traveller spoke ONCE in a hundred and
+ * nine paragraphs, and that was back in the shop. Forty-one paragraphs of
+ * dialogue inside the account and nobody addressed her. She carried water,
+ * gathered grain and watched.
+ *
+ * THE GAPS ARE WHERE THEY LIVE. An account records what it records; it does
+ * not say who fetched the water, who sat with him in the dark, who was told to
+ * move along. That is room to act in, with real effect, that changes nothing
+ * written down -- and it is the honest reading of Blake's "having the
+ * character do things that affect the story yet somehow it remains on track".
+ *
+ * WHAT IS NOT HERE, deliberately: the account happening BECAUSE of them. Blake
+ * raised it and doubted it himself -- "I don't know if that can be safely
+ * integrated". It cannot. The story ends with a note saying this character was
+ * invented, and that note stops being true the moment the recorded events
+ * needed them; a child cannot then tell which half of what they read was real.
+ * They may try and fail. Failing is allowed to matter.
+ */
+const partOfIt = (name: string) =>
+  `${name} is IN this and not watching it: they speak and are spoken to, they ` +
+  "help, they get in the way, they are noticed. Let them act where the account " +
+  "is silent -- who carried the water, who sat with him, who was told to move " +
+  "along -- and let trying and failing cost something. What the account does " +
+  "record happens anyway, and never because of them.";
+
+/**
  * The mission: given a sympathetic character who thinks the hero's choice is
  * mad, the obvious scene is the one where they talk him out of it. That is
  * the story this mode exists to NOT tell. He listens, and he goes anyway --
@@ -392,7 +423,11 @@ function participationPremise(
       lines: out,
       // "Does not die" was the alongside mode's alone. A traveller is in the
       // same accounts, and a reader who made them has the same question.
-      anchor: [hasSource ? HISTORY_FIXED : "", neverDies(name)].filter(Boolean).join(" "),
+      // The permission FIRST: a chapter prompt that opens with four things
+      // they must not do is one that writes somebody standing still.
+      anchor: [hasSource ? partOfIt(name) : "", hasSource ? HISTORY_FIXED : "", neverDies(name)]
+        .filter(Boolean)
+        .join(" "),
       world: { canon: worldCanon(frame), anchor: worldAnchor() },
     };
   }

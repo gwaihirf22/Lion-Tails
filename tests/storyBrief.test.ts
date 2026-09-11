@@ -1867,3 +1867,55 @@ describe("a whole life, on a quest", () => {
     expect(plain).not.toMatch(/covers more than one moment/);
   });
 });
+
+describe("a traveller is in the account, not watching it", () => {
+  /**
+   * Every line the chapter prompt carried about being in a real account was a
+   * prohibition, and a model told only what it may not do writes somebody who
+   * does nothing. Measured on a real Joseph quest: the traveller spoke once in
+   * 109 paragraphs, and that was back in the shop; 41 paragraphs of dialogue
+   * inside the account and nobody addressed her.
+   */
+  const questChapter = () =>
+    renderBrief(
+      buildStoryBrief(
+        { characterIds: ["c1"], characterRole: "travels", biblicalEvent: "joseph", travelFrame: "errand" } as any,
+        [{ id: "c1", name: "Mia", kind: "girl", createdAt: "2026-01-01" } as any],
+      ),
+      "chapter",
+    );
+
+  it("tells them what they MAY do, and first", () => {
+    const c = questChapter();
+    expect(c).toMatch(/Mia is IN this and not watching it/);
+    expect(c).toMatch(/speak and are spoken to/);
+    // Before the prohibitions, not after them.
+    expect(c.indexOf("is IN this")).toBeLessThan(c.indexOf("do not invent history"));
+  });
+
+  it("points them at the gaps the account does not record", () => {
+    expect(questChapter()).toMatch(/act where the account is silent/);
+    expect(questChapter()).toMatch(/who carried the water/);
+  });
+
+  it("still refuses to let them cause what is written", () => {
+    // Blake raised this and doubted it himself. The story ends with a note
+    // saying the character was invented, and that note stops being true the
+    // moment the recorded events needed them.
+    const c = questChapter();
+    expect(c).toMatch(/happens anyway, and never because of them/);
+    expect(c).toMatch(/do not let them change what happened/);
+  });
+
+  it("says none of it when there is no account to be in", () => {
+    // An invented story has no record to respect and no gaps to find.
+    const plain = renderBrief(
+      buildStoryBrief(
+        { characterIds: ["c1"], characterRole: "travels", travelFrame: "errand" } as any,
+        [{ id: "c1", name: "Mia", kind: "girl", createdAt: "2026-01-01" } as any],
+      ),
+      "chapter",
+    );
+    expect(plain).not.toMatch(/is IN this and not watching it/);
+  });
+});
