@@ -173,13 +173,25 @@ async function checkHero(hero: (typeof heroesOfFaithData)[number]): Promise<Chec
   const ourDied = year(hero.deathYear) ?? endYear(hero.timePeriod);
   const fuzzy = approximate(hero.birthYear) || approximate(hero.deathYear) || approximate(hero.timePeriod);
 
-  // Wikipedia states years in its own one-line description, e.g.
-  // "American Christian missionary (1927-1956)". Parsed as a second, genuinely
-  // independent opinion -- Wikidata is a different database maintained by
-  // different people, and they do disagree.
-  const descYears = [...String(summary.description ?? "").matchAll(/\b(\d{3,4})\b/g)].map((m) =>
-    parseInt(m[1], 10),
+  // Wikipedia states life dates in its one-line description, but ONLY inside
+  // parentheses at the end: "American Christian missionary (1927-1956)".
+  //
+  // Reading every number in the description instead reads terms of OFFICE as
+  // life dates. "Pope of Alexandria from 328 to 373" made Athanasius born in
+  // 328 rather than 296, and "Archbishop of Canterbury from 1093 to 1109" made
+  // Anselm born sixty years after he was. Both were reported as FAILURES
+  // against correct profiles -- and only when Wikidata was throttled and so
+  // not there to contradict the misreading. A check that invents errors when a
+  // source is slow is worse than no check, because it trains you to dismiss it.
+  // Only a parenthetical containing nothing but years, dashes, "c." and
+  // spaces. Two-digit years included: Polycarp is "(69-155)", and requiring
+  // three digits is the same mistake that once reported his birth year as 155.
+  const parenthesised = String(summary.description ?? "").match(
+    /\(\s*(?:c\.\s*)?(\d{1,4})\s*(?:[–—-]\s*(?:c\.\s*)?(\d{1,4})\s*)?\)/,
   );
+  const descYears = parenthesised
+    ? [parenthesised[1], parenthesised[2]].filter(Boolean).map((v) => parseInt(String(v), 10))
+    : [];
   const wpBorn = descYears[0] ?? null;
   const wpDied = descYears[1] ?? null;
 
@@ -261,6 +273,15 @@ async function checkHero(hero: (typeof heroesOfFaithData)[number]): Promise<Chec
         });
       }
     }
+  }
+
+  if (out.length === 0 && wdBorn === null && wpBorn === null) {
+    out.push({
+      hero: hero.name,
+      level: "warn",
+      note: "no dates available from either source -- NOT verified",
+    });
+    return out;
   }
 
   if (out.length === 0) {
