@@ -147,71 +147,80 @@ export default function UniversePage() {
         </Link>
       </p>
 
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          {renaming ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                aria-label="Universe name"
-                className="max-w-md text-lg font-semibold"
-                autoFocus
-              />
-              <Button size="sm" onClick={saveName} disabled={!nameDraft.trim()}>
-                Save
+      {/* THE ACTIONS COME FIRST, on their own row, and the title starts
+          below them.
+
+          They used to share a line with the title: flex-1 on the text column
+          let the title shrink to nothing while shrink-0 on the buttons kept
+          their full width, so flex-wrap never fired and on a phone the title
+          was a one-word-per-line column with a button sitting over it.
+          Separated, neither can squeeze the other, and the two buttons are
+          matched in weight so a filled one no longer looms over a text link. */}
+      <div className="mb-3 flex flex-wrap justify-end gap-2">
+        <Button onClick={addHere}>Add to this Universe</Button>
+        <Button
+          variant="outline"
+          className="text-destructive"
+          onClick={() => setConfirmDelete(true)}
+        >
+          Delete universe
+        </Button>
+      </div>
+
+      <div className="mb-6 min-w-0">
+        {renaming ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              aria-label="Universe name"
+              className="max-w-md text-lg font-semibold"
+              autoFocus
+            />
+            <Button size="sm" onClick={saveName} disabled={!nameDraft.trim()}>
+              Save
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setRenaming(false)}>
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <h2 className="flex flex-wrap items-center gap-2 text-2xl md:text-3xl font-heading font-bold text-secondary">
+            {/* break-words, because a universe is named after a story title
+                and one long unbroken word would otherwise run off a phone. */}
+            <span className="min-w-0 break-words">{universe.name}</span>
+            {/* Parent Mode on the server too; this only hides the pencil. */}
+            {parentMode && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2"
+                aria-label="Rename universe"
+                onClick={() => {
+                  setNameDraft(universe.name);
+                  setRenaming(true);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setRenaming(false)}>
-                Cancel
-              </Button>
-            </div>
-          ) : (
-            <h2 className="flex items-center gap-2 text-3xl font-heading font-bold text-secondary">
-              <span className="min-w-0">{universe.name}</span>
-              {/* Parent Mode on the server too; this only hides the pencil. */}
-              {parentMode && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 px-2"
-                  aria-label="Rename universe"
-                  onClick={() => {
-                    setNameDraft(universe.name);
-                    setRenaming(true);
-                  }}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              )}
-            </h2>
+            )}
+          </h2>
+        )}
+        <p className="text-sm text-muted-foreground">
+          {inThis.length} {inThis.length === 1 ? "story" : "stories"}
+          {editedAt && (
+            <>
+              {" · "}
+              {EDITED_BY_PARENT} ·{" "}
+              {new Date(editedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+            </>
           )}
-          <p className="text-sm text-muted-foreground">
-            {inThis.length} {inThis.length === 1 ? "story" : "stories"}
-            {editedAt && (
-              <>
-                {" · "}
-                {EDITED_BY_PARENT} ·{" "}
-                {new Date(editedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
-              </>
-            )}
-            {busy && (
-              <Badge variant="outline" className="ml-2 gap-1">
-                <Loader2 className="h-3 w-3 animate-spin" /> summarising
-              </Badge>
-            )}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button onClick={addHere}>Add to this Universe</Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-destructive"
-            onClick={() => setConfirmDelete(true)}
-          >
-            Delete universe
-          </Button>
-        </div>
+          {busy && (
+            <Badge variant="outline" className="ml-2 gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" /> summarising
+            </Badge>
+          )}
+        </p>
       </div>
 
       <UniverseDetails
