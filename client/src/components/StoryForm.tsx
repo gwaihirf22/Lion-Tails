@@ -41,6 +41,7 @@ import { useToast } from "@/hooks/use-toast";
 import PromptEditor from "./PromptEditor";
 import { ROLE_OPTIONS } from "@/lib/characterRole";
 import { questLengthAllowed, QUEST_PREFERRED_LENGTH } from "@shared/quests";
+import { storyTakesAWhile } from "@shared/schema";
 import { QUEST_SERIES_TITLE } from "@shared/quests";
 import { cn } from "@/lib/utils";
 import barnabasSign from "@/assets/barnabas-sign.webp";
@@ -389,6 +390,18 @@ export default function StoryForm({
    * of which is a quest.
    */
   const isQuest = form.watch("characterRole") === "travels";
+
+  /**
+   * The wait, in words rather than minutes.
+   *
+   * No number is promised: a measured epic took about three minutes on the
+   * economy model, and the stronger ones are slower -- Blake: "the wait will
+   * be even longer if they use 5.6 Terra or 6". A line saying "about three
+   * minutes" is wrong for half the users and reads as a fault the moment it
+   * is exceeded. The tier is already fetched for the model picker, so the one
+   * thing that IS known gets said.
+   */
+  const slowModel = modelSetting?.tier === "premium";
 
   /**
    * The chosen hero's key events, which are the focus options.
@@ -919,6 +932,20 @@ export default function StoryForm({
             <FormSection tint="bg-tab-stories/40" className="space-y-3">
               <h3 className="text-sm font-semibold">Part of a series?</h3>
 
+              {/* A quest has more to fit than one story can hold -- the way in,
+                  the account, and what it cost them -- and even Epic is one
+                  sitting. A series is the honest answer to wanting more depth,
+                  and it is the one place in the form where somebody deciding
+                  how long a quest should be will see it. */}
+              {isQuest && !isContinuation && !universeName && (
+                <p className="text-xs text-muted-foreground">
+                  A quest is one journey. If you want more than fits in one, tick the box
+                  below and continue it afterwards — each new quest remembers the last, so
+                  the same character can be sent again, and build something longer than
+                  any single story can hold.
+                </p>
+              )}
+
               {isContinuation ? (
                 <p className="text-xs text-muted-foreground">
                   This story continues an earlier one, so what happens in it will
@@ -1331,28 +1358,59 @@ export default function StoryForm({
                             <SelectValue placeholder="Select story length" />
                           </SelectTrigger>
                           <SelectContent>
-                            {/* A quest cannot fit in the short ones -- the way
-                                in and the account both have to happen. Disabled
-                                rather than hidden, so the option does not
-                                silently vanish and leave the picker looking
-                                broken; the description below says why. */}
+                            {/* A quest cannot fit in the shorter ones -- the
+                                way in and the account both have to happen, and
+                                at medium the account becomes a synopsis
+                                nobody can act inside. Disabled rather than
+                                hidden, so the option does not silently vanish
+                                and leave the picker looking broken; the
+                                description below says why. */}
                             <SelectItem value="very-short" disabled={isQuest}>
                               Very Short (2-4 minutes)
                             </SelectItem>
                             <SelectItem value="short" disabled={isQuest}>
                               Short (5-7 minutes)
                             </SelectItem>
-                            <SelectItem value="medium">Medium (8-12 minutes)</SelectItem>
+                            <SelectItem value="medium" disabled={isQuest}>
+                              Medium (8-12 minutes)
+                            </SelectItem>
                             <SelectItem value="long">Long (13-20 minutes)</SelectItem>
                             <SelectItem value="extended">Extended (20+ minutes)</SelectItem>
+                            <SelectItem value="epic">Epic (35+ minutes)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     </FormControl>
+                    {/* The wait is warned about for every long story, not only
+                        for quests: it is written a chapter at a time, so the
+                        length IS the wait, and somebody who does not know that
+                        thinks it has hung.
+
+                        NO NUMBER IS PROMISED. A measured epic took about three
+                        minutes on the economy model, and the stronger ones are
+                        slower -- Blake: "the wait will be even longer if they
+                        use 5.6 Terra or 6". A copy line that says "about three
+                        minutes" is wrong for half the users and reads as a
+                        fault when it is exceeded. */}
                     <FormDescription>
-                      {isQuest
-                        ? "A quest needs room for the journey and the account it visits, so the shorter lengths are not available."
-                        : "Select the desired length for the story."}
+                      {isQuest ? (
+                        <>
+                          A quest tells two stories — getting there, and the real account
+                          it visits — so it needs Long or more.{" "}
+                          <strong>These take several minutes to write</strong>
+                          {slowModel ? ", and longer still on the model you have chosen" : ""}. You
+                          can leave the page; it keeps going and lands in My Stories.
+                        </>
+                      ) : storyTakesAWhile(form.watch("storyLength")) ? (
+                        <>
+                          <strong>This one takes several minutes to write</strong> — it is
+                          written a chapter at a time
+                          {slowModel ? ", and longer still on the model you have chosen" : ""}. You
+                          can leave the page; it keeps going and lands in My Stories.
+                        </>
+                      ) : (
+                        "Select the desired length for the story."
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

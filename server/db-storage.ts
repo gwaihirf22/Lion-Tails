@@ -699,6 +699,12 @@ export class DbStorage implements IStorage {
         isFavorite: false,
         expiresAt: expiryDate.toISOString(),
         ...(outline ? { outline } : {}),
+        // NULL, and written explicitly: the presence of this key is what says
+        // the row is one the unseen bubble knows about. A story from before
+        // this existed has no key and is treated as seen, which is what makes
+        // the feature need no migration and no backfill. See seenAt on
+        // savedStorySchema.
+        seenAt: null,
         // savedStorySchema declares searchMetadata with .default(), so the
         // parsed type requires it even though the input does not. Writing it
         // explicitly also means updateStoryHeroId's jsonb_set has a parent key
@@ -803,6 +809,57 @@ export class DbStorage implements IStorage {
     }
   }
   
+  /**
+   * Stamp a story as looked at.
+   *
+   * ONLY WHERE IT IS EXPLICITLY NULL. A row from before this existed has no
+   * seenAt key and must not grow one -- it is already treated as seen, and
+   * writing a date would be inventing a moment that never happened. The
+   * WHERE clause is the guard, so a second open is a no-op rather than a
+   * rewrite of when they first read it.
+   */
+  async markStorySeen(storyId: string, userId: number): Promise<void> {
+    if (!isDatabaseAvailable()) return;
+    try {
+      await pool!.query(
+        `UPDATE user_stories
+            SET story_data = story_data || jsonb_build_object('seenAt', $1::text)
+          WHERE story_id = $2 AND user_id = $3
+            AND story_data ? 'seenAt' AND story_data->>'seenAt' IS NULL`,
+        [new Date().toISOString(), storyId, userId],
+      );
+    } catch (error) {
+      // A bubble that does not clear is a smaller problem than a failed read.
+      console.error(`Error marking story ${storyId} seen:`, error);
+    }
+  }
+
+  /**
+   * How many are written and not yet opened.
+   *
+   * COUNTED IN SQL, unlike the quest counter next door, because this one has
+   * no legacy field to read through -- seenAt is one key with one meaning --
+   * and it runs on every page load for the nav bubble. Reading every story
+   * body to count a handful would be the getUserStories mistake again.
+   */
+  async countUnseenStories(userId: number): Promise<number> {
+    if (!isDatabaseAvailable()) return 0;
+    try {
+      const { rows } = await pool!.query(
+        `SELECT COUNT(*)::int AS n
+           FROM user_stories
+          WHERE user_id = $1
+            AND (is_favorite = true OR expires_at IS NULL OR expires_at > NOW())
+            AND story_data ? 'seenAt' AND story_data->>'seenAt' IS NULL`,
+        [userId],
+      );
+      return rows[0]?.n ?? 0;
+    } catch (error) {
+      console.error(`Error counting unseen stories for user ${userId}:`, error);
+      return 0;
+    }
+  }
+
   async getStoryRequests(userId: number): Promise<StoryRequest[]> {
     if (!isDatabaseAvailable()) {
       console.warn(`Database unavailable in getStoryRequests(${userId}).`);

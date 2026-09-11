@@ -13,6 +13,7 @@ import appIcon from "@/assets/app-icon.jpg";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useQuery } from "@tanstack/react-query";
 import { characterAlerts, type Character } from "@shared/schema";
+import { UNSEEN_STORIES_KEY, type UnseenStories } from "@/lib/unseenStories";
 import { useAuth } from "@/hooks/use-auth";
 import { useStoryJobs, describeJob } from "@/hooks/use-story-jobs";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,24 @@ export default function Header() {
   const waiting = alerts.unspent + alerts.unseen;
 
   /**
+   * What the My Stories link has to say.
+   *
+   * A COUNT, not the library: this renders on every page, and /api/stories
+   * returns every story's full text. Same enabled-on-user guard as the
+   * characters query above, for the same reason.
+   *
+   * It is invalidated by the reader when a story is opened and by the library
+   * when it is looked at, so it needs no polling -- except while something is
+   * generating, which is exactly when a new one is about to appear, and
+   * use-story-jobs already refetches on a job finishing.
+   */
+  const { data: unseenStories } = useQuery<UnseenStories>({
+    queryKey: UNSEEN_STORIES_KEY,
+    enabled: Boolean(user),
+  });
+  const unread = unseenStories?.count ?? 0;
+
+  /**
    * The bubbles, at whatever size the surface wants.
    *
    * `onDark` is the bar itself, where the ring has to be the bar's colour --
@@ -95,6 +114,40 @@ export default function Header() {
    * the popover and the sheet are three different colours and a hairline that
    * guessed would vanish on at least one. That is the mistake .nav-text made.
    */
+  const dot = (
+    count: number,
+    tone: string,
+    what: string,
+    ring: keyof typeof RING,
+  ) => (
+    <span
+      title={`${count} ${what}${count === 1 ? "" : "s"}`}
+      className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none ring-2 ${tone} ${RING[ring]}`}
+    >
+      {count}
+    </span>
+  );
+
+  /** Where a bubble sits on a given surface. See the note above. */
+  const place = (where: "corner" | "row") =>
+    where === "corner"
+      ? "absolute -right-1.5 -top-1.5 z-10 flex items-center -space-x-1"
+      : "absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center -space-x-1";
+
+  /**
+   * A story written and not yet read.
+   *
+   * The same shape as the character bubbles and deliberately its own colour:
+   * red is "you have points to spend", and a new story is good news rather
+   * than something owed.
+   */
+  const storyBubble = (where: "corner" | "row", ring: keyof typeof RING) =>
+    unread === 0 ? null : (
+      <span className={place(where)}>
+        {dot(unread, "bg-tab-stories text-foreground", "new story", ring)}
+      </span>
+    );
+
   const alertBubbles = (place: "corner" | "row", ring: keyof typeof RING) => {
     if (waiting === 0) return null;
     const dot = (count: number, tone: string, what: string) => (
@@ -308,6 +361,7 @@ export default function Header() {
                       >
                         {item.text}
                         {item.href === "/characters" && alertBubbles("corner", "header")}
+                        {item.href === "/saved-stories" && storyBubble("corner", "header")}
                       </Link>
                     </li>
                   ))}
@@ -337,6 +391,7 @@ export default function Header() {
                               >
                                 {item.text}
                                 {item.href === "/characters" && alertBubbles("row", "popover")}
+                                {item.href === "/saved-stories" && storyBubble("row", "popover")}
                               </Link>
                             </DropdownMenuItem>
                           ))}
@@ -434,6 +489,7 @@ export default function Header() {
                       >
                         {item.text}
                         {item.href === "/characters" && alertBubbles("row", "card")}
+                        {item.href === "/saved-stories" && storyBubble("row", "card")}
                       </Link>
                     </li>
                   ))}

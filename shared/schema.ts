@@ -1307,6 +1307,17 @@ export function avatarsOf(
  * reading the list straight off the row would show that story no pictures
  * while its picture was on screen.
  */
+/**
+ * Has this story been generated and not yet looked at?
+ *
+ * Strictly `seenAt === null`: undefined is a story from before this existed
+ * and is treated as seen. Read through this and never off the field, so the
+ * three-state rule lives in one place.
+ */
+export function storyIsUnseen(story?: { seenAt?: string | null } | null): boolean {
+  return story?.seenAt === null;
+}
+
 export function storyImagesOf(
   story?: Partial<Pick<SavedStory, "images" | "createdAt">> & {
     story?: { imageUrl?: string; imagePrompt?: string } | null;
@@ -1357,6 +1368,25 @@ export function characterSearchText(c: Character): string {
 
 // Schema for story generation with optional fields
 /** The most characters one story can hold. */
+/**
+ * Lengths that are worth warning somebody about before they wait for one.
+ *
+ * A story is written a chapter at a time, so the wait scales with the length:
+ * long is five model calls and epic is seven, and an epic measured at 208
+ * seconds even after the chapters were made bigger. Nothing is broken while
+ * that happens, and a reader who does not know that thinks it is.
+ *
+ * SEPARATE FROM QUEST_LENGTHS even though the two lists currently match. They
+ * answer different questions -- "will this take a while" and "can a quest fit
+ * in this" -- and tying them together means moving the quest floor silently
+ * changes who gets warned.
+ */
+export const SLOW_STORY_LENGTHS = ["long", "extended", "epic"] as const;
+
+export function storyTakesAWhile(storyLength?: string | null): boolean {
+  return SLOW_STORY_LENGTHS.includes((storyLength ?? "") as (typeof SLOW_STORY_LENGTHS)[number]);
+}
+
 export const MAX_STORY_CHARACTERS = 8;
 
 
@@ -1729,7 +1759,24 @@ export const storyRequestSchema = z.object({
     "short", 
     "medium", 
     "long", 
-    "extended"
+    "extended",
+    /**
+     * ~5000 words, about ten chapters.
+     *
+     * Added for quests, which have two stories to tell -- the way in and the
+     * account -- and were visibly short of room at anything less: the same
+     * Joseph quest gave its traveller one line of dialogue at medium and five
+     * at long, because at medium one chapter had to carry the pit, the prison
+     * and the dreams.
+     *
+     * NOT UNBOUNDED. finalizeStoryDetails embeds the entire assembled story
+     * and is documented as the call site with the least headroom -- it is what
+     * broke when "long" was introduced. At 5000 words that prompt is roughly
+     * 8800 tokens against MODEL_CONTEXT_LIMIT's 16384, which leaves room; a
+     * tier past this one needs that call fixed first, not just a bigger number
+     * here.
+     */
+    "epic"
   ]).default("medium"),
   // Custom prompts for Parent Mode
   customSystemPrompt: z.string().optional(),
@@ -1909,6 +1956,30 @@ export const savedStorySchema = z.object({
    * storyImagesOf() folds those rows in instead.
    */
   images: z.array(storyPictureSchema).max(MAX_STORY_IMAGES).optional(),
+
+  /**
+   * When the reader first opened it, or null if they have not.
+   *
+   * SERVER-OWNED, and stamped by POST /api/stories/:id/seen -- the seenVirtues
+   * precedent, which is an explicit route rather than a side effect of reading
+   * so that a GET stays a GET.
+   *
+   * THE THREE STATES ARE THE POINT, and they are what makes this need no
+   * migration and no backfill:
+   *
+   *   undefined  a story written before any of this existed. Seen. There is no
+   *              honest way to say otherwise, and a bubble counting somebody's
+   *              whole library on the day this ships is worse than useless.
+   *   null       written since, and not opened yet. This is what the bubble
+   *              counts.
+   *   a date     opened, then.
+   *
+   * saveStory writes null explicitly for exactly this reason: the PRESENCE of
+   * the key is what marks a row as one this feature knows about. Same trick as
+   * avatarsOf and storyImagesOf, where an absent list means "from before" and
+   * is folded in rather than treated as empty.
+   */
+  seenAt: z.string().nullable().optional(),
 
   // Search and relationship metadata
   heroId: z.string().optional(), // ID of the Hero of Faith if story is related to one

@@ -40,7 +40,7 @@ import {
   readStoryImageFile,
 } from "./lib/illustration";
 import { sceneFromPassage } from "./lib/passageScene";
-import { questLengthAllowed } from "@shared/quests";
+import { questLengthAllowed, QUEST_SHORTEST_LENGTH } from "@shared/quests";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
 import {
@@ -731,7 +731,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({
           code: "quest_too_short",
           message:
-            "A Quest with the Timekeeper needs room for the journey and the account it visits. Choose Medium or longer.",
+            "A Quest with the Timekeeper needs room for the journey and the account it visits, and takes a few minutes to write. " +
+            `Choose ${QUEST_SHORTEST_LENGTH} or longer.`,
         });
       }
 
@@ -1281,6 +1282,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // API endpoint to associate a story with a hero of faith
+  /**
+   * How many stories are waiting to be read.
+   *
+   * TWO SEGMENTS AFTER /api/stories ON PURPOSE. A single one would be caught
+   * by GET /api/stories/:id -- Express matches in declaration order and that
+   * route would answer "story not found" for a word that is not an id.
+   *
+   * A count and nothing else: this runs on every page load for the nav bubble,
+   * and returning the library to count it is how a badge becomes the most
+   * expensive request in the app.
+   */
+  app.get("/api/stories/unseen/count", requireAuth, async (req, res) => {
+    try {
+      const count = await storage.countUnseenStories((req.user as any).id);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error counting unseen stories:", error);
+      res.status(500).json({ message: "Could not count unread stories." });
+    }
+  });
+
+  /**
+   * They have looked at it.
+   *
+   * A route rather than a side effect of GET /api/stories/:id, following the
+   * seenVirtues precedent: a GET that writes is a GET that cannot be retried,
+   * prefetched or cached without changing something.
+   */
+  app.post("/api/stories/:id/seen", requireAuth, async (req, res) => {
+    try {
+      if (refuseBuiltIn(req, res)) return;
+      await storage.markStorySeen(req.params.id, (req.user as any).id);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error marking a story seen:", error);
+      res.status(500).json({ message: "Could not mark the story as read." });
+    }
+  });
+
   /**
    * A description of one moment, written against this story's own brief.
    *

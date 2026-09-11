@@ -13,6 +13,7 @@ import { createContext, ReactNode, useContext, useEffect, useRef, useState } fro
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, apiRequestAllowingErrors } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
+import { UNSEEN_STORIES_KEY } from "@/lib/unseenStories";
 
 export type StoryJob = {
   job_id: string;
@@ -103,6 +104,10 @@ export function StoryJobsProvider({ children }: { children: ReactNode }) {
       setLastCompletedAt(Date.now());
       // The worker saved the story, so the library is stale.
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+      // And there is a new one nobody has read, which is what the nav bubble
+      // counts. Without this the bubble only appears on the next page load,
+      // which is exactly when the person is least likely to be looking.
+      queryClient.invalidateQueries({ queryKey: UNSEEN_STORIES_KEY });
       // And so is every universe: the extraction after a series story
       // rewrites its summary and world memory, and with staleTime Infinity
       // nothing else would ever refetch them. Invisible while the universe

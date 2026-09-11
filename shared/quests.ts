@@ -42,20 +42,39 @@ export function isTimekeeperStory(story: {
  *   medium     1,500 words in 3 parts -> 1,000
  *   long       2,500 words in 5 parts -> 2,000
  *
- * 667 words is not a retelling of Genesis 37-50, it is a summary of one. So
- * the floor is medium, which was verified end to end rather than assumed, and
- * QUEST_PREFERRED_LENGTH is what the form offers first: the account is the
- * variable this cannot control, and the big ones want the room.
+ * 667 words is not a retelling of Genesis 37-50, it is a summary of one.
+ *
+ * THE FLOOR WAS MEDIUM AND THAT WAS WRONG. It was verified on the wrong thing:
+ * that the OPENING worked at medium, not that the account had room left after
+ * it. The same quest, same account, same character, at two lengths:
+ *
+ *   medium, 3 parts -> the traveller speaks once, and one chapter carries the
+ *                      pit, the prison and the dreams in 570 words
+ *   long,   5 parts -> she speaks five times, fetches water, points the way,
+ *                      and is spoken to
+ *
+ * Nobody can act inside a synopsis. Blake's first instinct -- that quests want
+ * long -- was right about the big accounts, and "epic" exists because even
+ * long is tight for one: two stories have to fit, the way in and the account.
  *
  * REFUSED, never quietly upgraded. decisions.md 16: "Length is what the user
  * asked for; silently shortening it delivers something other than the
  * request" -- and silently lengthening it spends more of the owner's money
  * than they chose to.
  */
-export const QUEST_LENGTHS = ["medium", "long", "extended"] as const;
+export const QUEST_LENGTHS = ["long", "extended", "epic"] as const;
 
 export const QUEST_PREFERRED_LENGTH = "long";
 
 export function questLengthAllowed(storyLength?: string | null): boolean {
   return QUEST_LENGTHS.includes((storyLength ?? "") as (typeof QUEST_LENGTHS)[number]);
 }
+
+/**
+ * The shortest one allowed, for saying so.
+ *
+ * Derived, because the refusal used to name "Medium" in a hardcoded string and
+ * went on naming it after the floor moved to Long -- a message that tells the
+ * user to choose the thing it just refused.
+ */
+export const QUEST_SHORTEST_LENGTH = QUEST_LENGTHS[0];

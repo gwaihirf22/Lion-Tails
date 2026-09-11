@@ -53,6 +53,28 @@ import { generateStoryImage, illustrationCast } from "./illustration";
 
 // Helper function to get word count from length setting
 /**
+ * Words per chapter, and the reason it is not 500 any more.
+ *
+ * 500 was chosen for the models this app was built on, which lost the thread
+ * over a longer stretch. The current ones do not, and the cost of pretending
+ * otherwise is paid twice: a 5000-word story was twelve model calls and three
+ * and a half minutes, and every chapter after the first carries the ENTIRE
+ * story so far in its prompt -- so halving the chapter count roughly quarters
+ * the tokens spent re-reading it.
+ *
+ * 1000 and not more. TOKEN_BUDGET.chapter is 4096 output tokens and a
+ * 1000-word chapter is about 1350, which leaves the same headroom a 500-word
+ * one had. Past that the budget, not the model, becomes the limit.
+ *
+ * WHAT THIS COSTS A QUEST, because it is not free: part one is the way in and
+ * the account gets the rest, so fewer parts means the fixed part is a bigger
+ * share. At long that is 3 parts rather than 5 -- the account drops from 80%
+ * of the words to 67% -- while the words themselves are unchanged. Measured
+ * on a real quest before this shipped, not assumed.
+ */
+const WORDS_PER_CHAPTER = 1000;
+
+/**
  * How many chapters a story of this length is planned as.
  *
  * Single source: the outline prompt, the outline's length validation and the
@@ -63,7 +85,7 @@ import { generateStoryImage, illustrationCast } from "./illustration";
  * structural 33% undershoot before the model was even involved.
  */
 function getChapterCount(targetWordCount: number): number {
-  return Math.max(3, Math.ceil(targetWordCount / 500));
+  return Math.max(3, Math.ceil(targetWordCount / WORDS_PER_CHAPTER));
 }
 
 /**
@@ -88,6 +110,7 @@ export function getWordCountFromLength(length: string, storyType?: string): numb
       case "medium": return 32 * WORDS_PER_VERSE_LINE;
       case "long": return 48 * WORDS_PER_VERSE_LINE;
       case "extended": return 64 * WORDS_PER_VERSE_LINE;
+      case "epic": return 96 * WORDS_PER_VERSE_LINE;
       default: return 32 * WORDS_PER_VERSE_LINE;
     }
   }
@@ -103,6 +126,8 @@ export function getWordCountFromLength(length: string, storyType?: string): numb
       return 2500; // ~18 minutes
     case "extended":
       return 3500; // ~25 minutes
+    case "epic":
+      return 5000; // ~36 minutes, about ten chapters
     default:
       return 1500;
   }
@@ -698,10 +723,31 @@ async function generateStoryChapter(
         }\n`
       : "";
 
+  /**
+   * AND THE SAME PROBLEM ON THE OTHER SIDE.
+   *
+   * A Joseph quest used the stone exactly as written -- dark in her pocket at
+   * the cistern, warm again outside Potiphar's house, "two years passed, the
+   * stone stayed cold" -- and Joseph never once noticed the girl who kept
+   * turning up across twenty years and had not grown. CANON.seenAgain reached
+   * the outline and the single-call path, because that is where the canon is
+   * rendered; the chapter projection carries world.anchor and nothing else.
+   *
+   * So it is sent with the chapters it belongs to, which is every chapter but
+   * the first: there is nobody to be seen again until they have been seen
+   * once. The first chapter gets the opening rule instead, and neither is in
+   * the anchor, whose 110 words repeat on every chapter and are spent on the
+   * rules that have to.
+   */
+  const seenBefore =
+    storySoFar && ctx.brief.world
+      ? `\n      IF THEY MEET SOMEONE THEY HAVE ALREADY MET: ${CANON.seenAgain}\n`
+      : "";
+
   const systemPrompt = `${ctx.systemPrompt} Continue writing a story based on the context provided. Focus ONLY on writing the current part of the story. Do NOT summarize or add titles/questions.`;
   const userPrompt = `
       ${renderBrief(ctx.brief, "chapter")}
-${opensTheQuest}
+${opensTheQuest}${seenBefore}
       Here is the story so far:
       ---
       ${storySoFar || "This is the very first chapter."}

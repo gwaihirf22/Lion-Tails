@@ -151,15 +151,38 @@ roaring, calling; and at the end, beginning to walk.
 Everything in `lionTails.ts` is phrased as something that is TRUE, never as
 something that is COMING.
 
+## Who holds the lantern
+
+**The Lion does, and he is not a tame lion.** Blake's line, and the answer to
+the question the whole device raises: the lantern answers to stories and not
+to instructions, Barnabas says "I have no control over this", and *something*
+decides where it opens and when it flares again. This is what.
+
+**It is withheld from the model, and this paragraph is why it lives here.**
+`lionTails.ts` holds what may be shown; a model told who controls the lantern
+will have Barnabas explain it in chapter two, and the reveal in Movement IV is
+spent before anyone reaches it. What the model gets is the shape without the
+name — the lantern decides, the traveller does not, nobody in the story knows
+how — plus `CANON.lion`, which lets him say the name once and mysteriously and
+forbids the Lion appearing at all.
+
+The stone is the same fact at a smaller scale. It sleeps in a pocket and wakes
+when it wants; a reader who asks *why it chose that moment* is asking the
+question this file answers and the stories do not.
+
 ## Canon, and still open
 
 **Settled** (in `lionTails.ts`, and in the prologue a reader can check):
 Mr Barnabas, the Timekeeper; the shop, *Barnabas & Co. — Keepers of Things
-Lost to Time*; the shelf; the lantern that answers to stories and goes dark
-on the far side; that he lends it to the person and never chooses the story;
-that arrival has a cause and the way back is a threshold; that the shop may
-appear where it could not be; that he asks what they found and never tells;
-that he never goes with them, never explains, and is not God.
+Lost to Time*; the shelf; the lantern that answers to stories, goes dark on
+the far side and closes into a small stone the traveller carries — waking and
+opening again, of its own accord, to move them elsewhere in the same account;
+that a quest begins in the traveller's own life and the shop comes to them,
+seen by nobody else; that a figure may meet the same traveller years apart and
+the traveller has not aged; that he lends it to the person and never chooses
+the story; that arrival has a cause and the way back is a threshold; that he
+asks what they found and never tells; that he never goes with them, never
+explains, and is not God.
 
 **Open:** what is under the cloth; who the other Timekeepers are; how the
 forgotten story is found; the Lion's first appearance; whether the Original
