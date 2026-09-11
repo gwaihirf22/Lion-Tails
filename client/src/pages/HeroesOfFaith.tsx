@@ -286,7 +286,34 @@ export default function HeroesOfFaith() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filtered.map(hero => (
-          <Card key={hero.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+          /*
+            The whole card opens the hero, not just the button. "Learn More"
+            stays where it is -- it says what the card does, which nothing
+            else on it does -- but a card that looks like a card and only
+            responds on one small button reads as broken.
+
+            The CharacterCard shape, exactly: modifier keys and non-left
+            clicks fall through so ctrl-click and middle-click still do what
+            the browser does, role and tabIndex because a click target a
+            keyboard cannot reach is a regression that nothing shows, and the
+            footer stops propagation so Create Story stays Create Story.
+          */
+          <Card
+            key={hero.id}
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.button !== 0) return;
+              openHeroDetails(hero);
+            }}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" && e.key !== " ") return;
+              // Or Space scrolls the page out from under them.
+              e.preventDefault();
+              openHeroDetails(hero);
+            }}
+            className="overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary/50"
+          >
             <CardHeader className="pb-2">
               <div className="flex justify-between items-start">
                 <div className="flex items-center space-x-4">
@@ -310,7 +337,9 @@ export default function HeroesOfFaith() {
                 <Badge variant="outline" className="text-xs">{livedLabel(hero)}</Badge>
               )}
             </CardContent>
-            <CardFooter className="pt-1 flex gap-2">
+            {/* The buttons keep their own jobs: the click stops here on the
+                way UP, after their handlers have fired. */}
+            <CardFooter className="pt-1 flex gap-2" onClick={(e) => e.stopPropagation()}>
               <Button variant="outline" size="sm" onClick={() => openHeroDetails(hero)}>
                 Learn More
               </Button>

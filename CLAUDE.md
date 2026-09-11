@@ -652,12 +652,11 @@ My Stories is four folders, every story one card, every universe one card.
   strip, the counts and the contents. There were two copies -- a switch and a
   filter per trigger -- and a tab the switch had not heard of silently showed
   the temporary list.
-- **The folder look is two strings** in `client/src/lib/folderTabs.ts`, read
-  by the character sheet AND the library. The tints are the sheet's own
-  `--tab-*` tokens, written out in full; `tests/theme.test.ts` reads every
-  `bg-tab-*` / `border-t-tab-*` literal in `client/src` and fails on one the
-  palettes do not define -- otherwise a typo is a transparent tab and nothing
-  says so.
+- **The folder strip is one component**, `FolderTabs` -- see "Tab strips"
+  below. The tints are the sheet's own `--tab-*` tokens, written out in
+  full; `tests/theme.test.ts` reads every `bg-tab-*` / `border-t-tab-*`
+  literal in `client/src` and fails on one the palettes do not define --
+  otherwise a typo is a transparent tab and nothing says so.
 - **`StoryCard`** is the one card. Its two `AlertDialog`s are SIBLINGS of the
   card, never children: the card navigates on click, and React events follow
   the React tree, so a dialog inside it would open the story on Cancel.
@@ -686,6 +685,25 @@ My Stories is four folders, every story one card, every universe one card.
   a hero's dialog lists the user's stories about them. Both are `StoryRow`s,
   not `StoryCard`s: a card navigates on click and owns dialogs, and these sit
   inside an open Dialog over a form.
+
+## Tab strips
+
+Two, and the second is the template for any new one.
+
+- **`FolderTabs`** (`client/src/components/FolderTabs.tsx`) -- coloured
+  folder tabs, used by the character sheet (seven) and My Stories (four).
+  Pass `{ value, label, tint, edge, badge? }` and keep the `Tabs` value and
+  panels yourself. **Every tab is always on screen**: under `md` the list is
+  a two-column grid, as many rows as it takes; from `md` up it is one row
+  that joins the panel exactly. It used to be one row that scrolled at every
+  width, with arrows, and on a phone three tabs of seven were visible -- to
+  anyone who did not already know the app, the other four did not exist.
+  The join is drawn once, under the last row, so on the grid only a tab on
+  that row touches the panel; that trade was chosen over hiding tabs.
+- **Heroes of Faith** keeps its own four-icon grid (`grid-cols-4`, an icon
+  each, labels from `sm` up). Four tabs that each have an icon fit one row
+  at any width. It is not the template: it only works when every tab has an
+  obvious icon and there are few enough to share a row on a phone.
 
 ## Parent Mode
 

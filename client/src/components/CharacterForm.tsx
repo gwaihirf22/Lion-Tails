@@ -48,7 +48,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import CharacterAvatar from "./CharacterAvatar";
@@ -66,7 +66,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { FOLDER_TAB_LIST, FOLDER_TAB_SCROLLER, FOLDER_TAB_TRIGGER } from "@/lib/folderTabs";
+import FolderTabs from "@/components/FolderTabs";
 import {
   Dialog,
   DialogContent,
@@ -75,7 +75,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Sparkles, RefreshCw, RotateCcw, ChevronLeft, ChevronRight, X, Plus, Lock } from "lucide-react";
+import { Loader2, Sparkles, RefreshCw, RotateCcw, X, Plus, Lock } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -171,7 +171,8 @@ function ParentEditable({
 
   return (
     <div className="flex gap-2 items-start">
-      <div className="flex-1">
+      {/* min-w-0, or the Input's ~20ch minimum stops this column shrinking. */}
+      <div className="min-w-0 flex-1">
         {typing ? (
           <Input
             autoFocus
@@ -580,7 +581,7 @@ export default function CharacterForm({
   const unseen = unseenVirtues(saved).length;
 
   const [tab, setTab] = useState("basics");
-  /** The scrolling strip, so a tab stepped to with the arrows can be shown. */
+  /** The strip's scrolling wrapper, for the one-row layout on a wide screen. */
   const stripRef = useRef<HTMLDivElement>(null);
   // The library, filtered to this character. Cached app-wide; free here.
   const { stories: allStories } = useStories();
@@ -589,8 +590,6 @@ export default function CharacterForm({
         .filter((s) => characterIdsOf(s.request).includes(saved.id))
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     : [];
-  // Parent Mode can be locked while the form is open, taking its tab with it.
-  const tabIndex = Math.max(0, TABS.findIndex((t) => t.value === tab));
   /**
    * Opening the Virtues tab is what "seen" means.
    *
@@ -607,26 +606,58 @@ export default function CharacterForm({
   const openTab = (next: string) => {
     setTab(next);
     if (next === "virtues") void markVirtuesSeen();
-    // The strip is one row that scrolls, so the arrows can step to a tab that
-    // is off-screen. Bring it into view -- "nearest" so a tab already visible
-    // does not jump, and block:nearest so the dialog itself does not scroll.
+    /**
+     * On a wide screen the strip is one row that scrolls if it ever outgrows
+     * the card (on a phone it is a grid and every tab is on screen -- see
+     * FolderTabs). Bring the chosen tab into view by moving THIS element's
+     * scrollLeft and nothing else; on the grid there is no overflow and the
+     * assignment is a no-op.
+     *
+     * NOT scrollIntoView: it walks every scrollable ancestor, and the
+     * dialog is one of them -- its overflow-y-auto makes the x axis auto
+     * too (CSS never pairs visible with a non-visible value), so
+     * inline:"nearest" would scroll the whole card sideways.
+     *
+     * BY INDEX, not by a value attribute. Radix destructures `value` out
+     * of the trigger's props and never renders it, so the obvious
+     * `[value="..."]` selector matches nothing and fails silently -- which
+     * is how the first version of this shipped doing nothing at all.
+     */
     requestAnimationFrame(() => {
-      stripRef.current
-        ?.querySelector(`[data-state][value="${next}"], [data-radix-collection-item][value="${next}"]`)
-        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      const strip = stripRef.current;
+      const index = TABS.findIndex((t) => t.value === next);
+      const el = strip?.querySelectorAll<HTMLElement>('[role="tab"]')[index];
+      if (!strip || !el) return;
+      // Rects, not offsetLeft: the trigger's offsetParent is whichever
+      // positioned ancestor happens to be nearest, which is not the strip.
+      const view = strip.getBoundingClientRect();
+      const tab = el.getBoundingClientRect();
+      // A tab already fully visible does not move.
+      if (tab.left < view.left) strip.scrollLeft -= view.left - tab.left + 8;
+      else if (tab.right > view.right) strip.scrollLeft += tab.right - view.right + 8;
     });
-  };
-
-  const step = (by: number) => {
-    const next = TABS[tabIndex + by];
-    if (next) openTab(next.value);
   };
 
   const results = kindSearch ? searchKinds(kindSearch, 40) : [];
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(submit)} className="space-y-6">
+      {/*
+        min-w-0, and it is the whole reason this dialog used to overflow.
+
+        DialogContent is `display: grid`, so this form is a GRID ITEM -- and a
+        grid item's `min-width` defaults to `auto`, meaning it refuses to
+        shrink below its own min-content. The tab strip's list is `w-max`, and
+        a max-content box still contributes its full width to that minimum even
+        though it sits inside an overflow container. So the column was forced to
+        the width of seven tabs (~840px), the dialog's box was 720px, and every
+        row in the form spilled past the right edge with the whole card
+        scrolling sideways -- on a phone and on a desktop alike.
+
+        Setting it to 0 lets the column take the dialog's width; the strip then
+        shrinks and scrolls inside itself, which is what it was built to do.
+      */}
+      <form onSubmit={form.handleSubmit(submit)} className="min-w-0 space-y-6">
         <Card>
           <CardHeader>
             {/*
@@ -643,7 +674,7 @@ export default function CharacterForm({
             </CardDescription>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             {/*
               Tabs rather than one long scroll. The sheet has grown past what
               fits in a dialog, and the sections answer genuinely different
@@ -654,99 +685,43 @@ export default function CharacterForm({
             */}
             <Tabs value={tab} onValueChange={openTab} className="w-full">
               {/*
-                FOLDER TABS. The default shadcn tab strip is a segmented control
-                -- a grey pill where only the selected item has a surface -- so
-                the unselected ones read as plain text and the strip does not
-                read as tabs at all.
-
-                Each trigger carries its own border and a rounded top, so an
-                unselected tab is still visibly a tab. The selected one takes
-                the card's background, loses its bottom border and is pulled
-                down a pixel over the strip's own border, which is what joins it
-                to the panel below and makes it read as the front folder.
+                The folder strip, and the count bubbles that say a tab has
+                something waiting. The bubble is a plain title, not a Tooltip:
+                this sits inside a modal Dialog, where a portalled Radix layer
+                is the thing that has already bitten this file once. The
+                card's bubbles are not in a dialog and use a real tooltip.
               */}
-              {/*
-                items-END, not items-stretch. Stretching made TabsList grow to
-                the height of the icon buttons beside it, so its bottom border
-                sat several pixels BELOW the tabs instead of under them -- the
-                selected tab's card-coloured border had nothing to cover, and
-                the line ran straight through the front folder. The arrows now
-                bottom-align with the strip instead of being nudged with a
-                margin.
-              */}
-              <div className="flex items-end gap-1">
-                <Button
-                  type="button" variant="ghost" size="icon"
-                  className="shrink-0"
-                  onClick={() => step(-1)}
-                  disabled={tabIndex === 0}
-                  aria-label="Previous tab"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-
-                <div className={FOLDER_TAB_SCROLLER} ref={stripRef}>
-                  <TabsList className={FOLDER_TAB_LIST}>
-                    {TABS.map((t) => {
-                      const count = t.value === "stats" ? unspent : t.value === "virtues" ? unseen : 0;
-                      return (
-                        <TabsTrigger
-                          key={t.value}
-                          value={t.value}
-                          className={cn(
-                            FOLDER_TAB_TRIGGER,
-                            // Its own colour when it is one of the closed folders,
-                            // and the same colour as a top edge when it is the
-                            // open one -- which has to stay bg-card, because that
-                            // is what joins it to the panel below.
-                            t.tint,
-                            t.edge,
-                          )}
-                        >
-                          {t.label}
-                          {count > 0 && (
-                            <span
-                              // A plain title, not a Tooltip: this sits inside a
-                              // modal Dialog, where a portalled Radix layer is
-                              // the thing that has already bitten this file once.
-                              // The card's bubbles are not in a dialog and use a
-                              // real tooltip.
-                              title={
-                                t.value === "stats"
-                                  ? `${count} Attribute/Skill point${count === 1 ? "" : "s"}`
-                                  : `${count} new virtue${count === 1 ? "" : "s"} to look at`
-                              }
-                              className={cn(
-                                "absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none",
-                                // Red for "there is something here". destructive is
-                                // the only red that follows all four palettes, and
-                                // an attention red sharing a token with a danger
-                                // red is the ordinary convention -- it is not
-                                // saying this is dangerous.
-                                t.value === "stats"
-                                  ? "bg-destructive text-destructive-foreground"
-                                  : "bg-tab-virtues text-foreground ring-1 ring-border",
-                              )}
-                            >
-                              {count}
-                            </span>
-                          )}
-                        </TabsTrigger>
-                      );
-                    })}
-                  </TabsList>
-                </div>
-
-                <Button
-                  type="button" variant="ghost" size="icon"
-                  className="shrink-0"
-                  onClick={() => step(1)}
-                  disabled={tabIndex >= TABS.length - 1}
-                  aria-label="Next tab"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
+              <FolderTabs
+                stripRef={stripRef}
+                tabs={TABS.map((t) => {
+                  const count = t.value === "stats" ? unspent : t.value === "virtues" ? unseen : 0;
+                  return {
+                    ...t,
+                    badge: count > 0 && (
+                      <span
+                        title={
+                          t.value === "stats"
+                            ? `${count} Attribute/Skill point${count === 1 ? "" : "s"}`
+                            : `${count} new virtue${count === 1 ? "" : "s"} to look at`
+                        }
+                        className={cn(
+                          "absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none",
+                          // Red for "there is something here". destructive is
+                          // the only red that follows all four palettes, and
+                          // an attention red sharing a token with a danger
+                          // red is the ordinary convention -- it is not
+                          // saying this is dangerous.
+                          t.value === "stats"
+                            ? "bg-destructive text-destructive-foreground"
+                            : "bg-tab-virtues text-foreground ring-1 ring-border",
+                        )}
+                      >
+                        {count}
+                      </span>
+                    ),
+                  };
+                })}
+              />
 
             <TabsContent value="basics" className="space-y-5 pt-4">
               {/* Display only here. The button that makes it lives on
@@ -911,7 +886,11 @@ export default function CharacterForm({
                   <FormItem>
                     <FormLabel>Name</FormLabel>
                     <div className="flex gap-2">
-                      <FormControl>
+                      {/* min-w-0: an input's intrinsic minimum is about twenty
+                          characters, and w-full does not override it -- without
+                          this the row cannot shrink below ~250px and pushes the
+                          whole dialog wider than the phone. */}
+                      <FormControl className="min-w-0 flex-1">
                         <Input placeholder="What are they called?" {...field} />
                       </FormControl>
                       {/*
@@ -1248,7 +1227,7 @@ export default function CharacterForm({
                 const canRaise = value < STAT_CAP && (available > 0 || parentMode);
                 return (
                   <div key={stat} className="flex items-center gap-3">
-                    <span className="w-28 text-sm capitalize">{stat}</span>
+                    <span className="w-20 sm:w-28 shrink-0 text-sm capitalize">{stat}</span>
                     <Button
                       type="button" variant="outline" size="icon" className="h-7 w-7"
                       disabled={value <= STAT_FLOOR}
@@ -1298,7 +1277,7 @@ export default function CharacterForm({
 
                 {skillValues.map((sk: CharacterSkill) => (
                   <div key={sk.name} className="flex items-center gap-3">
-                    <span className="w-28 truncate text-sm capitalize" title={sk.name}>{sk.name}</span>
+                    <span className="w-20 sm:w-28 shrink-0 truncate text-sm capitalize" title={sk.name}>{sk.name}</span>
                     <Button
                       type="button" variant="outline" size="icon" className="h-7 w-7"
                       disabled={sk.value <= STAT_FLOOR}
@@ -1436,7 +1415,7 @@ export default function CharacterForm({
                     .sort((a, b) => b[1] - a[1])
                     .map(([virtue, level]) => (
                       <div key={virtue} className="flex items-center gap-2">
-                        <span className="w-28 text-sm capitalize">{virtue}</span>
+                        <span className="w-20 sm:w-28 shrink-0 text-sm capitalize">{virtue}</span>
                         <Badge variant="secondary">Level {level}</Badge>
                       </div>
                     ))}

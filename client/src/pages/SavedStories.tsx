@@ -6,9 +6,8 @@ import { useUniverses } from "@/hooks/use-universes";
 import { useStories } from "@/hooks/use-stories";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
-import { FOLDER_TAB_LIST, FOLDER_TAB_SCROLLER, FOLDER_TAB_TRIGGER } from "@/lib/folderTabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import FolderTabs from "@/components/FolderTabs";
 import { STORY_FOLDERS, storyFolder } from "@/lib/storyFolders";
 import StoryCard from "@/components/StoryCard";
 import { useChipSources } from "@/lib/useChipSources";
@@ -181,17 +180,14 @@ export default function SavedStories() {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className={FOLDER_TAB_SCROLLER}>
-          <TabsList className={FOLDER_TAB_LIST}>
-            {STORY_FOLDERS.map((f) => (
-              <TabsTrigger key={f.value} value={f.value} className={cn(FOLDER_TAB_TRIGGER, f.tint, f.edge)}>
-                {/* Slot for the lantern on the Timekeeper folder: an
-                    <img className="mr-2 h-4 w-4"> before the label. */}
-                {f.label} ({f.filter ? stories.filter(f.filter).length : universes.length})
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
+        {/* Slot for the lantern on the Timekeeper folder: an
+            <img className="mr-2 h-4 w-4"> before the label. */}
+        <FolderTabs
+          tabs={STORY_FOLDERS.map((f) => ({
+            ...f,
+            label: `${f.label} (${f.filter ? stories.filter(f.filter).length : universes.length})`,
+          }))}
+        />
 
         <TabsContent value={activeTab} className="pt-4">
           {folder.value === "universes" ? (

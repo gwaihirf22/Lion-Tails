@@ -1289,7 +1289,7 @@ export default function StoryForm({
 
     {/* Character Edit Dialog */}
     <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-      <DialogContent className="max-w-3xl top-[4vh] translate-y-0 max-h-[92vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl top-[4vh] translate-y-0 max-h-[92dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Character</DialogTitle>
         </DialogHeader>
