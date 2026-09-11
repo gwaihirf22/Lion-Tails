@@ -232,6 +232,42 @@ export const CANON = {
     "forget sacrifice; that someone spoke the truth and forget what it cost. " +
     "Every journey is into a story that holds something that must be " +
     "remembered, and the traveller is not told what.",
+  /**
+   * HOW A QUEST BEGINS, and it is not in the shop.
+   *
+   * Four of five long quests opened inside it, because worldCanon's first
+   * line established the shop as the world before anything else was said and
+   * the frame's opening arrived last. The rule was already true in two places
+   * and told to the model in neither: the prologue -- canon a reader can
+   * check -- says "Most people walk past it ... And some, very rarely, see
+   * the light", and CANON.wayBack said the shop may appear where it could not
+   * logically be, filed under the RETURN so the model only used it at the end.
+   * That sentence now lives here, once.
+   *
+   * A MOMENT, NOT A CRISIS. Blake: "not something going on, but something
+   * happening that in some way can relate to the story, like they are tempted
+   * to sin against someone in some way or they have to deal with being
+   * patient as someone is taking a long time." Nothing is broken and nobody
+   * needs rescuing -- an opening that poses a problem makes the journey an
+   * errand to solve it, which is the shape this is written to avoid.
+   *
+   * AND NOBODY EVER SAYS WHY. That the arrival has a cause is already canon
+   * (see arrival, below); WHO causes it is withheld, and naming the link
+   * between their morning and their destination would both leak that and turn
+   * a quest into an illustration of a moral.
+   */
+  beginning:
+    "A quest begins in the traveller's own life, never in the shop. Something " +
+    "there is asking something of them -- a temptation to be unkind, a wait " +
+    "they are impatient with, a slight they would like to repay. A moment, " +
+    "not a crisis: nothing is broken and nobody needs rescuing. The story " +
+    "they are sent to bears on that same thing, and NOTHING ever says so -- " +
+    "not the narrator, not the Timekeeper, not the traveller. Then the shop " +
+    "is there, where a shop could not be: the end of a corridor, a gap " +
+    "between two houses. Sudden, or so quiet they half expected it. Always " +
+    "the same shop, the same sign and the same man; only where and how it " +
+    "arrives is new. Only they see it -- anyone else passing sees a " +
+    "second-hand shop, an empty building, or nothing worth looking at.",
   arrival:
     "Arrival always has a cause, even when the traveller does not understand " +
     "it; it is never arbitrary teleportation. The boundary between times goes " +
@@ -239,9 +275,8 @@ export const CANON = {
     "bell, a voice saying their name, a reflection in a window.",
   wayBack:
     "The way back is a threshold, never an announcement: a doorway, a road, a " +
-    "shop window, a brass bell. The shop may appear where it could not " +
-    "logically be; that is normal for a Timekeeper's shop. The story ends " +
-    "when it has given the traveller what they were sent to find.",
+    "shop window, a brass bell. The story ends when it has given the " +
+    "traveller what they were sent to find.",
   ending:
     "Afterwards Barnabas asks what they found -- never whether they learned " +
     "something -- and if the answer is too easy, he asks again. He may appear " +
@@ -296,16 +331,24 @@ export type FramingApproach = {
  * Each one describes a SHAPE and leaves the content to the story. "An errand
  * that never got finished" produces a different errand every time; "they were
  * carrying the shopping in" produces the same opening every time.
+ *
+ * NONE OF THEM OPENS IN THE SHOP. CANON.beginning owns the arrival -- their
+ * own life, a moment asking something of them, and then the shop where a shop
+ * could not be -- so what a frame varies is WHAT is being asked and HOW the
+ * shop turns up. Two of these used to start with the traveller already
+ * talking to Barnabas, which is most of why four of five long quests opened
+ * inside the shop; both work one beat later, once they are through the door.
  */
 export const FRAMING_APPROACHES: readonly FramingApproach[] = [
   {
     id: "errand",
     label: "an errand interrupted",
     opening:
-      "Open in the present day, with something ordinary already underway and " +
-      "not yet finished -- a job half done, somewhere they were supposed to " +
-      "be, a promise made that morning. The quest interrupts it. Do not " +
-      "resolve it before they go.",
+      "Something ordinary is already underway and not yet finished -- a job " +
+      "half done, somewhere they were supposed to be, a promise made that " +
+      "morning and now inconvenient. The shop is on the way, on a stretch of " +
+      "the way that has never had a shop on it. Do not resolve the unfinished " +
+      "thing before they go.",
     closing:
       "At the end, come back to the unfinished thing. They still have to " +
       "finish it, and they are not the same person doing it.",
@@ -314,10 +357,12 @@ export const FRAMING_APPROACHES: readonly FramingApproach[] = [
     id: "question",
     label: "a question asked and not answered",
     opening:
-      `Open in the present day with a question they put to ${KEEPER.shortName} -- ` +
-      "something they genuinely want to know, and something he could answer in " +
-      "a sentence if he chose to. He does not choose to. He hands them the " +
-      "lantern instead.",
+      "Open with a question already sitting in them, put badly or not out " +
+      "loud -- something about what they are supposed to do, or why somebody " +
+      "else does not have to. They are still carrying it when the shop turns " +
+      `up in front of them. Inside, they put it to ${KEEPER.shortName}, who ` +
+      "could answer it in a sentence if he chose to. He does not choose to. " +
+      "He hands them the lantern instead.",
     closing:
       "At the end, return to the question. They may answer it themselves, or " +
       "find it was the wrong question. Do not have him explain it to them.",
@@ -326,8 +371,10 @@ export const FRAMING_APPROACHES: readonly FramingApproach[] = [
     id: "brought-back",
     label: "something brought back",
     opening:
-      "Open in the present day, briefly, and get them travelling quickly. The " +
-      "weight of this one is at the end.",
+      "Open briefly -- one small moment in their day where something is being " +
+      "asked of them and they have not answered it yet -- and get them " +
+      "travelling quickly. The shop is simply there, and they go in without " +
+      "much fuss. The weight of this one is at the end.",
     closing:
       "They come back carrying something they did not leave with -- an object, " +
       "a habit, a piece of knowledge, a mark. Close on it, and on somebody " +
@@ -337,10 +384,11 @@ export const FRAMING_APPROACHES: readonly FramingApproach[] = [
     id: "someone-else-first",
     label: "someone was here first",
     opening:
-      "Open in the present day with evidence that someone has used the " +
-      "lantern before them and recently -- a name, a date, an object left " +
-      `where it should not be. ${KEEPER.name} sees it and says nothing useful. ` +
-      "Do not resolve who it was; this story is not about that.",
+      "Open in their day with something small they would rather not have to " +
+      "do well. When the shop arrives and they are inside it, there is " +
+      "evidence that someone else has been here recently -- a name, a date, " +
+      `an object left where it should not be. ${KEEPER.name} sees it and says ` +
+      "nothing useful. Do not resolve who it was; this story is not about that.",
     closing:
       "At the end, the evidence is still there and still unexplained. Let them " +
       "notice it again.",
@@ -349,10 +397,11 @@ export const FRAMING_APPROACHES: readonly FramingApproach[] = [
     id: "wrong-arrival",
     label: "not where they meant to be",
     opening:
-      "Open in the present day and make the arrival go wrong -- the wrong day, " +
-      "some distance from the account, or early enough to wait. They walk INTO " +
-      "the account rather than landing in the middle of it, and what they see " +
-      "on the way matters.",
+      "Open with them mid-something that is testing their patience or their " +
+      "temper, and let the shop appear at the least convenient moment. Then " +
+      "make the arrival go wrong -- the wrong day, some distance from the " +
+      "account, or early enough to wait. They walk INTO the account rather " +
+      "than landing in the middle of it, and what they see on the way matters.",
     closing:
       "At the end they have to get back to where they arrived, and the way " +
       "back is not the way they came.",
@@ -426,8 +475,12 @@ export function framingApproachOf(id?: string | null): FramingApproach {
  */
 export function worldCanon(frame: FramingApproach): string[] {
   return [
-    `${KEEPER.name}, ${KEEPER.title}, keeps ${KEEPER.place} He is ${KEEPER.who} ${KEEPER.why}`,
+    `${KEEPER.name} is ${KEEPER.title}. He is ${KEEPER.who} ${KEEPER.why}`,
     CANON.keeper,
+    // The premises AFTER the man and what he does, never before: leading
+    // with the shop is what made the shop the place every story started.
+    `He keeps ${KEEPER.place}`,
+    CANON.beginning,
     `What he keeps is ${DEVICE.brief} ${DEVICE.rules}`,
     CANON.forgetting,
     CANON.arrival,
@@ -442,6 +495,71 @@ export function worldCanon(frame: FramingApproach): string[] {
     frame.opening,
     frame.closing,
   ];
+}
+
+/** "a, b and c" */
+const list = (names: readonly string[]): string =>
+  names.length <= 1
+    ? (names[0] ?? "")
+    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+
+/** One traveller and how many quests they have already been on. */
+export type Traveller = { name: string; visits: number };
+
+/**
+ * Who has been here before, and what that changes about the opening.
+ *
+ * Blake: "if this is the character's first time going. and if ANY of the
+ * characters it is their first time it should be noteworthy, and the 2nd time
+ * is worth noting as well. but after that the characters should respond with
+ * some knowledge of barnabas and the shop, the 'magic'."
+ *
+ * Three registers and no more. A fourth -- "they have been nine times" --
+ * would say nothing a story could act on that the third does not already say.
+ *
+ * A NEWCOMER OUTRANKS EVERYONE. With a mixed cast the first-timer is the one
+ * the opening is about, because the wonder belongs to whoever still has it,
+ * and a veteran standing next to them is what makes it visible.
+ *
+ * Outside worldCanon deliberately: the canon is the same for every story and
+ * is capped as such, and this changes per cast. It renders beside it.
+ */
+export function questFamiliarity(travellers: readonly Traveller[]): string {
+  const newcomers = travellers.filter((t) => t.visits === 0).map((t) => t.name);
+  const returning = travellers.filter((t) => t.visits === 1).map((t) => t.name);
+  const seasoned = travellers.filter((t) => t.visits >= 2).map((t) => t.name);
+  const out: string[] = [];
+
+  if (newcomers.length > 0) {
+    const they = newcomers.length === 1 ? "has" : "have";
+    out.push(
+      `${list(newcomers)} ${they} never been. The shop is new, ${KEEPER.shortName} is a ` +
+        "stranger, and nothing about any of it has been explained. Make that the weight " +
+        "of the opening: let them work out where they are, and do not have anyone give " +
+        "them a tour of it.",
+    );
+  }
+  if (returning.length > 0) {
+    const they = returning.length === 1 ? "has" : "have";
+    out.push(
+      `${list(returning)} ${they} been once. They know the shop is real and are not ` +
+        "sure it will be there again. Let them notice that it is.",
+    );
+  }
+  if (seasoned.length > 0) {
+    const they = seasoned.length === 1 ? "knows" : "know";
+    out.push(
+      `${list(seasoned)} ${they} the shop, the man and what the lantern does. Explain ` +
+        "none of it to them again, and do not have them marvel at the shop itself; " +
+        "whatever is strange this time is strange to them too.",
+    );
+  }
+  if (newcomers.length > 0 && seasoned.length + returning.length > 0) {
+    out.push(
+      "Let the one who has never been see it the way the others no longer can.",
+    );
+  }
+  return out.join(" ");
 }
 
 /**

@@ -27,6 +27,7 @@ import {
   resolveTravelFrame,
   resolveStorySource,
   resolveHeroOfFaith,
+  countQuestsFor,
   renderBrief,
   serialiseBrief,
 } from "./lib/storyBrief";
@@ -76,7 +77,7 @@ import {
   storyAllowance,
   statsOf,
   virtueLevels,
-  avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, characterIdsOf,
+  avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, characterIdsOf, characterRoleOf,
   type SavedStory, type Character, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
@@ -715,12 +716,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // and at the same moment: picked here, frozen with the request, so the
       // frame is recoverable from the story rather than re-rolled on replay.
       resolveTravelFrame(validatedData);
+      // And how many quests each of them has already been on, for the same
+      // reason and at the same moment: the shop should not be a revelation to
+      // somebody on their fifth visit, and a retry next week must still say
+      // fifth. Only asked for on a quest -- an ordinary story has no shop to
+      // have seen before.
+      const visits =
+        characterRoleOf(validatedData) === "travels"
+          ? await countQuestsFor(userId, characterIdsOf(validatedData))
+          : undefined;
       const result = await enqueueStoryJob({
         userId,
         request: validatedData,
         // JSON, not prose: the worker renders a different projection per
         // prompt site, so freezing one rendering would lose the others.
-        brief: serialiseBrief(buildStoryBrief(validatedData, characters, continuity, hero)),
+        brief: serialiseBrief(
+          buildStoryBrief(validatedData, characters, continuity, hero, visits),
+        ),
         // Parent Mode is derived inside buildSystemPrompt from the request, so
         // there is no second argument here to forget. See storyBrief.ts.
         systemPrompt: buildSystemPrompt(validatedData),

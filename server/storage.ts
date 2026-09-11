@@ -48,6 +48,21 @@ export interface IStorage {
 
   // User stories methods
   getUserStories(userId: number): Promise<SavedStory[]>;
+  /**
+   * Every stored story REQUEST for this user, newest first, and nothing else.
+   *
+   * For counting how many quests a character has already been on, at enqueue.
+   * getUserStories would answer the same question and read every story BODY
+   * to do it -- megabytes, per generation, to count a handful of rows.
+   *
+   * Requests rather than a COUNT in SQL on purpose: which stories are quests,
+   * and who is in them, are answered by characterRoleOf() and
+   * characterIdsOf(), the two helpers that know characterRole/useTimeTravel
+   * and characterIds/characterId are each one fact under two names. A jsonb
+   * predicate would be a second copy of both, and the older spelling is
+   * exactly what it would miss.
+   */
+  getStoryRequests(userId: number): Promise<StoryRequest[]>;
 
   /**
    * Character methods. EVERY ONE TAKES THE OWNER.
@@ -638,6 +653,10 @@ export class MemStorage implements IStorage {
     return this.stories.delete(id);
   }
   
+  async getStoryRequests(userId: number): Promise<StoryRequest[]> {
+    return (await this.getUserStories(userId)).map((s) => s.request);
+  }
+
   async setStoryImages(
     storyId: string,
     userId: number,
