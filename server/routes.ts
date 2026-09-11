@@ -40,7 +40,7 @@ import {
   readStoryImageFile,
 } from "./lib/illustration";
 import { sceneFromPassage } from "./lib/passageScene";
-import { questLengthAllowed } from "@shared/quests";
+import { questLengthAllowed, QUEST_SHORTEST_LENGTH } from "@shared/quests";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
 import {
@@ -731,7 +731,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({
           code: "quest_too_short",
           message:
-            "A Quest with the Timekeeper needs room for the journey and the account it visits. Choose Medium or longer.",
+            "A Quest with the Timekeeper needs room for the journey and the account it visits, and takes a few minutes to write. " +
+            `Choose ${QUEST_SHORTEST_LENGTH} or longer.`,
         });
       }
 

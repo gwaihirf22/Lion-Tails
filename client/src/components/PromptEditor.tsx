@@ -46,7 +46,8 @@ const generateDefaultSystemPrompt = (storyRequest: StoryRequest) => {
     "short": "700-1000 words", 
     "medium": "1000-1500 words",
     "long": "1500-2500 words",
-    "extended": "2500+ words (20+ minutes reading time)"
+    "extended": "2500+ words (20+ minutes reading time)",
+    "epic": "4500-5000 words (35+ minutes reading time)"
   };
 
   const targetLength = lengthMapping[storyRequest.storyLength] || "1000+ words";

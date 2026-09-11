@@ -1743,15 +1743,23 @@ describe("how long a quest has to be", () => {
    * those, and very-short is written in one call with no outline at all, so
    * the way in has no budget to be given.
    */
-  it("refuses the two lengths that cannot hold one", () => {
+  it("refuses the lengths that cannot hold one", () => {
     expect(questLengthAllowed("very-short")).toBe(false);
     expect(questLengthAllowed("short")).toBe(false);
   });
 
-  it("allows medium, which was verified end to end rather than assumed", () => {
-    expect(questLengthAllowed("medium")).toBe(true);
+  it("refuses medium too, which was measured and not guessed", () => {
+    // The floor was medium on the strength of the OPENING working there. The
+    // account is what has no room: at medium the traveller spoke once and one
+    // chapter carried the pit, the prison and the dreams; at long she spoke
+    // five times. Nobody can act inside a synopsis.
+    expect(questLengthAllowed("medium")).toBe(false);
+  });
+
+  it("allows long and up, including the tier added for them", () => {
     expect(questLengthAllowed("long")).toBe(true);
     expect(questLengthAllowed("extended")).toBe(true);
+    expect(questLengthAllowed("epic")).toBe(true);
   });
 
   it("offers a length it allows", () => {

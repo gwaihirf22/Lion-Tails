@@ -1729,7 +1729,24 @@ export const storyRequestSchema = z.object({
     "short", 
     "medium", 
     "long", 
-    "extended"
+    "extended",
+    /**
+     * ~5000 words, about ten chapters.
+     *
+     * Added for quests, which have two stories to tell -- the way in and the
+     * account -- and were visibly short of room at anything less: the same
+     * Joseph quest gave its traveller one line of dialogue at medium and five
+     * at long, because at medium one chapter had to carry the pit, the prison
+     * and the dreams.
+     *
+     * NOT UNBOUNDED. finalizeStoryDetails embeds the entire assembled story
+     * and is documented as the call site with the least headroom -- it is what
+     * broke when "long" was introduced. At 5000 words that prompt is roughly
+     * 8800 tokens against MODEL_CONTEXT_LIMIT's 16384, which leaves room; a
+     * tier past this one needs that call fixed first, not just a bigger number
+     * here.
+     */
+    "epic"
   ]).default("medium"),
   // Custom prompts for Parent Mode
   customSystemPrompt: z.string().optional(),

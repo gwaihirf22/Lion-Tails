@@ -88,6 +88,7 @@ export function getWordCountFromLength(length: string, storyType?: string): numb
       case "medium": return 32 * WORDS_PER_VERSE_LINE;
       case "long": return 48 * WORDS_PER_VERSE_LINE;
       case "extended": return 64 * WORDS_PER_VERSE_LINE;
+      case "epic": return 96 * WORDS_PER_VERSE_LINE;
       default: return 32 * WORDS_PER_VERSE_LINE;
     }
   }
@@ -103,6 +104,8 @@ export function getWordCountFromLength(length: string, storyType?: string): numb
       return 2500; // ~18 minutes
     case "extended":
       return 3500; // ~25 minutes
+    case "epic":
+      return 5000; // ~36 minutes, about ten chapters
     default:
       return 1500;
   }
