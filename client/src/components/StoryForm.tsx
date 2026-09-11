@@ -556,7 +556,7 @@ export default function StoryForm({
 
   return (
     <>
-    /*
+    {/*
       FLUSH ON A PHONE. This is a card inside the app shell's card inside the
       tab panel -- three surfaces, all --card, each charging for a border and
       padding nobody can see. Below 640px only the shell's card is drawn and
@@ -569,7 +569,7 @@ export default function StoryForm({
 
       The historical border returns at sm: too. On a phone that signal is
       carried by the tab, which is already data-[state=active]:bg-warning-surface.
-    */
+    */}
     <Card
       className={`content-container border-0 shadow-none rounded-none sm:border sm:shadow-lg sm:rounded-2xl ${formType === "historical" ? "sm:border-warning" : "sm:border-border"}`}
     >
