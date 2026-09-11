@@ -8,12 +8,19 @@
  * simply is not the child on the character sheet.
  *
  * So the picture is drawn FROM the portrait, not from a description of it.
- * `images.edit` takes up to sixteen reference images, and `input_fidelity:
- * "high"` is the parameter that asks the model to match "the style and
- * features, especially facial features, of input images". It defaults to
- * "low", which is a style hint and not what is wanted here. avatar.ts has
- * drawn a second portrait this way all along; this is the same mechanism
- * pointed at the story.
+ * `images.edit` takes up to sixteen reference images. avatar.ts has drawn a
+ * second portrait this way all along; this is the same mechanism pointed at
+ * the story.
+ *
+ * `input_fidelity: "high"` is the parameter that asks a model to match "the
+ * style and features, especially facial features, of input images", and
+ * `gpt-image-2` REFUSES IT -- a 400, whatever the SDK's doc comment says. So
+ * it goes through the catalogue (`inputFidelityFor`), like every other
+ * per-model parameter here, and the prompt is what has to carry "these are the
+ * people, match their faces". Sending it literally cost this feature its first
+ * real test: the 400 fell through to a plain generate, which threw away every
+ * reference image and drew a different child, and the only sign was one line
+ * in the log.
  *
  * Text is the FALLBACK, not the mechanism: a character with no portrait gets
  * whatever their sheet says about how they look (describeCharacter, the same
@@ -39,7 +46,7 @@ import {
 import { KEEPER, KEEPER_FACE_FILE } from "../data/lionTails";
 import { storage } from "../storage";
 import { describeCharacter, readAvatarFile } from "./avatar";
-import { resolveModel, createClient } from "./modelPolicy";
+import { resolveModel, createClient, inputFidelityFor } from "./modelPolicy";
 
 /** Where story pictures are written. The `story_images` volume mounts here. */
 const STORY_IMAGE_DIR = path.join(process.cwd(), "public", "images", "stories");
@@ -60,8 +67,6 @@ export type IllustrationMember = {
   look: string;
   /** Their picture, when there is one. This is what actually works. */
   reference?: Buffer;
-  /** They may be in the picture and may not. Barnabas, and nobody else. */
-  optional?: boolean;
 };
 
 /**
@@ -98,6 +103,19 @@ export function charactersAreInTheStory(request: StoryRequest): boolean {
   return !source.some((s) => typeof s === "string" && s.trim().length > 0);
 }
 
+/**
+ * Does this scene have Barnabas in it?
+ *
+ * Built from the canon, never a typed-again string. Safe to compile: these are
+ * our own constants, not user text -- the rule against building a regex from a
+ * name is about the skill list, which anyone can write into.
+ */
+const KEEPER_PATTERN = new RegExp(
+  `\\b(${KEEPER.shortName}|${KEEPER.title.replace(/^the /i, "")})\\b`,
+  "i",
+);
+const mentionsKeeper = (scenePrompt: string): boolean => KEEPER_PATTERN.test(scenePrompt);
+
 /** Read the Timekeeper's one canon face. */
 async function readKeeperFace(): Promise<Buffer | undefined> {
   try {
@@ -118,6 +136,8 @@ async function readKeeperFace(): Promise<Buffer | undefined> {
 export async function illustrationCast(
   request: StoryRequest,
   userId: number,
+  /** The scene the model wrote. Read only to decide whether Barnabas is in it. */
+  scenePrompt: string = "",
 ): Promise<IllustrationMember[]> {
   const cast: IllustrationMember[] = [];
 
@@ -144,21 +164,31 @@ export async function illustrationCast(
   }
 
   /**
-   * The Timekeeper, on every quest, whether or not the scene mentions him.
+   * The Timekeeper, when the scene he is in is the one being drawn.
    *
-   * Blake's call, and the reasoning is the model writes the scene description:
-   * attaching him only when it happens to say "Barnabas" means the one that
-   * says "the old shopkeeper" is a different man in every story. He is marked
-   * optional instead, so the picture is never forced to contain him.
+   * ATTACHED ONLY WHEN THE SCENE NAMES HIM, and that is not the first answer.
+   * The first answer was to attach him to every quest and mark him optional --
+   * "he need not appear" -- so that a scene calling him "the old shopkeeper"
+   * could not slip past. The first real generation showed what that costs: a
+   * quest about William Tyndale came back with TYNDALE wearing Barnabas's face
+   * and coat. The scene wanted an older man at a desk, an older man's face was
+   * attached, and the model used it. Adding "everyone else is a different
+   * person" to the prompt did not stop it happening again.
    *
-   * `travels` is the same fact isTimekeeperStory() reads.
+   * The two failures are not equal. Not attaching him to a scene he is quietly
+   * in means one generic old man. Attaching him to a scene he is not in means
+   * a real historical figure drawn as a fictional character, in an app whose
+   * whole point is that the history is true. So: named, or absent.
+   *
+   * `travels` is the same fact isTimekeeperStory() reads. The pattern is built
+   * from the canon rather than typed again, so renaming him cannot leave this
+   * looking for a man who no longer exists.
    */
-  if (characterRoleOf(request) === "travels") {
+  if (characterRoleOf(request) === "travels" && mentionsKeeper(scenePrompt)) {
     cast.push({
       name: `${KEEPER.name}, ${KEEPER.title}`,
       look: KEEPER.look,
       reference: await readKeeperFace(),
-      optional: true,
     });
   }
 
@@ -171,12 +201,6 @@ export async function illustrationCast(
  * warmth and the soft palette without telling the model who is looking.
  */
 const STYLE = "Render in a beautiful biblical storybook illustration style with soft colors.";
-
-/** "a, b and c" */
-const list = (names: string[]): string =>
-  names.length <= 1
-    ? (names[0] ?? "")
-    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 
 /**
  * The whole prompt: the scene, the style, and who the people are.
@@ -209,21 +233,20 @@ export function composeIllustrationPrompt(
       parts.push(`Reference image ${i + 1} is ${m.look}`);
     });
     parts.push(
-      "Take each person's face, hair and colouring from their own reference image and nothing else from it —" +
-        " not its background, its framing, its lighting, or anything it happens to be holding.",
+      "Take each person's face, hair, colouring and clothing from their own reference image and nothing else" +
+        " from it — not its background, its framing, its lighting, or anything it happens to be holding.",
+      // WITHOUT THIS, A SPARE FACE GETS USED. First real test: a quest story
+      // about William Tyndale came back with Tyndale drawn as Barnabas --
+      // the scene called for an older man at a desk, a face for an older man
+      // was attached, and the model reached for it. "He need not appear" says
+      // nothing about who else may wear his face.
+      "Everyone else in the picture is a different person and must not be given a face, hair or clothing" +
+        " from any reference image — including whoever the story is about.",
     );
   }
 
   if (described.length > 0) {
     parts.push(`Also in the picture: ${described.map((m) => m.look).join(" ")}`);
-  }
-
-  const optional = cast.filter((m) => m.optional).map((m) => m.name);
-  if (optional.length > 0) {
-    parts.push(
-      `${list(optional)} need not appear in this picture at all — draw them only if the scene calls for it —` +
-        " but must look exactly like this if they do.",
-    );
   }
 
   return parts.join(" ").replace(/\s+/g, " ").trim();
@@ -271,9 +294,12 @@ export async function generateStoryImage(
             ),
           ),
           prompt,
-          // THE PARAMETER THIS FEATURE IS. Without it the references are a
-          // style hint; with it the model is asked to match faces.
-          input_fidelity: "high",
+          // Asks the model to match FACES rather than style, where the model
+          // takes it at all -- gpt-image-2 answers 400 to the parameter and
+          // the catalogue is what knows that. Sending it blind cost this
+          // feature its first real test: the 400 dropped every reference and
+          // the fallback quietly drew a different child.
+          ...inputFidelityFor(resolved.model),
           n: 1,
           size: "1024x1024",
         });

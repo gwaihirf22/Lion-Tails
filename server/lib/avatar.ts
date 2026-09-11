@@ -28,7 +28,7 @@ import { v4 as uuidv4 } from "uuid";
 import { coveringNoun } from "@shared/characterVocab";
 import { characterKind, type Character } from "@shared/schema";
 import { toFile } from "openai";
-import { resolveModel, createClient } from "./modelPolicy";
+import { resolveModel, createClient, inputFidelityFor } from "./modelPolicy";
 
 /** Where portraits live. See the note above about why it is under `stories`. */
 export const AVATAR_DIR = path.join(process.cwd(), "public", "images", "stories", "avatars");
@@ -202,10 +202,11 @@ export async function generateAvatar(
           model: resolved.model,
           image: await toFile(reference, "reference.png", { type: "image/png" }),
           prompt: `${prompt} Keep the same character: the same face, colouring and markings as the picture provided.`,
-          // The whole point of passing a reference, and it defaults to "low".
-          // See the note in illustration.ts: this is the only parameter that
-          // asks the model to match FACES rather than style and mood.
-          input_fidelity: "high",
+          // Asks the model to match FACES rather than style and mood, on the
+          // models that take it. Through the catalogue, never literally:
+          // gpt-image-2 refuses the parameter with a 400, and there is no
+          // fallback on this path -- the portrait would simply fail.
+          ...inputFidelityFor(resolved.model),
           n: 1,
           size: "1024x1024",
         })

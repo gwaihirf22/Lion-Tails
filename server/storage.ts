@@ -1,6 +1,6 @@
 import type { EditLogEntry } from "@shared/editLog";
 import {
-  storyAllowance, users, type User, type InsertUser, type Song, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory ,
+  storyAllowance, users, type User, type InsertUser, type Song, type SavedStory, type GeneratedPicture, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory ,
   type ReadingPrefs,
 } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
@@ -88,7 +88,19 @@ export interface IStorage {
    * unlike hero_id there is no risk here of writing the same fact twice. See
    * the note on updateStoryHeroId.
    */
-  setStoryImageUrl(storyId: string, imageUrl: string, userId: number): Promise<SavedStory | undefined>;
+  /**
+   * The chosen picture and the gallery it came from, written together.
+   *
+   * One method rather than two, because they are one fact: a picture that is
+   * in the gallery and not selected, or selected and not in the gallery, is a
+   * story with a broken picture and nothing to say so. `imageUrl: null`
+   * removes the key -- the last picture deleted leaves a story with none.
+   */
+  setStoryImages(
+    storyId: string,
+    userId: number,
+    next: { imageUrl: string | null; images: GeneratedPicture[] },
+  ): Promise<SavedStory | undefined>;
   /**
    * A parent's edit to the title and/or text, with an entry appended to the
    * story's edit log. The patch carries only the keys being changed.
@@ -626,16 +638,21 @@ export class MemStorage implements IStorage {
     return this.stories.delete(id);
   }
   
-  async setStoryImageUrl(
+  async setStoryImages(
     storyId: string,
-    imageUrl: string,
     userId: number,
+    next: { imageUrl: string | null; images: GeneratedPicture[] },
   ): Promise<SavedStory | undefined> {
     // getStoryById already does the user-scoping check, so ownership is
     // enforced in one place rather than re-derived here.
     const story = await this.getStoryById(storyId, userId);
     if (!story) return undefined;
-    const updated = { ...story, story: { ...story.story, imageUrl } };
+    const { imageUrl: _dropped, ...rest } = story.story;
+    const updated = {
+      ...story,
+      images: next.images,
+      story: next.imageUrl ? { ...story.story, imageUrl: next.imageUrl } : rest,
+    };
     this.stories.set(storyId, updated);
     return updated;
   }

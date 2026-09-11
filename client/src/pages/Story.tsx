@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import StoryDisplay from "@/components/StoryDisplay";
 import { StoryResponse, StoryRequest } from "@shared/schema";
 import type { EditLogEntry } from "@shared/editLog";
+import { storyImagesOf, type GeneratedPicture } from "@shared/schema";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 
 export default function Story() {
@@ -20,6 +21,9 @@ export default function Story() {
   // Both are on the payload and used to be discarded with the rest of the row.
   const [universeId, setUniverseId] = useState<string | null>(null);
   const [editLog, setEditLog] = useState<EditLogEntry[]>([]);
+  // Every picture this story has had. Through storyImagesOf, so a story
+  // illustrated before galleries existed still shows the one it has.
+  const [images, setImages] = useState<GeneratedPicture[]>([]);
 
   useEffect(() => {
     // Scroll to the top of the page when component mounts
@@ -56,6 +60,7 @@ export default function Story() {
             setBuiltIn(Boolean(saved.builtIn));
             setUniverseId(saved.universeId ?? null);
             setEditLog(saved.editLog ?? []);
+            setImages(storyImagesOf(saved));
             // s.storyType is set on stories generated after this shipped;
             // saved.request.storyType is present on every row that already
             // exists, which is why no backfill is needed. The parser's own
@@ -122,6 +127,7 @@ export default function Story() {
         storyType={storyType}
         builtIn={builtIn}
         editLog={editLog}
+        images={images}
         onEdited={(next) => {
           setStoryData({ ...storyData, title: next.title, content: next.content });
           setEditLog(next.editLog);

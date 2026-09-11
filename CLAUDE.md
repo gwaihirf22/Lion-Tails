@@ -403,12 +403,17 @@ anything written beside it does not.
 "an 8-year-old girl with brown hair" and you get two different girls — which
 is why the story's picture never matched the character sheet, silently, with
 nothing to see in a log. So the picture is drawn FROM the portrait:
-`images.edit` with the avatars as reference images and **`input_fidelity:
-"high"`**, the parameter that asks the model to match "the style and
-features, especially facial features, of input images". It defaults to
-`"low"`, which is a style hint. `avatar.ts` has drawn second portraits this
-way all along; the same mechanism now points at the story, and the avatar
-path gained the `input_fidelity` it should always have had.
+`images.edit` with the avatars as reference images. `avatar.ts` has drawn
+second portraits this way all along; the same mechanism now points at the
+story.
+
+**`input_fidelity` goes through the catalogue, never literally.**
+`gpt-image-2` answers **400** to it, whatever the SDK's doc comment says, so
+`inputFidelityFor(model)` is spread in — `temperatureFor`'s shape, and the
+same rule: request shape is a property of the model. Sending it literally
+cost this feature its first real test. The 400 fell through to a plain
+`images.generate`, which threw away every reference image and drew a
+different child, and the only sign was one line in the log.
 
 - **`describeCharacter()` is the one definition of how somebody looks**, in
   `avatar.ts`. `buildAvatarPrompt` is that sentence plus the portrait's own
@@ -439,17 +444,38 @@ path gained the `input_fidelity` it should always have had.
   ships, but the `story_images` volume mounts over `public/images/stories`
   only, so a file beside that directory survives a redeploy and a file inside
   it is shadowed at runtime. `attached_assets/` is not in the runtime image
-  at all. He is attached to EVERY quest story and marked optional ("need not
-  appear"), never guessed from the scene text — the model writes that text,
-  and the one that says "the old shopkeeper" would be a different man.
-  `KEEPER.look` is the sentence that stands in if the file cannot be read;
-  `worldCanon()` does not render it.
+  at all. `KEEPER.look` is the sentence that stands in if the file cannot be
+  read; `worldCanon()` does not render it.
+- **He is attached ONLY when the scene names him**, and that is the second
+  answer. The first attached him to every quest and marked him optional
+  ("need not appear"), so a scene calling him "the old shopkeeper" could not
+  slip past. What came back was **William Tyndale wearing Barnabas's face and
+  coat**: the scene wanted an older man at a desk, an older man's face was in
+  the request, and the model used it — twice, including after the prompt was
+  told everyone else is a different person. The failures are not equal. Not
+  attaching him to a scene he is quietly in costs one generic old man;
+  attaching him to a scene he is not in draws a real historical figure as a
+  fictional character, in an app whose point is that the history is true.
+- **A story keeps its pictures.** A redraw APPENDS — Blake: "the chances are
+  that the old one may be better than the last with AI" — up to
+  `MAX_STORY_IMAGES` (5, the same as `MAX_AVATARS`), past which it is
+  **refused** with a 409 rather than dropping the oldest, because a silent
+  drop is the automatic discard the gallery exists to stop.
+  `savedStory.images` is the list, `story.imageUrl` stays the CHOSEN one and
+  the field everything else reads, and `storyImagesOf()` folds a pre-gallery
+  row into a list of one exactly as `avatarsOf()` does. Both use one
+  `generatedPictureSchema`. `setStoryImages()` writes the pair in ONE leaf
+  merge (`editStory`'s rule: never `jsonb_set`, which returns NULL into a
+  missing key and erases the row); its null branch `#-` removes `imageUrl`
+  rather than writing JSON null, which the schema would refuse to parse.
+- **Only `DELETE /api/stories/:id/image/:imageId` removes a picture**, and the
+  reader asks first. Deleting the chosen one promotes the newest of what is
+  left, and the file goes only AFTER the row no longer points at it.
 - **Redraw is `{ redraw: true }` on `POST /api/stories/:id/illustrate`**, and
   the entitlement is checked BEFORE any work — admin or own key, derived from
   `isModelAllowedFor` like `canIllustrate`, answering 403 rather than the
   503 that comes out the far end. Blake: "that is a farming method
-  otherwise." The replaced file is deleted only AFTER the new one is
-  attached.
+  otherwise."
 
 ## Attributes and Skills
 

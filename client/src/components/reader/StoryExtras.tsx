@@ -20,7 +20,9 @@ import { ImagePlus, Loader2, RefreshCw } from "lucide-react";
 import { DebugPanel } from "@/components/DebugPanel";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { StoryResponse, HeroOfFaith, SavedStory } from "@shared/schema";
+import type { StoryResponse, HeroOfFaith, SavedStory, GeneratedPicture } from "@shared/schema";
+import { MAX_STORY_IMAGES } from "@shared/schema";
+import { Trash2 } from "lucide-react";
 import type { StoryDoc } from "@/lib/storyContent";
 import lionTailsImage from "@/assets/illustrations/lion-tails.jpg";
 
@@ -39,6 +41,7 @@ export function StoryExtras({
   doc,
   focusHidden,
   builtIn,
+  images,
 }: {
   story: StoryResponse;
   storyId?: string;
@@ -47,6 +50,8 @@ export function StoryExtras({
   focusHidden: boolean;
   /** Ships with the app: the server refuses to illustrate or link it. */
   builtIn?: boolean;
+  /** Every picture this story has had. The chosen one is story.imageUrl. */
+  images?: GeneratedPicture[];
 }) {
   const { toast } = useToast();
   const ref = useRef<HTMLDivElement>(null);
@@ -101,6 +106,11 @@ export function StoryExtras({
   // The picture the story was saved with, or the one we just made for it.
   const [imageUrl, setImageUrl] = useState<string | undefined>(story.imageUrl);
   useEffect(() => setImageUrl(story.imageUrl), [story.imageUrl]);
+  // And every picture it has had. A redraw APPENDS -- nothing here throws a
+  // picture away except the delete below, which asks first. Blake: "the
+  // chances are that the old one may be better than the last with AI."
+  const [gallery, setGallery] = useState<GeneratedPicture[]>(images ?? []);
+  useEffect(() => setGallery(images ?? []), [images]);
 
   /**
    * Make a picture, or make a different one.
@@ -112,10 +122,11 @@ export function StoryExtras({
   const illustrate = useMutation({
     mutationFn: async (redraw: boolean = false) => {
       const response = await apiRequest("POST", `/api/stories/${storyId}/illustrate`, { redraw });
-      return (await response.json()) as { imageUrl: string };
+      return (await response.json()) as { imageUrl: string; images?: GeneratedPicture[] };
     },
     onSuccess: (data) => {
       setImageUrl(data.imageUrl);
+      if (data.images) setGallery(data.images);
       queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
       toast({ title: "Picture added", description: "It is saved with the story." });
@@ -123,6 +134,49 @@ export function StoryExtras({
     onError: (error) => {
       toast({
         title: "Could not make a picture",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  /** Show a different one of the pictures this story already has. No spend. */
+  const choosePicture = useMutation({
+    mutationFn: async (imageId: string) => {
+      const response = await apiRequest("PUT", `/api/stories/${storyId}/image/${imageId}`, {});
+      return (await response.json()) as { imageUrl: string; images: GeneratedPicture[] };
+    },
+    onSuccess: (data) => {
+      setImageUrl(data.imageUrl);
+      setGallery(data.images);
+      queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not change the picture",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  /** The only thing that removes a picture, and it is asked for twice. */
+  const deletePicture = useMutation({
+    mutationFn: async (imageId: string) => {
+      const response = await apiRequest("DELETE", `/api/stories/${storyId}/image/${imageId}`, {});
+      return (await response.json()) as { imageUrl: string | null; images: GeneratedPicture[] };
+    },
+    onSuccess: (data) => {
+      setImageUrl(data.imageUrl ?? undefined);
+      setGallery(data.images);
+      queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+      toast({ title: "Picture deleted" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not delete the picture",
         description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
@@ -162,9 +216,84 @@ export function StoryExtras({
             className="mx-auto max-h-[70vh] w-auto rounded-lg"
             style={{ border: "1px solid var(--reader-border)" }}
           />
-          {/* Quiet, and under the picture: a redraw spends a generation and
-              throws away the picture that is on screen, so it is not a thing
-              to fall over. Shown on the same condition the server enforces. */}
+          {/*
+            THE GALLERY. Every picture the story has had, oldest first, and
+            nothing here throws one away by itself -- a redraw appends and the
+            bin asks first. Hidden at one picture, because a strip of one is
+            just the picture again.
+          */}
+          {gallery.length > 1 && storyId && (
+            <figcaption className="mt-3 flex flex-wrap justify-center gap-2">
+              {gallery.map((picture) => {
+                const chosen = picture.url === imageUrl;
+                return (
+                  <span key={picture.id} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => !chosen && choosePicture.mutate(picture.id)}
+                      disabled={chosen || choosePicture.isPending}
+                      aria-label={chosen ? "The picture this story shows" : "Show this picture instead"}
+                      aria-pressed={chosen}
+                      className="block rounded-md"
+                      style={{
+                        // The chosen one is ringed rather than moved or
+                        // resized: a strip that reflows when you pick is a
+                        // strip you pick the wrong thing from.
+                        outline: chosen ? "2px solid var(--reader-fg)" : "1px solid var(--reader-border)",
+                        outlineOffset: chosen ? "2px" : "0",
+                        opacity: chosen ? 1 : 0.75,
+                      }}
+                    >
+                      <img
+                        src={picture.url}
+                        alt=""
+                        loading="lazy"
+                        className="h-16 w-16 rounded-md object-cover"
+                      />
+                    </button>
+                    {!builtIn && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label="Delete this picture"
+                            disabled={deletePicture.isPending}
+                            className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete this picture?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              It is removed from &ldquo;{story.title}&rdquo; for good and cannot be
+                              got back. The other {gallery.length - 1}{" "}
+                              {gallery.length - 1 === 1 ? "picture stays" : "pictures stay"}, and
+                              the story itself is not changed.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Keep it</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={() => deletePicture.mutate(picture.id)}
+                            >
+                              Delete it
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </span>
+                );
+              })}
+            </figcaption>
+          )}
+
+          {/* Quiet, and under the picture: a redraw spends a generation, so it
+              is not a thing to fall over. Shown on the same condition the
+              server enforces. */}
           {modelInfo?.canIllustrate && !builtIn && storyId && (
             <figcaption className="mt-2 text-center">
               <AlertDialog>
@@ -172,7 +301,14 @@ export function StoryExtras({
                   <Button
                     variant="ghost"
                     size="sm"
-                    disabled={illustrate.isPending}
+                    // Full is full: the server answers 409 rather than dropping
+                    // the oldest, so the button says so before it is pressed.
+                    disabled={illustrate.isPending || gallery.length >= MAX_STORY_IMAGES}
+                    title={
+                      gallery.length >= MAX_STORY_IMAGES
+                        ? `This story keeps ${MAX_STORY_IMAGES} pictures. Delete one to draw another.`
+                        : undefined
+                    }
                     style={{ color: "var(--reader-muted)" }}
                   >
                     {illustrate.isPending ? (
@@ -192,8 +328,10 @@ export function StoryExtras({
                   <AlertDialogHeader>
                     <AlertDialogTitle>Draw a new picture?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This makes a new picture for &ldquo;{story.title}&rdquo; and the one
-                      here now is deleted. The story itself is not changed.
+                      This makes another picture for &ldquo;{story.title}&rdquo;. The one
+                      here now is kept — you can switch back to it, and it is deleted only
+                      if you say so. A story keeps up to {MAX_STORY_IMAGES}. The story
+                      itself is not changed.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

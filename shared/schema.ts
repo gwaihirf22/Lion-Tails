@@ -710,6 +710,36 @@ export function storyAllowance(
 export const MAX_AVATARS = 5;
 
 /**
+ * Pictures one story keeps.
+ *
+ * A redraw does not throw the old one away -- "the chances are that the old
+ * one may be better than the last with AI" -- so a story collects pictures the
+ * way a character collects portraits, and the one on the page is the one that
+ * was chosen. Five, the same as MAX_AVATARS, and for the same reason: a cap
+ * that is the feature rather than a detail. Past it the redraw is REFUSED and
+ * says to delete one, because silently dropping the oldest is exactly the
+ * automatic discard this exists to stop.
+ */
+export const MAX_STORY_IMAGES = 5;
+
+/**
+ * One generated picture: what it is, and what made it.
+ *
+ * Shared by a character's portraits and a story's illustrations, because they
+ * are the same fact in two places and drifted apart would be two shapes for
+ * one thing.
+ */
+export const generatedPictureSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  /** What made it. Reused verbatim, and shown to nobody. */
+  prompt: z.string(),
+  createdAt: z.string(),
+});
+
+export type GeneratedPicture = z.infer<typeof generatedPictureSchema>;
+
+/**
  * Named skills one character may keep.
  *
  * Six, because each one costs a point and a sheet with more than a handful of
@@ -929,18 +959,7 @@ export const characterSchema = z.object({
    * before this has an avatarUrl and no list, and a derived field would have
    * needed a backfill to keep them showing a picture.
    */
-  avatars: z
-    .array(
-      z.object({
-        id: z.string(),
-        url: z.string(),
-        /** What made it. Reused verbatim, and shown to nobody. */
-        prompt: z.string(),
-        createdAt: z.string(),
-      }),
-    )
-    .max(MAX_AVATARS)
-    .optional(),
+  avatars: z.array(generatedPictureSchema).max(MAX_AVATARS).optional(),
 
   avatarUrl: optionalText(500),
 
@@ -1206,6 +1225,31 @@ export function avatarsOf(
       url: character.avatarUrl,
       prompt: character.avatarPrompt ?? "",
       createdAt: character.createdAt ?? new Date().toISOString(),
+    },
+  ];
+}
+
+/**
+ * What pictures a story has, counting the one saved before galleries.
+ *
+ * avatarsOf()'s counterpart, and deliberately the same shape: a row written by
+ * the first version of illustration has story.imageUrl and no list, and
+ * reading the list straight off the row would show that story no pictures
+ * while its picture was on screen.
+ */
+export function storyImagesOf(
+  story?: Partial<Pick<SavedStory, "images" | "createdAt">> & {
+    story?: { imageUrl?: string; imagePrompt?: string } | null;
+  } | null,
+): GeneratedPicture[] {
+  if (story?.images?.length) return story.images;
+  if (!story?.story?.imageUrl) return [];
+  return [
+    {
+      id: "legacy",
+      url: story.story.imageUrl,
+      prompt: story.story.imagePrompt ?? "",
+      createdAt: story.createdAt ?? new Date().toISOString(),
     },
   ];
 }
@@ -1783,6 +1827,18 @@ export const savedStorySchema = z.object({
    * Optional because every story written before it existed has none.
    */
   editLog: z.array(editLogEntrySchema).optional(),
+
+  /**
+   * Every picture this story has had, oldest first. SERVER-OWNED.
+   *
+   * `story.imageUrl` stays the CHOSEN one and the field everything else reads
+   * -- the card's thumbnail, the reader, the library. Keeping it rather than
+   * deriving it from this list is the same decision `avatarUrl` made: every
+   * story illustrated before this has an imageUrl and no list, and a derived
+   * field would have needed a backfill to keep them showing a picture.
+   * storyImagesOf() folds those rows in instead.
+   */
+  images: z.array(generatedPictureSchema).max(MAX_STORY_IMAGES).optional(),
 
   // Search and relationship metadata
   heroId: z.string().optional(), // ID of the Hero of Faith if story is related to one

@@ -2,7 +2,7 @@
 import type { EditLogEntry } from "@shared/editLog";
 import { db, pool } from './db';
 import {
-  FREE_STORIES_PER_MONTH, users, verificationTokens, readingPrefsSchema, storyRequestSchema, type ReadingPrefs, type User, type InsertUser, type SavedStory, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
+  FREE_STORIES_PER_MONTH, users, verificationTokens, readingPrefsSchema, storyRequestSchema, type ReadingPrefs, type User, type InsertUser, type SavedStory, type GeneratedPicture, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
 import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
 import { eq, and, desc, isNull, sql, or, like, ilike } from 'drizzle-orm';
@@ -803,24 +803,40 @@ export class DbStorage implements IStorage {
     }
   }
   
-  async setStoryImageUrl(
+  async setStoryImages(
     storyId: string,
-    imageUrl: string,
     userId: number,
+    next: { imageUrl: string | null; images: GeneratedPicture[] },
   ): Promise<SavedStory | undefined> {
     if (!isDatabaseAvailable()) {
-      console.warn(`Database unavailable in setStoryImageUrl(${storyId}).`);
+      console.warn(`Database unavailable in setStoryImages(${storyId}).`);
       return undefined;
     }
     try {
+      // ONE statement, no read, and a shallow merge rather than jsonb_set --
+      // editStory's reasoning, and the same trap: jsonb_set into a missing key
+      // returns NULL and erases the row. Every other key of `story` (title,
+      // content, bibleVerse, the five questions) is left exactly as it was.
+      //
       // Scoped to the user in the STATEMENT, not by a prior SELECT: storyId is
       // client-supplied, and without this a user could illustrate -- and so
       // modify -- somebody else's story.
+      //
+      // The null branch REMOVES the key instead of writing JSON null: the
+      // schema says imageUrl is a string when it is there at all, and a row
+      // carrying null is a row that fails to parse rather than a story with no
+      // picture.
       const { rowCount } = await pool!.query(
         `UPDATE user_stories
-         SET story_data = jsonb_set(story_data, '{story,imageUrl}', to_jsonb($1::text), true)
-         WHERE story_id = $2 AND user_id = $3`,
-        [imageUrl, storyId, userId],
+            SET story_data = CASE WHEN $1::text IS NULL
+              THEN (story_data || jsonb_build_object('images', $2::jsonb)) #- '{story,imageUrl}'
+              ELSE story_data || jsonb_build_object(
+                'story',  COALESCE(story_data->'story', '{}'::jsonb)
+                          || jsonb_build_object('imageUrl', $1::text),
+                'images', $2::jsonb)
+              END
+          WHERE story_id = $3 AND user_id = $4`,
+        [next.imageUrl, JSON.stringify(next.images), storyId, userId],
       );
       if (!rowCount) {
         console.warn(`Story not found for illustration: ${storyId} (user ${userId})`);

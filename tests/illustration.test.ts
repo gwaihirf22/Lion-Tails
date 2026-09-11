@@ -3,12 +3,14 @@ import fs from "fs";
 import path from "path";
 import {
   composeIllustrationPrompt,
+  illustrationCast,
   charactersAreInTheStory,
   MAX_DRAWN_CHARACTERS,
   type IllustrationMember,
 } from "../server/lib/illustration";
 import { describeCharacter, buildAvatarPrompt } from "../server/lib/avatar";
 import { KEEPER, KEEPER_FACE_FILE, worldCanon, FRAMING_APPROACHES } from "../server/data/lionTails";
+import { storyImagesOf, MAX_STORY_IMAGES, MAX_AVATARS } from "@shared/schema";
 import type { Character, StoryRequest } from "@shared/schema";
 
 /**
@@ -63,8 +65,16 @@ describe("the illustration prompt", () => {
     // Barnabas's canon face is a whole scene -- a shop, shelves, a lit lantern.
     // Without this the reference is a background as much as a man.
     const p = composeIllustrationPrompt(SCENE, [member({ reference: Buffer.from("a") })]);
-    expect(p).toMatch(/nothing else from it/i);
+    expect(p).toMatch(/nothing else/i);
     expect(p).toMatch(/background/i);
+  });
+
+  it("forbids a spare face being handed to somebody else", () => {
+    // The defect the first real generation found: a quest story about William
+    // Tyndale came back with Tyndale drawn as Barnabas. The scene wanted an
+    // older man at a desk and there was one attached.
+    const p = composeIllustrationPrompt(SCENE, [member({ reference: Buffer.from("a") })]);
+    expect(p).toContain("Everyone else in the picture is a different person");
   });
 
   it("describes anyone who has no picture instead", () => {
@@ -73,16 +83,6 @@ describe("the illustration prompt", () => {
     ]);
     expect(p).toContain("Also in the picture: Mia, an 8-year-old girl. They have brown hair.");
     expect(p).not.toMatch(/reference image/i);
-  });
-
-  it("says the optional ones need not appear", () => {
-    const p = composeIllustrationPrompt(SCENE, [
-      member({ name: "Mia", reference: Buffer.from("a") }),
-      member({ name: "Mr Barnabas", look: "an old man.", reference: Buffer.from("b"), optional: true }),
-    ]);
-    expect(p).toContain("Mr Barnabas need not appear");
-    // And Mia is not made optional by his presence.
-    expect(p).not.toContain("Mia need not appear");
   });
 
   it("never collapses into blank space or 'undefined'", () => {
@@ -190,5 +190,80 @@ describe("the Timekeeper's face", () => {
     const canon = worldCanon(FRAMING_APPROACHES[0]).join(" ");
     expect(canon).not.toContain(KEEPER_FACE_FILE);
     expect(canon).not.toContain(KEEPER.look);
+  });
+});
+
+describe("when Barnabas is attached", () => {
+  /**
+   * The rule that cost two real generations to find.
+   *
+   * He was attached to every quest and marked "need not appear", so that a
+   * scene calling him "the old shopkeeper" could not slip past. What came back
+   * was William Tyndale wearing Barnabas's face and coat: the scene wanted an
+   * older man at a desk and an older man's face was in the request. A generic
+   * old man is a smaller mistake than a real historical figure drawn as a
+   * fictional one.
+   */
+  const quest = req({ characterRole: "travels", heroOfFaith: "william-tyndale" });
+
+  it("is attached when the scene names him", async () => {
+    const cast = await illustrationCast(quest, 1, "Mr Barnabas hands the boy the lantern.");
+    expect(cast.some((m) => m.name.includes(KEEPER.shortName))).toBe(true);
+  });
+
+  it("is attached when the scene calls him the Timekeeper", async () => {
+    const cast = await illustrationCast(quest, 1, "The Timekeeper watches from the doorway.");
+    expect(cast.some((m) => m.name.includes(KEEPER.shortName))).toBe(true);
+  });
+
+  it("is NOT attached to a scene he is not in", async () => {
+    const cast = await illustrationCast(quest, 1, "Tyndale at his desk in a dim study, a boy beside him.");
+    expect(cast.some((m) => m.name.includes(KEEPER.shortName))).toBe(false);
+  });
+
+  it("is never attached to a story that is not a quest", async () => {
+    const cast = await illustrationCast(req({ characterRole: "alongside" }), 1, "Mr Barnabas and the lantern.");
+    expect(cast.some((m) => m.name.includes(KEEPER.shortName))).toBe(false);
+  });
+});
+
+describe("a story's pictures", () => {
+  /**
+   * A redraw appends. Nothing discards a picture on its own.
+   *
+   * Blake, after seeing the first redraw replace one: "the chances are that
+   * the old one may be better than the last with AI. I do not want to
+   * automatically discard the old photo."
+   */
+  const row = (o: Record<string, unknown>) => o as Parameters<typeof storyImagesOf>[0];
+
+  it("folds a story illustrated before galleries into a list of one", () => {
+    const list = storyImagesOf(
+      row({ createdAt: "2026-01-01", story: { imageUrl: "/a.png", imagePrompt: "a scene" } }),
+    );
+    expect(list).toEqual([
+      { id: "legacy", url: "/a.png", prompt: "a scene", createdAt: "2026-01-01" },
+    ]);
+  });
+
+  it("prefers the real list once there is one", () => {
+    const list = storyImagesOf(
+      row({
+        story: { imageUrl: "/a.png" },
+        images: [{ id: "1", url: "/a.png", prompt: "", createdAt: "2026-01-01" }],
+      }),
+    );
+    expect(list).toHaveLength(1);
+    expect(list[0].id).toBe("1");
+  });
+
+  it("is empty for a story that never had one", () => {
+    expect(storyImagesOf(row({ story: { title: "x" } }))).toEqual([]);
+    expect(storyImagesOf(null)).toEqual([]);
+  });
+
+  it("keeps as many as a character keeps portraits", () => {
+    // Two caps that answer the same question should not disagree by accident.
+    expect(MAX_STORY_IMAGES).toBe(MAX_AVATARS);
   });
 });

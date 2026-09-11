@@ -69,7 +69,7 @@ import {
   storyAllowance,
   statsOf,
   virtueLevels,
-  avatarsOf, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
+  avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
@@ -1287,6 +1287,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (saved.story.imageUrl && !redraw) {
         return res.json({ imageUrl: saved.story.imageUrl, alreadyExisted: true });
       }
+      // The gallery is full, and the way past it is a DELIBERATE deletion.
+      // Dropping the oldest to make room is the automatic discard this gallery
+      // exists to stop: "the chances are that the old one may be better than
+      // the last with AI."
+      const gallery = storyImagesOf(saved);
+      if (gallery.length >= MAX_STORY_IMAGES) {
+        return res.status(409).json({
+          message: `This story already has ${MAX_STORY_IMAGES} pictures. Delete one you do not want before drawing another.`,
+          code: "gallery_full",
+        });
+      }
 
       // The prompt the model wrote for this story when it was generated. Older
       // rows may not have one, so fall back to something derived from the
@@ -1301,7 +1312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const imageUrl = await generateStoryImage(
         prompt,
         userId,
-        await illustrationCast(saved.request, userId),
+        await illustrationCast(saved.request, userId, prompt),
       );
       if (!imageUrl) {
         // generateStoryImage returns undefined for BOTH "not entitled" and
@@ -1314,21 +1325,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const replaced = saved.story.imageUrl;
-      const updated = await storage.setStoryImageUrl(req.params.id, imageUrl, userId);
+      // APPENDED, never replacing. The picture that was there stays in the
+      // gallery and is deleted only when somebody says to.
+      const updated = await storage.setStoryImages(req.params.id, userId, {
+        imageUrl,
+        images: [
+          ...gallery,
+          { id: uuidv4(), url: imageUrl, prompt, createdAt: new Date().toISOString() },
+        ],
+      });
       if (!updated) {
         // The picture exists on disk but could not be attached. Say so rather
         // than returning a URL the story does not actually carry.
         return res.status(500).json({ message: "The picture was made but could not be saved to the story." });
       }
-      // AFTER the new one is attached, never before: a redraw that failed to
-      // save would otherwise leave the story with no picture at all. Skipped
-      // when nothing changed, so a no-op cannot delete a story's only picture.
-      if (replaced && replaced !== imageUrl) await deleteStoryImage(replaced);
-      res.json({ imageUrl, alreadyExisted: false });
+      res.json({ imageUrl, images: updated.images ?? [], alreadyExisted: false });
     } catch (error) {
       console.error("Error illustrating story:", error);
       res.status(500).json({ message: "Could not create a picture for this story." });
+    }
+  });
+
+  /**
+   * Choose which of a story's pictures is the one it shows.
+   *
+   * No model call, no spend, no entitlement: picking between pictures that
+   * already exist is not generation. CharacterForm's avatar selector is the
+   * same shape.
+   */
+  app.put("/api/stories/:id/image/:imageId", requireAuth, async (req, res) => {
+    try {
+      if (refuseBuiltIn(req, res)) return;
+      const userId = (req.user as any).id;
+      const saved = await storage.getStoryById(req.params.id, userId);
+      if (!saved) return res.status(404).json({ message: "Story not found" });
+
+      const gallery = storyImagesOf(saved);
+      const chosen = gallery.find((p) => p.id === req.params.imageId);
+      if (!chosen) return res.status(404).json({ message: "No such picture" });
+
+      // The list is written back as well as the url: a legacy row has no list
+      // until something writes one, and selecting is the moment it gets one.
+      const updated = await storage.setStoryImages(req.params.id, userId, {
+        imageUrl: chosen.url,
+        images: gallery,
+      });
+      if (!updated) return res.status(500).json({ message: "Could not change the picture." });
+      res.json({ imageUrl: chosen.url, images: updated.images ?? [] });
+    } catch (error) {
+      console.error("Error selecting a story picture:", error);
+      res.status(500).json({ message: "Could not change the picture." });
+    }
+  });
+
+  /**
+   * Delete one of a story's pictures, and its file.
+   *
+   * The ONLY thing that removes a picture. A redraw appends; this is the
+   * deliberate act, and the client asks before calling it. Deleting the chosen
+   * one promotes the newest of what is left, so a story is never left pointing
+   * at a file that has gone.
+   */
+  app.delete("/api/stories/:id/image/:imageId", requireAuth, async (req, res) => {
+    try {
+      if (refuseBuiltIn(req, res)) return;
+      const userId = (req.user as any).id;
+      const saved = await storage.getStoryById(req.params.id, userId);
+      if (!saved) return res.status(404).json({ message: "Story not found" });
+
+      const gallery = storyImagesOf(saved);
+      const doomed = gallery.find((p) => p.id === req.params.imageId);
+      if (!doomed) return res.status(404).json({ message: "No such picture" });
+
+      const remaining = gallery.filter((p) => p.id !== doomed.id);
+      const imageUrl =
+        saved.story.imageUrl === doomed.url
+          ? (remaining[remaining.length - 1]?.url ?? null)
+          : (saved.story.imageUrl ?? null);
+
+      const updated = await storage.setStoryImages(req.params.id, userId, {
+        imageUrl,
+        images: remaining,
+      });
+      if (!updated) return res.status(500).json({ message: "Could not delete the picture." });
+      // AFTER the row no longer points at it, never before: the other order
+      // leaves a story showing a file that is gone if the write fails.
+      await deleteStoryImage(doomed.url);
+      res.json({ imageUrl, images: updated.images ?? [] });
+    } catch (error) {
+      console.error("Error deleting a story picture:", error);
+      res.status(500).json({ message: "Could not delete the picture." });
     }
   });
 

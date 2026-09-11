@@ -967,7 +967,7 @@ async function runGeneration(
       imageUrl = await generateStoryImage(
         finalDetails.imagePrompt,
         userId,
-        await illustrationCast(request, userId),
+        await illustrationCast(request, userId, finalDetails.imagePrompt),
       );
     } catch (imageError) {
       console.error("Error generating story image:", imageError);

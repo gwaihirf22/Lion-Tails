@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useReadingPrefs } from "@/hooks/use-reading-prefs";
-import type { StoryRequest, StoryResponse } from "@shared/schema";
+import type { StoryRequest, StoryResponse, GeneratedPicture } from "@shared/schema";
 import { parseStoryContent, storyToPrintHtml } from "@/lib/storyContent";
 import ReaderBar from "@/components/reader/ReaderBar";
 import ReadingSurface from "@/components/reader/ReadingSurface";
@@ -31,11 +31,13 @@ interface StoryDisplayProps {
   builtIn?: boolean;
   /** What a parent changed by hand, for the line under the title. */
   editLog?: EditLogEntry[];
+  /** Every picture this story has had; the chosen one is story.imageUrl. */
+  images?: GeneratedPicture[];
   /** The page holds the story; a saved edit hands the new text back to it. */
   onEdited?: (next: { title: string; content: string; editLog: EditLogEntry[] }) => void;
 }
 
-export default function StoryDisplay({ story, storyId, storyType, builtIn, editLog, onEdited }: StoryDisplayProps) {
+export default function StoryDisplay({ story, storyId, storyType, builtIn, editLog, images, onEdited }: StoryDisplayProps) {
   const [isFavorite, setIsFavorite] = useState(false);
   /**
    * A parent editing the title and text, in place.
@@ -265,7 +267,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
         <ReadingSurface title={story.title} doc={doc} note={editedNote} />
       )}
 
-      <StoryExtras story={story} storyId={storyId} doc={doc} focusHidden={focus.hidden} builtIn={builtIn} />
+      <StoryExtras story={story} storyId={storyId} doc={doc} focusHidden={focus.hidden} builtIn={builtIn} images={images} />
     </div>
   );
 }
