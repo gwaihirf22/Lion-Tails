@@ -417,6 +417,30 @@ is**. One route, `POST /api/characters/:id/avatar/photo?mode=drawing|photo`.
   magic bytes, never the header. **Do not copy `pages/ImageAnalysis.tsx`**: it
   posts base64 through `express.json()`'s 100kb default and cannot have worked
   on a real photo.
+- **Every photo is framed before it is sent** (`PhotoCropper.tsx`). Blake:
+  "needs a crop or zoom out option so that the file can fit where it needs to
+  in the window." Every portrait is shown square and `object-cover`, so a
+  photo that is not square was being cropped anyway, by the display, with no
+  say in where. Drag to move, pinch/slider/wheel to zoom, and two one-tap
+  framings: **Whole photo** (zoomed out, gap filled) and **Fill the square**
+  (the default — doing nothing gives the old result).
+  - **The preview IS the file.** Both are drawn by `renderCrop()`, placing the
+    photo with `placement()` from `client/src/lib/imageCrop.ts` (pure, tested).
+    No CSS transform stands in for the crop. Verified in a browser: the saved
+    1024px file and the on-screen frame are the same picture.
+  - The view is stored in fractions of the square's side, not pixels, so the
+    same framing renders identically at 300px and 1024px.
+  - **The gap is filled with the average of the photo's EDGES that touch it**
+    (`edgeColour()`), averaged in JS from a 32px downscale. Shrinking straight
+    to one pixel does not average — the browser samples near the middle, and
+    a teddy on a cream kitchen table came back framed in maroon off its ribbon.
+  - The slider is logarithmic: linear, a 3:4 photo's whole zoom-out range is
+    the first 8% of the track.
+  - Callback refs, not `useRef`: the dialog is portalled, and an effect reading
+    `ref.current` can run before the node exists, leaving a blank preview.
+  - The three picture buttons wrap their labels (`h-auto whitespace-normal`):
+    the stock Button is nowrap at a fixed height, and beside the portrait on a
+    390px phone "Turn a photo into a drawing" ran out through its border.
 - **`storeAvatarFile` is the one place a portrait is named and written.**
   `generateAvatar` uses it too. A file named any other way is served fine and
   then silently skipped the first time a story tries to draw that character.

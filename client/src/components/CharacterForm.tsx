@@ -76,7 +76,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Loader2, Sparkles, RefreshCw, RotateCcw, X, Plus, Lock, ImagePlus, Upload } from "lucide-react";
-import { pngFromFile, AVATAR_FILE_ACCEPT } from "@/lib/imageFile";
+import {
+  AVATAR_FILE_ACCEPT,
+  croppedPng,
+  decodeImage,
+  releaseImage,
+  type DecodedImage,
+} from "@/lib/imageFile";
+import type { CropView } from "@/lib/imageCrop";
+import { PhotoCropper } from "@/components/PhotoCropper";
 import {
   Tooltip,
   TooltipContent,
@@ -551,13 +559,18 @@ export default function CharacterForm({
    * controls disable together. Two of them cost money and none of them should
    * be pressable twice.
    */
-  const uploadPhoto = async (file: File, mode: "drawing" | "photo") => {
+  const uploadPhoto = async (
+    image: DecodedImage,
+    view: CropView,
+    fill: string,
+    mode: "drawing" | "photo",
+  ) => {
     if (!saved?.id || drawing) return;
     setDrawing(true);
     try {
-      // Converted here, not on the server: see client/src/lib/imageFile.ts.
-      // Throws a sentence worth showing when the browser cannot read the file.
-      const png = await pngFromFile(file);
+      // Framed and converted here, not on the server: see
+      // client/src/lib/imageFile.ts. This is the square the cropper showed.
+      const png = await croppedPng(image, view, fill);
 
       const res = await fetch(`/api/characters/${saved.id}/avatar/photo?mode=${mode}`, {
         method: "POST",
@@ -602,6 +615,34 @@ export default function CharacterForm({
   const pickPhoto = (mode: "drawing" | "photo") => {
     photoMode.current = mode;
     photoInputRef.current?.click();
+  };
+
+  /**
+   * A picked photo, decoded and waiting to be framed.
+   *
+   * Nothing is uploaded until the cropper says so. The mode is copied OUT of
+   * the ref here, at the moment the file arrives, so the cropper's buttons
+   * cannot be affected by another button being pressed while it is open.
+   *
+   * The decoded image is released whichever way the cropper closes -- an
+   * ImageBitmap of a camera photo is tens of megabytes until it is.
+   */
+  const [cropping, setCropping] = useState<{ image: DecodedImage; mode: "drawing" | "photo" } | null>(null);
+  const openCropper = async (file: File) => {
+    try {
+      const image = await decodeImage(file);
+      setCropping({ image, mode: photoMode.current });
+    } catch (error) {
+      toast({
+        title: "That file was not a picture",
+        description: error instanceof Error ? error.message : "Please try another one.",
+        variant: "destructive",
+      });
+    }
+  };
+  const closeCropper = () => {
+    releaseImage(cropping?.image);
+    setCropping(null);
   };
 
   /**
@@ -1086,7 +1127,11 @@ export default function CharacterForm({
 
                         Stacked rather than in a row: three labels this long do
                         not share a line on a phone, and the middle one is a
-                        sentence.
+                        sentence. And each may WRAP inside its button
+                        (h-auto whitespace-normal): the stock Button is
+                        nowrap at a fixed height, and beside the portrait on a
+                        390px phone "Turn a photo into a drawing" ran straight
+                        out through the button's border.
 
                         `full` is off `busy`, not off each button's own state,
                         so pressing any one of them disables all three. Two of
@@ -1099,12 +1144,12 @@ export default function CharacterForm({
                           <div className="space-y-3">
                             <div className="space-y-1">
                               <Button type="button" variant="outline" size="sm"
-                                      className="w-full justify-start sm:w-auto"
+                                      className="h-auto min-h-9 w-full justify-start whitespace-normal py-2 text-left sm:w-auto"
                                       onClick={() => setAskOpen(true)}
                                       disabled={busy}>
                                 {drawing
                                   ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Working…</>
-                                  : <><Sparkles className="mr-2 h-4 w-4" />
+                                  : <><Sparkles className="mr-2 h-4 w-4 shrink-0" />
                                       {form.watch("avatarUrl") ? "Draw a new picture" : "Draw a picture"}</>}
                               </Button>
                               <p className="text-xs text-muted-foreground">
@@ -1114,10 +1159,10 @@ export default function CharacterForm({
 
                             <div className="space-y-1">
                               <Button type="button" variant="outline" size="sm"
-                                      className="w-full justify-start sm:w-auto"
+                                      className="h-auto min-h-9 w-full justify-start whitespace-normal py-2 text-left sm:w-auto"
                                       onClick={() => pickPhoto("drawing")}
                                       disabled={busy}>
-                                <ImagePlus className="mr-2 h-4 w-4" />
+                                <ImagePlus className="mr-2 h-4 w-4 shrink-0" />
                                 Turn a photo into a drawing
                               </Button>
                               <p className="text-xs text-muted-foreground">
@@ -1127,10 +1172,10 @@ export default function CharacterForm({
 
                             <div className="space-y-1">
                               <Button type="button" variant="outline" size="sm"
-                                      className="w-full justify-start sm:w-auto"
+                                      className="h-auto min-h-9 w-full justify-start whitespace-normal py-2 text-left sm:w-auto"
                                       onClick={() => pickPhoto("photo")}
                                       disabled={busy}>
-                                <Upload className="mr-2 h-4 w-4" />
+                                <Upload className="mr-2 h-4 w-4 shrink-0" />
                                 Use a photo as it is
                               </Button>
                               <p className="text-xs text-muted-foreground">
@@ -1172,7 +1217,7 @@ export default function CharacterForm({
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           e.target.value = "";
-                          if (file) void uploadPhoto(file, photoMode.current);
+                          if (file) void openCropper(file);
                         }}
                       />
 
@@ -1859,6 +1904,38 @@ export default function CharacterForm({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/*
+          Framing a picked photo, before anything is sent.
+
+          Confirming closes the cropper FIRST, so the Appearance tab's own busy
+          state is what shows while it uploads, and releases the photo LAST --
+          after croppedPng has drawn from it. Releasing on close, the obvious
+          place, would free the bitmap the upload is about to read.
+        */}
+        <PhotoCropper
+          image={cropping?.image ?? null}
+          title={
+            cropping?.mode === "drawing"
+              ? "Frame the photo to draw from"
+              : "Frame the photo"
+          }
+          description={
+            cropping?.mode === "drawing"
+              ? "Put them in the middle of the square. The drawing is made from what is inside it, and the photo is thrown away afterwards."
+              : "This square is exactly what will be saved as their picture."
+          }
+          confirmLabel={cropping?.mode === "drawing" ? "Draw from this" : "Use this"}
+          onCancel={closeCropper}
+          onConfirm={(view, fill) => {
+            const picked = cropping;
+            if (!picked) return;
+            setCropping(null);
+            void uploadPhoto(picked.image, view, fill, picked.mode).finally(() =>
+              releaseImage(picked.image),
+            );
+          }}
+        />
       </form>
     </Form>
   );

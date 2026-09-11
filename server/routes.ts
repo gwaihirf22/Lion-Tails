@@ -565,7 +565,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * The body parser is attached to this route alone: raising the global JSON
    * limit to fit an image would raise it for all fifty-odd other routes.
    *
-   * `image/png` only, and the client converts before sending (`pngFromFile`).
+   * `image/png` only, and the client converts before sending (`croppedPng`).
    * That keeps ONE format in AVATAR_DIR -- see `isPngImage` on why that
    * invariant is load-bearing -- and it means a phone's 12-megapixel photo is
    * resized in the browser rather than posted whole.
