@@ -106,6 +106,35 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
   );
 
   const picker = usePassagePicker({ bodyBlocks });
+
+  /**
+   * How tall the reader bar ACTUALLY is, for the picking bar to stick below.
+   *
+   * It was a constant -- `top-12`, 48px, one row of buttons -- and on a phone
+   * the bar wraps to two rows, about 100px, and sits in a higher layer. So the
+   * picking bar stuck underneath it with its top half hidden: the quote cut
+   * off mid-line and "Draw this" clipped (Blake, on an iPhone). Measured, it is
+   * right at every width, text size and orientation.
+   *
+   * 48 until the first measurement, which is the old value, so nothing renders
+   * differently for the frame before it arrives. A callback ref in state, not
+   * useRef, so the observer attaches when the element exists rather than when
+   * an effect happens to run.
+   *
+   * offsetHeight, which is unaffected by focus mode: that FADES the bar and
+   * keeps its space ("fade, never collapse"), so the picking bar stays put
+   * under an invisible bar rather than jumping up when the toolbar hides.
+   */
+  const [readerBar, setReaderBar] = useState<HTMLDivElement | null>(null);
+  const [readerBarHeight, setReaderBarHeight] = useState(48);
+  useEffect(() => {
+    if (!readerBar) return;
+    const measure = () => setReaderBarHeight(readerBar.offsetHeight || 48);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(readerBar);
+    return () => ro.disconnect();
+  }, [readerBar]);
   const [lightbox, setLightbox] = useState<StoryPicture | null>(null);
 
   // Whether this account may draw at all. The same policy call the server
@@ -262,6 +291,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
         focusArmed={focus.armed}
         onToggleFocus={focus.toggle}
         picking={picker.picking}
+        barRef={setReaderBar}
         onTogglePicture={
           canPicture ? (picker.picking ? picker.cancel : picker.start) : undefined
         }
@@ -313,8 +343,12 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
       */}
       {picker.picking && (
         <div
-          className="sticky top-12 z-20 mx-auto mt-2 w-full max-w-3xl rounded-md border px-3 py-2"
-          style={{ borderColor: "var(--reader-border)", background: "var(--reader-surface)" }}
+          className="sticky z-20 mx-auto mt-2 w-full max-w-3xl rounded-md border px-3 py-2"
+          style={{
+            top: readerBarHeight,
+            borderColor: "var(--reader-border)",
+            background: "var(--reader-surface)",
+          }}
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="min-w-0 flex-1 text-sm">
