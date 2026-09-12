@@ -223,6 +223,8 @@ account-synced is a schema change.
 | zod 3 → 4 migration | blocks `drizzle-zod` 0.8 only, which is the sole failure in the 54-package `production-minor` PR. Ignored in `dependabot.yml` until the migration happens |
 | `@vitejs/plugin-react` 6 | needs Vite 5 → 8 plus three new peer deps. Not a bump; a build-system migration, and `@replit/vite-plugin-shadcn-theme-json` has to be replaced first |
 | `characters` and `stories` tables | may still exist on old databases; never read, safe to drop |
+| `StoryExtras.tsx` re-fetches the whole `SavedStory` | it needs `heroId` and `editLog` and pulls `debugData` with them — measured at up to 244 KB for one story (`generationRecords.ts`) — through `getQueryFn`, which leaves two `Response.clone()`s unread (`queryClient.ts:112-123`). Signed-in reader only; the share page does neither |
+| `splitFurtherLearning`'s non-literal fallback | `storyContent.ts` cuts the story at the FIRST line matching `/For Further Learning:?/im`. The server only appends its own block when the model wrote none, so a model that writes that heading mid-story has everything after it silently moved into the "Further reading" accordion |
 
 ---
 

@@ -902,6 +902,49 @@ sites, gated on `brief.world`, which IS the fact "this is a quest" and is
 already on the frozen brief. Ordinary stories get nothing: there is no lantern
 in one.
 
+**A quest ends at home, and the last chapter has to be told that it is last.**
+Blake reported a four-character quest as "cut off… no resolution, about
+halfway through". Nothing was cut off — 4,366 words, `truncated_calls: 0`, and
+the reader rendered every one of them. The prompt had told the final chapter
+not to finish: `"The story has N chapters of similar length, so do not try to
+finish the whole story in this one"` was appended to **every** chapter, and the
+chapter prompt never said which chapter it was on at all. Four things now:
+
+- `chapterPositionRule()` (pure, exported) says "part N of M", and on the last
+  one drops that sentence for "this is where the story ENDS", with a ceiling of
+  1.35× rather than 1.15× because that part carries a scene AND an ending. A
+  **cliffhanger** gets the first half only — told it is last so it finishes its
+  scene, never told to end the story, which its own premise forbids.
+- `questShape()` budgeted part 1 ("the way in and nothing else") and nothing
+  for the way home, so the last part had the account, the return and the close
+  in one part's words and dropped the half it had least room for. It now names
+  the last part too.
+- `CANON.ending` said Barnabas "may appear before the journey, during it, or at
+  its end", so an outline wrote "Mr Barnabas is waiting **only if** the story
+  has brought her back to him" and the chapter took the exit. He **is** there
+  when the traveller comes back; "purposefully and never conveniently" now
+  governs only his appearances during a journey. Blake's call.
+- `StoryBrief.cliffhanger` is carried as a fact, like `soloRetelling` and
+  `ensemble`, because the quest shape and the last chapter both read it. An
+  older frozen brief is recognised by `CLIFFHANGER_PREMISE` being in its own
+  premise — those jobs are in flight across the deploy.
+
+**`tests/fixtures/chapter-prompt-golden.json` captures the ASSEMBLED chapter
+prompt**, first, middle and last. The brief goldens could not have caught any
+of the above: the defect was in the wrapper around the brief, which no fixture
+could see. `buildChapterPrompt()` is pure for that reason. Regenerate with
+`UPDATE_GOLDEN=1 npm test -- chapterPrompt` and read the diff.
+
+**Nobody is written out of a story.** At four or more characters the brief caps
+a scene at three of them — and the outline read that as licence to delete
+people, instructing its own last chapter with "Elijah is waiting nearby, while
+Ellie and Lucy are no longer beside Esther". Two of four children vanished a
+page from the end, which to a reader is a missing page. The cap now says what
+it is *not* about, the outline is told to write what happens rather than the
+casting, and the **chapter projection** — which had no cast rule at all, and is
+the prompt that writes actual sentences — carries "leave out whoever this part
+does not need, silently".
+
 **The word cap is per FRAME, not per brief.** `worldCanon(frame)` renders five
 different documents and the cap test measured one of them -- it passed while
 `wrong-arrival` rendered at 752 against a ceiling of 750. It now asserts every
