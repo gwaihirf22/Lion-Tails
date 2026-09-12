@@ -30,6 +30,7 @@ import {
   skillLeakage,
   SOLO_RETELLING_GUARD,
   type BriefPurpose,
+  EXPERT_CRAFT,
 } from "../server/lib/storyBrief";
 import {
   characterIdsOf,
@@ -2084,6 +2085,21 @@ describe("a Human is still a girl or a boy in the story", () => {
     expect(characterKind({ kind: "human", age: 40 })).toBe("person");
   });
 
+  it("reconciles the four age-nouns with the age, and leaves them alone without one", () => {
+    // The Paul case: a preset of "boy" saved with an age of 33.
+    expect(characterKind({ kind: "boy", age: 33 })).toBe("man");
+    expect(characterKind({ kind: "girl", age: 40 })).toBe("woman");
+    expect(characterKind({ kind: "man", age: 10 })).toBe("boy");
+    expect(characterKind({ kind: "woman", age: 7 })).toBe("girl");
+    expect(characterKind({ kind: "boy", age: 17 })).toBe("boy");
+    // No age: the noun the user chose stands, so every older row is unchanged.
+    expect(characterKind({ kind: "boy" })).toBe("boy");
+    expect(characterKind({ kind: "woman" })).toBe("woman");
+    // Not an age-noun: untouched whatever the age says.
+    expect(characterKind({ kind: "grandmother", age: 30 })).toBe("grandmother");
+    expect(characterKind({ kind: "dragon", age: 300 })).toBe("dragon");
+  });
+
   it("leaves every other kind exactly as it was", () => {
     expect(characterKind({ kind: "girl" })).toBe("girl");
     expect(characterKind({ gender: "girl" })).toBe("girl");
@@ -2297,6 +2313,29 @@ describe("what a traveller is wearing when they arrive", () => {
     expect(renderBrief(alongsideBrief(), "image")).not.toContain(STONE_IN_PICTURES);
   });
 
+  it("tells a quest picture which side of the crossing a scene is on", () => {
+    expect(renderBrief(questBrief(), "image")).toContain("begins in the present day and crosses over");
+    expect(renderBrief(alongsideBrief(), "image")).not.toContain("crosses over");
+  });
+
+  it("forbids narrating the limits, in both modes, in the brief and every chapter", () => {
+    for (const b of [questBrief(), alongsideBrief()]) {
+      expect(renderBrief(b, "single")).toContain("Never write what");
+      expect(renderBrief(b, "chapter")).toContain("Never write what");
+      expect(renderBrief(b, "single")).toContain("that note is the only place it is said");
+    }
+  });
+
+  it("still holds the account fixed while letting them help", () => {
+    // The permission is the chapter anchor's for a traveller, by design: a
+    // chapter prompt that opens with four prohibitions writes somebody standing
+    // still. So it is asserted where it renders, and the fixed account beside it.
+    const c = renderBrief(questBrief(), "chapter");
+    expect(c).toContain("is the reason a small thing goes right");
+    expect(c).toContain("never because of");
+    expect(renderBrief(questBrief(), "single")).toContain("does not change what happened");
+  });
+
   it("describes the stone by a hand, not a ruler, and forbids the palm", () => {
     expect(STONE_IN_PICTURES).toMatch(/closed hand/);
     expect(STONE_IN_PICTURES).toMatch(/pocket/);
@@ -2308,5 +2347,29 @@ describe("what a traveller is wearing when they arrive", () => {
     // ... they ... their" is a singular they. The pronoun suite catches it in
     // the assembled brief; this catches it in the constant itself.
     expect(CROSSING_OVER_DRESS).not.toMatch(/\b(they|them|their)\b/i);
+  });
+});
+
+/**
+ * "expert" is an appetite, not an age, and it is the only level with a craft
+ * line of its own. Every other level's prompt must not have moved.
+ */
+describe("the expert reading level", () => {
+  const req = (readingLevel: string) =>
+    buildStoryBrief({ storyType: "regular", storyLength: "medium", theme: "courage",
+      childName: "Mia", gender: "girl", readingLevel } as unknown as StoryRequest, []);
+
+  it("asks for full literary strength, and closes on restraint", () => {
+    const s = renderBrief(req("expert"), "single");
+    expect(s).toContain(EXPERT_CRAFT);
+    expect(s).toContain("Written for a reader aged 18 or over and reading to be stretched.");
+    expect(EXPERT_CRAFT).toMatch(/purple/);
+    expect(EXPERT_CRAFT).toMatch(/do not moralise/i);
+  });
+
+  it("lands for nobody else", () => {
+    for (const level of ["preschool", "early-elementary", "middle-school", "high-school", "adult"]) {
+      expect(renderBrief(req(level), "single")).not.toContain(EXPERT_CRAFT);
+    }
   });
 });

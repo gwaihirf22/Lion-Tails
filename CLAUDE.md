@@ -194,6 +194,20 @@ more, not ten. Five storage methods that looked like the counter were all dead:
 the real increment is raw SQL inside the worker's finishing transaction, which
 is where it has to be to share that transaction.
 
+## Reading levels
+
+`READING_LEVELS` in `shared/schema.ts` is the tuple; `READING_LEVEL_AGES`
+and `READING_LEVEL_LABELS` are total Records over it, so adding a level
+without an age or a label is a compile error. **The form renders from the
+tuple** — it used to carry its own five `<SelectItem>`s and had drifted a
+year from the ages. Eight levels now, up to `high-school` (15–17), `adult`
+("aged 18 or over", phrased to follow "a reader") and `expert` — an appetite,
+not an age: "aged 18 or over and reading to be stretched", and the only level
+with a craft line of its own (`EXPERT_CRAFT` in `storyBrief.ts`: layered
+meaning, the exact word, moral weight left to the reader, and a closing warning
+against purple prose, because that is the easy failure). No persona says
+"children" any more, so an adult level is not fighting the system prompt.
+
 ## Model selection
 
 `server/lib/modelPolicy.ts` is the only place the model, provider base URL and
@@ -270,6 +284,15 @@ feathers, scales, plating), so the story sees only `kind` and a girl renders "a
 girl" rather than "a human". A row saved before any of this has no category and
 falls through to "hair", which is what keeps the golden briefs identical.
 
+**The four human age-nouns are reconciled with the age.** `characterKind()`
+turns `boy`/`girl`/`man`/`woman` plus an age into the right one of the
+four (18 is the line, as it already was for `"human"`); with no age the
+chosen noun stands, so every older row renders as before. A preset of "boy"
+saved with an age of 33 used to reach the brief as "aged 33, a boy", and the
+model obediently wrote "thirty-three, though he was still a boy". The
+character form says what the story will call them under the age field —
+automatic, and visible, rather than a warning to click through.
+
 **A story may have NO main character.** `noMainCharacter` on the request,
 read only through `isEnsemble()` — the flag is meaningless with one character,
 and a request can carry it from a cast later cut to one. Absent means the old
@@ -336,6 +359,18 @@ Either way in, the story gets a short appended note saying what was invented.
 **The note is appended by the server, never asked of the model** — a disclaimer
 the model writes is one it can forget, soften, or bury mid-story, and this one
 has to be exactly right and always present.
+
+**The story never narrates the limits; the note does.** Told three ways per
+chapter what the character cannot change, the model hedged by writing it —
+"He did not build the wall. He did not make the family's decision. He only
+held one board." `notNarrated()` forbids writing what the character did
+not do, could not change, or only watched, and points at the appended note
+as the only place that is said. It rides in both modes' premise lines AND
+both chapter anchors, and — for a traveller — in the premise too, because
+the helping permission (`partOfIt`) is chapter-only by design and the
+outline had heard only the prohibitions. The permission itself widened:
+carries, warns, comforts, holds the board, is the reason a small thing goes
+right. What the account records still happens, and never because of them.
 
 This exists because the two used to contradict each other with nothing making
 anyone choose. The historical tab used to force-set `useTimeTravel: false`,

@@ -26,6 +26,7 @@ import {
   virtueLevels,
   type Character,
   type CharacterStat,
+  characterKind,
 } from "@shared/schema";
 import {
   CHARACTER_CATEGORIES,
@@ -279,6 +280,14 @@ export default function CharacterForm({
   const kind = form.watch("kind") ?? initialCharacter?.gender;
   const category = form.watch("category");
   const covering = coveringNoun(category, kind);
+  // Automatic, and said out loud: a "boy" aged 33 is written as a man, and the
+  // form says so under the age rather than letting the brief surprise anyone.
+  const watchedAge = form.watch("age");
+  const storyNoun = characterKind({ kind, age: watchedAge, sex: form.watch("sex") });
+  const ageNounHint =
+    kind && storyNoun && storyNoun !== kind && typeof watchedAge === "number"
+      ? `At ${watchedAge}, the story will call ${form.watch("name") || "them"} ${/^[aeiou]/i.test(storyNoun) ? "an" : "a"} ${storyNoun}.`
+      : undefined;
 
   // Stats live in form state like everything else; these are just the readouts.
   // earned comes from the SAVED row, never the form -- how many stories a
@@ -1165,6 +1174,7 @@ export default function CharacterForm({
                         }
                       />
                     </FormControl>
+                    {ageNounHint && <FormDescription>{ageNounHint}</FormDescription>}
                     <FormMessage />
                   </FormItem>
                 )}

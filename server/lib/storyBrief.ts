@@ -353,10 +353,27 @@ const ONE_PERSON_PRONOUNS =
  */
 const partOfIt = (name: string) =>
   `${name} is IN this and not watching it: ${name} speaks and is spoken to, ` +
-  `helps, gets in the way, is noticed. Let ${name} act where the account ` +
+  `helps -- carries, warns, comforts, holds the board, is the reason a small ` +
+  `thing goes right -- gets in the way, is noticed. Let ${name} act where the account ` +
   "is silent -- who carried the water, who sat with him, who was told to move " +
   "along -- and let trying and failing cost something. What the account does " +
-  `record happens anyway, and never because of ${name}.`;
+  `record happens anyway, and never because of ${name}. ` +
+  notNarrated(name);
+
+/**
+ * The limits are the note's to state, not the story's.
+ *
+ * Told three ways per chapter what the character cannot change, the model
+ * hedged by NARRATING it: "He did not build the wall. He did not make the
+ * family's decision. He only held one board." Blake: "it is always overly
+ * noting that the character did nothing... we can just save that for the
+ * disclaimer." The rules above still bind what HAPPENS; this one binds what
+ * gets written about it, and points at the note the app appends.
+ */
+const notNarrated = (name: string) =>
+  `Never write what ${name} did not do, could not change, or only watched, ` +
+  `and never say ${name} was merely there. A note the app adds after the ` +
+  `story says what was invented; that note is the only place it is said.`;
 
 /**
  * The mission: given a sympathetic character who thinks the hero's choice is
@@ -450,6 +467,11 @@ function participationPremise(
           `${name} finds at the end of it be as serious as it actually was.`,
       );
       out.push(HISTORY_FIXED);
+      // The narration rule reaches the OUTLINE too. The helping permission
+      // (partOfIt) is chapter-only here by design -- see the anchor below --
+      // but an outline that has heard "does not change what happened" and
+      // nothing about how to write that plans a chapter around the not-doing.
+      out.push(notNarrated(name));
     }
     return {
       lines: out,
@@ -483,7 +505,8 @@ function participationPremise(
   out.push(
     `${name} matters to what happens -- not a bystander and not a rescuer. ` +
       `${name} helps, asks hard questions, and pushes back when the choice ` +
-      `in front of ${name} looks mad from where ${name} is standing.`,
+      `in front of ${name} looks mad from where ${name} is standing. ` +
+      notNarrated(name),
   );
   out.push(
     "The account still happens exactly as it is recorded -- the same events, " +
@@ -514,7 +537,7 @@ function participationPremise(
       `WHY that choice was made. Let ${name} ask the question the reader would ` +
       "ask, and let the answer be the story.",
   );
-  return { lines: out, anchor: `${missionHolds(name)} ${neverDies(name)}` };
+  return { lines: out, anchor: `${missionHolds(name)} ${neverDies(name)} ${notNarrated(name)}` };
 }
 
 /**
@@ -910,6 +933,26 @@ export type StoryBrief = {
   };
 };
 
+/**
+ * What "expert" asks for, in the brief.
+ *
+ * The other levels are ages, and an age is a ceiling: write so a reader that
+ * age can follow. This one is a floor. Blake: "high level writing that pushes
+ * the mind." So it names the things that make prose demanding rather than
+ * merely long -- and closes on restraint, because a model told to write
+ * "literary" reaches first for adjectives, and purple is the easy failure.
+ *
+ * Exported so a test can assert it lands for expert and for nobody else.
+ */
+export const EXPERT_CRAFT =
+  "Write at full literary strength. Layered meaning, and a second reading that " +
+  "rewards; the exact word even when it is uncommon; sentences that vary and earn " +
+  "their length; moral weight left for the reader to carry rather than explained; " +
+  "an ending that trusts the reader with what it means. Do not simplify, do not " +
+  "signpost the theme, do not moralise -- and do not let the prose turn purple. " +
+  "Restraint is the harder skill, and the reader will notice which one you have.";
+
+
 export function buildStoryBrief(
   request: StoryRequest,
   /**
@@ -1264,6 +1307,9 @@ export function buildStoryBrief(
   // away with it only because every persona also said "children". That word is
   // gone, so this line now carries the whole guard rail on its own.
   craft.push(`Written for a reader ${readingLevelAges(request.readingLevel)}.`);
+  // The one level that is an appetite rather than an age gets a craft line of
+  // its own. Gated on the slug so every other level's prompt is untouched.
+  if (request.readingLevel === "expert") craft.push(EXPERT_CRAFT);
   if (isSet(request.learningFocus)) craft.push(`Learning focus: ${request.learningFocus}.`);
   const form = storyFormFor(request.storyType);
   if (form.craft) craft.push(form.craft);
@@ -1612,6 +1658,12 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     // opening included, which is why this is gated on world alone and not,
     // like the dress, on there being an era to dress for. See referencePlates.
     const stone = brief.world ? ` ${STONE_IN_PICTURES}` : "";
+    // A quest has two sides and the era names only one. Without this the
+    // modern playground was captioned "in Haarlem, Netherlands" -- the picture
+    // came out modern only because the model half-ignored its own prompt.
+    const sides = brief.world && brief.sourceMaterial?.era
+      ? " The story begins in the present day and crosses over: draw each scene where that scene is, and only the far side in the era above."
+      : "";
 
     // With no lead there is no one face to build the frame around, so the
     // subject is the group -- but the cap does not move: a picture with
@@ -1619,7 +1671,7 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     if (brief.ensemble) {
       const who = `${everyone}${brief.sourceMaterial ? ` -- a scene from ${brief.sourceMaterial.label}` : ""}.`;
       return (
-        `${who}${era}${dress}${stone} ${brief.cast.map((c) => c.identity).join(" ")} ` +
+        `${who}${era}${dress}${stone}${sides} ${brief.cast.map((c) => c.identity).join(" ")} ` +
         `Draw at most three of them -- a picture with everyone in it is a crowd, not a scene.`
       );
     }
@@ -1627,7 +1679,7 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     // the fact "this is a quest", and a quest picture with nothing to dress
     // for still has a traveller with a pocket.
     const base = brief.sourceMaterial
-      ? `${lead.identity} -- a scene from ${brief.sourceMaterial.label}.${era}${dress}${stone}`
+      ? `${lead.identity} -- a scene from ${brief.sourceMaterial.label}.${era}${dress}${stone}${sides}`
       : `${lead.identity}${stone}`;
     if (others.length === 0) return base;
     // Naming everyone would put eight children in one frame. An illustration

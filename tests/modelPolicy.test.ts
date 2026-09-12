@@ -208,3 +208,17 @@ describe("the free avatar allowance", () => {
     expect(avatarsRemaining(8, free)).toBe(0);
   });
 });
+
+import { READING_LEVELS, READING_LEVEL_AGES, READING_LEVEL_LABELS, readingLevelAges } from "../shared/schema";
+describe("reading levels", () => {
+  it("has a label and an age range for every level, and reaches adults", () => {
+    for (const l of READING_LEVELS) {
+      expect(READING_LEVEL_LABELS[l]).toBeTruthy();
+      expect(READING_LEVEL_AGES[l]).toMatch(/\d/);
+    }
+    expect(READING_LEVELS).toContain("high-school");
+    expect(READING_LEVELS).toContain("adult");
+    // Reads as a sentence after "a reader": "a reader aged 18 or over".
+    expect(readingLevelAges("adult")).toMatch(/^aged/);
+  });
+});
