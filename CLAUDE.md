@@ -540,6 +540,19 @@ different child, and the only sign was one line in the log.
   field being filled at all, because the two mistakes do not cost the same.
   A missing face is a generic picture; a wrong face in a biblical scene is
   the Esther bug with a camera.
+- **Two visual rules ride on the image projection of a quest brief, and only
+  there.** `CROSSING_OVER_DRESS` (the lantern outfits the traveller for the
+  place; goes to the prose too, so story and picture agree on clothes) and
+  `STONE_IN_PICTURES` (the stone is small — it vanishes inside a closed hand —
+  and stays in the traveller's pocket; picture only, because the prose never
+  had it wrong). Both live in `referencePlates.ts`, beside the plates, not in
+  `lionTails.ts`: visual rules stay in one file, and CANON is edited often
+  enough that a new key there is a merge conflict waiting to happen. The stone
+  rule is gated on `world` alone — the modern opening has a pocket too — where
+  the dress needs an era to dress for. Found on a real quest: the prose kept
+  the stone pocketed for 2,800 words while the cover and all three passage
+  pictures drew a fist-sized rock held out on an open palm, because nothing on
+  the picture side had ever said what it was like or where it lived.
 - **At most three faces**, which is the rule the brief's `"image"`
   projection already states in words.
 - **The Timekeeper has one face and it is a file.**

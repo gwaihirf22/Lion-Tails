@@ -7,7 +7,8 @@ import {
 } from "../client/src/lib/storyContent";
 import { buildPassageScenePrompt } from "../server/lib/passageScene";
 import { composeIllustrationPrompt } from "../server/lib/illustration";
-import { COVER_SHOWS_PEOPLE } from "../server/lib/openai-implementation";
+import { COVER_SHOWS_PEOPLE, COVER_MONTAGE } from "../server/lib/openai-implementation";
+import { COVER_SIZE, PAGE_SIZE } from "../server/lib/illustration";
 import { questTitleRule, DEVICE, SHOP, KEEPER } from "../server/data/lionTails";
 import {
   MAX_STORY_IMAGES,
@@ -251,19 +252,36 @@ describe("the look of the book", () => {
     { name: "Mia", look: "Mia, a girl.", reference: { data: Buffer.from("x"), filename: "portrait.png", type: "image/png" } },
   ];
 
+  /**
+   * The cover, attached as what it IS rather than as an untyped extra.
+   *
+   * It used to be a boolean -- "there is one more picture and it is not a
+   * person" -- which is true of a shop front and a palette too. A role says
+   * which, so the same fence ("take nothing else from it") is the general rule
+   * for a style reference instead of a special case.
+   */
+  const look = {
+    role: "style" as const,
+    name: "the look of this book",
+    look: "the cover of this same story.",
+    file: { data: Buffer.from("x"), filename: "story_1.png", type: "image/png" },
+  };
+
   it("numbers the story's picture after the cast, so the cast keeps its numbers", () => {
-    const p = composeIllustrationPrompt("A scene", cast, true);
+    const p = composeIllustrationPrompt("A scene", cast, [look]);
     expect(p).toContain("Reference image 1 is Mia, a girl.");
-    expect(p).toContain("Reference image 2 is an earlier picture from this same story");
+    expect(p).toContain("Reference image 2 is the cover of this same story.");
   });
 
-  it("calls it a picture, not a person", () => {
+  it("calls it a look, not a person", () => {
     // Described as one more face, the model places it in the scene.
-    expect(composeIllustrationPrompt("A scene", cast, true)).toContain("not a person");
+    expect(composeIllustrationPrompt("A scene", cast, [look])).toContain(
+      "not a scene and not a person",
+    );
   });
 
   it("asks for the people and nothing else from it", () => {
-    const p = composeIllustrationPrompt("A scene", cast, true);
+    const p = composeIllustrationPrompt("A scene", cast, [look]);
     expect(p).toMatch(/must look the same here as they do there/);
     expect(p).toMatch(/Take nothing else from it/);
   });
@@ -272,16 +290,72 @@ describe("the look of the book", () => {
     // The Barnabas-as-Tyndale rule has to survive the earlier picture being
     // attached -- and now has to be phrased against the references rather
     // than a list of names, because that picture carries people nobody named.
-    const p = composeIllustrationPrompt("A scene", cast, true);
+    const p = composeIllustrationPrompt("A scene", cast, [look]);
     expect(p).toContain("appears in none of the reference images is a different person");
   });
 
   it("says nothing at all when no picture is attached", () => {
-    // The end-of-story picture and the redraw send no story look, and their
-    // prompt must not change because this shipped.
-    const p = composeIllustrationPrompt("A scene", cast, false);
+    // The end-of-story picture and the redraw send no style reference, and
+    // their prompt must not change because this shipped.
+    const p = composeIllustrationPrompt("A scene", cast, []);
     expect(p).toBe(composeIllustrationPrompt("A scene", cast));
-    expect(p).not.toMatch(/earlier picture/);
+    expect(p).not.toMatch(/the look of this book/);
+  });
+
+  it("ignores an extra whose file could not be read", () => {
+    // The same rule the cast follows: no file, no numbered line, because the
+    // numbers have to match what images.edit actually received.
+    const p = composeIllustrationPrompt("A scene", cast, [{ ...look, file: undefined }]);
+    expect(p).toBe(composeIllustrationPrompt("A scene", cast));
+  });
+});
+
+/**
+ * Each attached picture says what it IS -- the guide's "identify each input by
+ * number and purpose: subject, style, clothing, or background".
+ */
+describe("what each attached picture is for", () => {
+  const plate = (role: "background" | "object" | "clothing", look: string) => ({
+    role,
+    name: "n",
+    look,
+    file: { data: Buffer.from("x"), filename: "plate.webp", type: "image/webp" },
+  });
+
+  it("asks a place for its building and not its framing", () => {
+    const p = composeIllustrationPrompt("A scene", [], [plate("background", "the shop front.")]);
+    expect(p).toContain("Reference image 1 is the shop front.");
+    expect(p).toMatch(/the same building, the same materials, the same colours/i);
+    expect(p).toMatch(/do not place any person from it into this picture/i);
+  });
+
+  it("asks an object for itself and nothing around it", () => {
+    const p = composeIllustrationPrompt("A scene", [], [plate("object", "the lantern, dark.")]);
+    expect(p).toMatch(/draw it as it is shown there/i);
+    expect(p).toMatch(/not.*anyone holding it/i);
+  });
+
+  it("asks clothing for clothing only", () => {
+    const p = composeIllustrationPrompt("A scene", [], [plate("clothing", "what people wore.")]);
+    expect(p).toMatch(/Dress the people in this scene to match it/i);
+    expect(p).toMatch(/Take only the clothing from it/i);
+  });
+
+  it("numbers several of them in the order images.edit receives them", () => {
+    const p = composeIllustrationPrompt(
+      "A scene",
+      [{ name: "Mia", look: "Mia, a girl.", reference: { data: Buffer.from("x"), filename: "p.png", type: "image/png" } }],
+      [plate("background", "the shop front."), plate("object", "the lantern, dark.")],
+    );
+    expect(p).toContain("Reference image 1 is Mia, a girl.");
+    expect(p).toContain("Reference image 2 is the shop front.");
+    expect(p).toContain("Reference image 3 is the lantern, dark.");
+  });
+
+  it("brings the spare-face rule with it even when no person is attached", () => {
+    // A plate is still a picture full of things the model may reach for.
+    const p = composeIllustrationPrompt("A scene", [], [plate("background", "the shop front.")]);
+    expect(p).toContain("appears in none of the reference images is a different person");
   });
 });
 
@@ -364,5 +438,50 @@ describe("a story nobody has read yet", () => {
       expect(savedStorySchema.shape.seenAt.safeParse(seenAt).success).toBe(true);
     }
     expect(savedStorySchema.shape.seenAt.safeParse(123).success).toBe(false);
+  });
+});
+
+/**
+ * The cover does two jobs: it is the picture on the card, and it is the style
+ * reference attached to every picture drawn afterwards.
+ */
+describe("the cover is a montage", () => {
+  it("asks for several moments, each described on its own", () => {
+    // "A montage of the story" produces a blur. The next prompt has to be able
+    // to point at a panel, so each one has to have been described.
+    expect(COVER_MONTAGE).toMatch(/five or six/i);
+    expect(COVER_MONTAGE).toMatch(/each moment on its own/i);
+    expect(COVER_MONTAGE).toMatch(/where it sits/i);
+  });
+
+  it("asks for the places, not only the people", () => {
+    // The whole point for consistency: the shop and the era have to be in the
+    // reference, or later pictures have nothing to match them to.
+    expect(COVER_MONTAGE).toMatch(/places the story visits/i);
+  });
+
+  it("refuses a grid of thumbnails", () => {
+    // One picture in one style, or it is a contact sheet and a bad cover.
+    expect(COVER_MONTAGE).toMatch(/not describe a grid of thumbnails/i);
+    expect(COVER_MONTAGE).toMatch(/one picture, in one style/i);
+  });
+
+  it("does not tell the illustrator to pose anyone", () => {
+    // The same rule COVER_SHOWS_PEOPLE is already held to: "recognisable" is
+    // the minimum that does the job, and "facing the viewer" is a school photo.
+    for (const posed of ["facing the viewer", "clearly visible", "portrait", "posed", "camera"]) {
+      expect(COVER_MONTAGE.toLowerCase()).not.toContain(posed);
+    }
+  });
+
+  it("is drawn in the frame that is exactly the patch budget", () => {
+    // 1536x1024 is 48x32 = 1,536 patches, the largest an input image gets
+    // before it is downscaled. The cover is attached to every later picture,
+    // so this is the one frame where wider buys real detail rather than
+    // spreading the same budget thinner.
+    expect(COVER_SIZE).toBe("1536x1024");
+    expect(PAGE_SIZE).toBe("1024x1024");
+    const [w, h] = COVER_SIZE.split("x").map(Number);
+    expect((w / 32) * (h / 32)).toBe(1536);
   });
 });

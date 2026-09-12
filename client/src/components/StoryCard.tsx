@@ -91,7 +91,7 @@ export default function StoryCard({
                 src={imageUrl}
                 alt=""
                 loading="lazy"
-                className="h-20 w-20 shrink-0 rounded-md object-cover"
+                className="h-16 w-24 shrink-0 rounded-md object-cover sm:h-20 sm:w-[7.5rem]"
               />
             )}
 

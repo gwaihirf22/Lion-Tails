@@ -46,6 +46,20 @@ export type BiblicalEvent = {
   label: string;
   /** Where the account is, for the model and for the reader. */
   passage: string;
+  /**
+   * WHEN AND WHERE THIS LOOKS LIKE, for the illustrator.
+   *
+   * `passage` is chapter-and-verse and tells a picture nothing -- "a scene from
+   * Joseph in Egypt (Genesis 37; 39-45; 50)" is an instruction to draw a
+   * reference, not a place. A hero of faith has carried `timePeriod` and
+   * `place` all along; a biblical event had nowhere to say it, so the
+   * illustrator was never told what century it was and drew whatever it liked.
+   *
+   * Written for someone holding a pencil: the period, the place, and the
+   * material culture that makes it recognisable -- what things are built from
+   * and what people wear. Not a history lesson, and never a date on its own.
+   */
+  era: string;
   /** What happens, in order, with real names. ~150-200 words. */
   anchor: string;
   /** Verbatim scripture. See the note on translation above. */
@@ -58,6 +72,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   creation: {
     label: "Creation",
     passage: "Genesis 1-2",
+    era:
+      "the world at its beginning; nothing built, nothing woven, nothing worn",
     anchor:
       "God creates the heavens and the earth. Day one: light, separated from darkness. Day two: an expanse -- the sky -- separating the waters. Day three: dry land and seas, then plants and trees bearing seed. Day four: the sun, the moon and the stars, to mark seasons and days. Day five: creatures of the sea and birds of the air. Day six: land animals, and then humankind, male and female, made in God's own image and given care over the rest. God sees that it is very good. On the seventh day God rests and blesses that day. Genesis 2 tells it again from close up: God forms the man from the dust of the ground and breathes life into him, plants a garden in Eden with a river running through it, puts the man there to work it and keep it, brings the animals to him to be named, and makes the woman from his side so he is not alone.",
     keyVerse: {
@@ -75,6 +91,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   noah: {
     label: "Noah's Ark",
     passage: "Genesis 6:9 - 9:17",
+    era:
+      "the ancient world before the flood; hand-cut timber, pitch and rope, no cities",
     anchor:
       "The earth is filled with violence, and God resolves to make an end of it -- but Noah, a righteous man, finds favour. God tells him to build an ark of gopher wood: three decks, rooms inside, a door in its side, covered with pitch inside and out. GOD brings the animals to Noah, two of every kind and seven pairs of every clean kind, and Noah takes his wife, his three sons Shem, Ham and Japheth, and their wives -- eight people in all. The rain falls forty days and forty nights and the waters cover the earth for a hundred and fifty days. The ark comes to rest on the mountains of Ararat. Noah sends out a raven, then a dove; the dove returns with nothing, then a week later with a fresh olive leaf in her beak, and the third time does not return at all. They come out onto dry ground. Noah builds an altar. God promises never again to destroy the earth by flood, and sets the rainbow in the clouds as the sign of that covenant.",
     keyVerse: {
@@ -95,6 +113,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   abraham: {
     label: "Abraham's Journey",
     passage: "Genesis 12; 15; 17; 21; 22",
+    era:
+      "the Bronze Age Near East, around 2000 BC; goat-hair tents, flocks, undyed woollen robes",
     anchor:
       "God tells Abram, then seventy-five and living in Haran, to leave his country and his father's house for a land God will show him, promising to make him a great nation. He goes, taking Sarai his wife and Lot his nephew, and comes into Canaan. When their herdsmen quarrel, Abram lets Lot choose first and Lot takes the well-watered Jordan plain. God brings Abram outside at night and tells him to count the stars -- so shall his offspring be -- and Abram believes God, and it is credited to him as righteousness. God renames them Abraham and Sarah and promises a son through Sarah, who laughs, being ninety. Isaac is born when Abraham is a hundred; his name means laughter. Later God tests Abraham, telling him to take Isaac to a mountain in Moriah. Abraham goes; Isaac carries the wood and asks where the lamb is; and as Abraham raises the knife the angel of the LORD calls from heaven and stops him. Abraham sees a ram caught by its horns in a thicket and offers it instead.",
     keyVerse: {
@@ -112,6 +132,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   joseph: {
     label: "Joseph in Egypt",
     passage: "Genesis 37; 39-45; 50",
+    era:
+      "Egypt of the Middle Kingdom, around 1800 BC; white linen, mud-brick and painted stone, the Nile",
     anchor:
       "Jacob loves Joseph more than his other sons and gives him a richly ornamented coat. Joseph dreams of his brothers' sheaves bowing to his, and of the sun, moon and eleven stars bowing down, and tells them -- and they hate him for it. When he comes to them in the fields they strip off the coat and throw him into a dry cistern; Reuben means to rescue him and Judah proposes selling him, and traders take him down to Egypt, where Potiphar buys him. Falsely accused by Potiphar's wife, he is put in prison, and there he interprets the dreams of Pharaoh's cupbearer and baker. Two years later he is brought out to interpret Pharaoh's dreams: seven fat cows and seven thin, seven good heads of grain and seven withered -- seven years of plenty, then seven of famine. Pharaoh puts him over all Egypt. His brothers come to buy grain and do not recognise him. He tests them, hides his silver cup in Benjamin's sack, and finally weeps aloud and tells them who he is, and that what they meant for evil, God meant for good.",
     keyVerse: {
@@ -129,6 +151,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   moses: {
     label: "Moses and the Exodus",
     passage: "Exodus 1-15",
+    era:
+      "Egypt and the Sinai desert, around 1300 BC; linen and leather, mud-brick, desert tents",
     anchor:
       "Pharaoh orders every Hebrew baby boy thrown into the Nile. Moses' mother hides him three months, then sets him in a papyrus basket among the reeds; his sister Miriam watches, and when Pharaoh's daughter draws him out Miriam fetches his own mother to nurse him. Grown, Moses kills an Egyptian beating a Hebrew and flees to Midian, where he marries Zipporah and keeps the flocks of Jethro. God speaks to him from a bush that burns without being consumed, gives his name -- I AM -- and sends him back with his brother Aaron to tell Pharaoh to let the people go. Pharaoh refuses through ten plagues: blood, frogs, gnats, flies, livestock, boils, hail, locusts, darkness, and the death of the firstborn. Israel keeps the Passover, marking the doorposts with the blood of a lamb, and that night they leave. Pharaoh pursues them to the sea. Moses stretches out his hand, a strong east wind drives the water back all night, and Israel crosses on dry ground; the waters return over the Egyptians behind them.",
     keyVerse: {
@@ -147,6 +171,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   joshua: {
     label: "Joshua and the Battle of Jericho",
     passage: "Joshua 2; 6",
+    era:
+      "Canaan around 1300 BC; walled towns of mud-brick on stone, bronze arms, woollen tunics",
     anchor:
       "After Moses dies, Joshua leads Israel across the Jordan into Canaan. Jericho is shut up tight against them, its gates barred. Two spies sent ahead are hidden by Rahab on her roof under stalks of flax; she asks that her household be spared, and they tell her to tie a scarlet cord in her window. God gives Joshua the plan, and it is not a plan of assault: the fighting men, with seven priests carrying seven trumpets of rams' horns ahead of the ark of the covenant, are to march around the city once a day for six days, in silence, no word out of anyone's mouth. On the seventh day they march around seven times, and at the seventh circuit the priests sound a long blast, Joshua tells the people to shout, and they shout a great shout. The wall falls down flat, and they go up into the city, every man straight ahead of him. Rahab and everyone in her house are brought out safely.",
     keyVerse: {
@@ -165,6 +191,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   davidGoliath: {
     label: "David and Goliath",
     passage: "1 Samuel 17",
+    era:
+      "Israel around 1000 BC; shepherds in undyed wool, bronze and iron arms, dry hill country",
     anchor:
       "The Philistines and Israel camp on opposite hills with the Valley of Elah between them. Goliath of Gath, a champion over nine feet tall in a bronze helmet and coat of scale armour, with a spear whose shaft is like a weaver's beam, comes out morning and evening for forty days to challenge any Israelite to fight him. Jesse sends his youngest son David with bread and cheese for his three eldest brothers, Eliab, Abinadab and Shammah. David hears the challenge and asks who this man is to defy the armies of the living God, and volunteers. Saul says he is only a boy; David answers that he has killed a lion and a bear that came after his father's sheep. Saul dresses him in his own armour and David takes it off -- he cannot walk in it. He goes down with his staff, chooses five smooth stones from the brook, and comes with his sling. Goliath despises him. David says he comes in the name of the LORD of Armies. The stone sinks into Goliath's forehead and he falls face down, and the Philistines run.",
     keyVerse: {
@@ -182,6 +210,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   daniel: {
     label: "Daniel in the Lions' Den",
     passage: "Daniel 6",
+    era:
+      "the Persian empire at Babylon, around 540 BC; glazed brick, layered robes, lamplight",
     anchor:
       "Under Darius the Mede, Daniel is one of three administrators set over a hundred and twenty satraps, and he does his work so well that the king plans to put him over the whole kingdom. The other officials, jealous, can find no fault in him at all, and conclude that the only charge they will ever get is about the law of his God. They flatter the king into signing a decree -- irrevocable, under the law of the Medes and Persians -- that for thirty days anyone who prays to any god or man except the king be thrown into the den of lions. Daniel goes home, opens the upstairs windows that face Jerusalem, and kneels and prays three times a day, as he has always done. They catch him at it and bring the charge. The king is distressed and works until sunset to save him, but cannot undo his own law, and Daniel is thrown in; a stone is laid over the mouth of the den and sealed. The king fasts all night and cannot sleep. At first light he calls out, and Daniel answers: God sent his angel and shut the lions' mouths.",
     keyVerse: {
@@ -200,6 +230,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   jonah: {
     label: "Jonah and the Great Fish",
     passage: "Jonah 1-4",
+    era:
+      "the Assyrian Near East around 780 BC; a working seaport, a small wooden sailing ship, a vast walled city",
     anchor:
       "God tells Jonah to go to Nineveh, a great and wicked city, and preach against it. Jonah goes the opposite way, down to Joppa, and pays his fare onto a ship bound for Tarshish. God sends a violent storm; the sailors throw the cargo overboard and each cries to his own god while Jonah sleeps below. They cast lots and the lot falls on Jonah, who tells them to throw him into the sea -- and when they finally do, the sea grows calm. God appoints a great fish to swallow him, and he is in it three days and three nights, and prays from inside it. The fish spits him out onto dry land. He goes to Nineveh and cries that in forty days it will be overthrown, and the whole city believes God, from the king on his throne down, and fasts, and God relents. This makes Jonah furious. He sits down east of the city to sulk; God grows a plant to shade him and then sends a worm to wither it; and the book ends with God asking Jonah whether he should not have pity on a city of a hundred and twenty thousand people who do not know their right hand from their left.",
     keyVerse: {
@@ -217,6 +249,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   nativity: {
     label: "The Nativity of Jesus",
     passage: "Luke 1-2; Matthew 1-2",
+    era:
+      "Roman-occupied Judea, about 4 BC; homespun wool, stone and mud-brick houses, oil lamps",
     anchor:
       "The angel Gabriel comes to Mary in Nazareth and tells her she will bear a son and call him Jesus. Joseph, told in a dream not to be afraid to take her as his wife, does so. A census ordered by Caesar Augustus sends them to Bethlehem, Joseph's ancestral town. There is no room for them in the guest room, so when the child is born Mary wraps him in cloths and lays him in a manger. That night an angel appears to shepherds keeping watch over their flocks nearby, and a great company of the heavenly host appears with him praising God; the shepherds hurry off and find Mary and Joseph and the baby, and afterwards tell everyone what they were told. He is presented at the temple, where old Simeon takes him in his arms and Anna the prophetess gives thanks. Later, Magi from the east follow a star to Jerusalem and then to Bethlehem, and coming into the HOUSE they bow down and give gold, frankincense and myrrh. Warned in a dream, they go home another way, and Joseph takes his family to Egypt to escape Herod.",
     keyVerse: {
@@ -235,6 +269,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   miracles: {
     label: "Jesus' Miracles",
     passage: "Mark 4:35-41 and parallels",
+    era:
+      "first-century Galilee; wooden fishing boats, dusty roads, tunics and cloaks",
     anchor:
       "Choose ONE recorded miracle and tell that one properly rather than gesturing at miracles in general. At a wedding in Cana the wine runs out and Jesus turns six stone water jars into wine, the best kept till last (John 2). Four friends dig through a roof to lower a paralysed man to him, and he forgives the man's sins and tells him to pick up his mat and walk (Mark 2). Crossing the Sea of Galilee a squall nearly swamps the boat while Jesus sleeps on a cushion in the stern; the disciples wake him and he rebukes the wind and says to the sea, Peace, be still (Mark 4). Five thousand are fed from five loaves and two fish a boy brings, and twelve baskets of scraps are gathered afterwards (all four Gospels). He walks on the water, and Peter walks a few steps and sinks (Matthew 14). Blind Bartimaeus shouts for him outside Jericho and will not be quieted (Mark 10). He raises Jairus' daughter, the widow's son at Nain, and Lazarus after four days in the tomb (Mark 5; Luke 7; John 11).",
     keyVerse: {
@@ -251,6 +287,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   parables: {
     label: "Jesus' Parables",
     passage: "Luke 15:11-32 and others",
+    era:
+      "first-century Judea and Galilee; farms, vineyards, flat-roofed village houses",
     anchor:
       "A parable is a short invented story Jesus told to make one thing land -- so a retelling may reset the scene, but it must keep the parable's own point. The prodigal son: a younger son asks for his inheritance early, wastes it in a distant country, ends up feeding pigs and hungry enough to envy them, comes to his senses and starts home rehearsing an apology -- and while he is still a long way off his father sees him, RUNS to him, throws his arms around him, and calls for the best robe, a ring, sandals and a feast. The older brother stands outside, angry, and the father goes out to him too. Others to draw on: the good Samaritan, where a priest and a Levite pass by on the other side and the despised Samaritan stops (Luke 10); the lost sheep and the lost coin (Luke 15); the sower and the four soils (Mark 4); the mustard seed; the unforgiving servant (Matthew 18); the talents (Matthew 25); the wise and foolish builders (Matthew 7).",
     keyVerse: {
@@ -268,6 +306,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   crucifixion: {
     label: "The Crucifixion",
     passage: "Luke 22-23; Matthew 26-27; John 18-19",
+    era:
+      "first-century Jerusalem under Rome; stone streets, Roman armour, homespun cloaks",
     anchor:
       "After the last supper and prayer in Gethsemane, Judas brings soldiers and betrays Jesus with a kiss. He is tried before the high priest and then before Pilate, who says he finds no basis for a charge, but gives way to the crowd and releases Barabbas instead. Soldiers mock him and press a crown of thorns onto his head. On the way to Golgotha, Simon of Cyrene is made to carry the cross. He is crucified between two criminals, and when one of them asks to be remembered, Jesus tells him that today he will be with him in paradise. The sign above him reads that he is the King of the Jews. He asks his Father to forgive them, because they do not know what they are doing. He sees his mother standing there with the disciple he loved, and gives them to each other. Darkness comes over the land, and the curtain of the temple tears in two from top to bottom. Joseph of Arimathea asks for the body and lays it in a new tomb cut from rock, and a stone is rolled across the entrance.",
     keyVerse: {
@@ -286,6 +326,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   resurrection: {
     label: "The Resurrection",
     passage: "Matthew 28; Mark 16; Luke 24; John 20-21",
+    era:
+      "first-century Jerusalem at dawn; a rock-cut tomb, a walled garden, homespun cloaks",
     anchor:
       "Very early on the first day of the week, while it is still dark, women come to the tomb with spices, wondering who will roll the stone away for them. There is an earthquake; an angel of the Lord comes down and rolls back the stone and sits on it, and the guards shake and become like dead men. The tomb is empty, and the angel says he is not here, for he has risen, just as he said -- come and see the place where he lay -- and go and tell his disciples. Mary Magdalene stands outside the tomb crying and takes him for the gardener until he says her name, Mary. Peter and John run to the tomb; John gets there first and Peter goes in, and they find the linen wrappings lying there and the cloth from his head folded up by itself. That same day two disciples walking to Emmaus talk with him for miles without knowing him, and recognise him when he breaks the bread. He stands among the disciples and shows them his hands and his side; Thomas, absent the first time, says he will not believe until he touches, and a week later Jesus offers him exactly that, and Thomas answers, My Lord and my God.",
     keyVerse: {
@@ -303,6 +345,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   pentecost: {
     label: "The Day of Pentecost",
     passage: "Acts 2",
+    era:
+      "first-century Jerusalem crowded for the festival; stone streets, the dress of many nations",
     anchor:
       "The believers, about a hundred and twenty of them, are all together in one place in Jerusalem for the feast of Pentecost. Suddenly a sound like a rushing violent wind fills the whole house, and what look like tongues of fire separate and come to rest on each of them, and they are all filled with the Holy Spirit and begin to speak in other languages as the Spirit gives them utterance. The city is full of pilgrims from every nation under heaven -- Parthians, Medes, Elamites, people from Mesopotamia, Egypt, Rome, Crete and Arabia -- and each of them hears these Galileans speaking his own language, and they are astonished and perplexed. Some sneer that the believers have had too much new wine. Peter stands up with the eleven and answers: it is only nine in the morning; this is what the prophet Joel spoke of. He preaches Jesus, crucified and raised, and the hearers are cut to the heart and ask what they should do. Peter tells them to repent and be baptised, and about three thousand are added that day.",
     keyVerse: {
@@ -320,6 +364,8 @@ export const BIBLICAL_EVENTS: Record<string, BiblicalEvent> = {
   paul: {
     label: "Paul's Missionary Journeys",
     passage: "Acts 9; 13-28",
+    era:
+      "the first-century Roman Mediterranean; paved roads, sailing ships, colonnaded cities",
     anchor:
       "Saul of Tarsus, a Pharisee, stands by approving as Stephen is stoned, and goes house to house dragging believers off to prison. On the road to Damascus a light from heaven flashes around him; he falls to the ground and hears a voice: Saul, Saul, why do you persecute me? He is blind for three days until Ananias, sent against his own better judgement, lays hands on him -- and he is baptised and starts preaching in the synagogues that Jesus is the Son of God. Barnabas vouches for him when the disciples are still afraid of him. From the church at Antioch the Holy Spirit sets apart Barnabas and Saul, and they sail for Cyprus and then travel through Asia Minor; at Lystra Paul is stoned and dragged out of the city and left for dead. On the second journey, with Silas, a vision of a man of Macedonia takes them into Europe: Lydia the cloth-dealer believes at Philippi, and an earthquake opens the prison there; at Athens he speaks in the Areopagus about the altar to an unknown god. Arrested in Jerusalem, he appeals to Caesar, is shipwrecked at Malta, and reaches Rome under guard, still preaching.",
     keyVerse: {
