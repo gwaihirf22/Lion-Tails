@@ -32,9 +32,24 @@ import type { SavedStory } from "@shared/schema";
  *    including the names in it, and how long the link lasts. Create.
  * 3. SHARED -- the link, the phone's own share sheet, copy, and STOP, which
  *    needs nothing: making something private again is never gated.
+ *
+ * CONTROLLED, and it renders no trigger of its own. Two places open it -- the
+ * reader's action row and a card in My Stories -- and the second one cannot
+ * use a trigger that lives in here: StoryCard navigates on click, so its
+ * dialog has to be a SIBLING of the card while its button sits inside it.
+ * One dialog, two buttons, rather than a copy of this per place.
  */
-export function ShareStoryDialog({ storyId, title }: { storyId: string; title: string }) {
-  const [open, setOpen] = useState(false);
+export function ShareStoryDialog({
+  storyId,
+  title,
+  open,
+  onOpenChange,
+}: {
+  storyId: string;
+  title: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const [confirmStop, setConfirmStop] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { isActive: parentMode } = useParentMode();
@@ -118,120 +133,114 @@ export function ShareStoryDialog({ storyId, title }: { storyId: string; title: s
       : null;
 
   return (
-    <>
-      <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={() => setOpen(true)}>
-        <Share2 className="h-3.5 w-3.5" aria-hidden="true" /> Share
-      </Button>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (!o) setConfirmStop(false);
+      }}
+    >
+      <DialogContent className="top-[4vh] max-h-[92dvh] max-w-md translate-y-0 overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Share this story</DialogTitle>
+          <DialogDescription>
+            A link anyone can open to read &ldquo;{title}&rdquo; — no account needed.
+          </DialogDescription>
+        </DialogHeader>
 
-      <Dialog
-        open={open}
-        onOpenChange={(o) => {
-          setOpen(o);
-          if (!o) setConfirmStop(false);
-        }}
-      >
-        <DialogContent className="top-[4vh] max-h-[92dvh] max-w-md translate-y-0 overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Share this story</DialogTitle>
-            <DialogDescription>
-              A link anyone can open to read &ldquo;{title}&rdquo; — no account needed.
-            </DialogDescription>
-          </DialogHeader>
-
-          {isLoading ? (
-            <div className="flex justify-center py-6">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-label="Loading" />
+        {isLoading ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-label="Loading" />
+          </div>
+        ) : token ? (
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Input
+                ref={inputRef}
+                readOnly
+                value={url}
+                aria-label="Share link"
+                onFocus={(e) => e.currentTarget.select()}
+                className="min-w-0 text-xs"
+              />
             </div>
-          ) : token ? (
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <Input
-                  ref={inputRef}
-                  readOnly
-                  value={url}
-                  aria-label="Share link"
-                  onFocus={(e) => e.currentTarget.select()}
-                  className="min-w-0 text-xs"
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {canNativeShare && (
-                  <Button type="button" size="sm" onClick={nativeShare}>
-                    <Share2 className="mr-1 h-4 w-4" aria-hidden="true" /> Share…
-                  </Button>
-                )}
-                <Button type="button" size="sm" variant={canNativeShare ? "outline" : "default"} onClick={copy}>
-                  <Copy className="mr-1 h-4 w-4" aria-hidden="true" /> Copy link
+            <div className="flex flex-wrap gap-2">
+              {canNativeShare && (
+                <Button type="button" size="sm" onClick={nativeShare}>
+                  <Share2 className="mr-1 h-4 w-4" aria-hidden="true" /> Share…
                 </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Anyone with this link can read the story, including the names in it.
-                {keptUntil && ` It works until ${keptUntil}, when the story is due to be cleared — favourite it to keep it for good.`}
-              </p>
-
-              {/* Stopping is never gated, and asks once. */}
-              <div className="border-t pt-3">
-                {confirmStop ? (
-                  <div className="space-y-2">
-                    <p className="text-sm">
-                      Stop sharing? The link stops working straight away. If you share
-                      again later, it will be a new link.
-                    </p>
-                    <div className="flex gap-2">
-                      <Button type="button" size="sm" variant="outline" onClick={() => setConfirmStop(false)}>
-                        Keep sharing
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="destructive"
-                        disabled={stop.isPending}
-                        onClick={() => stop.mutate()}
-                      >
-                        {stop.isPending ? "Stopping…" : "Stop sharing"}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <Button type="button" size="sm" variant="ghost" className="px-0 text-destructive" onClick={() => setConfirmStop(true)}>
-                    Stop sharing
-                  </Button>
-                )}
-              </div>
-            </div>
-          ) : parentMode ? (
-            <div className="space-y-3">
-              <ul className="list-disc space-y-1 pl-5 text-sm">
-                <li>Anyone you send the link to can read this story, without an account.</li>
-                <li>They will see the names in it. Nothing else about you or your characters is shared.</li>
-                <li>You can stop sharing at any time, and the link stops working straight away.</li>
-                {keptUntil && (
-                  <li>
-                    The link lasts as long as the story, which is kept until {keptUntil}.
-                    Favourite it to keep both for good.
-                  </li>
-                )}
-              </ul>
-              <Button type="button" onClick={() => create.mutate()} disabled={create.isPending}>
-                {create.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Link2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                )}
-                Create link
+              )}
+              <Button type="button" size="sm" variant={canNativeShare ? "outline" : "default"} onClick={copy}>
+                <Copy className="mr-1 h-4 w-4" aria-hidden="true" /> Copy link
               </Button>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm">
-                Making a link needs a grown-up. Turn on Parent Mode, then come back here.
-              </p>
-              <ParentModeToggle />
+            <p className="text-xs text-muted-foreground">
+              Anyone with this link can read the story, including the names in it.
+              {keptUntil && ` It works until ${keptUntil}, when the story is due to be cleared — favourite it to keep it for good.`}
+            </p>
+
+            {/* Stopping is never gated, and asks once. */}
+            <div className="border-t pt-3">
+              {confirmStop ? (
+                <div className="space-y-2">
+                  <p className="text-sm">
+                    Stop sharing? The link stops working straight away. If you share
+                    again later, it will be a new link.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" variant="outline" onClick={() => setConfirmStop(false)}>
+                      Keep sharing
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      disabled={stop.isPending}
+                      onClick={() => stop.mutate()}
+                    >
+                      {stop.isPending ? "Stopping…" : "Stop sharing"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button type="button" size="sm" variant="ghost" className="px-0 text-destructive" onClick={() => setConfirmStop(true)}>
+                  Stop sharing
+                </Button>
+              )}
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
+          </div>
+        ) : parentMode ? (
+          <div className="space-y-3">
+            <ul className="list-disc space-y-1 pl-5 text-sm">
+              <li>Anyone you send the link to can read this story, without an account.</li>
+              <li>They will see the names in it. Nothing else about you or your characters is shared.</li>
+              <li>You can stop sharing at any time, and the link stops working straight away.</li>
+              {keptUntil && (
+                <li>
+                  The link lasts as long as the story, which is kept until {keptUntil}.
+                  Favourite it to keep both for good.
+                </li>
+              )}
+            </ul>
+            <Button type="button" onClick={() => create.mutate()} disabled={create.isPending}>
+              {create.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Link2 className="mr-2 h-4 w-4" aria-hidden="true" />
+              )}
+              Create link
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm">
+              Making a link needs a grown-up. Turn on Parent Mode, then come back here.
+            </p>
+            <ParentModeToggle />
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

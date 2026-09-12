@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
+import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ShareStoryDialog } from "@/components/ShareStoryDialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -60,6 +62,7 @@ export default function StoryCard({
   const [, navigate] = useLocation();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const href = `/story?id=${story.id}`;
   const imageUrl = story.story.imageUrl;
@@ -77,7 +80,12 @@ export default function StoryCard({
         onClick={open}
       >
         <CardContent className="p-5">
-          <div className="flex items-start gap-4">
+          {/* WRAPS. Thumbnail + title + icons do not share a 390px line: with
+              three icons the title column fell to 82px, a few characters of a
+              text-xl title. The text column may not shrink below 11rem, so on
+              a phone the icons drop to their own row instead and the title
+              keeps its width. Unchanged from sm up, where it all fits. */}
+          <div className="flex flex-wrap items-start gap-4">
             {imageUrl && (
               <img
                 src={imageUrl}
@@ -87,7 +95,7 @@ export default function StoryCard({
               />
             )}
 
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-[1_1_11rem]">
               {story.builtIn && (
                 <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {QUEST_SERIES_TITLE}
@@ -132,12 +140,16 @@ export default function StoryCard({
               )}
             </div>
 
+            {/* h-8 w-8 p-0 on every icon here: the stock small button carries
+                12px of side padding it does not need for a lone icon, and with
+                three of them a 390px card's title column fell from 102px to
+                58px -- titles that fitted before were clipped. */}
             {!story.builtIn && (
-              <div className="flex shrink-0 gap-1">
+              <div className="ml-auto flex shrink-0 gap-1">
                 <Button
                   size="sm"
                   variant="ghost"
-                  className={story.isFavorite ? "text-warning hover:text-warning" : "text-muted-foreground hover:text-warning"}
+                  className={`h-8 w-8 p-0 ${story.isFavorite ? "text-warning hover:text-warning" : "text-muted-foreground hover:text-warning"}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onToggleFavorite(story.id, !story.isFavorite);
@@ -148,11 +160,27 @@ export default function StoryCard({
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                 </Button>
+                {/* Lucide, not an inline svg like this row's other icons: it is
+                    the same action as the reader's Share button and should be
+                    the same glyph. stopPropagation, or the card opens the story
+                    underneath the tap. */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0 text-muted-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShareOpen(true);
+                  }}
+                  title="Share this story"
+                >
+                  <Share2 className="h-[18px] w-[18px]" aria-hidden="true" />
+                </Button>
                 {onRemoveFromUniverse && (
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="text-muted-foreground"
+                    className="h-8 w-8 p-0 text-muted-foreground"
                     onClick={(e) => {
                       e.stopPropagation();
                       setConfirmRemove(true);
@@ -167,7 +195,7 @@ export default function StoryCard({
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="text-destructive hover:text-destructive"
+                  className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                   onClick={(e) => {
                     e.stopPropagation();
                     setConfirmDelete(true);
@@ -210,6 +238,19 @@ export default function StoryCard({
           )}
         </CardContent>
       </Card>
+
+      {/* OUTSIDE the card, like the two dialogs below and for the same reason:
+          the card navigates on click, and React events follow the React tree,
+          so every button and the overlay inside a dialog nested in <Card
+          onClick> would open the story. */}
+      {!story.builtIn && (
+        <ShareStoryDialog
+          storyId={story.id}
+          title={story.story.title}
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+        />
+      )}
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>

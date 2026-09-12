@@ -7,6 +7,7 @@ import { apiRequestAllowingErrors, queryClient } from "@/lib/queryClient";
 import { splitAppendices } from "@shared/storyAppendices";
 import { EDITED_BY_PARENT, lastEditedAt, type EditLogEntry } from "@shared/editLog";
 import { ShareStoryDialog } from "@/components/ShareStoryDialog";
+import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
@@ -70,6 +71,9 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
   const canEdit = Boolean(storyId) && !builtIn && parentMode;
   const [busy, setBusy] = useState(false);
   const [showExpiryAlert, setShowExpiryAlert] = useState(true);
+  // The share dialog is controlled from here now, because StoryCard opens the
+  // same dialog from a button it has to own itself. See ShareStoryDialog.
+  const [shareOpen, setShareOpen] = useState(false);
   const { toast } = useToast();
   const focus = useFocusMode();
   const { prefs } = useReadingPrefs();
@@ -332,7 +336,11 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
           </Button>
         )}
-        {storyId && !builtIn && !shared && <ShareStoryDialog storyId={storyId} title={story.title} />}
+        {storyId && !builtIn && !shared && (
+          <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={() => setShareOpen(true)}>
+            <Share2 className="h-3.5 w-3.5" aria-hidden="true" /> Share
+          </Button>
+        )}
         <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={handlePrint}>
           <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print
         </Button>
@@ -405,6 +413,15 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
             </div>
           </div>
         </div>
+      )}
+
+      {storyId && !builtIn && !shared && (
+        <ShareStoryDialog
+          storyId={storyId}
+          title={story.title}
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+        />
       )}
 
       {showExpiryAlert && storyId && !isFavorite && !builtIn && (
