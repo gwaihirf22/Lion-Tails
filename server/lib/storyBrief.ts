@@ -32,7 +32,7 @@ import {
   worldCanon,
   questFamiliarity,
 } from "../data/lionTails";
-import { CROSSING_OVER_DRESS } from "../data/referencePlates";
+import { CROSSING_OVER_DRESS, STONE_IN_PICTURES } from "../data/referencePlates";
 
 export type CustomPrompts = {
   systemPrompt?: string;
@@ -1608,6 +1608,10 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
      * prose canon says the same thing so the story and the picture agree.
      */
     const dress = brief.world && brief.sourceMaterial?.era ? ` ${CROSSING_OVER_DRESS}` : "";
+    // The stone rides in the pocket, in every quest picture -- the modern
+    // opening included, which is why this is gated on world alone and not,
+    // like the dress, on there being an era to dress for. See referencePlates.
+    const stone = brief.world ? ` ${STONE_IN_PICTURES}` : "";
 
     // With no lead there is no one face to build the frame around, so the
     // subject is the group -- but the cap does not move: a picture with
@@ -1615,13 +1619,16 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     if (brief.ensemble) {
       const who = `${everyone}${brief.sourceMaterial ? ` -- a scene from ${brief.sourceMaterial.label}` : ""}.`;
       return (
-        `${who}${era}${dress} ${brief.cast.map((c) => c.identity).join(" ")} ` +
+        `${who}${era}${dress}${stone} ${brief.cast.map((c) => c.identity).join(" ")} ` +
         `Draw at most three of them -- a picture with everyone in it is a crowd, not a scene.`
       );
     }
+    // The stone rides even with no source to be a scene from: world alone is
+    // the fact "this is a quest", and a quest picture with nothing to dress
+    // for still has a traveller with a pocket.
     const base = brief.sourceMaterial
-      ? `${lead.identity} -- a scene from ${brief.sourceMaterial.label}.${era}${dress}`
-      : lead.identity;
+      ? `${lead.identity} -- a scene from ${brief.sourceMaterial.label}.${era}${dress}${stone}`
+      : `${lead.identity}${stone}`;
     if (others.length === 0) return base;
     // Naming everyone would put eight children in one frame. An illustration
     // is a moment, and a moment has two or three people in it.

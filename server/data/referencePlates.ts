@@ -57,6 +57,30 @@ export const CROSSING_OVER_DRESS =
   " someone of that age would wear there, as though it had always been so. Nobody remarks on it" +
   " and nobody explains it.";
 
+/**
+ * THE STONE IS IN A POCKET, and it is small. FOR PICTURES ONLY.
+ *
+ * The prose already has this right: DEVICE.rules says the lantern "closes into
+ * a small smooth stone the traveller keeps in a pocket", and a real quest kept
+ * it there for 2,800 words. The pictures did not. The cover and all three
+ * passage pictures of that same quest drew a fist-sized rock held out on an
+ * open palm -- because the scene-writing model takes its cue from the text's
+ * "holding his smooth stone", and nothing on the picture side ever said what
+ * the stone is like or where it lives. Blake: "the stone in the images needs
+ * to be smaller and be inside the traveller's pocket."
+ *
+ * Image projection only, gated on brief.world. NOT the prose projections:
+ * CROSSING_OVER_DRESS goes to both because the story and the picture must
+ * agree on clothes, but the story has never had this wrong, and a sentence
+ * about not drawing something is noise in a prompt that draws nothing.
+ *
+ * "Vanishes inside a closed hand" rather than a measurement: an image model
+ * does not have a ruler, and it does have hands.
+ */
+export const STONE_IN_PICTURES =
+  "The stone is small -- it vanishes inside a closed hand -- and it stays in the traveller's" +
+  " pocket, out of sight. Never draw it held out, on an open palm, or on display.";
+
 /** What the picture is of, as the model wrote it. All a gate gets to see. */
 export type PlateContext = {
   /** The image prompt for THIS picture -- not the story, not the brief. */

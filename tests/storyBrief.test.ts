@@ -14,7 +14,7 @@ import {
   worldAnchor,
 } from "../server/data/lionTails";
 import { BIBLICAL_EVENTS } from "../server/data/biblicalEvents";
-import { CROSSING_OVER_DRESS } from "../server/data/referencePlates";
+import { CROSSING_OVER_DRESS, STONE_IN_PICTURES } from "../server/data/referencePlates";
 import fs from "fs";
 import { readFileSync, writeFileSync } from "fs";
 import path from "path";
@@ -2280,6 +2280,27 @@ describe("what a traveller is wearing when they arrive", () => {
     // that stops to describe an outfit appearing has explained it.
     expect(CROSSING_OVER_DRESS).toMatch(/nobody explains it/i);
     expect(CROSSING_OVER_DRESS).not.toMatch(/shimmer|transform|magically|glow/i);
+  });
+
+  it("tells every quest picture the stone is small and in a pocket", () => {
+    // Every quest picture, the modern opening included: gated on world alone,
+    // not on there being an era, unlike the dress.
+    expect(renderBrief(questBrief(), "image")).toContain(STONE_IN_PICTURES);
+  });
+
+  it("keeps the stone rule out of the prose, which never had it wrong", () => {
+    expect(renderBrief(questBrief(), "single")).not.toContain(STONE_IN_PICTURES);
+    expect(renderBrief(questBrief(), "chapter")).not.toContain(STONE_IN_PICTURES);
+  });
+
+  it("says nothing about the stone in a picture with no quest in it", () => {
+    expect(renderBrief(alongsideBrief(), "image")).not.toContain(STONE_IN_PICTURES);
+  });
+
+  it("describes the stone by a hand, not a ruler, and forbids the palm", () => {
+    expect(STONE_IN_PICTURES).toMatch(/closed hand/);
+    expect(STONE_IN_PICTURES).toMatch(/pocket/);
+    expect(STONE_IN_PICTURES).toMatch(/open palm/);
   });
 
   it("is one person, not a group", () => {
