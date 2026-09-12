@@ -30,6 +30,8 @@ import {
 import {
   CHARACTER_CATEGORIES,
   categoryOf,
+  GENDERED_KINDS,
+  kindNeedsSex,
   coveringNoun,
   optionsFor,
   popularKinds,
@@ -125,22 +127,32 @@ const formSchema = characterSchema.omit({ id: true, createdAt: true, customField
 export type CharacterFormValues = z.infer<typeof formSchema>;
 
 /**
- * The eight answers that cover most characters, and a door to the other 780.
+ * The seven answers that cover most characters, and a door to everything else.
+ *
+ * The peoples closest to man come first, where the dog, cat and horse used to
+ * be -- Blake: "put the other races closest to man as the top choices instead
+ * of the animals". The animals are one tap away in "Something else…", which
+ * opens on People and Fantasy folk before any of them.
+ *
+ * "Human" replaces Boy and Girl. The gender is its own question now, asked
+ * straight underneath, and characterKind() turns the two back into "girl" or
+ * "man" so the story reads exactly as it did.
  *
  * No alien: Blake, "I don't think we want that anyway."
  */
 const PRESETS: ReadonlyArray<{ kind: string; label: string }> = [
-  { kind: "boy", label: "Boy" },
-  { kind: "girl", label: "Girl" },
-  { kind: "dog", label: "Dog" },
-  { kind: "cat", label: "Cat" },
-  { kind: "horse", label: "Horse" },
+  { kind: "human", label: "Human" },
+  { kind: "elf", label: "Elf" },
+  { kind: "dwarf", label: "Dwarf" },
+  { kind: "hobbit", label: "Hobbit" },
+  { kind: "wizard", label: "Wizard" },
   { kind: "dragon", label: "Dragon" },
   { kind: "robot", label: "Robot" },
 ];
 
 const CATEGORY_LABELS: Record<CharacterCategory, string> = {
   human: "People",
+  folk: "Fantasy folk",
   mammal: "Animals",
   bird: "Birds",
   reptile: "Reptiles and dinosaurs",
@@ -319,6 +331,14 @@ export default function CharacterForm({
         form.setValue(f, undefined, { shouldDirty: true });
       }
     }
+    // The same rule for "it", which only a machine may be. This used to be
+    // missing: a robot set to "it" and then turned into a dog kept the hidden
+    // "it", and the save was refused with nothing on screen to explain why.
+    // He and she survive the change on purpose -- a Human girl becoming an Elf
+    // is still a she.
+    if (form.getValues("sex") === "it" && categoryOf(k) !== "machine") {
+      form.setValue("sex", undefined, { shouldDirty: true });
+    }
     setKindOpen(false);
     setKindSearch("");
   };
@@ -341,6 +361,14 @@ export default function CharacterForm({
   };
 
   const submit = async (values: CharacterFormValues) => {
+    // The server refuses a Human or one of the folk with no he or she -- the
+    // same kindNeedsSex() rule. Caught here as well so it is a message under
+    // the question, on the tab it is on, rather than a toast after a round trip.
+    if (kindNeedsSex(values.kind) && values.sex !== "male" && values.sex !== "female") {
+      form.setError("sex", { message: "Choose he or she." });
+      setTab("basics");
+      return;
+    }
     try {
       await onSubmit(values, isCustom(values));
       // Reset TO THE SUBMITTED VALUES, not to the initial ones: this is what
@@ -872,7 +900,7 @@ export default function CharacterForm({
               name="kind"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>What are they?</FormLabel>
+                  <FormLabel>What kind of character?</FormLabel>
                   <div className="flex flex-wrap gap-2">
                     {PRESETS.map((p) => (
                       <Button
@@ -1007,6 +1035,54 @@ export default function CharacterForm({
                 </FormItem>
               )}
             />
+
+            {/* ---- He or she ----
+                Asked straight under the kind, because it is part of the same
+                answer: "Human" on its own carries no gender, and characterKind()
+                needs the pair to say "girl". It used to sit on the Personality
+                tab and only for machines, so every person and animal had no
+                way to say it at all.
+
+                Not asked for a kind whose word already says it -- a character
+                saved as "girl" keeps working with no question to answer. "It"
+                only for a machine, matching the server's rule. */}
+            {kind && !GENDERED_KINDS.has(kind.trim().toLowerCase()) && (
+              <FormField
+                control={form.control}
+                name="sex"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {category === "machine" ? "He, she or it?" : "He or she?"}
+                    </FormLabel>
+                    <div className="flex flex-wrap gap-2">
+                      {(category === "machine"
+                        ? ([["male", "He"], ["female", "She"], ["it", "It"]] as const)
+                        : ([["male", "He"], ["female", "She"]] as const)
+                      ).map(([value, label]) => (
+                        <Button
+                          key={value}
+                          type="button"
+                          size="sm"
+                          variant={field.value === value ? "default" : "outline"}
+                          aria-pressed={field.value === value}
+                          onClick={() => {
+                            field.onChange(value);
+                            form.clearErrors("sex");
+                          }}
+                        >
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
+                    {!kindNeedsSex(kind) && (
+                      <FormDescription>Optional for an animal or a creature.</FormDescription>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             {/* ---- Name and age ---- */}
             <div className="grid md:grid-cols-2 gap-4">
@@ -1376,29 +1452,6 @@ export default function CharacterForm({
                     )}
                   />
               </div>
-                  {category === "machine" && (
-                    <FormField
-                      control={form.control}
-                      name="sex"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Do we call them he, she, or it?</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                            <FormControl>
-                              <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
-                            </FormControl>
-                            <SelectContent portalled={false}>
-                              <SelectItem value="male">He</SelectItem>
-                              <SelectItem value="female">She</SelectItem>
-                              <SelectItem value="it">It</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-
                   <FormField
                     control={form.control}
                     name="notes"

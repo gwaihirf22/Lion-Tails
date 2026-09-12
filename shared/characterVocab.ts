@@ -32,14 +32,43 @@ import { animalDatabase } from "./animalData";
  * the human default, which is what keeps the golden briefs byte-identical.
  */
 export const CHARACTER_CATEGORIES = [
-  "human", "mammal", "bird", "reptile", "amphibian",
+  "human", "folk", "mammal", "bird", "reptile", "amphibian",
   "fish", "insect", "creature", "mythical", "machine",
 ] as const;
 
 export type CharacterCategory = (typeof CHARACTER_CATEGORIES)[number];
 
+/**
+ * `human` is the one person a child picks; the gender is a separate choice
+ * (`sex`), and characterKind() turns the pair back into "girl" or "man" so the
+ * story still says what it always said.
+ *
+ * The gendered words stay in the catalogue. They are no longer OFFERED -- they
+ * are not in POPULAR or the presets -- but a character saved as "girl" before
+ * this has to stay saveable, and grandmother, grandfather and baby carry more
+ * than a gender, so they are left reachable by search.
+ */
 const HUMAN: readonly string[] = [
-  "boy", "girl", "man", "woman", "grandmother", "grandfather", "baby",
+  "human", "boy", "girl", "man", "woman", "grandmother", "grandfather", "baby",
+];
+
+/**
+ * The peoples closest to man, ahead of every animal because that is what a
+ * child is usually looking for when a person is not quite right.
+ *
+ * Their own category rather than `mythical`, because that one colours a
+ * character in jewel tones with "starlight" eyes: an elf could not have brown
+ * hair. These take the human colour lists and the human name pool.
+ *
+ * Faun and dryad are Lewis's, and are here on purpose; `satyr` and `nymph` are
+ * still refused (see characterVocab.test.ts). In the classical myths the satyrs
+ * are the lecherous ones -- the very line Lewis drew with Mr Tumnus -- and
+ * `dryad` is the gentle tree-spirit without the generic word. Nothing that is a
+ * villain in almost every story it appears in is added: no hag, witch or
+ * werewolf.
+ */
+const FOLK: readonly string[] = [
+  "elf", "dwarf", "hobbit", "wizard", "gnome", "faun", "dryad", "centaur", "minotaur",
 ];
 
 const MAMMAL: readonly string[] = [
@@ -175,7 +204,7 @@ const CREATURE: readonly string[] = [
 
 const MYTHICAL: readonly string[] = [
   "dragon", "leviathan", "behemoth", "unicorn", "pegasus", "phoenix", "griffin", "hippogriff",
-  "wyvern", "minotaur", "centaur", "pixie", "fairy", "brownie", "gnome", "dwarf", "elf",
+  "wyvern", "pixie", "fairy", "brownie", "ent",
   "troll", "ogre", "giant", "cyclops", "mermaid", "roc", "thunderbird",
 ];
 
@@ -207,6 +236,7 @@ const EVERYDAY_INSECT = ["caterpillar"];
 
 export const KINDS_BY_CATEGORY: Record<CharacterCategory, readonly string[]> = {
   human: HUMAN,
+  folk: FOLK,
   mammal: [...MAMMAL, ...EVERYDAY_MAMMAL],
   bird: BIRD,
   reptile: [...REPTILE, ...EVERYDAY_REPTILE],
@@ -233,6 +263,7 @@ for (const [cat, kinds] of Object.entries(KINDS_BY_CATEGORY) as [CharacterCatego
  */
 const COVERING_BY_CATEGORY: Record<CharacterCategory, string> = {
   human: "hair",
+  folk: "hair",
   mammal: "fur",
   bird: "feathers",
   reptile: "scales",
@@ -258,11 +289,15 @@ const COVERING_BY_KIND: Record<string, string> = {
   roc: "feathers", thunderbird: "feathers", mermaid: "hair",
   elf: "hair", dwarf: "hair", gnome: "hair", fairy: "hair", pixie: "hair",
   brownie: "hair", troll: "hair", ogre: "hair", giant: "hair",
+  // A tree. Jewel-tone bark is the one place mythical's palette is exactly right.
+  ent: "bark",
 };
 
 /** Colour words for whatever covers them, per category. */
 const COVERING_COLOURS: Record<CharacterCategory, readonly string[]> = {
   human: ["brown", "black", "blonde", "red", "auburn", "ginger", "white", "grey", "silver"],
+  // The human list, deliberately: an elf or a dwarf has hair a person could have.
+  folk: ["brown", "black", "blonde", "red", "auburn", "ginger", "white", "grey", "silver"],
   mammal: ["brown", "black", "white", "grey", "golden", "cream", "ginger", "chestnut", "spotted", "striped", "patched"],
   bird: ["brown", "black", "white", "grey", "blue", "green", "red", "yellow", "orange", "speckled", "iridescent"],
   reptile: ["green", "brown", "olive", "grey", "black", "yellow", "orange", "banded", "patterned"],
@@ -277,7 +312,7 @@ const COVERING_COLOURS: Record<CharacterCategory, readonly string[]> = {
 /** Eye colours. Living things share a palette; made things get their own. */
 const NATURAL_EYES = ["brown", "blue", "green", "hazel", "grey", "amber", "black", "gold"] as const;
 const EYE_COLOURS: Record<CharacterCategory, readonly string[]> = {
-  human: NATURAL_EYES, mammal: NATURAL_EYES, bird: NATURAL_EYES,
+  human: NATURAL_EYES, folk: NATURAL_EYES, mammal: NATURAL_EYES, bird: NATURAL_EYES,
   reptile: NATURAL_EYES, amphibian: NATURAL_EYES, fish: NATURAL_EYES,
   insect: NATURAL_EYES, creature: NATURAL_EYES,
   mythical: ["gold", "silver", "emerald", "amber", "violet", "crimson", "starlight", "black"],
@@ -354,6 +389,35 @@ export function isKnownKind(kind?: string | null): boolean {
 }
 
 /**
+ * Kinds whose word already says he or she. A pronoun tag after one is noise,
+ * and the form does not ask the question for them.
+ *
+ * One list, read by the brief (sexTag), the form and this file -- the header of
+ * this file is about why a second copy is the bug.
+ */
+export const GENDERED_KINDS: ReadonlySet<string> = new Set([
+  "boy", "girl", "man", "woman", "grandmother", "grandfather",
+]);
+
+/**
+ * Whether a character of this kind MUST say he or she.
+ *
+ * "human" and the folk carry no gender in the word, so without it the story is
+ * back to guessing a pronoun -- which is how a girl ended up called "they".
+ * Animals are left optional: nobody should have to sex a jellyfish, and the
+ * brief falls back to the name. The gendered human words are exempt because
+ * they say it themselves, and a character saved as "girl" has to stay saveable.
+ *
+ * One rule, read by the form before it sends and by vocabularyErrors() after,
+ * so the form can never offer a save the server will refuse.
+ */
+export function kindNeedsSex(kind?: string | null): boolean {
+  const k = kind?.trim().toLowerCase();
+  if (!k) return false;
+  return k === "human" || categoryOf(k) === "folk";
+}
+
+/**
  * The noun for their covering. Defaults to "hair" so a row written before
  * categories existed renders exactly as it always has.
  */
@@ -389,15 +453,37 @@ export function kindsIn(category: CharacterCategory): readonly string[] {
  * searchKinds() reaches the other seven hundred.
  */
 const POPULAR: Record<CharacterCategory, readonly string[]> = {
-  human: ["boy", "girl", "man", "woman", "grandmother", "grandfather", "baby"],
-  mammal: ["dog", "cat", "horse", "rabbit", "lion", "elephant", "bear", "fox", "wolf", "mouse", "monkey", "sheep"],
-  bird: ["owl", "eagle", "robin", "dove", "penguin", "parrot", "duck", "chicken", "peacock", "swan"],
-  reptile: ["dinosaur", "turtle", "tortoise", "snake", "gecko", "chameleon", "crocodile", "lizard"],
+  human: ["human"],
+  folk: ["elf", "dwarf", "hobbit", "wizard", "gnome", "faun", "dryad", "centaur", "minotaur"],
+  mammal: [
+    "dog", "puppy", "cat", "kitten", "horse", "pony", "rabbit", "hamster", "guinea pig", "mouse",
+    "squirrel", "chipmunk", "hedgehog", "fox", "wolf", "bear", "polar bear", "panda", "koala",
+    "deer", "moose", "lion", "tiger", "cheetah", "leopard", "elephant", "giraffe", "zebra",
+    "hippopotamus", "rhinoceros", "kangaroo", "monkey", "gorilla", "sloth", "otter", "beaver",
+    "raccoon", "badger", "bat", "whale", "dolphin", "seal", "sheep", "goat", "cow", "pig",
+    "donkey", "camel", "llama",
+  ],
+  bird: [
+    "owl", "eagle", "robin", "dove", "penguin", "parrot", "duck", "chicken", "hen", "rooster",
+    "peacock", "swan", "goose", "hawk", "falcon", "flamingo", "hummingbird", "toucan", "crow",
+    "raven", "pelican", "woodpecker", "sparrow", "bluebird", "cardinal", "kingfisher", "ostrich",
+  ],
+  reptile: [
+    "dinosaur", "triceratops", "stegosaurus", "tyrannosaurus", "brachiosaurus", "velociraptor",
+    "turtle", "sea turtle", "tortoise", "snake", "gecko", "chameleon", "iguana", "lizard",
+    "crocodile", "alligator", "komodo dragon",
+  ],
   amphibian: ["frog", "tree frog", "toad", "salamander", "newt"],
-  fish: ["goldfish", "salmon", "trout", "clownfish", "shark", "angelfish", "sea horse"],
-  insect: ["butterfly", "bee", "ladybug", "ant", "grasshopper", "dragonfly", "spider", "cricket"],
+  fish: [
+    "goldfish", "clownfish", "angelfish", "sea horse", "shark", "whale shark", "stingray",
+    "manta ray", "pufferfish", "swordfish", "salmon", "trout", "tuna", "catfish",
+  ],
+  insect: [
+    "butterfly", "caterpillar", "moth", "bee", "bumblebee", "ladybug", "firefly", "beetle",
+    "ant", "grasshopper", "cricket", "dragonfly", "praying mantis", "spider",
+  ],
   creature: ["octopus", "crab", "starfish", "jellyfish", "snail", "lobster"],
-  mythical: ["dragon", "unicorn", "griffin", "phoenix", "pegasus", "mermaid", "giant", "elf"],
+  mythical: ["dragon", "unicorn", "griffin", "phoenix", "pegasus", "mermaid", "giant", "ent"],
   machine: ["robot", "android", "clockwork toy", "toy robot", "automaton"],
 };
 
@@ -501,6 +587,20 @@ export function vocabularyErrors(
     errors.push("Only a machine can be an it.");
   }
 
+  // A person has to say which. "Human" carries no gender of its own, and nor
+  // does "elf" -- without this, the new Human button would be worse than the
+  // Girl button it replaced, and the story is back to guessing a pronoun.
+  //
+  // Keyed on `kind` being IN this patch, because this validates the patch and
+  // not the merged character: an edit that does not touch the kind must not be
+  // refused over it. And keyed on "human" and folk EXACTLY, not the human
+  // category -- "girl", "grandmother" and the rest carry their gender in the
+  // word, and a character saved as "girl" before this has to stay saveable.
+  // Animals are not asked: nobody should have to sex a jellyfish.
+  if (kindNeedsSex(patch.kind as string | undefined) && patch.sex !== "male" && patch.sex !== "female") {
+    errors.push("Choose whether this character is a he or a she.");
+  }
+
   return errors;
 }
 
@@ -589,7 +689,7 @@ export const NAME_POOLS = {
  */
 export function randomName(category?: CharacterCategory | null, avoid?: string): string {
   const pool =
-    category === "human" || category === undefined || category === null
+    category === "human" || category === "folk" || category === undefined || category === null
       ? HUMAN_NAMES
       : category === "machine"
         ? MACHINE_NAMES
