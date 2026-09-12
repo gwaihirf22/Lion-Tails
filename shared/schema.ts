@@ -1600,6 +1600,21 @@ export function characterIdsOf(
 }
 
 /**
+ * Does this story have no main character?
+ *
+ * THE FLAG ALONE IS NOT THE ANSWER. It is meaningless with one character --
+ * "nobody is the lead" and "there is one person" cannot both be honoured, and
+ * a request can carry the flag from a cast that was later cut to one. Asking
+ * here rather than reading `noMainCharacter` means the brief, the appended
+ * note and the form cannot disagree about what the story is.
+ */
+export function isEnsemble(
+  request?: Partial<Pick<StoryRequest, "noMainCharacter" | "characterIds" | "characterId">> | null,
+): boolean {
+  return Boolean(request?.noMainCharacter) && characterIdsOf(request).length >= 2;
+}
+
+/**
  * The reading levels, and what each one MEANS in years.
  *
  * The age is the point. Until now `readingLevel` reached the model as a bare
@@ -1800,6 +1815,17 @@ export const storyRequestSchema = z.object({
    * frozen before the cast became plural carries it; nothing new writes it.
    */
   characterId: z.string().optional(),
+  /**
+   * Nobody is the protagonist: the story belongs to the whole cast.
+   *
+   * Blake: "the option when having multiple characters to not have a main
+   * character." Two siblings, and neither of them the star.
+   *
+   * ABSENT MEANS THE OLD SHAPE, so every request frozen before this existed
+   * still means what it meant. Never read directly -- call isEnsemble(), which
+   * also knows the flag is meaningless with fewer than two characters.
+   */
+  noMainCharacter: z.boolean().optional(),
   storyType: z.enum(["regular", "poem", "moral"]).default("regular"),
   customPrompt: z.string().default("").optional(),
   // The shape the story should end in. Previously chosen with Math.random()

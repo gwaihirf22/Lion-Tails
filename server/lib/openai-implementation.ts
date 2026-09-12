@@ -10,6 +10,7 @@ import {
   storyFormFor,
   WORDS_PER_VERSE_LINE,
   type StoryBrief,
+  nameList,
 } from "./storyBrief";
 
 /**
@@ -1122,7 +1123,19 @@ async function runGeneration(
     const role = characterRoleOf(request);
     const account = ctx.brief.sourceMaterial;
     if (role !== "absent" && account && !finalDetails.content.includes(MEETING_NOTE_HEADING)) {
-      const who = ctx.brief.cast[0]?.name;
+      /**
+       * EVERY invented character, not just the first.
+       *
+       * With no main character the cast shares the story, so naming one of
+       * them would leave a reader thinking the others were in the account --
+       * which is the precise belief this note exists to prevent.
+       */
+      const inventedNames = ctx.brief.ensemble
+        ? ctx.brief.cast.map((c) => c.name).filter(Boolean)
+        : [ctx.brief.cast[0]?.name].filter(Boolean);
+      const who = nameList(inventedNames as string[]);
+      const many = inventedNames.length > 1;
+      const them = many ? "them" : who;
       /**
        * Asked as "not absent" rather than by naming the modes, so a mode added
        * later carries the note without anyone remembering to widen this. The
@@ -1141,8 +1154,8 @@ async function runGeneration(
        */
       const invented =
         role === "travels"
-          ? ` ${who} was added so it could be told as a quest -- ${KEEPER.name}, ${KEEPER.title}, ${DEVICE.name}, the journey and that meeting are all made up.`
-          : ` ${who} is invented. Nobody like ${who} was there; everything that happens around ${who} is what the account records.`;
+          ? ` ${who} ${many ? "were" : "was"} added so it could be told as a quest -- ${KEEPER.name}, ${KEEPER.title}, ${DEVICE.name}, the journey and that meeting are all made up.`
+          : ` ${who} ${many ? "are" : "is"} invented. Nobody like ${them} was there; everything that happens around ${them} is what the account records.`;
       finalDetails.content +=
         `\n\n${MEETING_NOTE_HEADING} ${account.label} really lived, and what happens ` +
         `in this story is what the account records.` +

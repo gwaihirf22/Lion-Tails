@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown, Crown, Pencil, Search, X } from "lucide-react";
+import { Check, ChevronsUpDown, Crown, Users, Pencil, Search, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -36,10 +37,15 @@ import {
  *  3. At the cap, unselected rows are disabled with a reason rather than
  *     silently doing nothing when clicked.
  *
- * ORDER IS MEANINGFUL. Index 0 is the protagonist and gets the whole
- * description in the prompt; everyone else gets a name and two facts. A rule
- * that load-bearing must not be invisible, so the lead wears a crown and any
- * other row can be promoted in one click.
+ * ORDER IS MEANINGFUL -- unless nobody is leading. Index 0 is the protagonist
+ * and gets the whole description in the prompt; everyone else gets a name and
+ * two facts. A rule that load-bearing must not be invisible, so the lead wears
+ * a crown and any other row can be promoted in one click.
+ *
+ * TICK "no main character" and that stops being true: the story belongs to all
+ * of them, they share the description, and THE CROWNS GO. Leaving a crown on
+ * screen while the prompt says nobody leads would be the UI telling one story
+ * and the model another.
  */
 export function CharacterPicker({
   value,
@@ -48,6 +54,8 @@ export function CharacterPicker({
   parentStoryTitle,
   onEdit,
   disabled,
+  noMainCharacter,
+  onNoMainCharacterChange,
 }: {
   /** Selected character ids, in order. Index 0 is the protagonist. */
   value: string[];
@@ -61,7 +69,18 @@ export function CharacterPicker({
   parentStoryTitle?: string;
   onEdit?: (character: Character) => void;
   disabled?: boolean;
+  /**
+   * Nobody is the main character. Owned by the form, because it is part of the
+   * request; offered here because this is where the cast is decided and where
+   * the crown says otherwise.
+   */
+  noMainCharacter?: boolean;
+  onNoMainCharacterChange?: (value: boolean) => void;
 }) {
+  // Only offered once there are two of them: "nobody is the lead" cannot mean
+  // anything about one character, and isEnsemble() on the server agrees.
+  const canShareBilling = value.length >= 2;
+  const shared = Boolean(noMainCharacter) && canShareBilling;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pendingRemoval, setPendingRemoval] = useState<Character | null>(null);
@@ -128,7 +147,11 @@ export function CharacterPicker({
             className="w-full justify-between font-normal"
           >
             <span className="flex min-w-0 items-center gap-2">
-              <Crown className="h-4 w-4 shrink-0 text-secondary" aria-hidden="true" />
+              {shared ? (
+                <Users className="h-4 w-4 shrink-0 text-secondary" aria-hidden="true" />
+              ) : (
+                <Crown className="h-4 w-4 shrink-0 text-secondary" aria-hidden="true" />
+              )}
               <span className="truncate">{label}</span>
             </span>
             <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
@@ -216,7 +239,7 @@ export function CharacterPicker({
                 key={c.id}
                 className="flex items-center gap-1.5 rounded-full border border-border bg-card py-1 pl-2.5 pr-1.5 text-sm"
               >
-                {i === 0 ? (
+                {shared ? null : i === 0 ? (
                   <Crown
                     className="h-3.5 w-3.5 shrink-0 fill-current text-secondary"
                     aria-label="Main character"
@@ -256,8 +279,27 @@ export function CharacterPicker({
               </li>
             ))}
           </ul>
+          {canShareBilling && onNoMainCharacterChange && (
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                checked={shared}
+                disabled={disabled}
+                onCheckedChange={(c) => onNoMainCharacterChange(Boolean(c))}
+                className="mt-0.5"
+                aria-label="No main character"
+              />
+              <span>
+                No main character
+                <span className="block text-xs text-muted-foreground">
+                  They share the story: no one of them is the one it follows.
+                </span>
+              </span>
+            </label>
+          )}
           <p className="text-xs text-muted-foreground">
-            The first character is the main one — the story follows them.
+            {shared
+              ? "Nobody is the main character — the story belongs to all of them."
+              : "The first character is the main one — the story follows them."}
           </p>
         </>
       )}

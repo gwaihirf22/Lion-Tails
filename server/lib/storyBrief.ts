@@ -14,13 +14,14 @@ import {
   STAT_NOTABLE_HIGH,
   STAT_NOTABLE_LOW,
   MAX_STORY_CHARACTERS,
+  isEnsemble,
   type CharacterStat,
   type CharacterStats,
   type StoryRequest,
   type Character,
   type HeroOfFaith,
 } from "@shared/schema";
-import { coveringNoun, GENDERED_KINDS } from "@shared/characterVocab";
+import { coveringNoun, GENDERED_KINDS, type CharacterCategory } from "@shared/characterVocab";
 import { storage } from "../storage";
 import { getBiblicalEvent } from "../data/biblicalEvents";
 import {
@@ -710,6 +711,60 @@ export type BriefCharacter = {
   skills?: CharacterSkill[];
 };
 
+/**
+ * Everything a character's COLOUR slot says: looks, nature, what they like,
+ * their companion, whatever their owner wrote about them.
+ *
+ * Lifted out of the lead's construction unchanged, because a story with no
+ * main character gives every character this same treatment (up to three of
+ * them) -- and two copies of it would drift the first time one was edited.
+ * The lead still passes the request-level extras it alone owns: the quick
+ * character's fields, and the companion `animal`, which is one per story
+ * rather than one each ("give it a name and a personality" eight times is a
+ * menagerie, not a cast").
+ *
+ * The golden briefs are the proof this move changed nothing: cases 1-5 render
+ * character for character what they always did.
+ */
+function fullColour(f: {
+  name: string;
+  kind?: string;
+  hair?: string;
+  eyes?: string;
+  personality?: string;
+  hobby?: string;
+  favoriteColor?: string;
+  animal?: string;
+  category?: CharacterCategory;
+  notes?: string;
+}): string {
+  const traits: string[] = [];
+  // The noun follows what they are: hair, fur, feathers, scales, plating. The
+  // stored field is `hair` whatever the answer, and a character with no
+  // category -- which is every character saved before this -- gets "hair".
+  if (isSet(f.hair)) traits.push(`${f.hair} ${coveringNoun(f.category, f.kind)}`);
+  if (isSet(f.eyes)) traits.push(`${f.eyes} eyes`);
+  if (isSet(f.personality)) traits.push(`a ${f.personality} nature`);
+  const colourParts: string[] = [];
+  if (traits.length) colourParts.push(`${f.name} has ${traits.join(", ")}.`);
+  if (isSet(f.hobby)) colourParts.push(`${f.name} likes ${f.hobby}.`);
+  if (isSet(f.favoriteColor)) colourParts.push(`Favourite colour: ${f.favoriteColor}.`);
+  if (f.animal) {
+    colourParts.push(
+      `${f.name} has ${article(f.animal)} ${f.animal} as a companion; give it a name and a personality.`,
+    );
+  }
+  // Whatever the user wrote about them, LAST and SOFT. It is the one field a
+  // child can type into freely, so it must not be able to act as an
+  // instruction: colour is followed by "use these details only where a scene
+  // naturally calls for them", and it never goes near userInstructions.
+  if (isSet(f.notes)) colourParts.push(sentence([f.notes]));
+  return colourParts.join(" ");
+}
+
+/** Up to three share the lead's description; beyond that, the ration. */
+const ENSEMBLE_FULL_DETAIL_MAX = 3;
+
 export type StoryBrief = {
   /**
    * The people in this story. Index 0 is the protagonist.
@@ -732,6 +787,15 @@ export type StoryBrief = {
    * generation. Carried on the brief so there is one answer.
    */
   soloRetelling: boolean;
+  /**
+   * Nobody is the protagonist: the story belongs to the whole cast.
+   *
+   * Carried like soloRetelling rather than derived: the full brief and the
+   * chapter projection both need it, and two derivations of one fact is how
+   * two prompts in the same generation come to disagree. False for every brief
+   * frozen before this existed, which is what those stories meant.
+   */
+  ensemble: boolean;
   /** What the story is about -- the thing to actually invent around. */
   premise: string[];
   /** Constraints on how it is written. */
@@ -830,6 +894,8 @@ export function buildStoryBrief(
   // tests/storyBrief.test.ts asserts exactly that against captured strings.
   const details = characters[0];
   const supporting = characters.slice(1);
+  /** Nobody is the protagonist. Read through the helper: see isEnsemble(). */
+  const ensemble = isEnsemble(request);
 
   /**
    * The inline character the form collects when nobody picked a saved one.
@@ -1007,28 +1073,12 @@ export function buildStoryBrief(
       : sentence([who.join(", ")]);
 
   // ---- Colour: usable if it fits, never required ---------------------------
-  const traits: string[] = [];
-  // The noun follows what they are: hair, fur, feathers, scales, plating. The
-  // stored field is `hair` whatever the answer, and a character with no
-  // category -- which is every character saved before this -- gets "hair".
-  if (isSet(hair)) traits.push(`${hair} ${coveringNoun(details?.category, kind)}`);
-  if (isSet(eyes)) traits.push(`${eyes} eyes`);
-  if (isSet(personality)) traits.push(`a ${personality} nature`);
-  const colourParts: string[] = [];
-  if (traits.length) colourParts.push(`${name} has ${traits.join(", ")}.`);
-  if (isSet(hobby)) colourParts.push(`${name} likes ${hobby}.`);
-  if (isSet(favoriteColor)) colourParts.push(`Favourite colour: ${favoriteColor}.`);
-  if (animal) {
-    colourParts.push(
-      `${name} has ${article(animal)} ${animal} as a companion; give it a name and a personality.`,
-    );
-  }
-  // Whatever the user wrote about them, LAST and SOFT. It is the one field a
-  // child can type into freely, so it must not be able to act as an
-  // instruction: colour is followed by "use these details only where a scene
-  // naturally calls for them", and it never goes near userInstructions.
-  if (isSet(details?.notes)) colourParts.push(sentence([details!.notes]));
-  const colour = anonymous ? "" : colourParts.join(" ");
+  const colour = anonymous
+    ? ""
+    : fullColour({
+        name, kind, hair, eyes, personality, hobby, favoriteColor, animal,
+        category: details?.category, notes: details?.notes,
+      });
 
   // ---- WHAT: the thing to invent around ------------------------------------
   const premise: string[] = [];
@@ -1054,6 +1104,31 @@ export function buildStoryBrief(
   if (childInScene) {
     const p = participationPremise(role, name, Boolean(sourceMaterial), request);
     premise.push(...p.lines);
+    /**
+     * With no main character, the lines above name only the first of them.
+     *
+     * Said HERE for the reason the visit counts below are: participationPremise
+     * knows one name, and the whole cast matters. Two sentences rather than
+     * rewriting those lines per character -- they are long, and eight copies of
+     * "X was there, not a visitor" is the character-sheet tour in another form.
+     *
+     * The quest line answers the question the canon leaves open for a group,
+     * and it does it WITHOUT touching the canon, which is capped by a test and
+     * written in the singular on purpose: one of them carries the stone, and
+     * "the traveller" is read as all of them.
+     */
+    if (ensemble) {
+      premise.push(
+        `Where the lines above name one of them, they are true of every one of them.`,
+      );
+      if (role === "travels") {
+        premise.push(
+          `They go together. One of them carries the stone and the others take ` +
+            `hold when it opens, they arrive and leave in the same moment, and ` +
+            `where the world's rules say "the traveller" they mean all of them.`,
+        );
+      }
+    }
     participationAnchor = p.anchor;
     world = p.world;
     /**
@@ -1153,6 +1228,23 @@ export function buildStoryBrief(
   const form = storyFormFor(request.storyType);
   if (form.craft) craft.push(form.craft);
 
+  /**
+   * With no main character, everybody gets the lead's description -- up to
+   * three of them.
+   *
+   * Blake asked for "no main character" and chose equal-and-full for two or
+   * three. The ceiling is the same argument the two-fact ration below is built
+   * on: one character is about six facts, and eight at parity is forty-eight,
+   * the character-sheet tour at eight times scale. Three is a dozen more facts
+   * than today's shape, which a story can carry; beyond that everyone but the
+   * first drops back to the ration.
+   *
+   * Not for a retelling nobody was written into (`anonymous`): there the cast
+   * is not in the story at all, and describing them fully would be describing
+   * people the reader never meets.
+   */
+  const shareEverything = ensemble && !anonymous && characters.length <= ENSEMBLE_FULL_DETAIL_MAX;
+
   // Supporting cast: a name, an identity sentence, and AT MOST TWO FACTS.
   //
   // Not parity with the lead, and the arithmetic is the argument. One character
@@ -1211,7 +1303,15 @@ export function buildStoryBrief(
           ? `${sentence([who.join(", ")])} ${sentence([c.mustBeTrue])}`
           : sentence([who.join(", ")]),
         mustHold: isSet(c.mustBeTrue) ? c.mustBeTrue : undefined,
-        colour: both ?? one,
+        // The same description the lead gets, when nobody is the lead. No
+        // `animal`: the companion is one per story, not one each.
+        colour: shareEverything
+          ? fullColour({
+              name: c.name, kind: ckind, hair: c.hair, eyes: c.eyes,
+              personality: c.personality, hobby: c.hobby,
+              favoriteColor: c.favoriteColor, category: c.category, notes: c.notes,
+            })
+          : (both ?? one),
       };
     }),
   ];
@@ -1219,6 +1319,7 @@ export function buildStoryBrief(
   return {
     cast,
     soloRetelling: anonymous,
+    ensemble,
     premise,
     craft,
     ...(world ? { world } : {}),
@@ -1417,6 +1518,18 @@ function renderAbilities(cast: BriefCharacter[]): string {
  * chapter prompt is the one repeated once per chapter, so it is the one the
  * story followed.
  */
+/**
+ * "Ellie and Lucy", "Ellie, Lucy and Sam" -- for a cast nobody leads.
+ *
+ * Exported because the note appended to every real-history story names the
+ * same people, and two joiners would punctuate the same cast two ways in the
+ * same story.
+ */
+export function nameList(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 function noInventedChild(brief: StoryBrief): boolean {
   return brief.soloRetelling === true;
 }
@@ -1426,8 +1539,20 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
   const lead = brief.cast[0];
   const others = brief.cast.slice(1);
   const otherNames = others.map((c) => c.name);
+  /** Everyone, for the shape where nobody is first. */
+  const everyone = nameList(brief.cast.map((c) => c.name));
 
   if (purpose === "image") {
+    // With no lead there is no one face to build the frame around, so the
+    // subject is the group -- but the cap does not move: a picture with
+    // everyone in it is a crowd whichever shape the story is.
+    if (brief.ensemble) {
+      const who = `${everyone}${brief.sourceMaterial ? ` -- a scene from ${brief.sourceMaterial.label}` : ""}.`;
+      return (
+        `${who} ${brief.cast.map((c) => c.identity).join(" ")} ` +
+        `Draw at most three of them -- a picture with everyone in it is a crowd, not a scene.`
+      );
+    }
     const base = brief.sourceMaterial
       ? `${lead.identity} -- a scene from ${brief.sourceMaterial.label}.`
       : lead.identity;
@@ -1467,8 +1592,16 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     // outline has already decided who appears where, so chapter 5 naming a
     // child who does not exist, or forgetting one who does, is the failure this
     // prevents.
+    // With no main character the same names carry the OPPOSITE instruction:
+    // "use them only where the instruction calls for them" is what makes a
+    // supporting character, and this projection writes every chapter -- so
+    // without this the ensemble brief would say one thing in WHO THIS IS ABOUT
+    // and the chapter prompt would quietly rebuild the lead. Caught by reading
+    // the rendered brief rather than by any test.
     const alsoLine = otherNames.length
-      ? ` Also in this story: ${otherNames.join(", ")} -- use them only where this chapter's instruction calls for them, and do not add anyone who is not named here.`
+      ? brief.ensemble
+        ? ` This story has no main character: ${everyone} share it equally, the chapter follows whichever of them the instruction is about, and no one of them is the one the reader stays with. Do not add anyone who is not named here.`
+        : ` Also in this story: ${otherNames.join(", ")} -- use them only where this chapter's instruction calls for them, and do not add anyone who is not named here.`
       : "";
     // The ONE exception to names-only. Everything else about a supporting
     // character is decoration that a chapter can do without; a must-be-true is
@@ -1496,20 +1629,28 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     // Continuity canon stays last. Both empty for every brief that has none.
     const participationLine = brief.participationAnchor ? ` ${brief.participationAnchor}` : "";
     const worldLine = brief.world ? ` ${brief.world.anchor}` : "";
-    return `The story is about ${lead.identity} Keep this consistent.${soloLine}${alsoLine}${holdLine}${participationLine}${sourceLine}${worldLine}${canonLine}`;
+    const about = brief.ensemble
+      ? `The story is about ${brief.cast.map((c) => c.identity).join(" ")} Keep this consistent.`
+      : `The story is about ${lead.identity} Keep this consistent.`;
+    return `${about}${soloLine}${alsoLine}${holdLine}${participationLine}${sourceLine}${worldLine}${canonLine}`;
   }
 
   const out: string[] = [];
 
   out.push("WHO THIS IS ABOUT");
   if (others.length > 0) {
-    // Said BEFORE the names, so the model reads the whole roll knowing which
-    // one it is following. Said after, it has already given everyone equal
-    // weight by the time it is told not to.
+    // Said BEFORE the names, so the model reads the whole roll knowing what
+    // shape the story is. Said after, it has already decided by the time it is
+    // told -- which is why the ensemble line sits in the same place.
     out.push(
-      `This is ${lead.name}'s story. The others are in it with ${lead.name}, but ` +
-        `the choices the story turns on are ${lead.name}'s, and the reader stays ` +
-        `with ${lead.name}.`,
+      brief.ensemble
+        ? `This story has no main character. It belongs to ${everyone} equally: ` +
+            `the choices it turns on are theirs together, no one of them is the ` +
+            `one the reader follows, and none of them is a helper in somebody ` +
+            `else's story.`
+        : `This is ${lead.name}'s story. The others are in it with ${lead.name}, but ` +
+            `the choices the story turns on are ${lead.name}'s, and the reader stays ` +
+            `with ${lead.name}.`,
     );
   }
   out.push(lead.identity);
@@ -1523,7 +1664,9 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
   if (lead.colour) out.push(lead.colour);
   if (others.length > 0) {
     out.push(
-      `ALSO IN THE STORY -- ${others.length} ${others.length === 1 ? "other" : "others"}, present but not the subject:`,
+      brief.ensemble
+        ? "AND, EQUALLY, THE REST OF THEM:"
+        : `ALSO IN THE STORY -- ${others.length} ${others.length === 1 ? "other" : "others"}, present but not the subject:`,
     );
     for (const c of others) out.push(`  - ${[c.identity, c.colour].filter(Boolean).join(" ")}`);
   }
@@ -1570,9 +1713,9 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     if (brief.sourceMaterial) {
       // Without this, eight modern children reshape the flood.
       out.push(
-        `The account comes first. ${lead.name} and the others are visitors in ` +
-          `it: they can watch, help and be afraid, but nothing they do changes ` +
-          `what happens or how it ends.`,
+        `The account comes first. ${brief.ensemble ? everyone : `${lead.name} and the others`} ` +
+          `are visitors in it: they can watch, help and be afraid, but nothing ` +
+          `they do changes what happens or how it ends.`,
       );
     }
     if (purpose === "outline") {
@@ -1912,6 +2055,9 @@ export function deserialiseBrief(raw: string): StoryBrief {
               colour: typeof parsed.colour === "string" ? parsed.colour : "",
             },
           ],
+          // Absent on every brief frozen before this shipped, and false is what
+          // those stories meant: one of them was the protagonist.
+          ensemble: parsed.ensemble === true,
         } as StoryBrief;
       }
     }
@@ -1923,6 +2069,8 @@ export function deserialiseBrief(raw: string): StoryBrief {
     // An unparseable brief carries no source material, so there is no retelling
     // for an invented child to be absent from.
     soloRetelling: false,
+    // One character, so the question does not arise.
+    ensemble: false,
     premise: [raw],
     craft: [],
   };
