@@ -133,7 +133,7 @@ export function getWordCountFromLength(length: string, storyType?: string): numb
     case "extended":
       return 3500; // ~25 minutes
     case "epic":
-      return 5000; // ~36 minutes, about ten chapters
+      return 5000; // ~36 minutes, five chapters at WORDS_PER_CHAPTER
     default:
       return 1500;
   }
@@ -323,15 +323,35 @@ const titleRuleFor = (brief: StoryBrief): string => (brief.world ? questTitleRul
  * own, and the account starts in the next one. Nothing else in the prompt can
  * buy the first half of a quest the room to happen.
  */
-const questShape = (brief: StoryBrief): string =>
-  brief.world
-    ? `
+export const questShape = (brief: StoryBrief, parts: number): string => {
+  if (!brief.world) return "";
+  /**
+   * AND THE SAME BUDGET AT THE OTHER END, for the same reason, found the hard
+   * way a second time. Part 1 was protected and the last part was not, so a
+   * four-part quest gave its final part the mountain in Moriah AND the way
+   * home AND the close, and the plan quietly dropped the half it had least
+   * room for: the outline wrote "Mr Barnabas is waiting ONLY IF the story has
+   * brought Esther back to him", and the chapter took the exit. A reader gets
+   * a story that stops rather than ends.
+   *
+   * Not sent when the reader asked for the story to be left open: there the
+   * premise says "Do NOT resolve this story", and this would contradict it.
+   */
+  const home = brief.cliffhanger
+    ? ""
+    : `
+    Part ${parts} is the way back and the close: crossing home, Barnabas asking what
+    they found, and the moment from part 1 answered by what the traveller does
+    about it. Leave it room -- the account has to be finished in part ${parts - 1} or
+    early in part ${parts}, not on the last line. Everyone who set out comes back.
+`;
+  return `
     This is a quest. Part 1 is the way in and nothing else: the moment in the
     traveller's own life, the shop arriving where it could not be, going inside,
     and stepping through. END part 1 at the crossing over. The account itself begins
     in part 2 -- put none of it in part 1.
-`
-    : "";
+${home}`;
+};
 
 export const COVER_SHOWS_PEOPLE =
   "The people in it should be recognisable -- show their faces rather than only their backs.";
@@ -682,7 +702,7 @@ async function generateStoryOutline(
 
     Instructions:
     Create a detailed outline with EXACTLY ${numberOfChapters} parts. Each part must be a distinct scene that moves the problem forward -- something must change or be at risk in each one.
-${questShape(ctx.brief)}
+${questShape(ctx.brief, numberOfChapters)}
     Respond with ONLY a valid JSON object in the format: { "outline": ["Chapter 1...", "Chapter 2...", ...] }
   `;
 
@@ -723,18 +743,115 @@ ${questShape(ctx.brief)}
   return parsed.outline;
 }
 
-// HELPER for Long Stories (Chapter Generation)
-async function generateStoryChapter(
-  client: OpenAI,
-  request: StoryRequest,
-  chapterOutline: string,
-  storySoFar: string,
-  debugData: any[],
-  ctx: StoryContext,
-  wordCountPerChapter: number,
-  totalChapters: number,
-): Promise<string> {
+/**
+ * What the chapter writer is told about WHERE IT IS and how long to be.
+ *
+ * THE BUG THIS EXISTS FOR. Every chapter used to end with "The story has N
+ * chapters of similar length, so do not try to finish the whole story in this
+ * one" -- unconditionally, the last one included -- and the prompt never said
+ * which chapter it was on at all. So the final chapter of a four-part quest was
+ * told, in as many words, not to end the story, and did as it was told: it
+ * spent its words on the account, compressed the way home into a dozen
+ * one-sentence paragraphs, dropped the Timekeeper entirely, and stopped.
+ * Blake read it as the reader cutting the story off halfway. The text was all
+ * there; the ending was not.
+ *
+ * So the last part is now told three things nothing told it before: that it is
+ * last, that the story ends here, and -- for a quest that is not deliberately
+ * left open -- what the ending consists of. The other parts keep the sentence
+ * they had, which is still right for them: a middle chapter that wraps
+ * everything up is the original failure this line was written to prevent.
+ *
+ * Pure, exported and fixture-captured, because the defect lived in the wrapper
+ * around the brief and the brief's own goldens could not see it.
+ */
+export function chapterPositionRule(opts: {
+  chapterNumber: number;
+  totalChapters: number;
+  wordCountPerChapter: number;
+  quest: boolean;
+  cliffhanger: boolean;
+}): string {
+  const { chapterNumber, totalChapters, wordCountPerChapter, quest, cliffhanger } = opts;
+  const isLast = chapterNumber >= totalChapters;
+  const target = Math.round(wordCountPerChapter);
+  const floor = Math.round(wordCountPerChapter * 0.85);
+  // A WIDER CEILING FOR THE LAST PART, because it has a scene AND an ending to
+  // write where the others have only a scene. Measured on the story that
+  // prompted this: asked for 875 with a ceiling of 1006, the model returned
+  // 987, 1099, 1115 and 1104 -- every part over the stated maximum anyway. The
+  // ceiling was not restraining anything; it was only making the one part that
+  // needed room think it had none.
+  const ceiling = Math.round(wordCountPerChapter * (isLast ? 1.35 : 1.15));
 
+  const length =
+    `CRITICAL INSTRUCTION: This is part ${chapterNumber} of ${totalChapters}` +
+    `${isLast ? ", the LAST one" : ""}. It must be close to ${target} words --\n` +
+    `      no fewer than ${floor} and no more than ${ceiling}.`;
+
+  if (!isLast) {
+    return (
+      `${length}\n` +
+      `      The story has ${totalChapters} chapters of similar length, so do not try to finish\n` +
+      `      the whole story in this one.`
+    );
+  }
+
+  // A CLIFFHANGER IS STILL LAST, AND IS STILL NOT RESOLVED. It needs the first
+  // half of this -- a chapter that thinks another one is coming does not finish
+  // its scene -- and must not be given the second, or it reads as "resolve it"
+  // against a premise that says "Do NOT resolve this story". Two instructions
+  // that contradict, and the model picks one: that is how "leave it open"
+  // produced a tidy ending once already.
+  if (cliffhanger) {
+    return (
+      `${length}\n` +
+      `      This is the last part that will be written -- there is no part ${totalChapters + 1}. The\n` +
+      `      story is deliberately left unresolved, as the instructions above say;\n` +
+      `      finish this SCENE properly and stop there.`
+    );
+  }
+
+  const ends =
+    `${length}\n` +
+    `      This is where the story ENDS. Finish it here -- there is no part ${totalChapters + 1}\n` +
+    `      to leave the ending to. It carries its own scene and the ending, so the\n` +
+    `      upper end of that range is the right length for it.`;
+
+  // The account is over; what is left is getting home, and a quest that stops
+  // in the account has no frame left to close.
+  if (!quest) return ends;
+  return (
+    `${ends}\n\n` +
+    `      HOW THIS ENDS: bring them home. The way back is a threshold, and on the\n` +
+    `      other side of it is the traveller's own life, where part 1 began.\n` +
+    `      Barnabas is there and asks what they found. The moment that was asking\n` +
+    `      something of the traveller at the start is answered in what the\n` +
+    `      traveller now DOES -- one action, not a speech, and nobody states the\n` +
+    `      lesson. Everyone who set out is still there.`
+  );
+}
+
+/**
+ * The whole user prompt one chapter is written from.
+ *
+ * PURE, AND SEPARATE FROM THE CALL, because this is where the defect lived.
+ * `tests/fixtures/brief-golden.json` captures what `renderBrief` produces and
+ * caught nothing: the sentence telling the last chapter not to finish the
+ * story was in the wrapper around the brief, which no fixture could see. The
+ * assembled prompt is what the model actually reads, so the assembled prompt
+ * is what gets captured.
+ */
+export function buildChapterPrompt(opts: {
+  brief: StoryBrief;
+  chapterOutline: string;
+  storySoFar: string;
+  wordCountPerChapter: number;
+  totalChapters: number;
+  chapterNumber: number;
+}): string {
+  const { brief, chapterOutline, storySoFar, wordCountPerChapter, totalChapters, chapterNumber } =
+    opts;
 
   /**
    * THE FIRST CHAPTER OF A QUEST OPENS IN THEIR LIFE, and only the first.
@@ -753,9 +870,9 @@ async function generateStoryChapter(
    * `storySoFar` being empty is already how this function knows it is first.
    */
   const opensTheQuest =
-    !storySoFar && ctx.brief.world
+    !storySoFar && brief.world
       ? `\n      HOW THIS STORY STARTS: ${CANON.beginning}${
-          ctx.brief.world.familiarity ? " " + ctx.brief.world.familiarity : ""
+          brief.world.familiarity ? " " + brief.world.familiarity : ""
         }\n`
       : "";
 
@@ -776,13 +893,12 @@ async function generateStoryChapter(
    * rules that have to.
    */
   const seenBefore =
-    storySoFar && ctx.brief.world
+    storySoFar && brief.world
       ? `\n      IF THEY MEET SOMEONE THEY HAVE ALREADY MET: ${CANON.seenAgain}\n`
       : "";
 
-  const systemPrompt = `${ctx.systemPrompt} Continue writing a story based on the context provided. Focus ONLY on writing the current part of the story. Do NOT summarize or add titles/questions.`;
-  const userPrompt = `
-      ${renderBrief(ctx.brief, "chapter")}
+  return `
+      ${renderBrief(brief, "chapter")}
 ${opensTheQuest}${seenBefore}
       Here is the story so far:
       ---
@@ -791,11 +907,37 @@ ${opensTheQuest}${seenBefore}
 
       Now, write the next part of the story based on this instruction: "${chapterOutline}"
 
-      CRITICAL INSTRUCTION: This chapter must be close to ${Math.round(wordCountPerChapter)} words --
-      no fewer than ${Math.round(wordCountPerChapter * 0.85)} and no more than ${Math.round(wordCountPerChapter * 1.15)}.
-      The story has ${totalChapters} chapters of similar length, so do not try to finish
-      the whole story in this one.
+      ${chapterPositionRule({
+        chapterNumber,
+        totalChapters,
+        wordCountPerChapter,
+        quest: Boolean(brief.world),
+        cliffhanger: brief.cliffhanger === true,
+      })}
     `;
+}
+
+// HELPER for Long Stories (Chapter Generation)
+async function generateStoryChapter(
+  client: OpenAI,
+  request: StoryRequest,
+  chapterOutline: string,
+  storySoFar: string,
+  debugData: any[],
+  ctx: StoryContext,
+  wordCountPerChapter: number,
+  totalChapters: number,
+  chapterNumber: number,
+): Promise<string> {
+  const systemPrompt = `${ctx.systemPrompt} Continue writing a story based on the context provided. Focus ONLY on writing the current part of the story. Do NOT summarize or add titles/questions.`;
+  const userPrompt = buildChapterPrompt({
+    brief: ctx.brief,
+    chapterOutline,
+    storySoFar,
+    wordCountPerChapter,
+    totalChapters,
+    chapterNumber,
+  });
 
   return await requestModelText({
     step: `generateChapter: ${chapterOutline.substring(0, 30)}...`,
@@ -1030,6 +1172,7 @@ async function runGeneration(
           ctx,
           wordsPerChapter,
           outline.length,
+          i + 1,
         );
         chapters.push(chapterContent);
         fullStoryContent += (fullStoryContent ? "\n\n" : "") + chapterContent;

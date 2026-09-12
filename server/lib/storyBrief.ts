@@ -765,6 +765,22 @@ function fullColour(f: {
 /** Up to three share the lead's description; beyond that, the ration. */
 const ENSEMBLE_FULL_DETAIL_MAX = 3;
 
+/**
+ * The premise line for "leave it open", named because two readers need it.
+ *
+ * It is written into the premise when the brief is built, and it is how
+ * `deserialiseBrief` recognises a cliffhanger in a brief frozen before
+ * `cliffhanger` was a field -- those jobs are in flight across this deploy,
+ * and getting it wrong would order a homecoming into a story whose own
+ * premise forbids one.
+ */
+export const CLIFFHANGER_PREMISE =
+  "Do NOT resolve this story. End it at a moment that makes the reader " +
+  "want the next one -- a decision not yet made, a door not yet opened, " +
+  "a question just asked. Still finish the SCENE properly: an unresolved " +
+  "story is not an unfinished sentence, and a child should not feel the " +
+  'story broke off. Do not write "to be continued".';
+
 export type StoryBrief = {
   /**
    * The people in this story. Index 0 is the protagonist.
@@ -796,6 +812,17 @@ export type StoryBrief = {
    * frozen before this existed, which is what those stories meant.
    */
   ensemble: boolean;
+  /**
+   * The reader asked for the story NOT to be resolved.
+   *
+   * Carried for the same reason as the two above: the premise already says
+   * "Do NOT resolve this story", and the quest shape and the last chapter's
+   * instruction both need to know it so they do not order a homecoming the
+   * premise has just forbidden. Deriving it twice from the request is how two
+   * prompts in one generation come to contradict each other -- which is the
+   * failure this whole change is about.
+   */
+  cliffhanger: boolean;
   /** What the story is about -- the thing to actually invent around. */
   premise: string[];
   /** Constraints on how it is written. */
@@ -1207,15 +1234,7 @@ export function buildStoryBrief(
       ? undefined
       : moralOutcomeInstruction(request.moralOutcome);
   if (ending) premise.push(ending);
-  if (request.cliffhanger) {
-    premise.push(
-      "Do NOT resolve this story. End it at a moment that makes the reader " +
-        "want the next one -- a decision not yet made, a door not yet opened, " +
-        "a question just asked. Still finish the SCENE properly: an unresolved " +
-        "story is not an unfinished sentence, and a child should not feel the " +
-        "story broke off. Do not write \"to be continued\".",
-    );
-  }
+  if (request.cliffhanger) premise.push(CLIFFHANGER_PREMISE);
 
   // ---- HOW ------------------------------------------------------------------
   const craft: string[] = [];
@@ -1320,6 +1339,7 @@ export function buildStoryBrief(
     cast,
     soloRetelling: anonymous,
     ensemble,
+    cliffhanger: request.cliffhanger === true,
     premise,
     craft,
     ...(world ? { world } : {}),
@@ -1598,10 +1618,18 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     // without this the ensemble brief would say one thing in WHO THIS IS ABOUT
     // and the chapter prompt would quietly rebuild the lead. Caught by reading
     // the rendered brief rather than by any test.
+    // AND NOBODY IS WRITTEN OUT. The crowd cap and the rule against announcing
+    // an absence are in the full brief, which the outline reads and the chapter
+    // writer does not -- so the one prompt that writes actual sentences had
+    // nothing stopping it. "Ellie and Lucy were no longer beside her", a page
+    // from the end of a four-character quest, is what that costs: to a reader
+    // it is indistinguishable from a missing page. Leaving somebody out of a
+    // chapter stays free; saying so does not.
+    const noExits = " Leave out whoever this part does not need, silently -- never write a character out of the story.";
     const alsoLine = otherNames.length
       ? brief.ensemble
-        ? ` This story has no main character: ${everyone} share it equally, the chapter follows whichever of them the instruction is about, and no one of them is the one the reader stays with. Do not add anyone who is not named here.`
-        : ` Also in this story: ${otherNames.join(", ")} -- use them only where this chapter's instruction calls for them, and do not add anyone who is not named here.`
+        ? ` This story has no main character: ${everyone} share it equally, the chapter follows whichever of them the instruction is about, and no one of them is the one the reader stays with. Do not add anyone who is not named here.${noExits}`
+        : ` Also in this story: ${otherNames.join(", ")} -- use them only where this chapter's instruction calls for them, and do not add anyone who is not named here.${noExits}`
       : "";
     // The ONE exception to names-only. Everything else about a supporting
     // character is decoration that a chapter can do without; a must-be-true is
@@ -1705,9 +1733,23 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
         "two of them into one, and do not add extra characters of your own.",
     );
     if (n >= 4) {
+      // THE CAP IS ABOUT CROWDING A SCENE, AND IT WAS READ AS PERMISSION TO
+      // DELETE PEOPLE. A four-character quest came back with its last chapter
+      // instructed -- by its own outline -- to write "Elijah is waiting nearby,
+      // while Ellie and Lucy are no longer beside Esther". Two of the four
+      // children vanished a page from the end with no explanation, which to a
+      // reader is indistinguishable from a missing page: Blake reported the
+      // story as cut off. So the cap now says what it is about and what it is
+      // not, in the same breath. Whoever sets out together comes back together;
+      // leaving someone out of a scene is silent, and is never an event.
       out.push(
         "Keep no more than three of them in any one scene. The rest are " +
-          "elsewhere, and the story does not have to say where.",
+          "elsewhere, and the story does not have to say where. This is about " +
+          "how many are in a scene, not about losing anyone: whoever sets out " +
+          "together is still together at the end, and the story NEVER writes a " +
+          "character out on the page -- no \"X was no longer beside her\", no " +
+          "explaining where somebody went. Leave them out of the part and say " +
+          "nothing about it.",
       );
     }
     if (brief.sourceMaterial) {
@@ -1725,6 +1767,19 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
         "Not every part needs everyone. Decide who is in each part and leave " +
           "the rest out of that part.",
       );
+      // ONLY WHERE THE CAP APPLIES, because the leak is the cap being reasoned
+      // about out loud. A real outline wrote "Lucy is elsewhere, so no more
+      // than three of the named children are present in the scene" into its
+      // own chapter instruction, and that instruction is handed verbatim to
+      // the model that writes the chapter -- so the rule about the story
+      // became a sentence in the story.
+      if (n >= 4) {
+        out.push(
+          "Write what happens, never the casting. An outline that explains " +
+            "who is absent and why hands that explanation to the writer of " +
+            "that part, who puts it in the story.",
+        );
+      }
     }
   }
 
@@ -2027,6 +2082,14 @@ export function deserialiseBrief(raw: string): StoryBrief {
           parsed.soloRetelling =
             Boolean(parsed.sourceMaterial) && !parsed.cast[0]?.colour;
         }
+        // Same treatment, same reason. A brief frozen before `cliffhanger` was
+        // a field still SAYS so in its premise, and defaulting to false would
+        // tell the last chapter of an in-flight "leave it open" story to bring
+        // everyone home -- the exact contradiction this field exists to stop.
+        if (typeof parsed.cliffhanger !== "boolean") {
+          parsed.cliffhanger =
+            Array.isArray(parsed.premise) && parsed.premise.includes(CLIFFHANGER_PREMISE);
+        }
         return parsed as StoryBrief;
       }
       // A brief frozen before the cast became plural. These are IN FLIGHT
@@ -2058,6 +2121,8 @@ export function deserialiseBrief(raw: string): StoryBrief {
           // Absent on every brief frozen before this shipped, and false is what
           // those stories meant: one of them was the protagonist.
           ensemble: parsed.ensemble === true,
+          cliffhanger:
+            Array.isArray(parsed.premise) && parsed.premise.includes(CLIFFHANGER_PREMISE),
         } as StoryBrief;
       }
     }
@@ -2071,6 +2136,8 @@ export function deserialiseBrief(raw: string): StoryBrief {
     soloRetelling: false,
     // One character, so the question does not arise.
     ensemble: false,
+    // Legacy premise text, with no structure to read the flag out of.
+    cliffhanger: false,
     premise: [raw],
     craft: [],
   };
