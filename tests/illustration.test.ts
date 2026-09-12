@@ -58,14 +58,38 @@ describe("the illustration prompt", () => {
     expect(p.startsWith(PLAIN)).toBe(true);
   });
 
-  it("numbers the reference images and demands the faces match", () => {
+  it("numbers the reference images and demands the likeness match", () => {
     const p = composeIllustrationPrompt(SCENE, [
       member({ name: "Mia", look: "Mia, an 8-year-old girl.", reference: file() }),
       member({ name: "Ben", look: "Ben, a 6-year-old boy.", reference: file() }),
     ]);
     expect(p).toContain("Reference image 1 is Mia, an 8-year-old girl.");
     expect(p).toContain("Reference image 2 is Ben, a 6-year-old boy.");
-    expect(p).toMatch(/faces/i);
+    expect(p).toMatch(/the same face, the same hair/i);
+  });
+
+  /**
+   * A LIKENESS IS NOT A POSE.
+   *
+   * The prompt used to ask for a match "especially their faces", which quietly
+   * asked for every face to be pointed at the viewer -- passage pictures came
+   * back arranged so nobody was ever turned away. Matching and posing are two
+   * requests and only one of them belongs in a scene.
+   */
+  it("lets a scene hide a face, and does not say so on an establishing picture", () => {
+    const cast = [member({ reference: file() })];
+
+    const scene = composeIllustrationPrompt(SCENE, cast);
+    expect(scene).toMatch(/turned away, partly hidden, or seen from behind/i);
+    expect(scene).toMatch(/do not rearrange the scene/i);
+
+    // The cover and the first sight of a new face become the reference
+    // everything later is matched against, and COVER_SHOWS_PEOPLE asks them
+    // for "recognisable" from the scene prompt's side. Saying both at once
+    // would contradict.
+    const establishing = composeIllustrationPrompt(SCENE, cast, [], { facesMustShow: true });
+    expect(establishing).not.toMatch(/turned away/i);
+    expect(establishing).toMatch(/the same face, the same hair/i);
   });
 
   it("takes the person from the reference and nothing else from it", () => {

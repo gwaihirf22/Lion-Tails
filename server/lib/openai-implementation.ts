@@ -1098,11 +1098,25 @@ async function runGeneration(
       // The cast is resolved HERE and not inside the image call, because it
       // reads the database and the image call must stay a thing that can fail
       // without taking a story with it.
-      imageUrl = await generateStoryImage(
+      // THE COVER IS AN ESTABLISHING PICTURE. It becomes the reference every
+      // later picture in this story is matched against, so a face turned away
+      // here costs more than an awkward composition -- which is the one place
+      // that trade goes this way round. Every passage picture is a scene and
+      // may hide a face; see composeIllustrationPrompt's `facesMustShow`.
+      const cover = await generateStoryImage(
         finalDetails.imagePrompt,
         userId,
         await illustrationCast(request, userId, finalDetails.imagePrompt),
+        [],
+        { facesMustShow: true },
       );
+      imageUrl = cover?.url;
+      if (cover?.droppedReferences) {
+        console.error(
+          `[story] the cover for "${finalDetails.title}" was drawn WITHOUT its reference images` +
+            ` (${cover.droppedReferences}); every picture anchored to it will inherit that.`,
+        );
+      }
     } catch (imageError) {
       console.error("Error generating story image:", imageError);
     }

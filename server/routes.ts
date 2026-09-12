@@ -42,6 +42,7 @@ import {
   illustrationCast,
   deleteStoryImage,
   readStoryImageFile,
+  type IllustrationReference,
 } from "./lib/illustration";
 import { sceneFromPassage } from "./lib/passageScene";
 import { questLengthAllowed, QUEST_SHORTEST_LENGTH } from "@shared/quests";
@@ -1761,20 +1762,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
        * anchoring a redraw to the very picture you are redoing is the one
        * case where this is exactly backwards.
        */
-      const storyLook =
+      const storyLookFile =
         passage.success && saved.story.imageUrl
           ? await readStoryImageFile(saved.story.imageUrl)
           : undefined;
 
+      /**
+       * The cover, attached as what it IS: the look of this book.
+       *
+       * It used to go in as an untyped extra picture with a sentence insisting
+       * it was "not a person". Now it carries a role, so the same sentence is
+       * the general rule for a style reference rather than a special case --
+       * and the door is open for the world sheet and an era's clothing to sit
+       * beside it without renumbering anybody.
+       */
+      const extras: IllustrationReference[] = storyLookFile
+        ? [
+            {
+              role: "style",
+              name: "the look of this book",
+              look: "the cover of this same story.",
+              file: storyLookFile,
+            },
+          ]
+        : [];
+
       // What the people in it look like, read live off their sheets -- the
       // point of the whole feature, and the reason a story illustrated today
       // matches a portrait drawn after the story was written.
-      const imageUrl = await generateStoryImage(
+      const drawn = await generateStoryImage(
         prompt,
         userId,
         await illustrationCast(saved.request, userId, prompt),
-        storyLook,
+        extras,
       );
+      const imageUrl = drawn?.url;
       if (!imageUrl) {
         // generateStoryImage returns undefined for BOTH "not entitled" and
         // "the image call failed", and the caller cannot tell them apart --
@@ -1828,6 +1850,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         imageUrl: updated.story.imageUrl ?? null,
         images: updated.images ?? [],
         alreadyExisted: false,
+        /**
+         * Present only when the picture was drawn WITHOUT the faces it was
+         * supposed to match. It looks like any other picture, so saying
+         * nothing means the reader finds out by recognising nobody.
+         */
+        ...(drawn?.droppedReferences ? { droppedReferences: drawn.droppedReferences } : {}),
       });
     } catch (error) {
       console.error("Error illustrating story:", error);

@@ -46,7 +46,7 @@ import {
 } from "@shared/schema";
 import { KEEPER, KEEPER_FACE_FILE } from "../data/lionTails";
 import { storage } from "../storage";
-import { describeCharacter, readAvatarFile } from "./avatar";
+import { describeCharacter, looksLikeRefusal, readAvatarFile } from "./avatar";
 import { resolveModel, createClient, inputFidelityFor } from "./modelPolicy";
 
 /** Where story pictures are written. The `story_images` volume mounts here. */
@@ -96,6 +96,40 @@ export type IllustrationMember = {
    * face, do not take the medium -- and nothing else.
    */
   fromPhoto?: boolean;
+};
+
+/**
+ * What an attached picture IS, so the prompt can say so.
+ *
+ * OpenAI's image-prompting guide: "Identify each input by number and purpose:
+ * subject, style, clothing, or background." Until now every reference was
+ * implicitly a person, which is why the one non-person reference -- the
+ * story's earlier picture -- needed a sentence insisting it was "not a
+ * person". With a role on each one, that sentence is the general case rather
+ * than a special case, and a shop front stops being read as somebody's face.
+ *
+ * The API cannot label an input image. The prompt is the only thing that can
+ * say which is which, which is why every reference is numbered and why the
+ * order they are handed to `images.edit` has to match the order they are
+ * described here.
+ */
+export type ReferenceRole = "subject" | "style" | "background" | "object" | "clothing";
+
+/**
+ * A reference that is not one of the cast.
+ *
+ * `look` does double duty, as it does for a person: it is the text fallback
+ * when the file cannot be read, AND -- for a sheet holding several things at
+ * once -- it is where the layout is spelled out, because a montage the model
+ * cannot navigate is a collage it has to guess at.
+ */
+export type IllustrationReference = {
+  role: Exclude<ReferenceRole, "subject">;
+  /** How the prompt names it. */
+  name: string;
+  /** What it shows, and for a multi-panel sheet, where each thing sits in it. */
+  look: string;
+  file?: PictureFile;
 };
 
 /**
@@ -252,6 +286,76 @@ export async function illustrationCast(
 const STYLE = "Render in a beautiful biblical storybook illustration style with soft colors.";
 
 /**
+ * Why the reference-matched call failed, in the three flavours that need
+ * different answers.
+ *
+ * `parameter` is OUR bug -- a model sent something it does not take, which is
+ * how `input_fidelity` cost this feature its first real test. It will fail
+ * identically on every retry until someone changes the code, so it has to be
+ * findable rather than absorbed.
+ * `refused` is the model declining the prompt; retrying draws the same refusal.
+ * `transient` is weather -- a timeout, a 500 -- and is worth another go.
+ */
+export type EditFailure = "parameter" | "refused" | "transient";
+
+/**
+ * A picture, and whether it is actually matched to the references we sent.
+ *
+ * The second field is the point. A picture drawn after the references were
+ * dropped looks exactly like one drawn with them -- same size, same style,
+ * same everything except that it is a different child -- so the only way for
+ * anything upstream to know is to be told.
+ */
+export type StoryImageResult = { url: string; droppedReferences?: EditFailure };
+
+export function classifyEditFailure(error: unknown): EditFailure {
+  // Checked before the status, because a refusal is ALSO a 400 and the two
+  // want opposite responses -- retrying a refusal earns the same refusal,
+  // while a parameter 400 is a bug somebody has to go and fix.
+  if (looksLikeRefusal(error)) return "refused";
+  const status = (error as { status?: number } | undefined)?.status;
+  if (status === 400 || status === 422) return "parameter";
+  return "transient";
+}
+
+/**
+ * What to say about one attached picture that is not a person.
+ *
+ * Every line does the same two jobs: name what the picture IS, and fence off
+ * what must not be taken from it. The fence is the load-bearing half -- the
+ * first version of the story-look reference had to be told "not a person" or
+ * the model placed it in the scene as one more face, and a shop front is the
+ * same mistake waiting to happen.
+ */
+function referenceLine(n: number, e: IllustrationReference): string {
+  const head = `Reference image ${n} is ${e.look}`;
+  switch (e.role) {
+    case "style":
+      return (
+        `${head} It is the look of this book, not a scene and not a person. Match its palette, its` +
+        " linework and the way it is lit. Anyone in this picture who also appears in it must look the" +
+        " same here as they do there. Take nothing else from it — not its scene, its framing or its moment."
+      );
+    case "background":
+      return (
+        `${head} Match what it shows where the scene calls for it — the same building, the same` +
+        " materials, the same colours. Do not copy its framing or its lighting, and do not place any" +
+        " person from it into this picture."
+      );
+    case "object":
+      return (
+        `${head} When that object appears in this scene, draw it as it is shown there. Take nothing` +
+        " else from the picture — not its background, its framing, or anyone holding it."
+      );
+    case "clothing":
+      return (
+        `${head} Dress the people in this scene to match it. Take only the clothing from it — not its` +
+        " faces, its background or its framing."
+      );
+  }
+}
+
+/**
  * The whole prompt: the scene, the style, and who the people are.
  *
  * Pure, and the reason this module is testable at all -- there is no way to
@@ -267,20 +371,35 @@ export function composeIllustrationPrompt(
   scenePrompt: string,
   cast: IllustrationMember[] = [],
   /**
-   * True when the story's chosen picture is attached after the cast, so that
-   * the people the story invented -- a hero of faith, a shopkeeper, anyone
-   * with no character sheet -- look the same from page to page.
+   * Everything attached that is not one of the cast: the world sheet, the
+   * story's own montage, an era's clothing. Numbered AFTER the cast, so adding
+   * one never renumbers a person.
+   *
+   * Replaces the old `hasStoryLook` boolean, which could say only "there is
+   * one more picture and it is not a person" -- true of every one of these,
+   * and not enough to tell a shop front from a palette.
    */
-  hasStoryLook = false,
+  extras: IllustrationReference[] = [],
+  opts: {
+    /**
+     * The cover and the first picture of a new face are ESTABLISHING shots:
+     * they become the reference everything later is matched against, so a
+     * head turned away costs more than an awkward composition. Every other
+     * picture is a scene, and a scene is allowed to hide a face.
+     */
+    facesMustShow?: boolean;
+  } = {},
 ): string {
   const parts = [`${scenePrompt}. ${STYLE}`];
 
   const matched = cast.filter((m) => m.reference);
   const described = cast.filter((m) => !m.reference);
+  const attached = extras.filter((e) => e.file);
 
   if (matched.length > 0) {
     parts.push(
-      "The people in this picture must match the reference images exactly, especially their faces.",
+      "The people in this picture must match their reference images — the same face, the same hair," +
+        " the same colouring.",
     );
     // Numbered in the order they are handed to images.edit. The API has no way
     // to label an input image, so the prompt is what says which is which.
@@ -310,21 +429,39 @@ export function composeIllustrationPrompt(
       "Take each person's face, hair, colouring and clothing from their own reference image and nothing else" +
         " from it — not its background, its framing, its lighting, or anything it happens to be holding.",
     );
+    /**
+     * A LIKENESS IS NOT A POSE.
+     *
+     * "Match them, especially their faces" was doing two jobs: it asked for
+     * the right face, and it quietly asked for that face to be pointed at the
+     * camera. Every passage picture came back arranged so nobody was ever
+     * turned away -- a row of people looking out of a scene they were supposed
+     * to be inside.
+     *
+     * Said only where it applies. An establishing picture -- the cover, the
+     * first sight of a new face -- becomes the reference everything later is
+     * matched against, and COVER_SHOWS_PEOPLE asks it for "recognisable" from
+     * the scene prompt's side. Saying both at once would contradict.
+     */
+    if (!opts.facesMustShow) {
+      parts.push(
+        "Match them wherever they can be seen, and compose the picture the way the moment wants it. If" +
+          " someone is turned away, partly hidden, or seen from behind, that is fine — do not rearrange" +
+          " the scene to bring a face into view.",
+      );
+    }
   }
 
-  if (hasStoryLook) {
-    // LAST, so every cast number above keeps the value it had. And described
-    // as a PICTURE rather than a person, or the model reads it as one more
-    // face to place in the scene.
-    parts.push(
-      `Reference image ${matched.length + 1} is an earlier picture from this same story, not a person.` +
-        " Anyone in this scene who also appears in it must look the same here as they do there — the same" +
-        " face, the same hair, the same clothes. Take nothing else from it: not its scene, its background," +
-        " its framing or its moment.",
-    );
-  }
+  // AFTER the cast, so every number above keeps the value it had, and each
+  // says what it IS -- the guide's "identify each input by number and
+  // purpose". A sheet holding several things carries its own layout in `look`,
+  // because a montage the model cannot navigate is a collage it must guess at.
+  attached.forEach((e, i) => {
+    const n = matched.length + i + 1;
+    parts.push(referenceLine(n, e));
+  });
 
-  if (matched.length > 0 || hasStoryLook) {
+  if (matched.length > 0 || attached.length > 0) {
     // WITHOUT THIS, A SPARE FACE GETS USED. First real test: a quest story
     // about William Tyndale came back with Tyndale drawn as Barnabas -- the
     // scene called for an older man at a desk, a face for an older man was
@@ -357,13 +494,22 @@ export async function generateStoryImage(
   userId: number = 1,
   cast: IllustrationMember[] = [],
   /**
-   * The story's chosen picture, so that whoever it contains is the same
-   * person here. The cast covers everybody with a character sheet; this
-   * covers everybody else, which on a historical story is the person the
-   * story is actually about.
+   * Everything attached that is not one of the cast: the story's own montage,
+   * the world sheet, an era's clothing. The cast covers everybody with a
+   * character sheet; these cover everybody and everything else -- on a
+   * historical story, the person it is actually about, and the shop they
+   * walked out of.
    */
-  storyLook?: PictureFile,
-): Promise<string | undefined> {
+  extras: IllustrationReference[] = [],
+  opts: { facesMustShow?: boolean } = {},
+): Promise<StoryImageResult | undefined> {
+  /**
+   * Set only when the reference-matched call failed and the picture was drawn
+   * from words alone. It travels OUT rather than staying in the log, because
+   * a picture that is not matched to its references looks exactly like one
+   * that is -- until you notice the child is somebody else.
+   */
+  let droppedReferences: EditFailure | undefined;
   try {
     // Illustration is premium-only and has no cheap or local tier, so an
     // unentitled user simply gets a story without a picture rather than an
@@ -382,13 +528,16 @@ export async function generateStoryImage(
     const filepath = path.join(STORY_IMAGE_DIR, filename);
     const openaiClient = createClient(resolved);
 
-    // The look reference goes LAST, after every cast member, so the numbering
-    // in the prompt matches the order images.edit receives them in.
+    // Extras go LAST, after every cast member, so the numbering in the prompt
+    // matches the order images.edit receives them in. The filter is the same
+    // one composeIllustrationPrompt applies, so the two cannot disagree about
+    // which extras were actually attached.
+    const attachedExtras = extras.filter((e) => e.file);
     const references = [
       ...cast.map((m) => m.reference).filter((f): f is PictureFile => Boolean(f)),
-      ...(storyLook ? [storyLook] : []),
+      ...attachedExtras.map((e) => e.file as PictureFile),
     ];
-    const prompt = composeIllustrationPrompt(imagePrompt, cast, Boolean(storyLook));
+    const prompt = composeIllustrationPrompt(imagePrompt, cast, extras, opts);
     let response;
     if (references.length > 0) {
       try {
@@ -414,11 +563,25 @@ export async function generateStoryImage(
           size: "1024x1024",
         });
       } catch (editError) {
-        // A picture that does not quite match beats no picture. The prompt
-        // still describes everyone in words, because every member carries
-        // `look` whether or not they have a reference.
+        /**
+         * THE MOST EXPENSIVE LINE IN THIS FILE, AND IT USED TO BE ONE LOG.
+         *
+         * A picture that does not quite match beats no picture, so the
+         * fallback stays. What did not stay is it being quiet: every
+         * reference is dropped here, and the result is a perfectly good
+         * picture of the wrong child. That is exactly what happened the first
+         * time this feature was tested -- the sign was one console.error, and
+         * nothing downstream knew.
+         *
+         * So the reason is named and carried out. A parameter 400 is OUR bug
+         * and must be findable; a refusal is the model declining and will
+         * happen again on retry; anything else is weather.
+         */
+        droppedReferences = classifyEditFailure(editError);
         console.error(
-          "[illustration] reference-matched generation failed; falling back to a plain one:",
+          `[illustration] reference-matched generation failed (${droppedReferences});` +
+            ` ${references.length} reference image(s) were DROPPED and this picture is not` +
+            " matched to them:",
           editError,
         );
       }
@@ -432,7 +595,8 @@ export async function generateStoryImage(
         prompt: composeIllustrationPrompt(
           imagePrompt,
           cast.map(({ reference: _reference, ...rest }) => rest),
-          false,
+          extras.map(({ file: _file, ...rest }) => rest),
+          opts,
         ),
         n: 1,
         size: "1024x1024",
@@ -451,13 +615,13 @@ export async function generateStoryImage(
     // reader would go on showing the stock lion with nothing logged.
     if (image?.b64_json) {
       await fs.promises.writeFile(filepath, Buffer.from(image.b64_json, "base64"));
-      return `/public/images/stories/${filename}`;
+      return { url: `/public/images/stories/${filename}`, droppedReferences };
     }
     // Kept for any model that does return a URL. Those links expire in about an
     // hour, which is why the file is downloaded rather than stored as a link.
     if (image?.url) {
       await downloadImage(image.url, filepath);
-      return `/public/images/stories/${filename}`;
+      return { url: `/public/images/stories/${filename}`, droppedReferences };
     }
 
     console.error(
