@@ -11,6 +11,9 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { getTableColumns, getTableName, is } from "drizzle-orm";
 import { PgTable, type AnyPgTable } from "drizzle-orm/pg-core";
 import * as schema from "@shared/schema";
+// The declared-table list lives in its own module so CI can read it without
+// importing this one, which connects to a database and logs as it does.
+import { declaredTables } from "@shared/schemaTables";
 
 let pool: PgPool | undefined;
 let db: NodePgDatabase<typeof schema> | undefined;
@@ -34,9 +37,7 @@ let schemaProblems: string[] = [];
  * there is covered automatically rather than needing to be remembered here.
  */
 async function verifyOrmSchema(activePool: PgPool): Promise<void> {
-  const tables = Object.values(schema).filter((value) =>
-    is(value, PgTable),
-  ) as AnyPgTable[];
+  const tables = declaredTables();
 
   const problems: string[] = [];
   try {
