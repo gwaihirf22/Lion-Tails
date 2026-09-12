@@ -1,32 +1,32 @@
 /**
- * Give one character's attributes and skills back, from Settings.
+ * Take one character back to the beginning, from Settings.
  *
- * WHY THIS EXISTS AT ALL, when the sliders already refund: lowering a stat
- * gives its point back, so a child can walk a sheet down one click at a time.
- * Except when that walk is refused. Parent Mode writes stats WITHOUT spending,
- * on purpose, and the strict save path checks the MERGED sheet -- so on a sheet
- * that is over budget every partial step is still over budget, and each save is
- * refused until the whole thing comes back in line at once. This is that one
- * save. It is also the answer to eleven fiddly clicks when the real wish is
- * "start her again".
+ * A RESET, NOT A RESPEC. The sliders already hand a spent point back when you
+ * lower a stat, so "choose again" is something the character form can already
+ * do a click at a time. This is the other thing: everything the character has
+ * SPENT and everything the character has EARNED, gone, back to a brand-new
+ * sheet with the starting points and nothing else.
  *
- * WHAT IT DOES NOT TOUCH: adventures. That is the record of the stories this
- * character has been through -- it is what EARNED the points, and it drives the
- * virtue levels. Both write routes omit it as server-owned, so this could
- * not clear it even by mistake. A reset hands the points back to be spent
- * again; it does not take a child's stories away.
+ * That is why it needs POST /api/characters/:id/reset rather than a normal
+ * save. Earned points live in `adventures`, which every other write route omits
+ * as server-owned -- a client cannot rewrite what happened by sending a body.
+ * The route is the one deliberate exception, so that rule stays absolute
+ * everywhere else.
  *
- * It writes on confirm, with nothing to press afterwards. In the character form
- * a reset could sit in form state and cost nothing until Save, but Settings has
- * no form to hold it -- so the dialog is the whole gate, and it says the
- * character's name and the exact number of points being given back rather than
- * asking "are you sure?" about an unnamed thing.
+ * IT CANNOT BE UNDONE, and the copy says so in those words. `adventures` is not
+ * derived by counting saved stories -- they expire, the ledger outlives them --
+ * so there is nothing to rebuild it from. The stories themselves stay in the
+ * library; what goes is this character's record of them.
+ *
+ * The dialog is therefore the whole gate: Settings has no form to hold an
+ * unsaved change, so there is no Save to think better at. It names the
+ * character and counts what is being taken, rather than asking "are you sure?"
+ * about an unnamed thing.
  */
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type Character,
-  baseStats,
   characterKind,
   pointsSpent,
   pointsEarned,
@@ -64,15 +64,22 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-/** How many points this sheet has committed, and to what. */
+/**
+ * What a reset would cost this character.
+ *
+ * `earned` counts too, and it is the reason this is not just "points spent":
+ * a character sitting at the baseline having never spent a thing can still
+ * have twenty stories behind it, and the reset takes those. A sheet is only
+ * already-at-the-beginning when there is nothing on it AND nothing behind it.
+ */
 function committed(c: Character) {
   const skills = skillsOf(c);
   return {
     points: pointsSpent(statsOf(c), skills),
     skills: skills.length,
-    /** A sheet nobody has spent on has nothing to give back. */
-    get isBaseline() {
-      return this.points === 0 && this.skills === 0;
+    earned: pointsEarned(c),
+    get isFresh() {
+      return this.points === 0 && this.skills === 0 && this.earned === 0;
     },
   };
 }
@@ -98,17 +105,14 @@ export default function ResetSheetCard() {
     if (!selected) return;
     setResetting(true);
     try {
-      // The strict route, deliberately: a baseline sheet spends nothing, so it
-      // is affordable for every character that has ever existed. This needs no
-      // Parent Mode and no route of its own.
-      await apiRequest("PUT", `/api/characters/${selected.id}`, {
-        stats: baseStats(),
-        skills: [],
-      });
+      // A route of its own, with no body. Clearing `adventures` is the whole
+      // point and no client may write that field -- see the route's comment for
+      // why that rule stays absolute everywhere else.
+      await apiRequest("POST", `/api/characters/${selected.id}/reset`);
       await queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
       toast({
-        title: `${selected.name}'s sheet is back to the start`,
-        description: "Those attributes and skills are ready to spend again.",
+        title: `${selected.name} is starting again`,
+        description: "Attributes, skills and earned points are all back to the beginning.",
       });
       setSelectedId("");
     } catch (error) {
@@ -132,9 +136,10 @@ export default function ResetSheetCard() {
             Written here first because this copy is about exactly one
             character, which is where that mistake gets made. */}
         <CardDescription>
-          Hand back every point one character has spent on attributes and skills, so the
-          points can be spent again. The stories that character has been in, and the
-          points those earned, are not affected.
+          Take one character back to the beginning: attributes to the middle, no skills,
+          and no earned points. The stories stay in your library — what goes is the
+          character's record of them, and the virtue levels that came with it. This cannot
+          be undone.
         </CardDescription>
       </CardHeader>
 
@@ -164,8 +169,8 @@ export default function ResetSheetCard() {
 
         {selected && spent && (
           <p className="text-sm text-muted-foreground">
-            {spent.isBaseline ? (
-              <>{selected.name} has not spent anything yet — there is nothing to give back.</>
+            {spent.isFresh ? (
+              <>{selected.name} is already at the beginning — there is nothing to reset.</>
             ) : (
               <>
                 {selected.name} has {spent.points} point{spent.points === 1 ? "" : "s"} committed
@@ -174,9 +179,13 @@ export default function ResetSheetCard() {
                     , including {spent.skills} skill{spent.skills === 1 ? "" : "s"}
                   </>
                 )}
-                . The {pointsEarned(selected)} point
-                {pointsEarned(selected) === 1 ? "" : "s"} earned from stories stay
-                {pointsEarned(selected) === 1 ? "s" : ""}.
+                {spent.earned > 0 && (
+                  <>
+                    , and {spent.earned} point{spent.earned === 1 ? "" : "s"} earned from{" "}
+                    {spent.earned === 1 ? "one story" : `${spent.earned} stories`}
+                  </>
+                )}
+                . A reset takes {spent.earned > 0 ? "all of it" : "it back to the beginning"}.
               </>
             )}
           </p>
@@ -186,10 +195,10 @@ export default function ResetSheetCard() {
       <CardFooter className="flex justify-end border-t p-4 bg-muted rounded-b-2xl">
         <Button
           variant="destructive"
-          disabled={!selected || !spent || spent.isBaseline || resetting}
+          disabled={!selected || !spent || spent.isFresh || resetting}
           onClick={() => setConfirmOpen(true)}
         >
-          {resetting ? "Resetting…" : "Reset attributes and skills"}
+          {resetting ? "Resetting…" : "Reset this character"}
         </Button>
       </CardFooter>
 
@@ -202,11 +211,18 @@ export default function ResetSheetCard() {
               Start {selected?.name ?? "this character"}'s sheet again?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The five attributes go back to the middle and every skill is cleared, giving
-              back {spent?.points ?? 0} point{spent?.points === 1 ? "" : "s"} to spend again.
-              The stories {selected?.name ?? "this character"} has been in, the points those
-              earned, and the virtues that came with them all stay. This happens straight
-              away.
+              The five attributes go back to the middle and every skill is cleared.
+              {(spent?.earned ?? 0) > 0 && (
+                <>
+                  {" "}
+                  The {spent?.earned} point{spent?.earned === 1 ? "" : "s"}{" "}
+                  {selected?.name ?? "this character"} earned from{" "}
+                  {spent?.earned === 1 ? "a story" : "stories"} are taken away too, along
+                  with the virtue levels that came with them. Your saved stories stay in
+                  the library.
+                </>
+              )}{" "}
+              This happens straight away and cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

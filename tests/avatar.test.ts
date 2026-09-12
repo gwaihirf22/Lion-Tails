@@ -21,6 +21,7 @@ import {
   SKILL_START,
   STAT_BASE,
   statsAreAffordable,
+  startingOver,
   statsOf,
   unseenVirtues,
   virtueLevels,
@@ -320,81 +321,113 @@ describe("skills cost points", () => {
 });
 
 /**
- * Settings can hand a character's spent points back. The reset writes one
- * sheet -- every attribute at the baseline, no skills -- through the STRICT
- * route, so what these assert is that such a write is always allowed to land,
- * and that it gives back exactly what was spent and nothing more.
+ * Settings can take a character back to the beginning. A RESET, NOT A RESPEC:
+ * POST /api/characters/:id/reset clears what was spent AND what was earned, so
+ * what these assert is the shape that write leaves behind -- a brand-new sheet,
+ * with the starting points and nothing else.
  */
-describe("starting a sheet again", () => {
+// startingOver() IS what POST /api/characters/:id/reset writes -- the route
+// passes it straight to storage. Restating the payload here instead would let
+// the route stop clearing a field while these kept passing.
+const RESET = startingOver();
+
+describe("starting a character again", () => {
   const sk = (name: string, value: number) => ({ name, value });
 
-  it("spends nothing, so it is affordable for any character", () => {
-    // Including the poorest possible one: brand new, no stories, nothing
-    // earned. If this were ever false the reset could strand the very sheets
-    // it exists to rescue.
-    expect(pointsSpent(baseStats(), [])).toBe(0);
-    expect(statsAreAffordable(baseStats(), undefined, [])).toBe(true);
-    expect(statsAreAffordable(baseStats(), { adventures: [] }, [])).toBe(true);
+  it("leaves a sheet identical to a character who has never done anything", () => {
+    const veteran = mk({
+      stats: { strength: 8, agility: 2, constitution: 5, wisdom: 4, heart: 6 },
+      skills: [sk("climbing", 3), sk("tracking", 2)],
+      adventures: [{ storyId: "s1", theme: "courage" }, { storyId: "s2", theme: "mercy" }],
+      seenVirtues: ["courage"],
+    });
+    const after = mk({ ...veteran, ...RESET });
+    const newborn = mk({ name: veteran.name });
+
+    // The whole point, as one assertion: afterwards there is no way to tell.
+    expect(pointsSpent(statsOf(after), skillsOf(after))).toBe(
+      pointsSpent(statsOf(newborn), skillsOf(newborn)),
+    );
+    expect(pointsEarned(after)).toBe(pointsEarned(newborn));
+    expect(pointsAvailable(after)).toBe(pointsAvailable(newborn));
+    expect(pointsAvailable(after)).toBe(STARTING_POINTS);
+  });
+
+  it("takes the earned points away, which is the whole purpose", () => {
+    // The distinction that matters: handing spent points BACK would leave this
+    // character better off than a new one, because the stories still counted.
+    const earner = mk({
+      stats: baseStats(),
+      adventures: [{ storyId: "s1" }, { storyId: "s2" }, { storyId: "s3" }],
+    });
+    expect(pointsAvailable(earner)).toBe(STARTING_POINTS + 3);
+
+    const after = mk({ ...earner, ...RESET });
+    expect(pointsEarned(after)).toBe(0);
+    expect(pointsAvailable(after)).toBe(STARTING_POINTS);
+  });
+
+  it("takes the virtue levels with them, because they were the same record", () => {
+    // Virtue levels are just how many adventures carry that theme -- there is
+    // no second list to clear, and none to forget to clear.
+    const devout = mk({
+      adventures: [
+        { storyId: "s1", theme: "courage" },
+        { storyId: "s2", theme: "courage" },
+        { storyId: "s3", theme: "mercy" },
+      ],
+    });
+    expect(virtueLevels(devout)).toEqual({ courage: 2, mercy: 1 });
+    expect(virtueLevels(mk({ ...devout, ...RESET }))).toEqual({});
   });
 
   it("rescues a sheet Parent Mode wrote over budget", () => {
-    // The case the feature is FOR. Parent Mode writes stats without spending,
-    // so a sheet can cost more than the character has ever earned.
+    // Parent Mode writes stats without spending, so a sheet can cost more than
+    // the character ever earned -- and the strict route checks the MERGED
+    // sheet, so every partial step down is still over budget and is refused.
     const lavish = mk({
       stats: { strength: 10, agility: 10, constitution: 10, wisdom: 10, heart: 10 },
       skills: [sk("climbing", 5)],
       adventures: [{ storyId: "s1", theme: "courage" }],
     });
     expect(pointsAvailable(lavish)).toBeLessThan(0);
-
-    // Every partial step down is STILL over budget, which is why the strict
-    // route refuses them one at a time and why a one-shot reset is the escape.
     const oneNotchDown = { ...statsOf(lavish), strength: 9 };
     expect(statsAreAffordable(oneNotchDown, lavish, skillsOf(lavish))).toBe(false);
 
-    // The whole sheet at once lands.
-    expect(statsAreAffordable(baseStats(), lavish, [])).toBe(true);
+    // After the reset the sheet is affordable again -- and stays affordable
+    // even though the earned points went with it, because a baseline sheet
+    // spends nothing at all.
+    const after = mk({ ...lavish, ...RESET });
+    expect(pointsAvailable(after)).toBe(STARTING_POINTS);
+    expect(statsAreAffordable(statsOf(after), after, skillsOf(after))).toBe(true);
   });
 
-  it("gives back exactly what was spent, and no more", () => {
-    const spender = mk({
-      stats: { ...baseStats(), strength: STAT_BASE + 2, wisdom: STAT_BASE - 1 },
-      skills: [sk("climbing", 2)],
-      adventures: [{ storyId: "s1" }, { storyId: "s2" }, { storyId: "s3" }],
+  it("keeps everything that is not the sheet", () => {
+    // A reset is not a delete. Who the character IS survives it.
+    const mia = mk({
+      name: "Mia",
+      kind: "human",
+      sex: "female",
+      age: 10,
+      hair: "brown",
+      avatarUrl: "https://example.test/mia.png",
+      stats: { ...baseStats(), strength: STAT_BASE + 2 },
+      adventures: [{ storyId: "s1" }],
     });
-    // 2 up, 1 refunded by the weakness, 2 on the skill.
-    expect(pointsSpent(statsOf(spender), skillsOf(spender))).toBe(3);
-
-    const after = { ...spender, stats: baseStats(), skills: [] };
-    // Back to the full pool: the starting points plus one per story. The
-    // stories themselves are untouched, so nothing that was earned is lost.
-    expect(pointsAvailable(after)).toBe(STARTING_POINTS + 3);
-    expect(pointsEarned(after)).toBe(pointsEarned(spender));
+    const after = mk({ ...mia, ...RESET });
+    expect(after.name).toBe("Mia");
+    expect(after.kind).toBe("human");
+    expect(after.age).toBe(10);
+    expect(after.hair).toBe("brown");
+    expect(after.avatarUrl).toBe(mia.avatarUrl);
   });
 
-  it("leaves the record of what happened alone", () => {
-    // adventures drives both the earned points and the virtue levels, and is
-    // server-owned on both write routes. A reset hands points back to be spent
-    // again; it does not take a child's stories away.
-    const veteran = mk({
-      stats: { ...baseStats(), heart: STAT_BASE + 3 },
-      adventures: [
-        { storyId: "s1", theme: "courage" },
-        { storyId: "s2", theme: "courage" },
-      ],
-    });
-    const after = { ...veteran, stats: baseStats(), skills: [] };
-    expect(after.adventures).toEqual(veteran.adventures);
-    expect(virtueLevels(after)).toEqual(virtueLevels(veteran));
-  });
-
-  it("is a no-op on a sheet nobody has spent on", () => {
+  it("changes nothing on a character that never started", () => {
     // What the button being disabled means, stated as arithmetic.
     const fresh = mk({});
     expect(pointsSpent(statsOf(fresh), skillsOf(fresh))).toBe(0);
-    expect(pointsAvailable({ ...fresh, stats: baseStats(), skills: [] })).toBe(
-      pointsAvailable(fresh),
-    );
+    expect(pointsEarned(fresh)).toBe(0);
+    expect(pointsAvailable(mk({ ...fresh, ...RESET }))).toBe(pointsAvailable(fresh));
   });
 });
 

@@ -80,6 +80,7 @@ import {
   MAX_AVATARS,
   FREE_STORIES_PER_MONTH,
   storyAllowance,
+  startingOver,
   statsOf,
   virtueLevels,
   avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, characterIdsOf, characterRoleOf,
@@ -409,6 +410,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error customising character:", error);
       res.status(500).json({ message: "Failed to update character" });
+    }
+  });
+
+  /**
+   * Start this character's sheet again, from nothing.
+   *
+   * THE ONE PLACE `adventures` IS CLEARED. Everywhere else it is server-owned
+   * and omitted from the write schema, because it is a record of what happened
+   * and no client gets to rewrite history by sending a body. That rule exists
+   * to stop an accident; this route is the deliberate exception, and it is a
+   * route of its own precisely SO the rule can stay absolute everywhere else.
+   * Nothing here is read from req.body -- there is nothing to send. The only
+   * input is which character, and that is checked against the signed-in user.
+   *
+   * What it costs, stated plainly because it cannot be undone: `adventures` is
+   * not derived by counting saved stories (they expire; the ledger outlives
+   * them), so once cleared it cannot be rebuilt. The stories themselves stay in
+   * the library -- this is the character's record of them, the points those
+   * earned, and the virtue levels that came with them, all back to zero. That
+   * IS the point: a reset that handed the points back to be spent again is a
+   * respec, and what was asked for is starting over.
+   *
+   * seenVirtues goes too. It is the read-receipt for virtues derived from
+   * adventures, and a receipt for something that no longer exists is the kind
+   * of leftover that shows up later as a badge that will not appear.
+   *
+   * NOT behind Parent Mode, to match the bar the app already sets: deleting a
+   * character outright is requireAuth plus a confirm dialog, and this keeps the
+   * character. The gate is the dialog, which names the character and counts
+   * what is being taken.
+   */
+  app.post("/api/characters/:id/reset", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const character = await storage.updateCharacter(
+        req.params.id,
+        userId,
+        startingOver(),
+      );
+      // updateCharacter reads the row under the same user id before writing, so
+      // a miss here is "not yours or not there" -- the same 404 either way,
+      // which is also what stops this being a probe for other people's ids.
+      if (!character) {
+        return res.status(404).json({ message: "Character not found" });
+      }
+      res.json(character);
+    } catch (error) {
+      console.error("Error resetting character:", error);
+      res.status(500).json({ message: "Failed to reset character" });
     }
   });
 
