@@ -37,7 +37,12 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
-  const [activeTab, setActiveTab] = useState<string>("login");
+  // ?tab=register opens straight onto sign-up -- the shared-story page's
+  // "Make your own story" sends people here, and landing them on Log In
+  // asks a newcomer for an account they do not have.
+  const [activeTab, setActiveTab] = useState<string>(() =>
+    new URLSearchParams(window.location.search).get("tab") === "register" ? "register" : "login",
+  );
 
   // Create forms
   const loginForm = useForm<LoginFormValues>({

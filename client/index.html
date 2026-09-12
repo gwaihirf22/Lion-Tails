@@ -16,6 +16,12 @@
       crop. Files here in client/public are copied verbatim to the site root,
       so these URLs are stable; the hero image is imported through Vite
       instead, because there it should be fingerprinted and cache-busted.
+
+      og:image is ABSOLUTE, with the domain written in. Stable is not enough:
+      the Open Graph spec asks for a full URL, and a crawler that does not
+      resolve "/og-cover.jpg" against the page shows the card with no picture.
+      A shared story's page (/s/:token) replaces all of these with its own --
+      see server/lib/pageMeta.ts -- building its URLs from the request.
     -->
     <title>Lion Tails — Real Stories. Timeless Truths.</title>
     <meta
@@ -35,7 +41,7 @@
       property="og:description"
       content="Scripture and church history as stories worth staying awake for, with the characters you choose in them."
     />
-    <meta property="og:image" content="/og-cover.jpg" />
+    <meta property="og:image" content="https://liontails.paul-blake.com/og-cover.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta

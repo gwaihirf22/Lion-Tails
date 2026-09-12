@@ -6,6 +6,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
 import createMemoryStore from 'memorystore';
+import { newShareToken } from './lib/sharing';
 
 const MemoryStore = createMemoryStore(session);
 
@@ -99,6 +100,23 @@ export interface IStorage {
   saveStory(story: StoryToSave, request: StoryRequest, userId: number, heroId?: string): Promise<SavedStory>;
   toggleFavorite(id: string, isFavorite: boolean, userId: number): Promise<SavedStory | undefined>;
   deleteStory(id: string, userId: number): Promise<boolean>;
+  /**
+   * Sharing a story by link (the story_shares table).
+   *
+   * Every method but getSharedStory takes the OWNER, and does nothing for a
+   * story that is not theirs -- createShare returns undefined rather than
+   * minting a link to somebody else's story. createShare is idempotent: a
+   * second call returns the link that already exists.
+   *
+   * getSharedStory takes only the token, because it is the one read with no
+   * session behind it. It applies the library's visibility rule (favourite, no
+   * expiry, or not yet expired), so a story that has lapsed from its owner's
+   * library cannot still be read by a stranger.
+   */
+  getShareToken(storyId: string, userId: number): Promise<string | undefined>;
+  createShare(storyId: string, userId: number): Promise<string | undefined>;
+  deleteShare(storyId: string, userId: number): Promise<boolean>;
+  getSharedStory(token: string): Promise<SavedStory | undefined>;
   updateStoryHeroId(storyId: string, heroId: string, userId: number): Promise<SavedStory | undefined>;
   /**
    * Attach an illustration to a story that was saved without one.
@@ -656,10 +674,53 @@ export class MemStorage implements IStorage {
     // Remove from user's stories
     userStories.delete(id);
 
+    // The database cascades a story's share link away with it; so must this.
+    for (const [token, share] of this.shares) {
+      if (share.storyId === id) this.shares.delete(token);
+    }
+
     // Remove from storage
     return this.stories.delete(id);
   }
-  
+
+  /** Share links, token -> the story it opens. See IStorage. */
+  private shares = new Map<string, { storyId: string; userId: number }>();
+
+  private ownsStory(storyId: string, userId: number): boolean {
+    return Boolean(this.userStories.get(userId)?.has(storyId) && this.stories.has(storyId));
+  }
+
+  async getShareToken(storyId: string, userId: number): Promise<string | undefined> {
+    for (const [token, share] of this.shares) {
+      if (share.storyId === storyId && share.userId === userId) return token;
+    }
+    return undefined;
+  }
+
+  async createShare(storyId: string, userId: number): Promise<string | undefined> {
+    if (!this.ownsStory(storyId, userId)) return undefined;
+    const existing = await this.getShareToken(storyId, userId);
+    if (existing) return existing;
+    const token = newShareToken();
+    this.shares.set(token, { storyId, userId });
+    return token;
+  }
+
+  async deleteShare(storyId: string, userId: number): Promise<boolean> {
+    const token = await this.getShareToken(storyId, userId);
+    return token ? this.shares.delete(token) : false;
+  }
+
+  async getSharedStory(token: string): Promise<SavedStory | undefined> {
+    const share = this.shares.get(token);
+    const story = share && this.stories.get(share.storyId);
+    if (!story) return undefined;
+    // The library's rule, as DbStorage applies it in SQL.
+    const visible =
+      story.isFavorite || !story.expiresAt || new Date(story.expiresAt).getTime() > Date.now();
+    return visible ? story : undefined;
+  }
+
   async getStoryRequests(userId: number): Promise<StoryRequest[]> {
     return (await this.getUserStories(userId)).map((s) => s.request);
   }

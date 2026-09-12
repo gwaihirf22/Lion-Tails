@@ -101,6 +101,7 @@ export default function ParentModeToggle() {
             <ul className="list-disc list-inside space-y-1 text-xs">
               <li>Edit a story's title and text from its page</li>
               <li>Rename a universe, edit its summary, pin what must never be forgotten</li>
+              <li>Share a story by link, for someone without an account to read</li>
               <li>Edit AI prompts before story generation</li>
             </ul>
           </div>

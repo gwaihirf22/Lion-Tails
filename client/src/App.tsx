@@ -15,6 +15,7 @@ import HeroesOfFaith from "@/pages/HeroesOfFaith";
 import ImageAnalysis from "@/pages/ImageAnalysis";
 import GenerateStory from "@/pages/GenerateStory";
 import AuthPage from "@/pages/auth-page";
+import SharedStory from "@/pages/SharedStory";
 
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -34,6 +35,9 @@ function Router() {
       <ProtectedRoute path="/generate-story" component={GenerateStory} />
       <Route path="/music" component={Music} />
       <Route path="/auth" component={AuthPage} />
+      {/* PUBLIC, on purpose: a shared story is for someone with no account.
+          What it may show is decided on the server (shared/sharedStory.ts). */}
+      <Route path="/s/:token" component={SharedStory} />
       <ProtectedRoute path="/saved-stories" component={SavedStories} />
         {/* The first param route here; wouter's Route provides useParams to the
             page, and ProtectedRoute renders inside one. */}
@@ -63,7 +67,10 @@ function App() {
    * is honest; out-shouting them is not.
    */
   const [location] = useLocation();
-  const bareReader = location.startsWith("/story");
+  // A shared story (/s/:token) is the same reader and gets the same treatment
+  // -- without it the reader sat in the shell's card, a box in a box on a
+  // phone. "/s/" WITH its slash: "/saved-stories" and "/settings" start "/s".
+  const bareReader = location.startsWith("/story") || location.startsWith("/s/");
 
   // The photo background and its rgba(255,255,255,0.7) readability overlay
   // are gone. They existed to make text legible over a stock photograph of a

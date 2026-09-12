@@ -99,6 +99,7 @@ import {
   AVATAR_DIR,
 } from "./lib/avatar";
 import { statsAreAffordable } from "@shared/schema";
+import { sharedStoryView, SHARE_TOKEN_PATTERN } from "@shared/sharedStory";
 import { z, ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
 // zod 4's $ZodError type, and this app defines its schemas with zod 3's
@@ -1947,6 +1948,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  /**
+   * SHARING A STORY BY LINK.
+   *
+   * Blake: "a share story option which would create a link that would allow a
+   * person to view the story without having an account."
+   *
+   * Four routes and they are not symmetrical, on purpose:
+   *
+   * - CREATING a link needs Parent Mode (requireParentMode, on the server,
+   *   where the gate is real). A link makes a story -- a child's name in it --
+   *   readable by anyone who holds it, and children use this app.
+   * - STOPPING needs only the session. Making something private again is the
+   *   one action here that can never cause harm, so it is never gated.
+   * - READING the owner's own link needs only the session.
+   * - READING a shared story needs NOTHING -- that is the feature -- and so it
+   *   returns only `sharedStoryView`, an allow-list with a test on its keys.
+   */
+  app.get("/api/stories/:id/share", requireAuth, async (req, res) => {
+    try {
+      const token = await storage.getShareToken(req.params.id, (req.user as any).id);
+      res.json({ token: token ?? null });
+    } catch (error) {
+      console.error("Error reading a share link:", error);
+      res.status(500).json({ message: "Failed to read the share link" });
+    }
+  });
+
+  app.post("/api/stories/:id/share", requireAuth, requireParentMode, async (req, res) => {
+    // The prologue is in every library already; a link to it shares nothing.
+    if (refuseBuiltIn(req, res)) return;
+    try {
+      const token = await storage.createShare(req.params.id, (req.user as any).id);
+      // Undefined means no such story OR not theirs -- one answer for both, as
+      // every by-id route here gives, so it does not confirm the id exists.
+      if (!token) return res.status(404).json({ message: "Story not found" });
+      res.json({ token });
+    } catch (error) {
+      console.error("Error creating a share link:", error);
+      res.status(500).json({ message: "Failed to create the share link" });
+    }
+  });
+
+  app.delete("/api/stories/:id/share", requireAuth, async (req, res) => {
+    try {
+      await storage.deleteShare(req.params.id, (req.user as any).id);
+      // 200 either way: "it is not shared" is true after this call whether or
+      // not it was before, and that is the only thing the caller asked for.
+      res.json({ token: null });
+    } catch (error) {
+      console.error("Error stopping a share:", error);
+      res.status(500).json({ message: "Failed to stop sharing" });
+    }
+  });
+
+  /**
+   * A shared story, for anybody holding the link.
+   *
+   * ONE 404 for every way of not being readable -- a malformed token, an
+   * unknown one, a stopped share, a lapsed or deleted story -- with the same
+   * body, so the route never confirms that a story exists.
+   *
+   * The token's shape is checked before any query, so junk never reaches the
+   * database and a probe costs a regex, not a round trip.
+   *
+   * `no-store`: a stopped share has to stop working NOW, not whenever a cache
+   * in SWAG or a browser lets go of it. `noindex`: a story about someone's
+   * child does not belong in a search engine, and the page says so too.
+   */
+  app.get("/api/shared/:token", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.set("X-Robots-Tag", "noindex, nofollow");
+    const notShared = () =>
+      res.status(404).json({ message: "This story is not shared, or is no longer shared." });
+    try {
+      if (!SHARE_TOKEN_PATTERN.test(req.params.token)) return notShared();
+      const saved = await storage.getSharedStory(req.params.token);
+      if (!saved) return notShared();
+      res.json(sharedStoryView(saved));
+    } catch (error) {
+      console.error("Error reading a shared story:", error);
+      res.status(500).json({ message: "Failed to load this story" });
+    }
+  });
+
   // Toggle a story as favorite - requires authentication
   app.put("/api/stories/:id/favorite", async (req, res) => {
     try {

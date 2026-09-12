@@ -11,6 +11,7 @@ import connectPg from 'connect-pg-simple';
 // previous inline require() threw a ReferenceError on the fallback path.
 import createMemoryStore from 'memorystore';
 import { IStorage, type StoryToSave } from './storage';
+import { newShareToken } from './lib/sharing';
 
 const PostgresStore = connectPg(session);
 
@@ -808,7 +809,74 @@ export class DbStorage implements IStorage {
       return false;
     }
   }
-  
+
+  /**
+   * Share links. See IStorage for the contract; the SQL is where it is kept.
+   *
+   * No share row survives its story: story_shares cascades from user_stories,
+   * so deleteStory above needs no change.
+   */
+  async getShareToken(storyId: string, userId: number): Promise<string | undefined> {
+    if (!isDatabaseAvailable()) return undefined;
+    const { rows } = await pool!.query(
+      `SELECT token FROM story_shares WHERE story_id = $1 AND user_id = $2`,
+      [storyId, userId],
+    );
+    return rows[0]?.token;
+  }
+
+  /**
+   * Ownership, creation and "you already have one" in ONE statement.
+   *
+   * The INSERT selects FROM the owner's own story row, so a story that is not
+   * theirs yields nothing to insert and nothing comes back -- there is no
+   * check-then-write gap to race. Two taps at once both land on the unique
+   * index; `DO UPDATE SET story_id = EXCLUDED.story_id` is a no-op update that
+   * exists only so RETURNING hands back the token already there, which is
+   * what makes this idempotent rather than a unique-violation error.
+   */
+  async createShare(storyId: string, userId: number): Promise<string | undefined> {
+    if (!isDatabaseAvailable()) return undefined;
+    const { rows } = await pool!.query(
+      `INSERT INTO story_shares (token, story_id, user_id)
+         SELECT $1, story_id, user_id FROM user_stories
+          WHERE story_id = $2 AND user_id = $3
+       ON CONFLICT (story_id) DO UPDATE SET story_id = EXCLUDED.story_id
+       RETURNING token`,
+      [newShareToken(), storyId, userId],
+    );
+    return rows[0]?.token;
+  }
+
+  async deleteShare(storyId: string, userId: number): Promise<boolean> {
+    if (!isDatabaseAvailable()) return false;
+    const result = await pool!.query(
+      `DELETE FROM story_shares WHERE story_id = $1 AND user_id = $2`,
+      [storyId, userId],
+    );
+    return (result.rowCount || 0) > 0;
+  }
+
+  /**
+   * The one read with no session behind it.
+   *
+   * The visibility clause is the library's own (getAllStories and the story
+   * lists), not getStoryById's, which has none: an owner may still open a
+   * lapsed story by id, but a stranger must not be able to read one the owner's
+   * own library has stopped showing.
+   */
+  async getSharedStory(token: string): Promise<SavedStory | undefined> {
+    if (!isDatabaseAvailable()) return undefined;
+    const { rows } = await pool!.query(
+      `SELECT s.* FROM story_shares sh
+         JOIN user_stories s ON s.story_id = sh.story_id
+        WHERE sh.token = $1
+          AND (s.is_favorite = true OR s.expires_at IS NULL OR s.expires_at > NOW())`,
+      [token],
+    );
+    return rows.length ? rowToSavedStory(rows[0]) : undefined;
+  }
+
   /**
    * Stamp a story as looked at.
    *

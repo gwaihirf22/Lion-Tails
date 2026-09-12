@@ -133,7 +133,7 @@ function StoryFigure({
         aria-label="See this picture larger"
         className="reader-figure-button"
       >
-        <img src={picture.url} alt={picture.prompt} loading="lazy" />
+        <img src={picture.url} alt={picture.prompt || "A picture from this story."} loading="lazy" />
       </button>
     </figure>
   );
