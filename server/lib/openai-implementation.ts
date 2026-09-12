@@ -45,7 +45,12 @@ import {
   FURTHER_LEARNING_HEADING,
 } from "@shared/storyAppendices";
 import { generateDiggingDeeper, type DiggingSource } from "./diggingDeeper";
-import { generateStoryImage, illustrationCast, illustrationPlates } from "./illustration";
+import {
+  generateStoryImage,
+  illustrationCast,
+  illustrationPlates,
+  COVER_SIZE,
+} from "./illustration";
 
 // Credentials, provider and model are decided exclusively by
 // resolveModel() in ./modelPolicy. Nothing here should read
@@ -330,6 +335,36 @@ const questShape = (brief: StoryBrief): string =>
 
 export const COVER_SHOWS_PEOPLE =
   "The people in it should be recognisable -- show their faces rather than only their backs.";
+
+/**
+ * THE COVER IS A MONTAGE, and it is doing two jobs at once.
+ *
+ * For a reader it is the picture on the card: several moments from the story in
+ * one frame, which is also a reason to open it. For every picture drawn
+ * afterwards it is the STYLE REFERENCE -- attached to each one, so the book
+ * looks like one book rather than a stack of unrelated drawings.
+ *
+ * WHY SEVERAL SCENES RATHER THAN ONE. Blake: one picture covering many events
+ * saves a reader generating several, and it sets a standard anything they
+ * generate later has to match. It also answers the budget: sixteen reference
+ * slots is not much once a cast, Barnabas and the world sheet are in, and a
+ * montage carries a whole story's worth of places in one of them.
+ *
+ * EACH PANEL DESCRIBED SEPARATELY, because the layout is the part the next
+ * prompt has to be able to point at. "A montage of the story" produces a blur;
+ * six described moments produce six things that can be named later.
+ *
+ * The count is 5-6 and not more: the frame is 1536x1024, which is exactly the
+ * ~1,536-patch budget an input image gets, so six panels come to about 512x512
+ * of real detail each. Ten panels would be a mosaic of thumbnails, and the
+ * detail that vanishes first is faces.
+ */
+export const COVER_MONTAGE =
+  "Describe a single picture that holds five or six separate moments from this story," +
+  " arranged as panels in one frame. Describe each moment on its own, in detail, and say" +
+  " where it sits -- which are on the top row and which on the bottom. Include the places" +
+  " the story visits, not only its people. Do not describe a grid of thumbnails or a collage" +
+  " of unrelated images: it is one picture, in one style, that a child would want to look at.";
 
 export async function requestModelJson<T>(opts: {
   step: string;
@@ -809,6 +844,8 @@ async function finalizeStoryDetails(
     The illustration must match the character, so carry this into the image prompt:
     ${renderBrief(ctx.brief, "image")}
 
+    ${COVER_MONTAGE}
+
     ${COVER_SHOWS_PEOPLE}
 
     ${titleRuleFor(ctx.brief)}
@@ -1111,7 +1148,7 @@ async function runGeneration(
         // so the world's furniture has to be right HERE first -- an error on
         // the cover is inherited by every page that follows it.
         await illustrationPlates(finalDetails.imagePrompt),
-        { facesMustShow: true },
+        { facesMustShow: true, size: COVER_SIZE },
       );
       imageUrl = cover?.url;
       if (cover?.droppedReferences) {

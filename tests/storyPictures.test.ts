@@ -7,7 +7,8 @@ import {
 } from "../client/src/lib/storyContent";
 import { buildPassageScenePrompt } from "../server/lib/passageScene";
 import { composeIllustrationPrompt } from "../server/lib/illustration";
-import { COVER_SHOWS_PEOPLE } from "../server/lib/openai-implementation";
+import { COVER_SHOWS_PEOPLE, COVER_MONTAGE } from "../server/lib/openai-implementation";
+import { COVER_SIZE, PAGE_SIZE } from "../server/lib/illustration";
 import { questTitleRule, DEVICE, SHOP, KEEPER } from "../server/data/lionTails";
 import {
   MAX_STORY_IMAGES,
@@ -437,5 +438,50 @@ describe("a story nobody has read yet", () => {
       expect(savedStorySchema.shape.seenAt.safeParse(seenAt).success).toBe(true);
     }
     expect(savedStorySchema.shape.seenAt.safeParse(123).success).toBe(false);
+  });
+});
+
+/**
+ * The cover does two jobs: it is the picture on the card, and it is the style
+ * reference attached to every picture drawn afterwards.
+ */
+describe("the cover is a montage", () => {
+  it("asks for several moments, each described on its own", () => {
+    // "A montage of the story" produces a blur. The next prompt has to be able
+    // to point at a panel, so each one has to have been described.
+    expect(COVER_MONTAGE).toMatch(/five or six/i);
+    expect(COVER_MONTAGE).toMatch(/each moment on its own/i);
+    expect(COVER_MONTAGE).toMatch(/where it sits/i);
+  });
+
+  it("asks for the places, not only the people", () => {
+    // The whole point for consistency: the shop and the era have to be in the
+    // reference, or later pictures have nothing to match them to.
+    expect(COVER_MONTAGE).toMatch(/places the story visits/i);
+  });
+
+  it("refuses a grid of thumbnails", () => {
+    // One picture in one style, or it is a contact sheet and a bad cover.
+    expect(COVER_MONTAGE).toMatch(/not describe a grid of thumbnails/i);
+    expect(COVER_MONTAGE).toMatch(/one picture, in one style/i);
+  });
+
+  it("does not tell the illustrator to pose anyone", () => {
+    // The same rule COVER_SHOWS_PEOPLE is already held to: "recognisable" is
+    // the minimum that does the job, and "facing the viewer" is a school photo.
+    for (const posed of ["facing the viewer", "clearly visible", "portrait", "posed", "camera"]) {
+      expect(COVER_MONTAGE.toLowerCase()).not.toContain(posed);
+    }
+  });
+
+  it("is drawn in the frame that is exactly the patch budget", () => {
+    // 1536x1024 is 48x32 = 1,536 patches, the largest an input image gets
+    // before it is downscaled. The cover is attached to every later picture,
+    // so this is the one frame where wider buys real detail rather than
+    // spreading the same budget thinner.
+    expect(COVER_SIZE).toBe("1536x1024");
+    expect(PAGE_SIZE).toBe("1024x1024");
+    const [w, h] = COVER_SIZE.split("x").map(Number);
+    expect((w / 32) * (h / 32)).toBe(1536);
   });
 });

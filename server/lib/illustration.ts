@@ -382,6 +382,17 @@ export type EditFailure = "parameter" | "refused" | "transient";
  */
 export type StoryImageResult = { url: string; droppedReferences?: EditFailure };
 
+/**
+ * The two frames this app draws in.
+ *
+ * A page is square. The cover is wide because it is a montage, and because
+ * 1536x1024 is 48x32 patches -- exactly the budget an input image gets, so
+ * nothing is thrown away when it is attached to the next picture.
+ */
+export type StoryImageSize = "1024x1024" | "1536x1024";
+export const COVER_SIZE: StoryImageSize = "1536x1024";
+export const PAGE_SIZE: StoryImageSize = "1024x1024";
+
 export function classifyEditFailure(error: unknown): EditFailure {
   // Checked before the status, because a refusal is ALSO a 400 and the two
   // want opposite responses -- retrying a refusal earns the same refusal,
@@ -575,7 +586,17 @@ export async function generateStoryImage(
    * walked out of.
    */
   extras: IllustrationReference[] = [],
-  opts: { facesMustShow?: boolean } = {},
+  opts: {
+    facesMustShow?: boolean;
+    /**
+     * The frame. A page is square; the cover is the wide one, because it is a
+     * montage AND because 1536x1024 is 48x32 patches = exactly the ~1,536-patch
+     * budget an input image is allowed. Every later picture attaches the cover,
+     * so this is the one place in the app where a wider frame buys real detail
+     * instead of spreading the same budget thinner.
+     */
+    size?: StoryImageSize;
+  } = {},
 ): Promise<StoryImageResult | undefined> {
   /**
    * Set only when the reference-matched call failed and the picture was drawn
@@ -653,7 +674,7 @@ export async function generateStoryImage(
           // the fallback quietly drew a different child.
           ...inputFidelityFor(resolved.model),
           n: 1,
-          size: "1024x1024",
+          size: opts.size ?? PAGE_SIZE,
         });
       } catch (editError) {
         /**
@@ -692,7 +713,7 @@ export async function generateStoryImage(
           opts,
         ),
         n: 1,
-        size: "1024x1024",
+        size: opts.size ?? PAGE_SIZE,
       });
     }
 
