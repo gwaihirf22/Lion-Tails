@@ -13,6 +13,7 @@ import {
   characterSchema,
   MAX_AVATARS,
   pointsAvailable,
+  pointsEarned,
   STARTING_POINTS,
   notableSkills,
   pointsSpent,
@@ -20,7 +21,9 @@ import {
   SKILL_START,
   STAT_BASE,
   statsAreAffordable,
+  statsOf,
   unseenVirtues,
+  virtueLevels,
 } from "../shared/schema";
 import { avatarCapFor, hasUnlimitedUse } from "../server/lib/modelPolicy";
 import type { Character } from "@shared/schema";
@@ -313,6 +316,85 @@ describe("skills cost points", () => {
     // another, rather than only ever spending upward.
     const weak = { ...baseStats(), agility: STAT_BASE - 2 };
     expect(statsAreAffordable(weak, undefined, [sk("climbing", 4)])).toBe(true);
+  });
+});
+
+/**
+ * Settings can hand a character's spent points back. The reset writes one
+ * sheet -- every attribute at the baseline, no skills -- through the STRICT
+ * route, so what these assert is that such a write is always allowed to land,
+ * and that it gives back exactly what was spent and nothing more.
+ */
+describe("starting a sheet again", () => {
+  const sk = (name: string, value: number) => ({ name, value });
+
+  it("spends nothing, so it is affordable for any character", () => {
+    // Including the poorest possible one: brand new, no stories, nothing
+    // earned. If this were ever false the reset could strand the very sheets
+    // it exists to rescue.
+    expect(pointsSpent(baseStats(), [])).toBe(0);
+    expect(statsAreAffordable(baseStats(), undefined, [])).toBe(true);
+    expect(statsAreAffordable(baseStats(), { adventures: [] }, [])).toBe(true);
+  });
+
+  it("rescues a sheet Parent Mode wrote over budget", () => {
+    // The case the feature is FOR. Parent Mode writes stats without spending,
+    // so a sheet can cost more than the character has ever earned.
+    const lavish = mk({
+      stats: { strength: 10, agility: 10, constitution: 10, wisdom: 10, heart: 10 },
+      skills: [sk("climbing", 5)],
+      adventures: [{ storyId: "s1", theme: "courage" }],
+    });
+    expect(pointsAvailable(lavish)).toBeLessThan(0);
+
+    // Every partial step down is STILL over budget, which is why the strict
+    // route refuses them one at a time and why a one-shot reset is the escape.
+    const oneNotchDown = { ...statsOf(lavish), strength: 9 };
+    expect(statsAreAffordable(oneNotchDown, lavish, skillsOf(lavish))).toBe(false);
+
+    // The whole sheet at once lands.
+    expect(statsAreAffordable(baseStats(), lavish, [])).toBe(true);
+  });
+
+  it("gives back exactly what was spent, and no more", () => {
+    const spender = mk({
+      stats: { ...baseStats(), strength: STAT_BASE + 2, wisdom: STAT_BASE - 1 },
+      skills: [sk("climbing", 2)],
+      adventures: [{ storyId: "s1" }, { storyId: "s2" }, { storyId: "s3" }],
+    });
+    // 2 up, 1 refunded by the weakness, 2 on the skill.
+    expect(pointsSpent(statsOf(spender), skillsOf(spender))).toBe(3);
+
+    const after = { ...spender, stats: baseStats(), skills: [] };
+    // Back to the full pool: the starting points plus one per story. The
+    // stories themselves are untouched, so nothing that was earned is lost.
+    expect(pointsAvailable(after)).toBe(STARTING_POINTS + 3);
+    expect(pointsEarned(after)).toBe(pointsEarned(spender));
+  });
+
+  it("leaves the record of what happened alone", () => {
+    // adventures drives both the earned points and the virtue levels, and is
+    // server-owned on both write routes. A reset hands points back to be spent
+    // again; it does not take a child's stories away.
+    const veteran = mk({
+      stats: { ...baseStats(), heart: STAT_BASE + 3 },
+      adventures: [
+        { storyId: "s1", theme: "courage" },
+        { storyId: "s2", theme: "courage" },
+      ],
+    });
+    const after = { ...veteran, stats: baseStats(), skills: [] };
+    expect(after.adventures).toEqual(veteran.adventures);
+    expect(virtueLevels(after)).toEqual(virtueLevels(veteran));
+  });
+
+  it("is a no-op on a sheet nobody has spent on", () => {
+    // What the button being disabled means, stated as arithmetic.
+    const fresh = mk({});
+    expect(pointsSpent(statsOf(fresh), skillsOf(fresh))).toBe(0);
+    expect(pointsAvailable({ ...fresh, stats: baseStats(), skills: [] })).toBe(
+      pointsAvailable(fresh),
+    );
   });
 });
 

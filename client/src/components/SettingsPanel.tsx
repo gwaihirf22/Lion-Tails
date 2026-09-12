@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import ReadingSettingsCard from "@/components/reader/ReadingSettingsCard";
 import ParentModeToggle from "@/components/ParentModeToggle";
+import ResetSheetCard from "@/components/ResetSheetCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -264,6 +265,13 @@ export function SettingsPanel() {
             the other account settings. PromptEditor still says what is needed
             and now says where to find it. */}
         <ParentModeToggle />
+
+        {/* Giving a character's spent points back. Here rather than on the
+            character's own Stats tab because it is a grown-up's undo, not part
+            of spending -- and because the sheet it rescues is usually one
+            Parent Mode wrote over budget, which the Stats tab cannot save its
+            way out of one click at a time. */}
+        <ResetSheetCard />
 
         {/* Story Generation Stats */}
         <Card className="bg-card rounded-2xl shadow-xl">
