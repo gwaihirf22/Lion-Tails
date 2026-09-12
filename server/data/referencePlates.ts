@@ -113,7 +113,16 @@ export function worldSheetLook(panels: readonly string[] = WORLD_SHEET_PANELS): 
  * place only next to the lantern, which is the only thing that makes it *the*
  * stone.
  */
-const SHOP_WORDS = [SHOP.name.replace(/\s*&\s*Co\.?/i, ""), "shop", "shopfront", "storefront", "sign"];
+/**
+ * "sign" is deliberately absent, for the same reason as "stone".
+ *
+ * It is an ordinary word -- a sign on a road, a sign from God, a sign of rain
+ * -- and a scene that means Barnabas's sign almost always names the shop in the
+ * same breath, which already matches. A false positive is not free: it spends a
+ * reference slot AND hands the model a shop front to put in a scene that has
+ * none, which is the Tyndale mistake with different furniture.
+ */
+const SHOP_WORDS = [SHOP.name.replace(/\s*&\s*Co\.?/i, ""), "shop", "shopfront", "storefront"];
 const DEVICE_WORD = DEVICE.name.replace(/^the /i, "");
 
 export const WORLD_SHEET_PATTERN = new RegExp(

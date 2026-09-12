@@ -8,6 +8,7 @@ import {
   MAX_DRAWN_CHARACTERS,
   MAX_REFERENCE_IMAGES,
   REFERENCE_BUDGET,
+  illustrationPlates,
   withinBudget,
   type IllustrationMember,
 } from "../server/lib/illustration";
@@ -449,11 +450,50 @@ describe("the Timekeeper world sheet", () => {
     expect(platesForScene({ scene: "A boy climbs a stone wall in the sun" })).toHaveLength(0);
   });
 
+  it("does not come for the bare word 'sign'", () => {
+    // Another ordinary word. A scene that means Barnabas's sign nearly always
+    // names the shop in the same breath, and that already matches.
+    expect(platesForScene({ scene: "A sign at the crossroads pointed east" })).toHaveLength(0);
+    expect(platesForScene({ scene: "The sign above the shop door swung" })).toHaveLength(1);
+  });
+
   it("is not shipped inside the volume that shadows it", () => {
     // public/images/stories is a docker mount; a file inside it disappears at
     // runtime. The same assertion guards the Timekeeper's face.
     expect(WORLD_SHEET_FILE).not.toContain("/");
     expect(WORLD_SHEET_FILE).toMatch(/\.(png|webp|jpe?g)$/i);
+  });
+
+  /**
+   * THE ART DOES NOT EXIST YET, and the app has to be fine with that.
+   *
+   * The sheet is drawn, approved and committed separately. Until then every
+   * quest still generates pictures, and they must be no worse than they were
+   * before this shipped -- the same rule the Timekeeper's face already follows
+   * when it cannot be read.
+   */
+  it("falls back to words when the file is not there", async () => {
+    const plates = await illustrationPlates("Mr Barnabas behind the counter of his shop");
+    expect(plates).toHaveLength(1);
+    expect(plates[0].file).toBeUndefined();
+    // The words still carry the layout, so a future reader of the prompt sees
+    // what was meant even though nothing was attached.
+    expect(plates[0].look).toContain("the lantern, dark");
+  });
+
+  it("attaches nothing at all to a scene that wants nothing", async () => {
+    expect(await illustrationPlates("Joseph counting grain in a granary")).toEqual([]);
+  });
+
+  it("changes no prompt while the file is missing", async () => {
+    // The promise that matters most right now: a plate with no file adds no
+    // numbered line, because the numbers must match what images.edit actually
+    // received. A described-but-unattached plate would renumber everybody.
+    const cast = [member({ reference: file() })];
+    const plates = await illustrationPlates("Mr Barnabas in his shop");
+    expect(composeIllustrationPrompt(SCENE, cast, plates)).toBe(
+      composeIllustrationPrompt(SCENE, cast),
+    );
   });
 });
 
