@@ -1149,6 +1149,25 @@ export function baseStats(): CharacterStats {
   return { strength: STAT_BASE, agility: STAT_BASE, constitution: STAT_BASE, wisdom: STAT_BASE, heart: STAT_BASE };
 }
 
+/**
+ * The four fields a reset writes: everything spent AND everything earned.
+ *
+ * Here rather than inline in the route so the tests measure the SAME object the
+ * route sends. A test that restated the payload would keep passing while the
+ * route quietly stopped clearing one of these, which is the only way this
+ * feature can fail silently -- a character who looks reset but is not.
+ *
+ * `seenVirtues` is in the list because it is the read-receipt for virtues
+ * derived from `adventures`: leaving it behind is a receipt for something that
+ * no longer exists, and shows up later as a badge that never appears.
+ */
+export function startingOver(): Pick<
+  Character,
+  "stats" | "skills" | "adventures" | "seenVirtues"
+> {
+  return { stats: baseStats(), skills: [], adventures: [], seenVirtues: [] };
+}
+
 export type CharacterSkill = NonNullable<Character["skills"]>[number];
 
 /** A character's named skills. Absent means none, like every other list here. */
