@@ -1187,7 +1187,17 @@ export default function CharacterForm({
               */}
               <div className="flex flex-wrap items-start gap-4 rounded-lg border border-border bg-muted/40 p-4">
                 {portrait("lg")}
-                <div className="min-w-0 flex-1 space-y-2">
+                {/*
+                  min-w-[13rem], not min-w-0. The old floor was accidental --
+                  the longest word in the helper text -- and removing it left
+                  NO floor, so an expanded gallery beside this column took every
+                  pixel of it: 234px down to 58px, each button label breaking
+                  one word per line, with a photo tile on top of the first one.
+                  208px is just under the 234 this column has when it is happy,
+                  and under the ~264 a 320px phone leaves, so it wraps to its
+                  own line rather than pushing anything off the card.
+                */}
+                <div className="min-w-[13rem] flex-1 space-y-2">
                   {saved?.id ? (
                     <>
                       {/*
@@ -1327,12 +1337,16 @@ export default function CharacterForm({
                 so the row reads as a set with a gap in it rather than as one
                 image with a button somewhere else.
                 
-                Three across before it folds. The cap is five, so at most two
-                are ever hidden -- but a fifth tile pushes the fields below it
-                off the card on a phone, which is the thing worth avoiding.
+                Three across before it folds -- and sm:max-w-[16rem] is what
+                makes that true: exactly 3 x 80px tiles + 2 x 8px gaps. Without
+                it "Show all" laid five tiles in one line, ~440px wide, and
+                flexbox paid for them out of the button column next door.
+                The cap is five, so at most two are ever hidden -- but a fifth
+                tile pushes the fields below it off the card on a phone, which
+                is the thing worth avoiding.
               */}
               {saved?.id && (
-                <div className="w-full space-y-2 sm:w-auto">
+                <div className="w-full space-y-2 sm:w-auto sm:max-w-[16rem]">
                   <div className="flex flex-wrap gap-2">
                     {(showAll ? gallery : gallery.slice(0, 3)).map((a: { id: string; url: string }) => {
                       const chosen = a.url === form.watch("avatarUrl");
