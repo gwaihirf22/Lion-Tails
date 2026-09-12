@@ -20,9 +20,9 @@ export default function StoryRow({ story }: { story: SavedStory }) {
   return (
     <div className="flex items-center gap-3 rounded-md border border-border bg-card p-2">
       {imageUrl ? (
-        <img src={imageUrl} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded object-cover" />
+        <img src={imageUrl} alt="" loading="lazy" className="h-10 w-[3.75rem] shrink-0 rounded object-cover" />
       ) : (
-        <div className="h-10 w-10 shrink-0 rounded bg-muted" aria-hidden="true" />
+        <div className="h-10 w-[3.75rem] shrink-0 rounded bg-muted" aria-hidden="true" />
       )}
       <div className="min-w-0 flex-1">
         <Link href={`/story?id=${story.id}`} className="block truncate text-sm font-medium text-primary hover:underline">
