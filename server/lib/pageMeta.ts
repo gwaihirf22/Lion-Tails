@@ -20,14 +20,61 @@
  * owns and appending a fresh set before </head> works whatever it looks like.
  */
 
+/**
+ * The cover art, for a story with no picture of its own.
+ *
+ * WHY A FALLBACK IS NOT OPTIONAL HERE: this module REMOVES every og:image tag
+ * before writing its own (see OWNED). Without something to put back, sharing a
+ * picture-less story stripped the site cover that client/index.html sets and
+ * added nothing -- so a shared story got a blank card while the plain home page
+ * got the artwork. The link that matters most was the worst-looking one.
+ *
+ * Kept in step with client/index.html by hand, which is safe because both are
+ * about the same file shipped at the same path: client/public is copied to the
+ * site root verbatim, so /og-cover.jpg is stable and unfingerprinted. It is
+ * already cropped to 1.91:1 at 1200x630, the ratio the scrapers use.
+ */
+export const SITE_COVER_PATH = "/og-cover.jpg";
+export const SITE_COVER_WIDTH = 1200;
+export const SITE_COVER_HEIGHT = 630;
+export const SITE_COVER_ALT =
+  "A lion and a lantern-keeper outside Barnabas & Co., with scenes from " +
+  "Scripture and church history winding away behind them.";
+
 export type ShareMeta = {
   title: string;
   description: string;
   /** Absolute. Crawlers do not reliably resolve a relative og:image. */
   url: string;
-  /** Absolute url of the story's picture, when it has one. */
+  /**
+   * Absolute url of the picture for the card: the story's own if it has one,
+   * otherwise the site cover. Optional only so a caller may deliberately pass
+   * none; static.ts always supplies one.
+   */
   image?: string;
+  /** What that picture is, since it is no longer always from the story. */
+  imageAlt?: string;
+  /** Set when `image` is the site cover, so its known size can be declared. */
+  imageIsCover?: boolean;
 };
+
+/**
+ * Which picture the card shows, and what to call it.
+ *
+ * A function rather than two lines inside the route handler, because the
+ * choice is the interesting part and a route handler is the one place a test
+ * cannot reach. The rule: the story's own picture when it has one, the cover
+ * when it does not, and NEVER neither -- this page strips the cover that
+ * index.html sets, so "no picture" here means a blank card.
+ */
+export function shareCardImage(
+  storyPicture: string | undefined,
+  absolute: (url: string) => string,
+): Pick<ShareMeta, "image" | "imageAlt" | "imageIsCover"> {
+  return storyPicture
+    ? { image: storyPicture, imageAlt: "A picture from this story." }
+    : { image: absolute(SITE_COVER_PATH), imageAlt: SITE_COVER_ALT, imageIsCover: true };
+}
 
 export function escapeHtml(value: string): string {
   return value
@@ -94,7 +141,20 @@ export function renderSharePage(template: string, meta: ShareMeta | null): strin
     ...(meta.image
       ? [
           `<meta property="og:image" content="${escapeHtml(meta.image)}" />`,
-          `<meta property="og:image:alt" content="A picture from this story." />`,
+          // The cover's size is known, so it is declared: a crawler that has
+          // the dimensions up front lays the card out without fetching the
+          // image first, and some show nothing at all while they wait. A
+          // story's own picture has no size we know here, so it says nothing
+          // rather than guessing wrong -- a WRONG width is worse than none.
+          ...(meta.imageIsCover
+            ? [
+                `<meta property="og:image:width" content="${SITE_COVER_WIDTH}" />`,
+                `<meta property="og:image:height" content="${SITE_COVER_HEIGHT}" />`,
+              ]
+            : []),
+          `<meta property="og:image:alt" content="${escapeHtml(
+            meta.imageAlt ?? "A picture from this story.",
+          )}" />`,
           `<meta name="twitter:card" content="summary_large_image" />`,
         ]
       : [`<meta name="twitter:card" content="summary" />`]),

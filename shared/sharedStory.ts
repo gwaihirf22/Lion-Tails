@@ -26,6 +26,7 @@
 
 import type { EditLogEntry } from "./editLog";
 import { storyImagesOf, type SavedStory, type StoryPicture } from "./schema";
+import { BUILT_IN_STORY_IDS } from "./quests";
 
 /**
  * A share token: 16 random bytes as base64url, which is always 22 characters.
@@ -39,6 +40,24 @@ export const SHARE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 /** Where a share link points. One definition, for the dialog and the server. */
 export function sharePathFor(token: string): string {
   return `/s/${token}`;
+}
+
+/**
+ * Could this /s/:token segment name a story at all?
+ *
+ * TWO shapes reach the same path. A normal share is a minted token -- the
+ * whole capability, unguessable and revocable, because the story behind it is
+ * one family's. A story the app ships with is named by its plain id: it has no
+ * row for a token to point at, and needs none, since nothing about it is
+ * private and it is already in every library.
+ *
+ * Checked before fetching so a typo costs no request -- but it MUST know about
+ * both, or it turns a good link away. It did: the client tested the token
+ * shape alone and answered "no longer shared" for the prologue, without ever
+ * asking the server, which would have said yes.
+ */
+export function isShareTarget(token: string): boolean {
+  return SHARE_TOKEN_PATTERN.test(token) || BUILT_IN_STORY_IDS.includes(token);
 }
 
 export type SharedStoryView = {

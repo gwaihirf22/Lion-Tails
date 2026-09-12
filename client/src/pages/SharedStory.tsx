@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import StoryDisplay from "@/components/StoryDisplay";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { SHARE_TOKEN_PATTERN, type SharedStoryView } from "@shared/sharedStory";
+import { isShareTarget, type SharedStoryView } from "@shared/sharedStory";
 
 /**
  * A story someone shared, for anybody with the link.
@@ -28,7 +28,7 @@ export default function SharedStoryPage() {
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
-    if (!token || !SHARE_TOKEN_PATTERN.test(token)) {
+    if (!token || !isShareTarget(token)) {
       setGone(true);
       return;
     }

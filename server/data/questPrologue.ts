@@ -29,7 +29,11 @@ import { KEEPER, SHOP } from "./lionTails";
  * text that reads correctly and is not.
  */
 
-export const QUEST_PROLOGUE_ID = "quest-prologue";
+// The id itself lives in shared/quests.ts: the client needs it to recognise a
+// share link, and cannot import anything under server/. Re-exported so every
+// existing importer of this module is unaffected.
+import { QUEST_PROLOGUE_ID } from "@shared/quests";
+export { QUEST_PROLOGUE_ID };
 
 const B = KEEPER.shortName;
 

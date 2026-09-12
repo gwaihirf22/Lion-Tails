@@ -1,6 +1,6 @@
 import { parentModeActive, type ParentModeSession } from "@shared/parentMode";
 import { splitAppendices } from "@shared/storyAppendices";
-import { builtInStoryById, refuseBuiltIn, withBuiltInStories } from "./lib/builtInStories";
+import { builtInStoryById, isBuiltInStoryId, refuseBuiltIn, withBuiltInStories } from "./lib/builtInStories";
 // `express` itself, not only its types: the photo-upload route attaches its own
 // body parser (express.raw) rather than raising the global JSON limit for every
 // other route in this file.
@@ -2015,8 +2015,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * - READING a shared story needs NOTHING -- that is the feature -- and so it
    *   returns only `sharedStoryView`, an allow-list with a test on its keys.
    */
+  /**
+   * A built-in story's link is PERMANENT and the same for everyone.
+   *
+   * The token on a normal share is the whole capability -- unguessable, minted
+   * fresh, revocable -- because the story behind it is one family's. None of
+   * that applies here: this story ships with the app, is already in every
+   * library, and holds nobody's details. So its link is its id, there is no
+   * row to create, and there is nothing to stop.
+   *
+   * It is also the story most worth sending to someone who has no account,
+   * which is the case the original refusal ("a link to it shares nothing")
+   * missed: true of everyone who already has the app, and false of exactly the
+   * person you would send it to.
+   */
+  const builtInShare = (id: string) =>
+    isBuiltInStoryId(id) ? { token: id, permanent: true as const } : null;
+
   app.get("/api/stories/:id/share", requireAuth, async (req, res) => {
     try {
+      const builtIn = builtInShare(req.params.id);
+      if (builtIn) return res.json(builtIn);
       const token = await storage.getShareToken(req.params.id, (req.user as any).id);
       res.json({ token: token ?? null });
     } catch (error) {
@@ -2025,9 +2044,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/stories/:id/share", requireAuth, requireParentMode, async (req, res) => {
-    // The prologue is in every library already; a link to it shares nothing.
-    if (refuseBuiltIn(req, res)) return;
+  app.post(
+    "/api/stories/:id/share",
+    requireAuth,
+    // BEFORE requireParentMode, not inside the handler: the middleware answers
+    // first, so a check placed after it never runs. Nothing is created for a
+    // built-in -- the link already exists and always has -- and the password
+    // guards making a link that exposes a family's story, which this is not.
+    // The same link is already readable from GET without Parent Mode, so
+    // answering here grants nothing that was withheld.
+    (req, res, next) => {
+      const builtIn = builtInShare(req.params.id);
+      if (builtIn) return res.json(builtIn);
+      next();
+    },
+    requireParentMode,
+    async (req, res) => {
     try {
       const token = await storage.createShare(req.params.id, (req.user as any).id);
       // Undefined means no such story OR not theirs -- one answer for both, as
@@ -2038,9 +2070,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error creating a share link:", error);
       res.status(500).json({ message: "Failed to create the share link" });
     }
-  });
+    },
+  );
 
   app.delete("/api/stories/:id/share", requireAuth, async (req, res) => {
+    // REFUSED for a built-in rather than answered with the usual "it is not
+    // shared now". deleteShare would find no row and report success, and the
+    // link would go on working -- telling someone a link is stopped when it is
+    // not is the one answer this route must never give.
+    if (isBuiltInStoryId(req.params.id)) {
+      return res.status(403).json({
+        message:
+          "This story is part of Lion Tails and its link is the same for everyone, " +
+          "so there is no link to stop.",
+      });
+    }
     try {
       await storage.deleteShare(req.params.id, (req.user as any).id);
       // 200 either way: "it is not shared" is true after this call whether or
@@ -2072,6 +2116,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const notShared = () =>
       res.status(404).json({ message: "This story is not shared, or is no longer shared." });
     try {
+      // A built-in story is shared by its own id: it has no row, so no token
+      // can point at it, and it needs none -- nothing about it is private.
+      const builtIn = builtInStoryById(req.params.token);
+      if (builtIn) return res.json(sharedStoryView(builtIn));
       if (!SHARE_TOKEN_PATTERN.test(req.params.token)) return notShared();
       const saved = await storage.getSharedStory(req.params.token);
       if (!saved) return notShared();

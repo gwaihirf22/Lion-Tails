@@ -11,6 +11,22 @@ import { characterRoleOf } from "./schema";
 export const QUEST_SERIES_TITLE = "Quests of the Timekeeper";
 
 /**
+ * The prologue's id, and the list of ids the app ships with.
+ *
+ * Shared because a built-in story is shared by its ID rather than by a token
+ * -- it has no row, so no token can point at it -- and the page at /s/:token
+ * runs on the CLIENT, which cannot see server/lib/builtInStories.ts. Without
+ * this the client rejects the link before it ever asks the server, which is
+ * exactly what it did: a perfectly good link answered "no longer shared".
+ *
+ * The server still derives its own answer from the stories themselves, so
+ * this list is a copy -- and a test pins the two together rather than trusting
+ * them to stay in step.
+ */
+export const QUEST_PROLOGUE_ID = "quest-prologue";
+export const BUILT_IN_STORY_IDS: readonly string[] = [QUEST_PROLOGUE_ID];
+
+/**
  * Is this story one of the Timekeeper's?
  *
  * ONE definition, because the library's tab is the first thing to ask and it
