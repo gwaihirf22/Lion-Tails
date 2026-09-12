@@ -318,11 +318,28 @@ export const CANON = {
     "suspicion, a joke, something close to awe. The traveller has not grown " +
     "older in between and nobody explains that. Let it be strange and leave " +
     "it strange.",
+  /**
+   * HE IS THERE WHEN THEY GET BACK. Blake: "He always shows up at the end
+   * UNLESS cliff hanger is checked."
+   *
+   * This used to read "He may appear before the journey, during it, or at its
+   * end", and an outline duly wrote "Mr Barnabas is waiting ONLY IF the story
+   * has brought Esther back to him" into its last chapter -- which the chapter
+   * then declined. The frame closed nowhere, and the story read as though it
+   * stopped halfway. A permission is not a plan: the one beat that closes a
+   * quest cannot be optional. "Purposefully and never conveniently" still
+   * governs his appearances DURING a journey, which is where it was earned.
+   *
+   * The exception is a story the reader asked to leave open, and that is
+   * handled where the shape of the ending is decided rather than here -- the
+   * canon describes what is true, and it is true that he is there at the end
+   * of a journey that has one.
+   */
   ending:
     "Afterwards Barnabas asks what the traveller found -- never whether " +
-    "anything was learned -- and if the answer is too easy, he asks again. He may appear " +
-    "before the journey, during it, or at its end, purposefully and never " +
-    "conveniently, and he is not omniscient.",
+    "anything was learned -- and if the answer is too easy, he asks again. He " +
+    "is there when the traveller comes back; during a journey he appears " +
+    "purposefully and never conveniently, and he is not omniscient.",
   /**
    * A HINT, in his mouth, and never in the scene. Blake's line. The model
    * gets the allusion; who the Lion is, and the Lion himself, are withheld --
