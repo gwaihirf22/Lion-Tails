@@ -6,8 +6,17 @@ import {
   illustrationCast,
   charactersAreInTheStory,
   MAX_DRAWN_CHARACTERS,
+  MAX_REFERENCE_IMAGES,
+  REFERENCE_BUDGET,
+  withinBudget,
   type IllustrationMember,
 } from "../server/lib/illustration";
+import {
+  platesForScene,
+  worldSheetLook,
+  WORLD_SHEET_FILE,
+  WORLD_SHEET_PANELS,
+} from "../server/data/referencePlates";
 import { describeCharacter, buildAvatarPrompt } from "../server/lib/avatar";
 import { KEEPER, KEEPER_FACE_FILE, worldCanon, FRAMING_APPROACHES } from "../server/data/lionTails";
 import { storyImagesOf, MAX_STORY_IMAGES, MAX_AVATARS } from "@shared/schema";
@@ -380,5 +389,122 @@ describe("a reference that is a photograph", () => {
     // caution anyone about, and `described` members never get numbered lines.
     const p = composeIllustrationPrompt(SCENE, [member({ fromPhoto: true })]);
     expect(p).not.toMatch(/photograph/i);
+  });
+});
+
+/**
+ * The world's furniture, on one sheet.
+ *
+ * Six separate plates would spend six of the sixteen reference slots on
+ * scenery. One sheet spends one, and the panels inside it are still ~512x512
+ * of real detail -- ample for a building, and deliberately not where faces go.
+ */
+describe("the Timekeeper world sheet", () => {
+  it("says where every panel is, built from the panel list", () => {
+    // A montage nobody can navigate is a collage the model guesses at. The
+    // layout is GENERATED from the panels so the two cannot drift apart.
+    const look = worldSheetLook();
+    for (const panel of WORLD_SHEET_PANELS) expect(look).toContain(panel);
+    expect(look).toMatch(/Top row, left to right/);
+    expect(look).toMatch(/Bottom row, left to right/);
+    expect(look).toContain(`${WORLD_SHEET_PANELS.length} separate pictures`);
+  });
+
+  it("lays out in whole rows, whatever the panel count", () => {
+    // The artwork is drawn to this. If the list grows and the sentence stops
+    // describing every panel, the prompt starts pointing at the wrong one --
+    // worse than no sheet, because it is confidently wrong.
+    const look = worldSheetLook(["a", "b", "c", "d"]);
+    expect(look).toContain("Top row, left to right: a; b.");
+    expect(look).toContain("Bottom row, left to right: c; d.");
+  });
+
+  it("carries both states of the lantern, which is the point", () => {
+    // The canon has said all along that the lantern goes dark on the far side.
+    // Nothing had ever drawn one, because nothing asked.
+    const panels = WORLD_SHEET_PANELS.join(" | ");
+    expect(panels).toMatch(/the lantern, lit/);
+    expect(panels).toMatch(/the lantern, dark/);
+    expect(panels).toMatch(/stone/);
+  });
+
+  it("keeps the white flame off it", () => {
+    // Movement III: the lantern burns white when a story cannot be found.
+    // A sheet every quest sees would spend the reveal before it is written.
+    expect(WORLD_SHEET_PANELS.join(" ")).not.toMatch(/white/i);
+  });
+
+  it("comes only when the scene calls for something on it", () => {
+    // The Tyndale rule, applied to furniture: a shop front attached to a scene
+    // in a granary is a shop front the model may decide to draw.
+    expect(platesForScene({ scene: "Mr Barnabas behind the counter of his shop" })).toHaveLength(1);
+    expect(platesForScene({ scene: "Ella holds the lantern up to the dark" })).toHaveLength(1);
+    expect(platesForScene({ scene: "Joseph counting grain in a granary" })).toHaveLength(0);
+  });
+
+  it("does not come for the ordinary word 'stone'", () => {
+    // "stone" is a common English word; a stone wall must not drag the sheet
+    // in. It earns its place next to the lantern, which is what makes it THE
+    // stone.
+    expect(platesForScene({ scene: "A boy climbs a stone wall in the sun" })).toHaveLength(0);
+  });
+
+  it("is not shipped inside the volume that shadows it", () => {
+    // public/images/stories is a docker mount; a file inside it disappears at
+    // runtime. The same assertion guards the Timekeeper's face.
+    expect(WORLD_SHEET_FILE).not.toContain("/");
+    expect(WORLD_SHEET_FILE).toMatch(/\.(png|webp|jpe?g)$/i);
+  });
+});
+
+/**
+ * Sixteen is the API's limit; twelve is ours. The four spare exist because a
+ * request that lands exactly on a hard limit fails completely the first time
+ * anything is added -- and the thing most likely to be added is one more face.
+ */
+describe("the reference budget", () => {
+  const person = (n: string) => member({ name: n, look: `${n}.`, reference: file() });
+  const extra = (role: "style" | "background") => ({
+    role,
+    name: role,
+    look: `${role}.`,
+    file: file(),
+  });
+
+  it("leaves room under the API's own limit", () => {
+    expect(REFERENCE_BUDGET).toBeLessThan(MAX_REFERENCE_IMAGES);
+  });
+
+  it("sends everything when everything fits", () => {
+    const cast = [person("a"), person("b")];
+    const extras = [extra("style")];
+    const out = withinBudget(cast, extras);
+    expect(out.cast).toHaveLength(2);
+    expect(out.extras).toHaveLength(1);
+  });
+
+  it("keeps the style reference before any face", () => {
+    // Dropping it changes every pixel of the picture; dropping one face of
+    // eight changes one person.
+    const cast = Array.from({ length: 20 }, (_, i) => person(`p${i}`));
+    const out = withinBudget(cast, [extra("style")], 3);
+    expect(out.extras.map((e) => e.role)).toEqual(["style"]);
+    expect(out.cast).toHaveLength(2);
+  });
+
+  it("drops the furniture before it drops a face", () => {
+    // A shop drawn slightly differently is a blemish. A child drawn as
+    // somebody else is the bug this whole feature exists to prevent.
+    const cast = [person("a"), person("b")];
+    const out = withinBudget(cast, [extra("style"), extra("background")], 3);
+    expect(out.cast).toHaveLength(2);
+    expect(out.extras.map((e) => e.role)).toEqual(["style"]);
+  });
+
+  it("never sends more than the budget, however much is asked for", () => {
+    const cast = Array.from({ length: 30 }, (_, i) => person(`p${i}`));
+    const extras = Array.from({ length: 10 }, () => extra("background"));
+    const out = withinBudget(cast, [extra("style"), ...extras]);
+    expect(out.cast.length + out.extras.length).toBeLessThanOrEqual(REFERENCE_BUDGET);
   });
 });

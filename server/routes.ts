@@ -42,6 +42,7 @@ import {
   illustrationCast,
   deleteStoryImage,
   readStoryImageFile,
+  illustrationPlates,
   type IllustrationReference,
 } from "./lib/illustration";
 import { sceneFromPassage } from "./lib/passageScene";
@@ -1776,16 +1777,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
        * and the door is open for the world sheet and an era's clothing to sit
        * beside it without renumbering anybody.
        */
-      const extras: IllustrationReference[] = storyLookFile
-        ? [
-            {
-              role: "style",
-              name: "the look of this book",
-              look: "the cover of this same story.",
-              file: storyLookFile,
-            },
-          ]
-        : [];
+      const extras: IllustrationReference[] = [
+        ...(storyLookFile
+          ? ([
+              {
+                role: "style",
+                name: "the look of this book",
+                look: "the cover of this same story.",
+                file: storyLookFile,
+              },
+            ] as IllustrationReference[])
+          : []),
+        // The world's own furniture -- the shop, its sign, the lantern lit and
+        // dark, the stone -- but only when the scene actually calls for it.
+        // Attaching a shop front to a scene in a granary is the Tyndale
+        // mistake with different furniture.
+        ...(await illustrationPlates(prompt)),
+      ];
 
       // What the people in it look like, read live off their sheets -- the
       // point of the whole feature, and the reason a story illustrated today

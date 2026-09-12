@@ -45,7 +45,7 @@ import {
   FURTHER_LEARNING_HEADING,
 } from "@shared/storyAppendices";
 import { generateDiggingDeeper, type DiggingSource } from "./diggingDeeper";
-import { generateStoryImage, illustrationCast } from "./illustration";
+import { generateStoryImage, illustrationCast, illustrationPlates } from "./illustration";
 
 // Credentials, provider and model are decided exclusively by
 // resolveModel() in ./modelPolicy. Nothing here should read
@@ -1107,7 +1107,10 @@ async function runGeneration(
         finalDetails.imagePrompt,
         userId,
         await illustrationCast(request, userId, finalDetails.imagePrompt),
-        [],
+        // The cover is what every later picture in this story is anchored to,
+        // so the world's furniture has to be right HERE first -- an error on
+        // the cover is inherited by every page that follows it.
+        await illustrationPlates(finalDetails.imagePrompt),
         { facesMustShow: true },
       );
       imageUrl = cover?.url;

@@ -45,6 +45,7 @@ import {
   type StoryRequest,
 } from "@shared/schema";
 import { KEEPER, KEEPER_FACE_FILE } from "../data/lionTails";
+import { platesForScene } from "../data/referencePlates";
 import { storage } from "../storage";
 import { describeCharacter, looksLikeRefusal, readAvatarFile } from "./avatar";
 import { resolveModel, createClient, inputFidelityFor } from "./modelPolicy";
@@ -142,6 +143,45 @@ export type IllustrationReference = {
  * class photo, and every one of them costs.
  */
 export const MAX_DRAWN_CHARACTERS = 3;
+
+/**
+ * What `images.edit` takes, and what we are willing to spend.
+ *
+ * SIXTEEN is the API's limit. Twelve is ours, and the four spare are not
+ * timidity: a request that lands exactly on a hard limit fails completely the
+ * first time anything is added, and the thing most likely to be added here is
+ * one more face.
+ *
+ * Every reference is also billed -- a 1024x1024 input is ~1,024 image tokens --
+ * so this is a cost ceiling as much as a correctness one.
+ */
+export const MAX_REFERENCE_IMAGES = 16;
+export const REFERENCE_BUDGET = 12;
+
+/**
+ * Which references survive when a scene asks for more than the budget.
+ *
+ * Order matters and is the whole point. The style reference goes first because
+ * it is the cheapest way to keep a book looking like itself, and dropping it
+ * changes every pixel; faces go next, protagonist first, because a wrong face
+ * is the failure people actually notice; the world's furniture goes last,
+ * because a shop drawn slightly differently is a blemish and a child drawn as
+ * somebody else is a bug.
+ */
+export function withinBudget(
+  cast: IllustrationMember[],
+  extras: IllustrationReference[],
+  budget = REFERENCE_BUDGET,
+): { cast: IllustrationMember[]; extras: IllustrationReference[] } {
+  const style = extras.filter((e) => e.role === "style");
+  const rest = extras.filter((e) => e.role !== "style");
+
+  const keptStyle = style.slice(0, budget);
+  const forCast = Math.max(0, budget - keptStyle.length);
+  const keptCast = cast.slice(0, forCast);
+  const forRest = Math.max(0, budget - keptStyle.length - keptCast.length);
+  return { cast: keptCast, extras: [...keptStyle, ...rest.slice(0, forRest)] };
+}
 
 /**
  * Is the user's character IN this story, or only reading it?
@@ -284,6 +324,40 @@ export async function illustrationCast(
  * warmth and the soft palette without telling the model who is looking.
  */
 const STYLE = "Render in a beautiful biblical storybook illustration style with soft colors.";
+
+/**
+ * Read one shipped plate off disk, if the scene has a use for it.
+ *
+ * Same shape and the same failure rule as readKeeperFace: a plate that cannot
+ * be read, or is in a format the images API will not take, comes back without a
+ * file and the prompt falls through to describing it in words. A reference the
+ * API refuses is worse than no reference -- it is a 400 that costs the whole
+ * picture its likeness.
+ */
+export async function illustrationPlates(scenePrompt: string): Promise<IllustrationReference[]> {
+  const out: IllustrationReference[] = [];
+  for (const plate of platesForScene({ scene: scenePrompt })) {
+    const type = mimeFor(plate.file);
+    if (!type) {
+      console.error(`[illustration] ${plate.file} is not a format the images API takes.`);
+      continue;
+    }
+    let data: Buffer | undefined;
+    try {
+      data = await fs.promises.readFile(path.join(SHIPPED_IMAGE_DIR, plate.file));
+    } catch {
+      // Not yet drawn, or not shipped. The words still go in.
+      data = undefined;
+    }
+    out.push({
+      role: plate.role,
+      name: plate.name,
+      look: plate.look,
+      ...(data ? { file: { data, filename: plate.file, type } } : {}),
+    });
+  }
+  return out;
+}
 
 /**
  * Why the reference-matched call failed, in the three flavours that need
@@ -528,16 +602,35 @@ export async function generateStoryImage(
     const filepath = path.join(STORY_IMAGE_DIR, filename);
     const openaiClient = createClient(resolved);
 
+    /**
+     * TRIMMED HERE, not at the call sites, so there is one place that can
+     * exceed the API's limit and one place that decides what goes. A scene
+     * with a full cast, Barnabas, the world sheet and a cover is already at
+     * six; it is the story-grown plates that will push this over.
+     */
+    const budgeted = withinBudget(cast, extras);
+    if (budgeted.cast.length < cast.length || budgeted.extras.length < extras.length) {
+      console.log(
+        `[illustration] ${cast.length + extras.length} references asked for, ` +
+          `${REFERENCE_BUDGET} sent.`,
+      );
+    }
+
     // Extras go LAST, after every cast member, so the numbering in the prompt
     // matches the order images.edit receives them in. The filter is the same
     // one composeIllustrationPrompt applies, so the two cannot disagree about
     // which extras were actually attached.
-    const attachedExtras = extras.filter((e) => e.file);
+    const attachedExtras = budgeted.extras.filter((e) => e.file);
     const references = [
-      ...cast.map((m) => m.reference).filter((f): f is PictureFile => Boolean(f)),
+      ...budgeted.cast.map((m) => m.reference).filter((f): f is PictureFile => Boolean(f)),
       ...attachedExtras.map((e) => e.file as PictureFile),
     ];
-    const prompt = composeIllustrationPrompt(imagePrompt, cast, extras, opts);
+    const prompt = composeIllustrationPrompt(
+      imagePrompt,
+      budgeted.cast,
+      budgeted.extras,
+      opts,
+    );
     let response;
     if (references.length > 0) {
       try {
