@@ -311,6 +311,17 @@ them. The crowns in `CharacterPicker` disappear when it is ticked — a crown on
 screen while the prompt says nobody leads is the UI contradicting the model.
 Verified on real generations: ticked, Ada 26 / Eli 24; unticked, Ada 38 / Eli 15.
 
+**The hobby and the favourite colour are permission, not inventory.** They
+render on their own line — *"Things a scene may notice about Mia, and none has
+to: likes drawing; favourite colour purple."* — the shelf's grading applied to a
+person (`BriefCharacter.mayNotice`, `softFacts()`). Measured before this across
+seven real stories: hobby nouns 5–18 times per ~1,200 words and four of seven
+titles carrying the sheet's colour or hobby. Blake: "Hobbies should probably not
+be as influential as they are." This was the first change to move the
+compatibility goldens on purpose, at his say-so: ten cases × (single + outline),
+each by exactly that relocation. Hair, eyes, nature, the companion and the notes
+stay in `colour`; the supporting cast's two-fact ration is untouched.
+
 **Nothing on a character is defaulted.** Every field is optional, and the form
 starts empty except the name. Six defaults — brown hair, brown eyes, blue,
 reading, kind, age 8 — used to reach every story.

@@ -305,6 +305,14 @@ const HISTORY_FIXED =
   "happened and does not rescue anyone from it.";
 
 /**
+ * The shelf's grading, for a person: "one may be noticed in passing; none has
+ * to be." Said per character, because "none has to" only means something when
+ * it is clear whose things it is talking about.
+ */
+const mayNoticeLine = (name: string, facts: string) =>
+  `Things a scene may notice about ${name}, and none has to: ${facts}.`;
+
+/**
  * One character is never "they".
  *
  * A story written for two girls came back calling one of them "they" -- "'You're
@@ -728,6 +736,20 @@ export type BriefCharacter = {
   /** Appearance, hobbies, companions. Colour, not requirements. */
   colour: string;
   /**
+   * What a scene MAY notice and none has to: the hobby and the favourite colour.
+   *
+   * They were in `colour`, in the same sentence as hair and eyes, under one
+   * generic "use only where a scene naturally calls for it" -- and measured
+   * across seven real stories the model read them as the plot: hobby nouns
+   * 5-18 times per story, and four of seven titles carrying the sheet's colour
+   * or hobby. Blake: "Hobbies should probably not be as influential as they
+   * are." So they render the way the shop's shelf does -- permission, not
+   * inventory -- which is a grading this model demonstrably honours.
+   *
+   * Absent on every brief frozen before this; those render exactly as before.
+   */
+  mayNotice?: string;
+  /**
    * What they can do, as five numbers. Absent for a character who has never
    * spent a point, which is what keeps this free for everyone who has not.
    */
@@ -743,8 +765,21 @@ export type BriefCharacter = {
 };
 
 /**
- * Everything a character's COLOUR slot says: looks, nature, what they like,
- * their companion, whatever their owner wrote about them.
+ * The hobby and the favourite colour, as a list a scene may draw on.
+ *
+ * Out of fullColour and into their own slot so the brief can grade them: see
+ * BriefCharacter.mayNotice. Name-free, because the render line names them.
+ */
+function softFacts(f: { hobby?: string; favoriteColor?: string }): string {
+  const parts: string[] = [];
+  if (isSet(f.hobby)) parts.push(`likes ${f.hobby}`);
+  if (isSet(f.favoriteColor)) parts.push(`favourite colour ${f.favoriteColor}`);
+  return parts.join("; ");
+}
+
+/**
+ * Everything a character's COLOUR slot says: looks, nature, their companion,
+ * whatever their owner wrote about them. What they like is softFacts' now.
  *
  * Lifted out of the lead's construction unchanged, because a story with no
  * main character gives every character this same treatment (up to three of
@@ -778,8 +813,6 @@ function fullColour(f: {
   if (isSet(f.personality)) traits.push(`a ${f.personality} nature`);
   const colourParts: string[] = [];
   if (traits.length) colourParts.push(`${f.name} has ${traits.join(", ")}.`);
-  if (isSet(f.hobby)) colourParts.push(`${f.name} likes ${f.hobby}.`);
-  if (isSet(f.favoriteColor)) colourParts.push(`Favourite colour: ${f.favoriteColor}.`);
   if (f.animal) {
     colourParts.push(
       `${f.name} has ${article(f.animal)} ${f.animal} as a companion; give it a name and a personality.`,
@@ -1201,6 +1234,7 @@ export function buildStoryBrief(
         name, kind, hair, eyes, personality, hobby, favoriteColor, animal,
         category: details?.category, notes: details?.notes,
       });
+  const mayNotice = anonymous ? "" : softFacts({ hobby, favoriteColor });
 
   // ---- WHAT: the thing to invent around ------------------------------------
   const premise: string[] = [];
@@ -1371,7 +1405,7 @@ export function buildStoryBrief(
   // the companion animal goes because "give it a name and a personality" eight
   // times is a menagerie, not a cast.
   const cast: BriefCharacter[] = [
-    { name, identity, colour, stats: details?.stats, statsEnabled: details?.statsEnabled, skills: details?.skills },
+    { name, identity, colour, ...(mayNotice ? { mayNotice } : {}), stats: details?.stats, statsEnabled: details?.statsEnabled, skills: details?.skills },
     ...supporting.map((c): BriefCharacter => {
       const who = [c.name];
       if (c.age) who.push(`aged ${c.age}`);
@@ -1429,6 +1463,9 @@ export function buildStoryBrief(
               favoriteColor: c.favoriteColor, category: c.category, notes: c.notes,
             })
           : (both ?? one),
+        ...(shareEverything && softFacts({ hobby: c.hobby, favoriteColor: c.favoriteColor })
+          ? { mayNotice: softFacts({ hobby: c.hobby, favoriteColor: c.favoriteColor }) }
+          : {}),
       };
     }),
   ];
@@ -1826,13 +1863,16 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     );
   }
   if (lead.colour) out.push(lead.colour);
+  if (lead.mayNotice) out.push(mayNoticeLine(lead.name, lead.mayNotice));
   if (others.length > 0) {
     out.push(
       brief.ensemble
         ? "AND, EQUALLY, THE REST OF THEM:"
         : `ALSO IN THE STORY -- ${others.length} ${others.length === 1 ? "other" : "others"}, present but not the subject:`,
     );
-    for (const c of others) out.push(`  - ${[c.identity, c.colour].filter(Boolean).join(" ")}`);
+    for (const c of others) {
+      out.push(`  - ${[c.identity, c.colour, c.mayNotice ? mayNoticeLine(c.name, c.mayNotice) : ""].filter(Boolean).join(" ")}`);
+    }
   }
   // Straight after the names, because that is what it is about. See
   // ONE_PERSON_PRONOUNS.

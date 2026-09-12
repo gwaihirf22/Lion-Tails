@@ -297,15 +297,17 @@ describe("a cast is weighted, not enumerated", () => {
 
   it("gives the lead full colour and the others at most two facts", () => {
     const brief = make(3);
-    // The lead keeps eyes, favourite colour and the animal companion.
+    // The lead keeps eyes and the animal companion in colour; the favourite
+    // colour is graded down to "may notice" now, but it is still the lead's.
     expect(brief.cast[0].colour).toContain("eyes");
-    expect(brief.cast[0].colour).toContain("Favourite colour");
+    expect(brief.cast[0].mayNotice).toContain("favourite colour");
     expect(brief.cast[0].colour).toContain("as a companion");
     // The supporting cast keeps none of those: they are sheet data with nothing
     // for a scene to do, and eight companions is a menagerie.
     for (const c of brief.cast.slice(1)) {
       expect(c.colour).not.toContain("eyes");
       expect(c.colour).not.toContain("Favourite colour");
+      expect(c.mayNotice).toBeUndefined();
       expect(c.colour).not.toContain("as a companion");
     }
   });
@@ -2395,5 +2397,32 @@ describe("titles", () => {
     const req = { storyType: "regular", storyLength: "medium", readingLevel: "adult" } as unknown as StoryRequest;
     expect(buildSystemPrompt(req)).not.toMatch(/\bweight\b/i);
     expect(EXPERT_CRAFT).not.toMatch(/\bweight\b/i);
+  });
+});
+
+/**
+ * The hobby and the favourite colour are permission, not inventory.
+ */
+describe("what a scene may notice", () => {
+  const withSoft = () => buildStoryBrief(
+    { storyType: "regular", storyLength: "short", theme: "kindness", characterIds: ["c1"] } as unknown as StoryRequest,
+    [{ id: "c1", name: "Mia", createdAt: "2026-01-01", kind: "girl", hair: "brown", hobby: "drawing", favoriteColor: "purple" } as Character],
+  );
+  it("takes the hobby and the colour out of the colour sentence and grades them", () => {
+    const b = withSoft();
+    expect(b.cast[0].colour).toBe("Mia has brown hair.");
+    expect(b.cast[0].mayNotice).toBe("likes drawing; favourite colour purple");
+    expect(renderBrief(b, "single")).toContain("Things a scene may notice about Mia, and none has to: likes drawing; favourite colour purple.");
+  });
+  it("keeps them out of every chapter, like the rest of the colour", () => {
+    expect(renderBrief(withSoft(), "chapter")).not.toContain("drawing");
+  });
+  it("says nothing at all for a character with neither", () => {
+    const b = buildStoryBrief(
+      { storyType: "regular", storyLength: "short", theme: "kindness", characterIds: ["c1"] } as unknown as StoryRequest,
+      [{ id: "c1", name: "Mia", createdAt: "2026-01-01", kind: "girl", hair: "brown" } as Character],
+    );
+    expect(b.cast[0].mayNotice).toBeUndefined();
+    expect(renderBrief(b, "single")).not.toContain("may notice");
   });
 });
