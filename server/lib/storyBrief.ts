@@ -32,6 +32,7 @@ import {
   worldCanon,
   questFamiliarity,
 } from "../data/lionTails";
+import { CROSSING_OVER_DRESS } from "../data/referencePlates";
 
 export type CustomPrompts = {
   systemPrompt?: string;
@@ -459,7 +460,14 @@ function participationPremise(
       anchor: [hasSource ? partOfIt(name) : "", hasSource ? HISTORY_FIXED : "", neverDies(name)]
         .filter(Boolean)
         .join(" "),
-      world: { canon: worldCanon(frame), anchor: worldAnchor() },
+      // CROSSING_OVER_DRESS rides with the canon so the STORY says it too.
+      // The picture is told the same thing by renderBrief's image projection;
+      // if only one of them knew, the prose would put a child in a fleece and
+      // the illustration would put them in linen, in the same scene.
+      world: {
+        canon: [...worldCanon(frame), CROSSING_OVER_DRESS],
+        anchor: worldAnchor(),
+      },
     };
   }
 
@@ -886,6 +894,16 @@ export type StoryBrief = {
     kind: "biblical-event" | "hero-of-faith";
     label: string;
     passage?: string;
+    /**
+     * When and where this LOOKS like, for the illustrator.
+     *
+     * Separate from `passage` because they answer different questions and only
+     * one of them helps a picture: "Genesis 37; 39-45; 50" is where to read the
+     * account, and "Egypt of the Middle Kingdom, around 1800 BC" is what to
+     * draw. The image projection used to carry neither, so every historical
+     * story was illustrated in no particular century.
+     */
+    era?: string;
     account: string;
     keyVerse?: { reference: string; text: string; translation?: string };
     cautions: string[];
@@ -960,6 +978,7 @@ export function buildStoryBrief(
       kind: "biblical-event",
       label: event.label,
       passage: event.passage,
+      era: event.era,
       account: event.anchor,
       keyVerse: { ...event.keyVerse, translation: "World English Bible" },
       cautions: event.cautions,
@@ -989,6 +1008,8 @@ export function buildStoryBrief(
       kind: "hero-of-faith",
       label: hero.name,
       passage: when || undefined,
+      // The same two fields, now reaching the illustrator as well as the prose.
+      era: when || undefined,
       account: [
         hero.description,
         hero.contribution,
@@ -1563,18 +1584,43 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
   const everyone = nameList(brief.cast.map((c) => c.name));
 
   if (purpose === "image") {
+    /**
+     * WHEN THIS IS, which the illustrator was never told.
+     *
+     * The projection carried `sourceMaterial.label` and nothing else, so
+     * "a scene from Joseph in Egypt" was all a picture ever knew -- no century,
+     * no place, no idea what anyone wore. Blake: the modern age should look
+     * like the modern age, and the era they are going to should match where
+     * they are going.
+     *
+     * `passage` is deliberately still left out. It is chapter-and-verse, which
+     * is not a place, and putting "Genesis 37; 39-45; 50" in front of an image
+     * model invites it to draw the words.
+     */
+    const era = brief.sourceMaterial?.era ? ` It is set in ${brief.sourceMaterial.era}.` : "";
+    /**
+     * THE CROSSING OVER DRESSES THEM, which is canon as of this change.
+     *
+     * A traveller arrives from now. Drawn in their own clothes they are a
+     * child in a fleece standing in Bronze Age Canaan, and drawn without a rule
+     * they are whatever the model felt like. So the lantern outfits them, and
+     * the picture has to know that -- CROSSING_OVER_DRESS says it once, and the
+     * prose canon says the same thing so the story and the picture agree.
+     */
+    const dress = brief.world && brief.sourceMaterial?.era ? ` ${CROSSING_OVER_DRESS}` : "";
+
     // With no lead there is no one face to build the frame around, so the
     // subject is the group -- but the cap does not move: a picture with
     // everyone in it is a crowd whichever shape the story is.
     if (brief.ensemble) {
       const who = `${everyone}${brief.sourceMaterial ? ` -- a scene from ${brief.sourceMaterial.label}` : ""}.`;
       return (
-        `${who} ${brief.cast.map((c) => c.identity).join(" ")} ` +
+        `${who}${era}${dress} ${brief.cast.map((c) => c.identity).join(" ")} ` +
         `Draw at most three of them -- a picture with everyone in it is a crowd, not a scene.`
       );
     }
     const base = brief.sourceMaterial
-      ? `${lead.identity} -- a scene from ${brief.sourceMaterial.label}.`
+      ? `${lead.identity} -- a scene from ${brief.sourceMaterial.label}.${era}${dress}`
       : lead.identity;
     if (others.length === 0) return base;
     // Naming everyone would put eight children in one frame. An illustration

@@ -13,6 +13,8 @@ import {
   pickFramingApproach,
   worldAnchor,
 } from "../server/data/lionTails";
+import { BIBLICAL_EVENTS } from "../server/data/biblicalEvents";
+import { CROSSING_OVER_DRESS } from "../server/data/referencePlates";
 import fs from "fs";
 import { readFileSync, writeFileSync } from "fs";
 import path from "path";
@@ -2191,5 +2193,99 @@ describe("no main character", () => {
     const before = renderBrief(buildStoryBrief({ ...base, characterIds: ["c1", "c2"] } as StoryRequest, [mia, ember]), "single");
     expect(before).toContain("This is Mia's story");
     expect(before).not.toContain("no main character");
+  });
+});
+
+/**
+ * WHEN THIS IS, which the illustrator was never told.
+ *
+ * The image projection carried the account's LABEL and nothing else, so every
+ * historical picture was drawn in no particular century. Blake: the modern age
+ * should look like the modern age, and the era they are going to should match
+ * where they are going.
+ */
+describe("what century the picture is in", () => {
+  const brief = (o: Partial<StoryRequest> = {}) =>
+    buildStoryBrief(
+      { biblicalEvent: "joseph", characterIds: ["c1"], ...o } as StoryRequest,
+      [{ id: "c1", name: "Mia", kind: "human", sex: "female", age: 8, createdAt: "x" } as never],
+    );
+
+  it("names the era of a biblical account", () => {
+    const image = renderBrief(brief(), "image");
+    expect(image).toMatch(/It is set in Egypt of the Middle Kingdom/);
+  });
+
+  it("never puts chapter-and-verse in front of an image model", () => {
+    // "Genesis 37; 39-45; 50" is where to READ the account, not a place. An
+    // image model handed a reference tends to draw the words.
+    const image = renderBrief(brief(), "image");
+    expect(image).not.toContain("Genesis");
+    expect(image).not.toMatch(/\d+:\d+/);
+  });
+
+  it("gives every biblical event an era, or the picture has no century", () => {
+    // The whole point is that this cannot be half-done: one event without an
+    // era is one account that goes on being drawn in no particular period.
+    for (const [slug, event] of Object.entries(BIBLICAL_EVENTS)) {
+      expect(event.era, slug).toBeTruthy();
+      expect(event.era.length, slug).toBeGreaterThan(20);
+      // An era is a place and a material world, not a bare date.
+      expect(event.era, slug).not.toMatch(/^\s*(around\s+)?\d+\s*(BC|AD)?\s*$/i);
+    }
+  });
+});
+
+/**
+ * THE CROSSING OVER DRESSES THEM. New canon.
+ *
+ * The only anachronism rule in the app was for "alongside" -- do not give them
+ * anything from another century -- and a traveller had none at all, because a
+ * traveller genuinely IS from another century. So a child arrived in Bronze Age
+ * Egypt in whatever the model felt like.
+ */
+describe("what a traveller is wearing when they arrive", () => {
+  const questBrief = () =>
+    buildStoryBrief(
+      { biblicalEvent: "joseph", characterIds: ["c1"], characterRole: "travels" } as StoryRequest,
+      [{ id: "c1", name: "Mia", kind: "human", sex: "female", age: 8, createdAt: "x" } as never],
+    );
+  const alongsideBrief = () =>
+    buildStoryBrief(
+      { biblicalEvent: "joseph", characterIds: ["c1"], characterRole: "alongside" } as StoryRequest,
+      [{ id: "c1", name: "Mia", kind: "human", sex: "female", age: 8, createdAt: "x" } as never],
+    );
+
+  it("tells the picture, so the traveller is not drawn in a fleece", () => {
+    expect(renderBrief(questBrief(), "image")).toContain(CROSSING_OVER_DRESS);
+  });
+
+  it("tells the story the same thing, so the two cannot disagree", () => {
+    // If only the picture knew, the prose would put a child in modern clothes
+    // and the illustration would put them in linen, in the same scene.
+    expect(renderBrief(questBrief(), "single")).toContain(CROSSING_OVER_DRESS);
+  });
+
+  it("says nothing to somebody who already belongs to that time", () => {
+    // "alongside" means they were always there. Dressing them is meaningless,
+    // and the existing anachronism rule already covers it.
+    const image = renderBrief(alongsideBrief(), "image");
+    expect(image).not.toContain(CROSSING_OVER_DRESS);
+    // The era still applies -- that is about the WORLD, not about arriving.
+    expect(image).toMatch(/It is set in Egypt/);
+  });
+
+  it("does not explain the lantern", () => {
+    // DEVICE.brief: nobody knows how it works and nobody explains it. A story
+    // that stops to describe an outfit appearing has explained it.
+    expect(CROSSING_OVER_DRESS).toMatch(/nobody explains it/i);
+    expect(CROSSING_OVER_DRESS).not.toMatch(/shimmer|transform|magically|glow/i);
+  });
+
+  it("is one person, not a group", () => {
+    // Blake's rule, and this text broke it on the first draft: "the traveller
+    // ... they ... their" is a singular they. The pronoun suite catches it in
+    // the assembled brief; this catches it in the constant itself.
+    expect(CROSSING_OVER_DRESS).not.toMatch(/\b(they|them|their)\b/i);
   });
 });

@@ -31,6 +31,32 @@
 
 import { DEVICE, SHOP } from "./lionTails";
 
+/**
+ * WHAT THE CROSSING OVER DOES TO THEIR CLOTHES. New canon, Blake's:
+ * "part of the magic is them being clothed and outfitted for the mission to
+ * some degree. their cloths [change] with the time as the lantern takes them."
+ *
+ * It fills a real hole. The only anachronism rule in the app is for the
+ * "alongside" role -- "do not give them anything from another century"
+ * (storyBrief.ts) -- and a "travels" traveller had none at all, because they
+ * genuinely ARE from another century. So a child arrived in Bronze Age Canaan
+ * in a fleece, or in whatever the model felt like that day.
+ *
+ * Deliberately "as though they had always belonged there" and NOT a costume
+ * change scene: DEVICE.brief says nobody knows how the lantern works and nobody
+ * explains it, and a story that stops to describe an outfit appearing has
+ * explained it. The same sentence goes to the prose and to the picture so the
+ * two cannot disagree about what the traveller is wearing.
+ *
+ * Lives here rather than in lionTails.ts's CANON so that the visual rules stay
+ * in one file -- and because CANON is edited often enough by other work that a
+ * new key there is a merge conflict waiting to happen.
+ */
+export const CROSSING_OVER_DRESS =
+  "Crossing over dresses the traveller for the place: what the traveller is wearing becomes what" +
+  " someone of that age would wear there, as though it had always been so. Nobody remarks on it" +
+  " and nobody explains it.";
+
 /** What the picture is of, as the model wrote it. All a gate gets to see. */
 export type PlateContext = {
   /** The image prompt for THIS picture -- not the story, not the brief. */
