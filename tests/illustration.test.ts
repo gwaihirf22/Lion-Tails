@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 import {
@@ -465,35 +465,85 @@ describe("the Timekeeper world sheet", () => {
   });
 
   /**
-   * THE ART DOES NOT EXIST YET, and the app has to be fine with that.
+   * THE ART EXISTS NOW, and the app has to be fine with it existing OR not.
    *
-   * The sheet is drawn, approved and committed separately. Until then every
-   * quest still generates pictures, and they must be no worse than they were
-   * before this shipped -- the same rule the Timekeeper's face already follows
-   * when it cannot be read.
+   * Drawn from the three masters in attached_assets with gpt-image-2 at
+   * 1536x1024 -- exactly the 48x32 patch budget -- and checked by eye against
+   * WORLD_SHEET_PANELS before it was committed: panel 5 really is the lantern
+   * dark, because the prompt will say so. The three tests that follow mirror
+   * the ones for the Timekeeper's face, for the same reasons.
+   *
+   * The absent-file property did not stop mattering when the file landed: a
+   * stripped image, a bad copy, a deleted asset must all still generate a
+   * picture no worse than before. So those tests stay, and the one thing that
+   * changed is that "not there" now has to be SIMULATED -- readFile is made to
+   * reject for that one call -- instead of being the natural state of the
+   * repository. When they passed on the real filesystem they proved the file
+   * was missing; now they prove the fallback, which is what they were for.
    */
-  it("falls back to words when the file is not there", async () => {
+  it("is a file that is actually there", () => {
+    const shipped = path.join(process.cwd(), "public", "images", WORLD_SHEET_FILE);
+    expect(fs.existsSync(shipped)).toBe(true);
+    expect(fs.statSync(shipped).size).toBeGreaterThan(1024);
+  });
+
+  it("is small enough to ship in every clone and every image layer", () => {
+    const shipped = path.join(process.cwd(), "public", "images", WORLD_SHEET_FILE);
+    expect(fs.statSync(shipped).size).toBeLessThan(400 * 1024);
+  });
+
+  it("is attached, as the format it is, when the scene calls for it", async () => {
     const plates = await illustrationPlates("Mr Barnabas behind the counter of his shop");
     expect(plates).toHaveLength(1);
-    expect(plates[0].file).toBeUndefined();
-    // The words still carry the layout, so a future reader of the prompt sees
-    // what was meant even though nothing was attached.
-    expect(plates[0].look).toContain("the lantern, dark");
+    expect(plates[0].file?.filename).toBe(WORLD_SHEET_FILE);
+    // mimeFor follows the extension, and the API is told what it is handed:
+    // sent under the wrong type it is a 400 that costs the whole picture.
+    expect(plates[0].file?.type).toBe("image/webp");
+    expect(plates[0].file?.data.length).toBeGreaterThan(1024);
+  });
+
+  it("is numbered after the cast, so attaching it renumbers nobody", async () => {
+    const cast = [member({ reference: file() })];
+    const plates = await illustrationPlates("Mr Barnabas in his shop");
+    const prompt = composeIllustrationPrompt(SCENE, cast, plates);
+    expect(prompt).not.toBe(composeIllustrationPrompt(SCENE, cast));
+    // One matched person is reference 1; the sheet is reference 2, and it
+    // says where every panel is, because the API cannot label an input.
+    expect(prompt).toContain("Reference image 2 is " + worldSheetLook());
+  });
+
+  it("falls back to words when the file cannot be read", async () => {
+    const spy = vi.spyOn(fs.promises, "readFile").mockRejectedValueOnce(new Error("ENOENT"));
+    try {
+      const plates = await illustrationPlates("Mr Barnabas behind the counter of his shop");
+      expect(plates).toHaveLength(1);
+      expect(plates[0].file).toBeUndefined();
+      // The words still carry the layout, so a future reader of the prompt
+      // sees what was meant even though nothing was attached.
+      expect(plates[0].look).toContain("the lantern, dark");
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("attaches nothing at all to a scene that wants nothing", async () => {
     expect(await illustrationPlates("Joseph counting grain in a granary")).toEqual([]);
   });
 
-  it("changes no prompt while the file is missing", async () => {
-    // The promise that matters most right now: a plate with no file adds no
-    // numbered line, because the numbers must match what images.edit actually
-    // received. A described-but-unattached plate would renumber everybody.
-    const cast = [member({ reference: file() })];
-    const plates = await illustrationPlates("Mr Barnabas in his shop");
-    expect(composeIllustrationPrompt(SCENE, cast, plates)).toBe(
-      composeIllustrationPrompt(SCENE, cast),
-    );
+  it("changes no prompt when the file cannot be read", async () => {
+    // A plate with no file adds no numbered line, because the numbers must
+    // match what images.edit actually received. A described-but-unattached
+    // plate would renumber everybody after it.
+    const spy = vi.spyOn(fs.promises, "readFile").mockRejectedValueOnce(new Error("ENOENT"));
+    try {
+      const cast = [member({ reference: file() })];
+      const plates = await illustrationPlates("Mr Barnabas in his shop");
+      expect(composeIllustrationPrompt(SCENE, cast, plates)).toBe(
+        composeIllustrationPrompt(SCENE, cast),
+      );
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
