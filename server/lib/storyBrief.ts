@@ -944,10 +944,41 @@ export type StoryBrief = {
  *
  * Exported so a test can assert it lands for expert and for nobody else.
  */
+/**
+ * What a title must not be shaped like.
+ *
+ * questTitleRule() already stops "The Lantern and the ..." by naming the
+ * furniture a title may not be built on. This is the same move one level up:
+ * the model's stock LITERARY shapes. Twelve titles in a row in a real library
+ * read "The Weight of What He Had Done", "The Weight of an Unfinished Thing",
+ * "The Hand That Moved", "The Hand That Wasn't Ready", "The Door That Stayed
+ * Shut", "The Lantern That Would Not Hurry" -- and the only title guidance a
+ * non-quest story had was the JSON schema's "A creative title". Blake: "Why is
+ * every new story the weight of something?" Partly because the persona said
+ * "stories that have real weight to them" to every one of them, which is
+ * fixed alongside this; mostly because nothing said what a title is FOR.
+ *
+ * Not a ban. Blake: "It can use it occasionally, just not every story. I like
+ * The Weight of Glory." An instruction cannot produce "occasionally" -- each
+ * story is its own call with no memory of the last title -- so this does the
+ * two things that actually move the base rate: the seed word is out of the
+ * persona, and the guidance is towards the particular rather than against a
+ * shape. Lewis's title is the bar: use one of these when this story has
+ * earned it.
+ *
+ * Applied to EVERY story through titleRuleFor, with the quest rule stacked on
+ * top for quests. Exported so a test can assert the shapes it names.
+ */
+export const TITLE_SHAPE_RULE =
+  "Title it after something particular to THIS story -- a thing, a place, a name, a moment. " +
+  "Shapes like \"The Weight of ...\" or \"The Hand That ...\" fit a thousand stories; they are " +
+  "earned only when nothing of this story's own would serve, which is rarely. Three or four plain " +
+  "words that could only be this story's beat a phrase that sounds like a title.";
+
 export const EXPERT_CRAFT =
   "Write at full literary strength. Layered meaning, and a second reading that " +
   "rewards; the exact word even when it is uncommon; sentences that vary and earn " +
-  "their length; moral weight left for the reader to carry rather than explained; " +
+  "their length; what it means left for the reader to decide rather than explained; " +
   "an ending that trusts the reader with what it means. Do not simplify, do not " +
   "signpost the theme, do not moralise -- and do not let the prose turn purple. " +
   "Restraint is the harder skill, and the reader will notice which one you have.";
@@ -2151,7 +2182,7 @@ function storytellerPersona(request: StoryRequest): string {
     default:
       return retelling
         ? "You are a Christian storyteller who retells real Bible accounts accurately. You are faithful to what Scripture records -- the events, the names, the order and the outcome -- and you say so plainly rather than inventing a version that is easier to tell. Where Scripture is silent you may imagine; where it speaks you follow it."
-        : "You are a Christian storyteller. You write faith-based stories that have real weight to them: something is genuinely at stake, the choices are genuinely hard, and the moral is what the story turns out to mean rather than a lesson pinned to the end of it.";
+        : "You are a Christian storyteller. You write faith-based stories with real stakes: something is genuinely at stake, the choices are genuinely hard, and the moral is what the story turns out to mean rather than a lesson pinned to the end of it.";
   }
 }
 

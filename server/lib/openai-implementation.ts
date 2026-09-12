@@ -11,6 +11,7 @@ import {
   WORDS_PER_VERSE_LINE,
   type StoryBrief,
   nameList,
+  TITLE_SHAPE_RULE,
 } from "./storyBrief";
 
 /**
@@ -303,7 +304,9 @@ function nextTokenBudget(current: number, promptTokens?: number): number | null 
  * frozen brief, already at both call sites, and not a second way of asking
  * the same question.
  */
-const titleRuleFor = (brief: StoryBrief): string => (brief.world ? questTitleRule() : "");
+// Every story gets the shape rule; a quest gets the furniture rule on top.
+const titleRuleFor = (brief: StoryBrief): string =>
+  brief.world ? `${TITLE_SHAPE_RULE} ${questTitleRule()}` : TITLE_SHAPE_RULE;
 
 /**
  * What a quest's FIRST part is for, told to the outline.

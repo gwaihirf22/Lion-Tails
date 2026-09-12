@@ -31,6 +31,8 @@ import {
   SOLO_RETELLING_GUARD,
   type BriefPurpose,
   EXPERT_CRAFT,
+  TITLE_SHAPE_RULE,
+  buildSystemPrompt,
 } from "../server/lib/storyBrief";
 import {
   characterIdsOf,
@@ -2371,5 +2373,27 @@ describe("the expert reading level", () => {
     for (const level of ["preschool", "early-elementary", "middle-school", "high-school", "adult"]) {
       expect(renderBrief(req(level), "single")).not.toContain(EXPERT_CRAFT);
     }
+  });
+});
+
+/**
+ * The word every title was reaching for, and the shapes it kept taking.
+ */
+describe("titles", () => {
+  it("names the stock shapes so the model is told, not left to its habit", () => {
+    expect(TITLE_SHAPE_RULE).toContain("The Weight of");
+    expect(TITLE_SHAPE_RULE).toContain("The Hand That");
+    expect(TITLE_SHAPE_RULE).toMatch(/particular to THIS story/);
+    // A bar, not a ban: "The Weight of Glory" must still be reachable.
+    expect(TITLE_SHAPE_RULE).not.toMatch(/do not|never/i);
+    expect(TITLE_SHAPE_RULE).toMatch(/earned/);
+  });
+
+  it("no longer seeds 'weight' into every story's system prompt", () => {
+    // "stories that have real weight to them" went to every non-retelling
+    // story, and two of the three titles after it were "The Weight of ...".
+    const req = { storyType: "regular", storyLength: "medium", readingLevel: "adult" } as unknown as StoryRequest;
+    expect(buildSystemPrompt(req)).not.toMatch(/\bweight\b/i);
+    expect(EXPERT_CRAFT).not.toMatch(/\bweight\b/i);
   });
 });
