@@ -1,5 +1,5 @@
 import type { SavedStory } from "@shared/schema";
-import { characterIdsOf, characterRoleOf } from "@shared/schema";
+import { characterIdsOf, characterRoleOf, isEnsemble } from "@shared/schema";
 import { EDITED_BY_PARENT } from "@shared/editLog";
 import { ROLE_OPTIONS } from "@/lib/characterRole";
 
@@ -56,6 +56,11 @@ export function storyChips(story: SavedStory, sources: ChipSources): string[] {
     const c = sources.characters.find((x) => x.id === id);
     if (c) chips.push(c.name);
   }
+
+  // Which shape it was written in. Only worth saying when it is the unusual
+  // one -- every other story has a main character, and a chip on all of them
+  // would say nothing.
+  if (isEnsemble(request)) chips.push("No main character");
 
   const role = characterRoleOf(request);
   if (role !== "absent") chips.push(ROLE_OPTIONS[role].label);

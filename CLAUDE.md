@@ -270,6 +270,24 @@ feathers, scales, plating), so the story sees only `kind` and a girl renders "a
 girl" rather than "a human". A row saved before any of this has no category and
 falls through to "hair", which is what keeps the golden briefs identical.
 
+**A story may have NO main character.** `noMainCharacter` on the request,
+read only through `isEnsemble()` — the flag is meaningless with one character,
+and a request can carry it from a cast later cut to one. Absent means the old
+shape, so every frozen request still means what it meant. The brief carries
+`ensemble` as a fact (like `soloRetelling`) because the full brief AND the
+chapter projection both need it, and the chapter projection is the one that
+writes every chapter: its "use them only where this chapter's instruction calls
+for them" is what MAKES a supporting character, so it needs the opposite
+sentence here. **Two or three share the lead's full description**
+(`ENSEMBLE_FULL_DETAIL_MAX`), four or more fall back to the two-fact ration —
+the "eight equal names is eight protagonists" argument is about eight, not two.
+The companion animal stays one per story. A shared quest adds two lines to the
+brief and **does not touch the canon**, which is capped by a test and singular
+on purpose: one of them carries the stone, and "the traveller" means all of
+them. The crowns in `CharacterPicker` disappear when it is ticked — a crown on
+screen while the prompt says nobody leads is the UI contradicting the model.
+Verified on real generations: ticked, Ada 26 / Eli 24; unticked, Ada 38 / Eli 15.
+
 **Nothing on a character is defaulted.** Every field is optional, and the form
 starts empty except the name. Six defaults — brown hair, brown eyes, blue,
 reading, kind, age 8 — used to reach every story.

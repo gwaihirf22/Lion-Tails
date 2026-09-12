@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { questLengthAllowed, QUEST_PREFERRED_LENGTH, QUEST_LENGTHS } from "@shared/quests";
-import { storyTakesAWhile, SLOW_STORY_LENGTHS } from "@shared/schema";
+import { storyTakesAWhile, SLOW_STORY_LENGTHS, isEnsemble } from "@shared/schema";
 import {
   CANON,
   KEEPER,
@@ -141,6 +141,25 @@ const cases: Record<string, () => ReturnType<typeof buildStoryBrief>> = {
    * "Sam, aged 8, a boy." -- a golden test cannot catch what its inputs do not
    * contain.
    */
+  /**
+   * No main character: the second shape, captured so the prompt it produces is
+   * reviewed rather than assumed. Two characters, so both get the lead's full
+   * description -- the ration Blake chose.
+   */
+  "no main character, two of them": () =>
+    buildStoryBrief(
+      { ...base, characterIds: ["c1", "c2"], noMainCharacter: true } as StoryRequest,
+      [mia, ember],
+    ),
+  "no main character, on a quest": () =>
+    buildStoryBrief(
+      {
+        ...base, characterIds: ["c1", "c2"], noMainCharacter: true,
+        characterRole: "travels", biblicalEvent: "noah",
+      } as StoryRequest,
+      [mia, ember],
+    ),
+
   "form defaults, no character": () =>
     buildStoryBrief({
       childName: "Sam", gender: "boy", animal: "", useAnimal: true, theme: "kindness",
@@ -2090,5 +2109,87 @@ describe("a Human is still a girl or a boy in the story", () => {
 
   it("does tag one of the folk, whose word carries no gender", () => {
     expect(identityOf({ kind: "elf", sex: "female", age: 10 })).toBe("Ellie, aged 10, an elf (she).");
+  });
+});
+
+/**
+ * A story with no main character.
+ *
+ * Blake: "the option when having multiple characters to not have a main
+ * character." Index 0 being the protagonist is load-bearing in every
+ * projection, so what these assert is that the second shape reaches ALL of
+ * them -- especially the chapter projection, which writes every chapter and
+ * was the one place the first attempt still quietly rebuilt the lead.
+ */
+describe("no main character", () => {
+  const two = { ...base, characterIds: ["c1", "c2"], noMainCharacter: true } as StoryRequest;
+  const ensembleBrief = () => buildStoryBrief(two, [mia, ember]);
+
+  it("needs two of them: the flag alone means nothing about one character", () => {
+    expect(isEnsemble({ ...base, characterIds: ["c1"], noMainCharacter: true } as StoryRequest)).toBe(false);
+    expect(isEnsemble(two)).toBe(true);
+    expect(isEnsemble({ ...base, characterIds: ["c1", "c2"] } as StoryRequest)).toBe(false);
+    // And the brief agrees with the helper rather than with the raw flag.
+    expect(buildStoryBrief({ ...base, characterIds: ["c1"], noMainCharacter: true } as StoryRequest, [mia]).ensemble).toBe(false);
+  });
+
+  it("never tells the model whose story it is", () => {
+    const full = renderBrief(ensembleBrief(), "single");
+    expect(full).not.toMatch(/This is \w+'s story/);
+    expect(full).toContain("This story has no main character");
+    expect(full).not.toContain("present but not the subject");
+  });
+
+  it("says it again in the chapter prompt, which writes every chapter", () => {
+    const chapter = renderBrief(ensembleBrief(), "chapter");
+    expect(chapter).toContain("no main character");
+    // The supporting-cast instruction is what MAKES a supporting character.
+    expect(chapter).not.toContain("use them only where this chapter's instruction calls for them");
+    // Both identities, not just the first.
+    expect(chapter).toContain("Mia");
+    expect(chapter).toContain("Ember");
+  });
+
+  it("gives two or three of them the same description, and four the ration", () => {
+    const [m, e] = ensembleBrief().cast;
+    // Ember's full colour, the lead's treatment: three traits, not the two-fact ration.
+    expect(e.colour).toContain("emerald scales");
+    expect(e.colour).toContain("gold eyes");
+    expect(e.colour).toContain("a patient nature");
+    // The companion animal stays one per story, on the first character only.
+    expect(m.colour).toContain("as a companion");
+    expect(e.colour).not.toContain("as a companion");
+
+    const four = buildStoryBrief(
+      { ...base, characterIds: ["c1", "c2", "c3", "c4"], noMainCharacter: true } as StoryRequest,
+      [mia, ember, bolt, { ...ember, id: "c4", name: "Cinder" } as Character],
+    );
+    expect(four.ensemble).toBe(true);
+    // Back to at most two facts, which is what stops eight equal protagonists.
+    expect(four.cast[1].colour).not.toContain("gold eyes");
+  });
+
+  it("draws the group, and still caps the picture at three", () => {
+    const image = renderBrief(ensembleBrief(), "image");
+    expect(image.startsWith("Mia and Ember")).toBe(true);
+    expect(image).toContain("Draw at most three of them");
+    expect(image).not.toMatch(/Draw Mia and/);
+  });
+
+  it("sends them on a quest together, without touching the canon", () => {
+    const quest = renderBrief(
+      buildStoryBrief({ ...two, characterRole: "travels", biblicalEvent: "noah" } as StoryRequest, [mia, ember]),
+      "single",
+    );
+    expect(quest).toContain("They go together");
+    expect(quest).toContain('where the world\'s rules say "the traveller" they mean all of them');
+    // The canon itself is unchanged -- it is capped by a test and singular on purpose.
+    expect(quest).toContain("the traveller keeps in a pocket");
+  });
+
+  it("leaves a story with a main character exactly as it was", () => {
+    const before = renderBrief(buildStoryBrief({ ...base, characterIds: ["c1", "c2"] } as StoryRequest, [mia, ember]), "single");
+    expect(before).toContain("This is Mia's story");
+    expect(before).not.toContain("no main character");
   });
 });

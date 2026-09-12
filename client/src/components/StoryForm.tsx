@@ -354,6 +354,7 @@ export default function StoryForm({
        * permanently.
        */
       characterIds: [],
+      noMainCharacter: false,
       // "absent" is the safe default: a retelling is about the person it is
       // about, and getting it wrong this way gives a plainer story rather than
       // a child written into Scripture.
@@ -630,10 +631,17 @@ export default function StoryForm({
                           setSelectedCharacter(c);
                           setEditDialogOpen(true);
                         }}
+                        noMainCharacter={form.watch("noMainCharacter")}
+                        onNoMainCharacterChange={(v) =>
+                          form.setValue("noMainCharacter", v, { shouldDirty: true })
+                        }
                       />
                     </FormControl>
                     <FormDescription>
-                      {`Saved characters, reusable across stories. Up to ${MAX_STORY_CHARACTERS}; the first one is the main character.`}
+                      {`Saved characters, reusable across stories. Up to ${MAX_STORY_CHARACTERS}; ` +
+                        (form.watch("noMainCharacter") && (field.value ?? []).length >= 2
+                          ? "they share the story."
+                          : "the first one is the main character.")}
                     </FormDescription>
                     {/* Always, not only when the list is empty. The picker is
                         the door to persistent characters, and a user with two

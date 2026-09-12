@@ -25,3 +25,7 @@ npm-debug.log*
 # Generated at runtime; a named volume is mounted over this in production
 public/images/stories/*
 !public/images/stories/.gitkeep
+
+# Claude Code's own workspace: worktrees it creates while working here.
+# Untracked and unignored, one `git add -A` away from being committed.
+.claude/
