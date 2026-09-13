@@ -63,7 +63,11 @@ export interface IStorage {
    * predicate would be a second copy of both, and the older spelling is
    * exactly what it would miss.
    */
-  getStoryRequests(userId: number): Promise<StoryRequest[]>;
+  /**
+   * Every visible story's frozen request, with when it was written. The date
+   * is what lets a character's reset draw a line through the quest count.
+   */
+  getStoryRequests(userId: number): Promise<Array<{ request: StoryRequest; createdAt: string }>>;
   /** Stamp a story as looked at. Idempotent: the first time is the one kept. */
   markStorySeen(storyId: string, userId: number): Promise<void>;
   /** How many stories are written and not yet opened. One number, no bodies. */
@@ -721,8 +725,8 @@ export class MemStorage implements IStorage {
     return visible ? story : undefined;
   }
 
-  async getStoryRequests(userId: number): Promise<StoryRequest[]> {
-    return (await this.getUserStories(userId)).map((s) => s.request);
+  async getStoryRequests(userId: number): Promise<Array<{ request: StoryRequest; createdAt: string }>> {
+    return (await this.getUserStories(userId)).map((s) => ({ request: s.request, createdAt: s.createdAt }));
   }
 
   async markStorySeen(storyId: string, userId: number): Promise<void> {

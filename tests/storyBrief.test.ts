@@ -33,6 +33,7 @@ import {
   EXPERT_CRAFT,
   TITLE_SHAPE_RULE,
   buildSystemPrompt,
+  questsSince,
 } from "../server/lib/storyBrief";
 import {
   characterIdsOf,
@@ -2389,6 +2390,9 @@ describe("titles", () => {
     // A bar, not a ban: "The Weight of Glory" must still be reachable.
     expect(TITLE_SHAPE_RULE).not.toMatch(/do not|never/i);
     expect(TITLE_SHAPE_RULE).toMatch(/earned/);
+    // Sixteen stories in: the grading moved the prose and not the titles, because
+    // "a thing, a place" was being satisfied by the sheet's hobby object.
+    expect(TITLE_SHAPE_RULE).toMatch(/character's sheet/);
   });
 
   it("no longer seeds 'weight' into every story's system prompt", () => {
@@ -2424,5 +2428,44 @@ describe("what a scene may notice", () => {
     );
     expect(b.cast[0].mayNotice).toBeUndefined();
     expect(renderBrief(b, "single")).not.toContain("may notice");
+  });
+});
+
+/**
+ * How many quests a character has been on, and what a reset does to it.
+ */
+describe("counting a character's quests", () => {
+  const quest = (ids: string[], createdAt: string) =>
+    ({ request: { characterIds: ids, characterRole: "travels" } as unknown as StoryRequest, createdAt });
+  const plain = (ids: string[], createdAt: string) =>
+    ({ request: { characterIds: ids } as unknown as StoryRequest, createdAt });
+
+  it("counts only quests, only for those in the cast", () => {
+    const v = questsSince(
+      [quest(["a"], "2026-02-01"), quest(["a", "b"], "2026-03-01"), plain(["a"], "2026-04-01")],
+      [{ id: "a" }, { id: "b" }, { id: "c" }],
+    );
+    expect(v).toEqual({ a: 2, b: 1, c: 0 });
+  });
+
+  it("starts the count again from the reset", () => {
+    const v = questsSince(
+      [quest(["a"], "2026-02-01"), quest(["a"], "2026-03-01"), quest(["a"], "2026-05-01")],
+      [{ id: "a", travelsResetAt: "2026-04-01T00:00:00.000Z" }],
+    );
+    expect(v.a).toBe(1);
+  });
+
+  it("does not lose an older story to a missing date", () => {
+    const v = questsSince(
+      [{ request: quest(["a"], "x").request, createdAt: null }],
+      [{ id: "a", travelsResetAt: "2026-04-01T00:00:00.000Z" }],
+    );
+    expect(v.a).toBe(1);
+  });
+
+  it("is untouched for a character who has never been reset", () => {
+    const v = questsSince([quest(["a"], "2020-01-01")], [{ id: "a" }]);
+    expect(v.a).toBe(1);
   });
 });

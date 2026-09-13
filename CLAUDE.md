@@ -284,6 +284,13 @@ feathers, scales, plating), so the story sees only `kind` and a girl renders "a
 girl" rather than "a human". A row saved before any of this has no category and
 falls through to "hair", which is what keeps the golden briefs identical.
 
+**A reset takes the quests too, by date.** How many quests a character has
+been on is derived from the library (`countQuestsFor` → `questsSince`), not
+stored, so `startingOver()` cannot clear it — it stamps `travelsResetAt`
+(server-owned, omitted from every write schema) and only quests written after
+it count. Absent means count everything. A story with no usable date counts,
+so an older row never drops out of a veteran's history over a null column.
+
 **The four human age-nouns are reconciled with the age.** `characterKind()`
 turns `boy`/`girl`/`man`/`woman` plus an age into the right one of the
 four (18 is the line, as it already was for `"human"`); with no age the

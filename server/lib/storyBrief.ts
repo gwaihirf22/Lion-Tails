@@ -190,15 +190,34 @@ export function resolveStoryFocus(request: StoryRequest, hero?: HeroOfFaith): vo
  */
 export async function countQuestsFor(
   userId: number,
-  characterIds: string[],
+  characters: ReadonlyArray<Pick<Character, "id" | "travelsResetAt">>,
 ): Promise<Record<string, number>> {
-  const visits: Record<string, number> = Object.fromEntries(characterIds.map((id) => [id, 0]));
-  if (characterIds.length === 0) return visits;
-  const requests = await storage.getStoryRequests(userId);
-  for (const request of requests) {
+  if (characters.length === 0) return {};
+  return questsSince(await storage.getStoryRequests(userId), characters);
+}
+
+/**
+ * The count itself, pure, so the reset's line can be tested without a store.
+ *
+ * A quest counts for a character when it was a "travels" story with them in
+ * the cast AND it was written after the character's travelsResetAt, if any.
+ * The comparison is on ISO strings, which sort correctly as written. A story
+ * with no usable date counts -- an older row must not vanish from a veteran's
+ * history because a column was null.
+ */
+export function questsSince(
+  stories: ReadonlyArray<{ request: StoryRequest; createdAt?: string | null }>,
+  characters: ReadonlyArray<Pick<Character, "id" | "travelsResetAt">>,
+): Record<string, number> {
+  const visits: Record<string, number> = Object.fromEntries(characters.map((c) => [c.id, 0]));
+  for (const { request, createdAt } of stories) {
     if (characterRoleOf(request) !== "travels") continue;
     const cast = new Set(characterIdsOf(request));
-    for (const id of characterIds) if (cast.has(id)) visits[id] += 1;
+    for (const c of characters) {
+      if (!cast.has(c.id)) continue;
+      if (c.travelsResetAt && createdAt && createdAt <= c.travelsResetAt) continue;
+      visits[c.id] += 1;
+    }
   }
   return visits;
 }
@@ -1005,8 +1024,9 @@ export type StoryBrief = {
 export const TITLE_SHAPE_RULE =
   "Title it after something particular to THIS story -- a thing, a place, a name, a moment. " +
   "Shapes like \"The Weight of ...\" or \"The Hand That ...\" fit a thousand stories; they are " +
-  "earned only when nothing of this story's own would serve, which is rarely. Three or four plain " +
-  "words that could only be this story's beat a phrase that sounds like a title.";
+  "earned only when nothing of this story's own would serve, which is rarely. And not something " +
+  "from the character's sheet -- what they like, or their colour -- unless the story turned on it. " +
+  "Three or four plain words that could only be this story's beat a phrase that sounds like a title.";
 
 export const EXPERT_CRAFT =
   "Write at full literary strength. Layered meaning, and a second reading that " +
