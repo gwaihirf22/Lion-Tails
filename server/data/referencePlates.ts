@@ -55,7 +55,7 @@ import { DEVICE, SHOP } from "./lionTails";
 export const CROSSING_OVER_DRESS =
   "Crossing over dresses the traveller for the place: what the traveller is wearing becomes what" +
   " someone of that age would wear there, as though it had always been so. Nobody remarks on it" +
-  " and nobody explains it. Nobody else's clothes change.";
+  " and nobody explains it.";
 
 /** What the picture is of, as the model wrote it. All a gate gets to see. */
 export type PlateContext = {

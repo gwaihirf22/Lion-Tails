@@ -2474,7 +2474,4 @@ describe("the lore, after Jericho", () => {
     expect(FRAMING_APPROACHES.map((a) => a.id)).not.toContain("someone-else-first");
     expect(framingApproachOf("someone-else-first").id).toBe(FRAMING_APPROACHES[0].id);
   });
-  it("dresses only the traveller", () => {
-    expect(CROSSING_OVER_DRESS).toMatch(/Nobody else's clothes change/);
-  });
 });

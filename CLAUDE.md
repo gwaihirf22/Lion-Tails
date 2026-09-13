@@ -601,8 +601,7 @@ different child, and the only sign was one line in the log.
   the Esther bug with a camera.
 - **One visual rule rides on the image projection of a quest brief, and only
   there:** `CROSSING_OVER_DRESS` — the lantern outfits the traveller for the
-  place, and *nobody else's* clothes change (the spies in Jericho were once
-  dressed by it too). It goes to the prose as well, so story and picture agree.
+  place. It goes to the prose as well, so story and picture agree.
   It lives in `referencePlates.ts`, beside the plates: visual rules stay in one
   file, and CANON is edited often enough that a new key there is a merge
   conflict waiting to happen. There used to be a second one for the stone; the
