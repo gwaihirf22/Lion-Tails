@@ -22,7 +22,7 @@
 import { randomUUID } from "crypto";
 import { pool, databaseReady } from "../db";
 import { resolveModel, createClient, tokenLimitFor, temperatureFor,
-  hasUnlimitedUse,
+  storyCreditsFor,
 } from "./modelPolicy";
 import { StoryGenerationError } from "./storyErrors";
 import {
@@ -186,7 +186,21 @@ async function isCancelled(jobId: string): Promise<boolean> {
  * used + in-flight, and since a free-tier user's concurrency limit is 1 the
  * maximum unconsumed exposure is exactly one generation.
  */
-async function finishSucceeded(job: JobRow, storyId: string): Promise<void> {
+async function finishSucceeded(
+  job: JobRow,
+  storyId: string,
+  /**
+   * The model this story was actually WRITTEN with -- resolved when the job
+   * started, not re-read now.
+   *
+   * The charge used to call resolveModel again at this point. With one flat
+   * price that was harmless. With a price per model it is a bug: start a story
+   * on Terra (3 credits), switch to Luna in Settings while it runs, and the
+   * finish would read Luna and charge 1. The story was written by Terra, so
+   * Terra is what is charged.
+   */
+  resolved: ResolvedModel,
+): Promise<void> {
   const client = await pool!.connect();
   try {
     await client.query("BEGIN");
@@ -204,16 +218,19 @@ async function finishSucceeded(job: JobRow, storyId: string): Promise<void> {
       await client.query("ROLLBACK");
       return;
     }
-    // Local generation costs electricity, not credits. The quota exists to
-    // protect the owner's OpenAI spend, so it is charged only when OpenAI was
-    // actually used and the user was not paying with their own key.
-    const usesOwnerCredits = await shouldChargeQuota(job.user_id);
-    if (usesOwnerCredits) {
+    // Local generation costs electricity, not credits, and someone on their own
+    // key pays OpenAI directly -- storyCreditsFor returns 0 for both. Otherwise
+    // the price of the model that wrote it: Luna 1, Terra 3.
+    const credits = storyCreditsFor(resolved.model, {
+      isAdmin: resolved.isAdmin,
+      hasOwnKey: resolved.usingOwnKey,
+    });
+    if (credits > 0) {
       await client.query(
         `INSERT INTO user_usage (user_id, count, last_reset_date)
-         VALUES ($1, 1, now())
-         ON CONFLICT (user_id) DO UPDATE SET count = user_usage.count + 1`,
-        [job.user_id],
+         VALUES ($1, $2, now())
+         ON CONFLICT (user_id) DO UPDATE SET count = user_usage.count + $2`,
+        [job.user_id, credits],
       );
     }
 
@@ -269,15 +286,6 @@ async function recordAdventure(job: JobRow, storyId: string): Promise<void> {
   }
 }
 
-async function shouldChargeQuota(userId: number): Promise<boolean> {
-  const resolved = await resolveModel(userId, "chat").catch(() => null);
-  if (!resolved) return false;
-  if (resolved.provider !== "openai") return false;
-  // The third restatement of "own key or admin", now the same function as the
-  // other two. Negated here because this asks the opposite question: the people
-  // who are NOT charged are exactly the people who pay for their own use.
-  return !hasUnlimitedUse({ isAdmin: resolved.isAdmin, hasOwnKey: resolved.usingOwnKey });
-}
 
 /**
  * Whether a retry of this failure must start from scratch rather than resume.
@@ -713,7 +721,13 @@ async function runJob(job: JobRow): Promise<void> {
     // premium model with their own key and then deleted that key is downgraded
     // or refused rather than running gpt-4o on the owner's account. job.model
     // records what they picked at enqueue; it is deliberately never read back.
-    const resolved = await resolveModel(job.user_id, "chat");
+    // A summary or an extraction charges no credits, so it is not a story for
+    // resolveModel either: a free account that chose Terra gets Luna for
+    // those. See paidFor(). Keyed on "not one of those" so a story row is a
+    // story whatever its kind column holds.
+    const resolved = await resolveModel(job.user_id, "chat", {
+      forStory: job.kind !== "summary" && job.kind !== "extract",
+    });
     if (!resolved) {
       await finishFailed(
         job,
@@ -797,7 +811,7 @@ async function runJob(job: JobRow): Promise<void> {
       job.request,
       job.user_id,
     );
-    await finishSucceeded(job, saved.id);
+    await finishSucceeded(job, saved.id, resolved);
 
     // EVERYTHING BELOW IS PAST THE POINT OF NO RETURN. The story is written,
     // saved, and marked succeeded; the user is finished. Its own try/catch

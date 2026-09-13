@@ -167,6 +167,10 @@ anyone who registers that name.
 
 ## The free story allowance
 
+**The unit is credits, not stories** (see "Model selection"): a Luna story is
+1, a Terra story 3, so the names below say STORIES and mean credits. `count`
+kept its column and its meaning — Luna-only history is identical either way.
+
 `FREE_STORIES` (50) and `FREE_STORIES_PER_MONTH` (10) in `shared/schema.ts`,
 and **one pure function, `storyAllowance()`**, which every screen and the
 enforcement path call. It is a balance that TOPS UP, not an allowance that
@@ -212,8 +216,38 @@ against purple prose, because that is the easy failure). No persona says
 
 `server/lib/modelPolicy.ts` is the only place the model, provider base URL and
 API key are decided. Tiers: local (Ollama, free, anyone), economy
-(`gpt-5.6-luna` default, anyone, owner's key), premium (`gpt-5.6-terra`,
-`gpt-6-astra`, `gpt-image-2`, admins or users with their own key).
+(`gpt-5.6-luna`, anyone, owner's key), premium (`gpt-5.6-terra`,
+`gpt-6-astra`, `gpt-4o`, `gpt-image-2`, admins or users with their own key —
+**except Terra for stories, which a free account buys with credits**).
+
+**Credits.** The free allowance is counted in credits, and a story costs
+`storyCreditsFor(model, entitlement)`: Luna 1, Terra 3, from `storyCredits`
+on the catalogue entry. Blake, 2026-09-13, after the Luna/Terra/Astra
+baseline: Terra on the free tier "will take 3 credits instead of just 1", Terra
+is the default for the paid tier, and Astra is not offered to free accounts.
+
+- **Paid tier = `hasUnlimitedUse`** (admin or own key). They are charged 0 on
+  every model and default to Terra (`defaultChatModelFor`). A stored choice
+  always wins, so nobody who picked Luna is moved onto Terra.
+- **`DEFAULTS.chat` stays Luna, and is the floor.** It is what a refused choice
+  falls back to; a premium floor is `null` — no story — for a free account.
+- **A premium model is open to a free account because it has a price.**
+  `isModelAllowedFor` lets a free account reach a premium model only for
+  `chat` and only when `storyCredits` is set; a test asserts every such model
+  is priced. Unpriced premium (Astra, gpt-4o) stays locked.
+- **One price, three readers**: the enqueue check (`canEnqueueWithinQuota`,
+  "enough for THIS story", not "any left"), the charge in `finishSucceeded`
+  (by the model that RAN, re-resolved at job start), and the price in the
+  picker and `/api/story/usage`.
+- **Credit-bought Terra is for the story only** — `resolveModel(..., {
+  forStory: true })`, checked by `paidFor()`. Chords, universe summaries and
+  world extractions charge nothing, so on Terra they would be free premium
+  calls as often as asked for; for a free account they run on Luna. Forgetting
+  `forStory` fails cheap.
+- A story enqueued on Luna and switched to Terra before the worker starts is
+  charged 3 into a balance that could not afford it. `used` keeps the overdraft
+  and the next top-up pays it back; the concurrency limit of 1 bounds it to one
+  story.
 
 **Request shape is per-model and lives in the catalogue, not at the call site.**
 The GPT-5.6 generation rejects `max_tokens` (wants `max_completion_tokens`)
