@@ -501,6 +501,29 @@ export default function StoryForm({
   }, [bringInHero, form, formType]);
 
   /**
+   * A quest is long, and the length follows the choice rather than the click.
+   *
+   * The Select greys out everything shorter than QUEST_SHORTEST_LENGTH the
+   * moment the quest is chosen, but a greyed option that is still SELECTED is
+   * not a guard: the form defaults to medium, and medium survived being
+   * disabled. It reached the server, which refused it with quest_too_short --
+   * a story the user waited for and did not get.
+   *
+   * An effect on the choice rather than a second write beside each control,
+   * because characterRole has three writers already (the switch, the role
+   * radio, and whatever seeds the form when a story is continued) and only one
+   * of them corrected the length. This cannot be bypassed by a fourth.
+   *
+   * Upward only, and only when the current answer is unusable: a user who
+   * chose epic keeps epic.
+   */
+  useEffect(() => {
+    if (!isQuest) return;
+    if (questLengthAllowed(form.getValues("storyLength"))) return;
+    form.setValue("storyLength", QUEST_PREFERRED_LENGTH, { shouldDirty: true });
+  }, [isQuest, form]);
+
+  /**
    * ONE choice, three frozen fields.
    *
    * biblicalEvent, heroOfFaith and biblePassage are three columns of one
@@ -1178,13 +1201,9 @@ export default function StoryForm({
                         // Switching on commits to a mode straight away, so the
                         // request never carries a source with nobody in it.
                         form.setValue("characterRole", "travels");
-                        // And moves the length up if it is one a quest cannot
-                        // use. Done HERE rather than on submit: a picker that
-                        // silently rewrites the answer at the last moment is
-                        // how somebody gets a story they did not ask for.
-                        if (!questLengthAllowed(form.getValues("storyLength"))) {
-                          form.setValue("storyLength", QUEST_PREFERRED_LENGTH);
-                        }
+                        // The length is not written here any more: the effect
+                        // above owns it, so the radio and a seeded form get the
+                        // same correction this switch used to get alone.
                       } else {
                         // And switching off clears BOTH, so a source picked and
                         // then abandoned cannot ride along on the request.
@@ -1381,7 +1400,13 @@ export default function StoryForm({
                         </span>
                         <Select
                           onValueChange={field.onChange}
-                          defaultValue={field.value}
+                          /* CONTROLLED, unlike its neighbours, because this one is
+                             written programmatically: choosing the Timekeeper quest
+                             moves the length up to QUEST_PREFERRED_LENGTH. With
+                             defaultValue the widget kept showing its first render, so
+                             the form said "Medium" while the request carried "long" --
+                             the control lying about what it would generate. */
+                          value={field.value}
                         >
                           <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
                             <SelectValue placeholder="Select story length" />
