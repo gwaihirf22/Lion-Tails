@@ -30,6 +30,10 @@ import {
   skillLeakage,
   SOLO_RETELLING_GUARD,
   type BriefPurpose,
+  EXPERT_CRAFT,
+  TITLE_SHAPE_RULE,
+  buildSystemPrompt,
+  questsSince,
 } from "../server/lib/storyBrief";
 import {
   characterIdsOf,
@@ -294,15 +298,17 @@ describe("a cast is weighted, not enumerated", () => {
 
   it("gives the lead full colour and the others at most two facts", () => {
     const brief = make(3);
-    // The lead keeps eyes, favourite colour and the animal companion.
+    // The lead keeps eyes and the animal companion in colour; the favourite
+    // colour is graded down to "may notice" now, but it is still the lead's.
     expect(brief.cast[0].colour).toContain("eyes");
-    expect(brief.cast[0].colour).toContain("Favourite colour");
+    expect(brief.cast[0].mayNotice).toContain("favourite colour");
     expect(brief.cast[0].colour).toContain("as a companion");
     // The supporting cast keeps none of those: they are sheet data with nothing
     // for a scene to do, and eight companions is a menagerie.
     for (const c of brief.cast.slice(1)) {
       expect(c.colour).not.toContain("eyes");
       expect(c.colour).not.toContain("Favourite colour");
+      expect(c.mayNotice).toBeUndefined();
       expect(c.colour).not.toContain("as a companion");
     }
   });
@@ -2084,6 +2090,21 @@ describe("a Human is still a girl or a boy in the story", () => {
     expect(characterKind({ kind: "human", age: 40 })).toBe("person");
   });
 
+  it("reconciles the four age-nouns with the age, and leaves them alone without one", () => {
+    // The Paul case: a preset of "boy" saved with an age of 33.
+    expect(characterKind({ kind: "boy", age: 33 })).toBe("man");
+    expect(characterKind({ kind: "girl", age: 40 })).toBe("woman");
+    expect(characterKind({ kind: "man", age: 10 })).toBe("boy");
+    expect(characterKind({ kind: "woman", age: 7 })).toBe("girl");
+    expect(characterKind({ kind: "boy", age: 17 })).toBe("boy");
+    // No age: the noun the user chose stands, so every older row is unchanged.
+    expect(characterKind({ kind: "boy" })).toBe("boy");
+    expect(characterKind({ kind: "woman" })).toBe("woman");
+    // Not an age-noun: untouched whatever the age says.
+    expect(characterKind({ kind: "grandmother", age: 30 })).toBe("grandmother");
+    expect(characterKind({ kind: "dragon", age: 300 })).toBe("dragon");
+  });
+
   it("leaves every other kind exactly as it was", () => {
     expect(characterKind({ kind: "girl" })).toBe("girl");
     expect(characterKind({ gender: "girl" })).toBe("girl");
@@ -2297,6 +2318,29 @@ describe("what a traveller is wearing when they arrive", () => {
     expect(renderBrief(alongsideBrief(), "image")).not.toContain(STONE_IN_PICTURES);
   });
 
+  it("tells a quest picture which side of the crossing a scene is on", () => {
+    expect(renderBrief(questBrief(), "image")).toContain("begins in the present day and crosses over");
+    expect(renderBrief(alongsideBrief(), "image")).not.toContain("crosses over");
+  });
+
+  it("forbids narrating the limits, in both modes, in the brief and every chapter", () => {
+    for (const b of [questBrief(), alongsideBrief()]) {
+      expect(renderBrief(b, "single")).toContain("Never write what");
+      expect(renderBrief(b, "chapter")).toContain("Never write what");
+      expect(renderBrief(b, "single")).toContain("that note is the only place it is said");
+    }
+  });
+
+  it("still holds the account fixed while letting them help", () => {
+    // The permission is the chapter anchor's for a traveller, by design: a
+    // chapter prompt that opens with four prohibitions writes somebody standing
+    // still. So it is asserted where it renders, and the fixed account beside it.
+    const c = renderBrief(questBrief(), "chapter");
+    expect(c).toContain("is the reason a small thing goes right");
+    expect(c).toContain("never because of");
+    expect(renderBrief(questBrief(), "single")).toContain("does not change what happened");
+  });
+
   it("describes the stone by a hand, not a ruler, and forbids the palm", () => {
     expect(STONE_IN_PICTURES).toMatch(/closed hand/);
     expect(STONE_IN_PICTURES).toMatch(/pocket/);
@@ -2308,5 +2352,120 @@ describe("what a traveller is wearing when they arrive", () => {
     // ... they ... their" is a singular they. The pronoun suite catches it in
     // the assembled brief; this catches it in the constant itself.
     expect(CROSSING_OVER_DRESS).not.toMatch(/\b(they|them|their)\b/i);
+  });
+});
+
+/**
+ * "expert" is an appetite, not an age, and it is the only level with a craft
+ * line of its own. Every other level's prompt must not have moved.
+ */
+describe("the expert reading level", () => {
+  const req = (readingLevel: string) =>
+    buildStoryBrief({ storyType: "regular", storyLength: "medium", theme: "courage",
+      childName: "Mia", gender: "girl", readingLevel } as unknown as StoryRequest, []);
+
+  it("asks for full literary strength, and closes on restraint", () => {
+    const s = renderBrief(req("expert"), "single");
+    expect(s).toContain(EXPERT_CRAFT);
+    expect(s).toContain("Written for a reader aged 18 or over and reading to be stretched.");
+    expect(EXPERT_CRAFT).toMatch(/purple/);
+    expect(EXPERT_CRAFT).toMatch(/do not moralise/i);
+  });
+
+  it("lands for nobody else", () => {
+    for (const level of ["preschool", "early-elementary", "middle-school", "high-school", "adult"]) {
+      expect(renderBrief(req(level), "single")).not.toContain(EXPERT_CRAFT);
+    }
+  });
+});
+
+/**
+ * The word every title was reaching for, and the shapes it kept taking.
+ */
+describe("titles", () => {
+  it("names the stock shapes so the model is told, not left to its habit", () => {
+    expect(TITLE_SHAPE_RULE).toContain("The Weight of");
+    expect(TITLE_SHAPE_RULE).toContain("The Hand That");
+    expect(TITLE_SHAPE_RULE).toMatch(/particular to THIS story/);
+    // A bar, not a ban: "The Weight of Glory" must still be reachable.
+    expect(TITLE_SHAPE_RULE).not.toMatch(/do not|never/i);
+    expect(TITLE_SHAPE_RULE).toMatch(/earned/);
+    // Sixteen stories in: the grading moved the prose and not the titles, because
+    // "a thing, a place" was being satisfied by the sheet's hobby object.
+    expect(TITLE_SHAPE_RULE).toMatch(/character's sheet/);
+  });
+
+  it("no longer seeds 'weight' into every story's system prompt", () => {
+    // "stories that have real weight to them" went to every non-retelling
+    // story, and two of the three titles after it were "The Weight of ...".
+    const req = { storyType: "regular", storyLength: "medium", readingLevel: "adult" } as unknown as StoryRequest;
+    expect(buildSystemPrompt(req)).not.toMatch(/\bweight\b/i);
+    expect(EXPERT_CRAFT).not.toMatch(/\bweight\b/i);
+  });
+});
+
+/**
+ * The hobby and the favourite colour are permission, not inventory.
+ */
+describe("what a scene may notice", () => {
+  const withSoft = () => buildStoryBrief(
+    { storyType: "regular", storyLength: "short", theme: "kindness", characterIds: ["c1"] } as unknown as StoryRequest,
+    [{ id: "c1", name: "Mia", createdAt: "2026-01-01", kind: "girl", hair: "brown", hobby: "drawing", favoriteColor: "purple" } as Character],
+  );
+  it("takes the hobby and the colour out of the colour sentence and grades them", () => {
+    const b = withSoft();
+    expect(b.cast[0].colour).toBe("Mia has brown hair.");
+    expect(b.cast[0].mayNotice).toBe("likes drawing; favourite colour purple");
+    expect(renderBrief(b, "single")).toContain("Things a scene may notice about Mia, and none has to: likes drawing; favourite colour purple.");
+  });
+  it("keeps them out of every chapter, like the rest of the colour", () => {
+    expect(renderBrief(withSoft(), "chapter")).not.toContain("drawing");
+  });
+  it("says nothing at all for a character with neither", () => {
+    const b = buildStoryBrief(
+      { storyType: "regular", storyLength: "short", theme: "kindness", characterIds: ["c1"] } as unknown as StoryRequest,
+      [{ id: "c1", name: "Mia", createdAt: "2026-01-01", kind: "girl", hair: "brown" } as Character],
+    );
+    expect(b.cast[0].mayNotice).toBeUndefined();
+    expect(renderBrief(b, "single")).not.toContain("may notice");
+  });
+});
+
+/**
+ * How many quests a character has been on, and what a reset does to it.
+ */
+describe("counting a character's quests", () => {
+  const quest = (ids: string[], createdAt: string) =>
+    ({ request: { characterIds: ids, characterRole: "travels" } as unknown as StoryRequest, createdAt });
+  const plain = (ids: string[], createdAt: string) =>
+    ({ request: { characterIds: ids } as unknown as StoryRequest, createdAt });
+
+  it("counts only quests, only for those in the cast", () => {
+    const v = questsSince(
+      [quest(["a"], "2026-02-01"), quest(["a", "b"], "2026-03-01"), plain(["a"], "2026-04-01")],
+      [{ id: "a" }, { id: "b" }, { id: "c" }],
+    );
+    expect(v).toEqual({ a: 2, b: 1, c: 0 });
+  });
+
+  it("starts the count again from the reset", () => {
+    const v = questsSince(
+      [quest(["a"], "2026-02-01"), quest(["a"], "2026-03-01"), quest(["a"], "2026-05-01")],
+      [{ id: "a", travelsResetAt: "2026-04-01T00:00:00.000Z" }],
+    );
+    expect(v.a).toBe(1);
+  });
+
+  it("does not lose an older story to a missing date", () => {
+    const v = questsSince(
+      [{ request: quest(["a"], "x").request, createdAt: null }],
+      [{ id: "a", travelsResetAt: "2026-04-01T00:00:00.000Z" }],
+    );
+    expect(v.a).toBe(1);
+  });
+
+  it("is untouched for a character who has never been reset", () => {
+    const v = questsSince([quest(["a"], "2020-01-01")], [{ id: "a" }]);
+    expect(v.a).toBe(1);
   });
 });

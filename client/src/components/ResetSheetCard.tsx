@@ -112,7 +112,7 @@ export default function ResetSheetCard() {
       await queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
       toast({
         title: `${selected.name} is starting again`,
-        description: "Attributes, skills and earned points are all back to the beginning.",
+        description: "Attributes, skills and earned points are all back to the beginning, and the next quest is a first visit again.",
       });
       setSelectedId("");
     } catch (error) {

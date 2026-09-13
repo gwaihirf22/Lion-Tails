@@ -329,9 +329,16 @@ describe("skills cost points", () => {
 // startingOver() IS what POST /api/characters/:id/reset writes -- the route
 // passes it straight to storage. Restating the payload here instead would let
 // the route stop clearing a field while these kept passing.
-const RESET = startingOver();
+const RESET = startingOver("2026-01-01T00:00:00.000Z");
 
 describe("starting a character again", () => {
+  it("draws a line under the quests too", () => {
+    // The count is derived from the library, so the reset stamps a date and
+    // only quests after it count. Without this field a reset character on
+    // their fifth visit is still greeted as a veteran.
+    expect(RESET.travelsResetAt).toBe("2026-01-01T00:00:00.000Z");
+  });
+
   const sk = (name: string, value: number) => ({ name, value });
 
   it("leaves a sheet identical to a character who has never done anything", () => {

@@ -27,6 +27,9 @@ import {
   type CharacterRole,
   MAX_STUDY_QUESTIONS,
   isChosen,
+  READING_LEVELS,
+  READING_LEVEL_LABELS,
+  READING_LEVEL_AGES,
 } from "@shared/schema";
 import { Switch } from "@/components/ui/switch";
 import CharacterPicker from "@/components/CharacterPicker";
@@ -1341,11 +1344,13 @@ export default function StoryForm({
                             <SelectValue placeholder="Select reading level" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="preschool">Preschool (Ages 3-4)</SelectItem>
-                            <SelectItem value="kindergarten">Kindergarten (Ages 5-6)</SelectItem>
-                            <SelectItem value="early-elementary">Early Elementary (Ages 6-8)</SelectItem>
-                            <SelectItem value="late-elementary">Late Elementary (Ages 9-12)</SelectItem>
-                            <SelectItem value="middle-school">Middle School (Ages 12-14)</SelectItem>
+                            {/* From the schema's tuple, never typed here: this list
+                                had drifted from READING_LEVEL_AGES by a year. */}
+                            {READING_LEVELS.map((level) => (
+                              <SelectItem key={level} value={level}>
+                                {READING_LEVEL_LABELS[level]} ({READING_LEVEL_AGES[level]})
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>

@@ -209,6 +209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // The read-receipt for a badge. A client that could write it could
     // silence its own notification.
     seenVirtues: true,
+    travelsResetAt: true,
     // Derived from `kind` below, never taken from the client: a body claiming
     // {kind: "dragon", category: "human"} would otherwise pick the human
     // colour lists to validate against.
@@ -297,7 +298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsed = characterSchema
         .omit({ id: true, createdAt: true, customFields: true, adventures: true,
                  avatarUrl: true, avatarPrompt: true, avatars: true,
-                 seenVirtues: true })
+                 seenVirtues: true, travelsResetAt: true })
         .parse(req.body);
 
       const customFields = Object.keys(parsed).filter((k) => k !== "category");
@@ -391,7 +392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updates = characterSchema
         .omit({ id: true, createdAt: true, customFields: true, adventures: true,
                  avatarUrl: true, avatarPrompt: true, avatars: true,
-                 seenVirtues: true })
+                 seenVirtues: true, travelsResetAt: true })
         .partial()
         .parse(req.body);
 
@@ -1036,7 +1037,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // have seen before.
       const visits =
         characterRoleOf(validatedData) === "travels"
-          ? await countQuestsFor(userId, characterIdsOf(validatedData))
+          ? await countQuestsFor(userId, characters)
           : undefined;
       const result = await enqueueStoryJob({
         userId,

@@ -1064,6 +1064,19 @@ export const characterSchema = z.object({
    */
   seenVirtues: z.array(z.string()).optional(),
 
+  /**
+   * When this character last started again, for the quest count. Server-owned.
+   *
+   * How many quests a character has been on is not stored: countQuestsFor()
+   * derives it from the library, so a deleted story lowers it. A reset cannot
+   * clear what is derived from stories the reader still has -- so it stamps
+   * this, and only quests written after it count. Blake: the reset should
+   * "also be able to reset the number of times the character has time
+   * traveled." Absent means count everything, which is what every older row
+   * does.
+   */
+  travelsResetAt: z.string().optional(),
+
   adventures: z
     .array(
       z.object({
@@ -1161,11 +1174,13 @@ export function baseStats(): CharacterStats {
  * derived from `adventures`: leaving it behind is a receipt for something that
  * no longer exists, and shows up later as a badge that never appears.
  */
-export function startingOver(): Pick<
-  Character,
-  "stats" | "skills" | "adventures" | "seenVirtues"
-> {
-  return { stats: baseStats(), skills: [], adventures: [], seenVirtues: [] };
+export function startingOver(
+  /** Injectable so a test can compare the payload without a moving clock in it. */
+  now: string = new Date().toISOString(),
+): Pick<Character, "stats" | "skills" | "adventures" | "seenVirtues" | "travelsResetAt"> {
+  // travelsResetAt is the fifth: the quest count is derived from the library,
+  // not stored, so the only way to take it back to zero is to say from when.
+  return { stats: baseStats(), skills: [], adventures: [], seenVirtues: [], travelsResetAt: now };
 }
 
 export type CharacterSkill = NonNullable<Character["skills"]>[number];
@@ -1438,6 +1453,11 @@ export function storyImagesOf(
   ];
 }
 
+/** The human nouns that carry an age as well as a sex. */
+const AGE_NOUN_SEX: Record<string, "male" | "female"> = {
+  boy: "male", man: "male", girl: "female", woman: "female",
+};
+
 /**
  * "human" is what a child picks now, with the gender chosen separately as
  * `sex`. The story still says "a girl" or "a man" -- never "a human" -- so the
@@ -1459,6 +1479,20 @@ export function characterKind(
   } | null,
 ): string | undefined {
   const kind = c?.kind?.trim() || c?.gender?.trim() || undefined;
+  /**
+   * The four human age-nouns are reconciled with the age, the same way
+   * "human" already is below. They were returned verbatim, so a preset of
+   * "boy" with an age of 33 reached the brief as "Paul, aged 33, a boy" -- and
+   * the model, being obedient, wrote "Paul was thirty-three, though he was
+   * still a boy". Blake: "it acted like a 33 year old was a kid." The noun
+   * says the sex and the age says the rest; with no age the noun stands, so
+   * every character saved before this renders exactly as before.
+   */
+  const ageNoun = kind && AGE_NOUN_SEX[kind.toLowerCase()];
+  if (ageNoun && typeof c?.age === "number") {
+    const grown = c.age >= 18;
+    return ageNoun === "male" ? (grown ? "man" : "boy") : (grown ? "woman" : "girl");
+  }
   if (kind !== "human") return kind;
   const adult = typeof c?.age === "number" && c.age >= 18;
   if (c?.sex === "female") return adult ? "woman" : "girl";
@@ -1657,6 +1691,15 @@ export const READING_LEVELS = [
   "early-elementary",
   "late-elementary",
   "middle-school",
+  // Blake: "I want to add a higher reading level option." His own quest had a
+  // 33-year-old traveller written for a reader of 6-8; a top of 14 would not
+  // have reached him either. Two, so the ceiling is honest about who reads.
+  "high-school",
+  "adult",
+  // Blake: "see how far we can push the AI... high level writing that pushes
+  // the mind." Not an age -- an appetite. The age phrase still has to read
+  // after "a reader" and before "Write so a reader that age can follow you".
+  "expert",
 ] as const;
 
 export type ReadingLevel = (typeof READING_LEVELS)[number];
@@ -1667,6 +1710,27 @@ export const READING_LEVEL_AGES: Record<ReadingLevel, string> = {
   "early-elementary": "ages 6-8",
   "late-elementary": "ages 9-11",
   "middle-school": "ages 12-14",
+  "high-school": "ages 15-17",
+  // Phrased to sit after "a reader": "a reader aged 18 or over".
+  "adult": "aged 18 or over",
+  "expert": "aged 18 or over and reading to be stretched",
+};
+
+/**
+ * What the form calls each level. Here, beside the ages, because the form
+ * used to carry its own five <SelectItem>s with the ages typed in by hand --
+ * and had already drifted ("Ages 9-12" against "ages 9-11" here). A level is
+ * added in this file and nowhere else.
+ */
+export const READING_LEVEL_LABELS: Record<ReadingLevel, string> = {
+  "preschool": "Preschool",
+  "kindergarten": "Kindergarten",
+  "early-elementary": "Early Elementary",
+  "late-elementary": "Late Elementary",
+  "middle-school": "Middle School",
+  "high-school": "High School",
+  "adult": "Adult",
+  "expert": "Expert",
 };
 
 /** The default reading level, named once so the fallback below cannot drift. */

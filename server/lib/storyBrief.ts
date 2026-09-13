@@ -190,15 +190,34 @@ export function resolveStoryFocus(request: StoryRequest, hero?: HeroOfFaith): vo
  */
 export async function countQuestsFor(
   userId: number,
-  characterIds: string[],
+  characters: ReadonlyArray<Pick<Character, "id" | "travelsResetAt">>,
 ): Promise<Record<string, number>> {
-  const visits: Record<string, number> = Object.fromEntries(characterIds.map((id) => [id, 0]));
-  if (characterIds.length === 0) return visits;
-  const requests = await storage.getStoryRequests(userId);
-  for (const request of requests) {
+  if (characters.length === 0) return {};
+  return questsSince(await storage.getStoryRequests(userId), characters);
+}
+
+/**
+ * The count itself, pure, so the reset's line can be tested without a store.
+ *
+ * A quest counts for a character when it was a "travels" story with them in
+ * the cast AND it was written after the character's travelsResetAt, if any.
+ * The comparison is on ISO strings, which sort correctly as written. A story
+ * with no usable date counts -- an older row must not vanish from a veteran's
+ * history because a column was null.
+ */
+export function questsSince(
+  stories: ReadonlyArray<{ request: StoryRequest; createdAt?: string | null }>,
+  characters: ReadonlyArray<Pick<Character, "id" | "travelsResetAt">>,
+): Record<string, number> {
+  const visits: Record<string, number> = Object.fromEntries(characters.map((c) => [c.id, 0]));
+  for (const { request, createdAt } of stories) {
     if (characterRoleOf(request) !== "travels") continue;
     const cast = new Set(characterIdsOf(request));
-    for (const id of characterIds) if (cast.has(id)) visits[id] += 1;
+    for (const c of characters) {
+      if (!cast.has(c.id)) continue;
+      if (c.travelsResetAt && createdAt && createdAt <= c.travelsResetAt) continue;
+      visits[c.id] += 1;
+    }
   }
   return visits;
 }
@@ -305,6 +324,14 @@ const HISTORY_FIXED =
   "happened and does not rescue anyone from it.";
 
 /**
+ * The shelf's grading, for a person: "one may be noticed in passing; none has
+ * to be." Said per character, because "none has to" only means something when
+ * it is clear whose things it is talking about.
+ */
+const mayNoticeLine = (name: string, facts: string) =>
+  `Things a scene may notice about ${name}, and none has to: ${facts}.`;
+
+/**
  * One character is never "they".
  *
  * A story written for two girls came back calling one of them "they" -- "'You're
@@ -353,10 +380,27 @@ const ONE_PERSON_PRONOUNS =
  */
 const partOfIt = (name: string) =>
   `${name} is IN this and not watching it: ${name} speaks and is spoken to, ` +
-  `helps, gets in the way, is noticed. Let ${name} act where the account ` +
+  `helps -- carries, warns, comforts, holds the board, is the reason a small ` +
+  `thing goes right -- gets in the way, is noticed. Let ${name} act where the account ` +
   "is silent -- who carried the water, who sat with him, who was told to move " +
   "along -- and let trying and failing cost something. What the account does " +
-  `record happens anyway, and never because of ${name}.`;
+  `record happens anyway, and never because of ${name}. ` +
+  notNarrated(name);
+
+/**
+ * The limits are the note's to state, not the story's.
+ *
+ * Told three ways per chapter what the character cannot change, the model
+ * hedged by NARRATING it: "He did not build the wall. He did not make the
+ * family's decision. He only held one board." Blake: "it is always overly
+ * noting that the character did nothing... we can just save that for the
+ * disclaimer." The rules above still bind what HAPPENS; this one binds what
+ * gets written about it, and points at the note the app appends.
+ */
+const notNarrated = (name: string) =>
+  `Never write what ${name} did not do, could not change, or only watched, ` +
+  `and never say ${name} was merely there. A note the app adds after the ` +
+  `story says what was invented; that note is the only place it is said.`;
 
 /**
  * The mission: given a sympathetic character who thinks the hero's choice is
@@ -450,6 +494,11 @@ function participationPremise(
           `${name} finds at the end of it be as serious as it actually was.`,
       );
       out.push(HISTORY_FIXED);
+      // The narration rule reaches the OUTLINE too. The helping permission
+      // (partOfIt) is chapter-only here by design -- see the anchor below --
+      // but an outline that has heard "does not change what happened" and
+      // nothing about how to write that plans a chapter around the not-doing.
+      out.push(notNarrated(name));
     }
     return {
       lines: out,
@@ -483,7 +532,8 @@ function participationPremise(
   out.push(
     `${name} matters to what happens -- not a bystander and not a rescuer. ` +
       `${name} helps, asks hard questions, and pushes back when the choice ` +
-      `in front of ${name} looks mad from where ${name} is standing.`,
+      `in front of ${name} looks mad from where ${name} is standing. ` +
+      notNarrated(name),
   );
   out.push(
     "The account still happens exactly as it is recorded -- the same events, " +
@@ -514,7 +564,7 @@ function participationPremise(
       `WHY that choice was made. Let ${name} ask the question the reader would ` +
       "ask, and let the answer be the story.",
   );
-  return { lines: out, anchor: `${missionHolds(name)} ${neverDies(name)}` };
+  return { lines: out, anchor: `${missionHolds(name)} ${neverDies(name)} ${notNarrated(name)}` };
 }
 
 /**
@@ -705,6 +755,20 @@ export type BriefCharacter = {
   /** Appearance, hobbies, companions. Colour, not requirements. */
   colour: string;
   /**
+   * What a scene MAY notice and none has to: the hobby and the favourite colour.
+   *
+   * They were in `colour`, in the same sentence as hair and eyes, under one
+   * generic "use only where a scene naturally calls for it" -- and measured
+   * across seven real stories the model read them as the plot: hobby nouns
+   * 5-18 times per story, and four of seven titles carrying the sheet's colour
+   * or hobby. Blake: "Hobbies should probably not be as influential as they
+   * are." So they render the way the shop's shelf does -- permission, not
+   * inventory -- which is a grading this model demonstrably honours.
+   *
+   * Absent on every brief frozen before this; those render exactly as before.
+   */
+  mayNotice?: string;
+  /**
    * What they can do, as five numbers. Absent for a character who has never
    * spent a point, which is what keeps this free for everyone who has not.
    */
@@ -720,8 +784,21 @@ export type BriefCharacter = {
 };
 
 /**
- * Everything a character's COLOUR slot says: looks, nature, what they like,
- * their companion, whatever their owner wrote about them.
+ * The hobby and the favourite colour, as a list a scene may draw on.
+ *
+ * Out of fullColour and into their own slot so the brief can grade them: see
+ * BriefCharacter.mayNotice. Name-free, because the render line names them.
+ */
+function softFacts(f: { hobby?: string; favoriteColor?: string }): string {
+  const parts: string[] = [];
+  if (isSet(f.hobby)) parts.push(`likes ${f.hobby}`);
+  if (isSet(f.favoriteColor)) parts.push(`favourite colour ${f.favoriteColor}`);
+  return parts.join("; ");
+}
+
+/**
+ * Everything a character's COLOUR slot says: looks, nature, their companion,
+ * whatever their owner wrote about them. What they like is softFacts' now.
  *
  * Lifted out of the lead's construction unchanged, because a story with no
  * main character gives every character this same treatment (up to three of
@@ -755,8 +832,6 @@ function fullColour(f: {
   if (isSet(f.personality)) traits.push(`a ${f.personality} nature`);
   const colourParts: string[] = [];
   if (traits.length) colourParts.push(`${f.name} has ${traits.join(", ")}.`);
-  if (isSet(f.hobby)) colourParts.push(`${f.name} likes ${f.hobby}.`);
-  if (isSet(f.favoriteColor)) colourParts.push(`Favourite colour: ${f.favoriteColor}.`);
   if (f.animal) {
     colourParts.push(
       `${f.name} has ${article(f.animal)} ${f.animal} as a companion; give it a name and a personality.`,
@@ -909,6 +984,58 @@ export type StoryBrief = {
     cautions: string[];
   };
 };
+
+/**
+ * What "expert" asks for, in the brief.
+ *
+ * The other levels are ages, and an age is a ceiling: write so a reader that
+ * age can follow. This one is a floor. Blake: "high level writing that pushes
+ * the mind." So it names the things that make prose demanding rather than
+ * merely long -- and closes on restraint, because a model told to write
+ * "literary" reaches first for adjectives, and purple is the easy failure.
+ *
+ * Exported so a test can assert it lands for expert and for nobody else.
+ */
+/**
+ * What a title must not be shaped like.
+ *
+ * questTitleRule() already stops "The Lantern and the ..." by naming the
+ * furniture a title may not be built on. This is the same move one level up:
+ * the model's stock LITERARY shapes. Twelve titles in a row in a real library
+ * read "The Weight of What He Had Done", "The Weight of an Unfinished Thing",
+ * "The Hand That Moved", "The Hand That Wasn't Ready", "The Door That Stayed
+ * Shut", "The Lantern That Would Not Hurry" -- and the only title guidance a
+ * non-quest story had was the JSON schema's "A creative title". Blake: "Why is
+ * every new story the weight of something?" Partly because the persona said
+ * "stories that have real weight to them" to every one of them, which is
+ * fixed alongside this; mostly because nothing said what a title is FOR.
+ *
+ * Not a ban. Blake: "It can use it occasionally, just not every story. I like
+ * The Weight of Glory." An instruction cannot produce "occasionally" -- each
+ * story is its own call with no memory of the last title -- so this does the
+ * two things that actually move the base rate: the seed word is out of the
+ * persona, and the guidance is towards the particular rather than against a
+ * shape. Lewis's title is the bar: use one of these when this story has
+ * earned it.
+ *
+ * Applied to EVERY story through titleRuleFor, with the quest rule stacked on
+ * top for quests. Exported so a test can assert the shapes it names.
+ */
+export const TITLE_SHAPE_RULE =
+  "Title it after something particular to THIS story -- a thing, a place, a name, a moment. " +
+  "Shapes like \"The Weight of ...\" or \"The Hand That ...\" fit a thousand stories; they are " +
+  "earned only when nothing of this story's own would serve, which is rarely. And not something " +
+  "from the character's sheet -- what they like, or their colour -- unless the story turned on it. " +
+  "Three or four plain words that could only be this story's beat a phrase that sounds like a title.";
+
+export const EXPERT_CRAFT =
+  "Write at full literary strength. Layered meaning, and a second reading that " +
+  "rewards; the exact word even when it is uncommon; sentences that vary and earn " +
+  "their length; what it means left for the reader to decide rather than explained; " +
+  "an ending that trusts the reader with what it means. Do not simplify, do not " +
+  "signpost the theme, do not moralise -- and do not let the prose turn purple. " +
+  "Restraint is the harder skill, and the reader will notice which one you have.";
+
 
 export function buildStoryBrief(
   request: StoryRequest,
@@ -1127,6 +1254,7 @@ export function buildStoryBrief(
         name, kind, hair, eyes, personality, hobby, favoriteColor, animal,
         category: details?.category, notes: details?.notes,
       });
+  const mayNotice = anonymous ? "" : softFacts({ hobby, favoriteColor });
 
   // ---- WHAT: the thing to invent around ------------------------------------
   const premise: string[] = [];
@@ -1264,6 +1392,9 @@ export function buildStoryBrief(
   // away with it only because every persona also said "children". That word is
   // gone, so this line now carries the whole guard rail on its own.
   craft.push(`Written for a reader ${readingLevelAges(request.readingLevel)}.`);
+  // The one level that is an appetite rather than an age gets a craft line of
+  // its own. Gated on the slug so every other level's prompt is untouched.
+  if (request.readingLevel === "expert") craft.push(EXPERT_CRAFT);
   if (isSet(request.learningFocus)) craft.push(`Learning focus: ${request.learningFocus}.`);
   const form = storyFormFor(request.storyType);
   if (form.craft) craft.push(form.craft);
@@ -1294,7 +1425,7 @@ export function buildStoryBrief(
   // the companion animal goes because "give it a name and a personality" eight
   // times is a menagerie, not a cast.
   const cast: BriefCharacter[] = [
-    { name, identity, colour, stats: details?.stats, statsEnabled: details?.statsEnabled, skills: details?.skills },
+    { name, identity, colour, ...(mayNotice ? { mayNotice } : {}), stats: details?.stats, statsEnabled: details?.statsEnabled, skills: details?.skills },
     ...supporting.map((c): BriefCharacter => {
       const who = [c.name];
       if (c.age) who.push(`aged ${c.age}`);
@@ -1352,6 +1483,9 @@ export function buildStoryBrief(
               favoriteColor: c.favoriteColor, category: c.category, notes: c.notes,
             })
           : (both ?? one),
+        ...(shareEverything && softFacts({ hobby: c.hobby, favoriteColor: c.favoriteColor })
+          ? { mayNotice: softFacts({ hobby: c.hobby, favoriteColor: c.favoriteColor }) }
+          : {}),
       };
     }),
   ];
@@ -1612,6 +1746,12 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     // opening included, which is why this is gated on world alone and not,
     // like the dress, on there being an era to dress for. See referencePlates.
     const stone = brief.world ? ` ${STONE_IN_PICTURES}` : "";
+    // A quest has two sides and the era names only one. Without this the
+    // modern playground was captioned "in Haarlem, Netherlands" -- the picture
+    // came out modern only because the model half-ignored its own prompt.
+    const sides = brief.world && brief.sourceMaterial?.era
+      ? " The story begins in the present day and crosses over: draw each scene where that scene is, and only the far side in the era above."
+      : "";
 
     // With no lead there is no one face to build the frame around, so the
     // subject is the group -- but the cap does not move: a picture with
@@ -1619,7 +1759,7 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     if (brief.ensemble) {
       const who = `${everyone}${brief.sourceMaterial ? ` -- a scene from ${brief.sourceMaterial.label}` : ""}.`;
       return (
-        `${who}${era}${dress}${stone} ${brief.cast.map((c) => c.identity).join(" ")} ` +
+        `${who}${era}${dress}${stone}${sides} ${brief.cast.map((c) => c.identity).join(" ")} ` +
         `Draw at most three of them -- a picture with everyone in it is a crowd, not a scene.`
       );
     }
@@ -1627,7 +1767,7 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     // the fact "this is a quest", and a quest picture with nothing to dress
     // for still has a traveller with a pocket.
     const base = brief.sourceMaterial
-      ? `${lead.identity} -- a scene from ${brief.sourceMaterial.label}.${era}${dress}${stone}`
+      ? `${lead.identity} -- a scene from ${brief.sourceMaterial.label}.${era}${dress}${stone}${sides}`
       : `${lead.identity}${stone}`;
     if (others.length === 0) return base;
     // Naming everyone would put eight children in one frame. An illustration
@@ -1743,13 +1883,16 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     );
   }
   if (lead.colour) out.push(lead.colour);
+  if (lead.mayNotice) out.push(mayNoticeLine(lead.name, lead.mayNotice));
   if (others.length > 0) {
     out.push(
       brief.ensemble
         ? "AND, EQUALLY, THE REST OF THEM:"
         : `ALSO IN THE STORY -- ${others.length} ${others.length === 1 ? "other" : "others"}, present but not the subject:`,
     );
-    for (const c of others) out.push(`  - ${[c.identity, c.colour].filter(Boolean).join(" ")}`);
+    for (const c of others) {
+      out.push(`  - ${[c.identity, c.colour, c.mayNotice ? mayNoticeLine(c.name, c.mayNotice) : ""].filter(Boolean).join(" ")}`);
+    }
   }
   // Straight after the names, because that is what it is about. See
   // ONE_PERSON_PRONOUNS.
@@ -2099,7 +2242,7 @@ function storytellerPersona(request: StoryRequest): string {
     default:
       return retelling
         ? "You are a Christian storyteller who retells real Bible accounts accurately. You are faithful to what Scripture records -- the events, the names, the order and the outcome -- and you say so plainly rather than inventing a version that is easier to tell. Where Scripture is silent you may imagine; where it speaks you follow it."
-        : "You are a Christian storyteller. You write faith-based stories that have real weight to them: something is genuinely at stake, the choices are genuinely hard, and the moral is what the story turns out to mean rather than a lesson pinned to the end of it.";
+        : "You are a Christian storyteller. You write faith-based stories with real stakes: something is genuinely at stake, the choices are genuinely hard, and the moral is what the story turns out to mean rather than a lesson pinned to the end of it.";
   }
 }
 
