@@ -426,7 +426,7 @@ export default function CharacterForm({
                   <SelectValue placeholder="Not set" />
                 </SelectTrigger>
               </FormControl>
-              <SelectContent portalled={false}>
+              <SelectContent>
                 {optionsFor(name, category).map((o) => (
                   <SelectItem key={o} value={o}>{title(o)}</SelectItem>
                 ))}
@@ -1636,7 +1636,7 @@ export default function CharacterForm({
                           <SelectValue placeholder="Add a skill…" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent portalled={false}>
+                      <SelectContent>
                         {optionsFor("skill")
                           .filter((o) => !skillValues.some((sk: CharacterSkill) => sk.name === o))
                           .map((o) => (
@@ -1787,7 +1787,7 @@ export default function CharacterForm({
                           <FormControl>
                             <SelectTrigger><SelectValue placeholder="Not set — we will say hair" /></SelectTrigger>
                           </FormControl>
-                          <SelectContent portalled={false}>
+                          <SelectContent>
                             {CHARACTER_CATEGORIES.map((c) => (
                               <SelectItem key={c} value={c}>
                                 {CATEGORY_LABELS[c]} — {coveringNoun(c)}

@@ -844,6 +844,20 @@ on pointer move, and `focus:` alone left the list with no hover feedback. Both
 halves of the accent pair, always: `findUnpairedAccent` in `tests/theme.test.ts`
 scans `components/ui` too.
 
+**A Select inside a dialog renders in place, and it decides that itself.**
+Radix's Dialog locks scroll with react-remove-scroll, which cancels wheel
+events outside DialogContent — and a portalled list lands on document.body,
+outside it. So the wheel moved nothing and hovering highlighted nothing, while
+the same list on a plain page worked. `DialogContent` provides
+`InsideDialogContext` and `SelectContent` defaults `portalled` from it; an
+explicit prop still wins. It used to be a prop each call site had to remember:
+CharacterForm's three did, and SettingsPanel's model picker could not have —
+that panel is both the Settings page and the body of the gear-icon dialog.
+Measured in a browser at 1280px and 390px: in the dialog the wheel went 0px →
+40px and hover returned, the page is unchanged, and the bottom option is
+hit-tested under its own centre, so the dialog's `overflow-y-auto` and
+centring transform do not clip it.
+
 **A tabbed dialog must be anchored, not centred.** `DialogContent` is
 `top-[50%] translate-y-[-50%]` with an intrinsic height, so switching to a
 shorter tab moved the whole card, tab strip included. The three dialogs that

@@ -3,6 +3,7 @@ import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { InsideDialogContext } from "@/components/ui/dialog"
 
 const Select = SelectPrimitive.Root
 
@@ -77,11 +78,21 @@ SelectScrollDownButton.displayName =
  * Same family as the kind picker recorded in CharacterForm: a Radix layer
  * portalled out of a modal dialog stops receiving input. Rendering it in place
  * removes the cause instead of fighting it.
+ *
+ * THE DEFAULT FOLLOWS WHERE IT IS MOUNTED. This used to be a prop every call
+ * site had to remember, and three in CharacterForm did. The model picker in
+ * SettingsPanel did not, and could not have been told reliably: that panel is
+ * both the Settings page and the inside of the gear-icon dialog. Measured in
+ * the dialog: the wheel moved the list 0px and hovering highlighted nothing;
+ * on the page, 40px and a highlight. InsideDialogContext (ui/dialog.tsx) now
+ * decides, and an explicit `portalled` still overrides it.
  */
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content> & { portalled?: boolean }
->(({ className, children, position = "popper", portalled = true, ...props }, ref) => {
+>(({ className, children, position = "popper", portalled: portalledProp, ...props }, ref) => {
+  const insideDialog = React.useContext(InsideDialogContext);
+  const portalled = portalledProp ?? !insideDialog;
   const content = (
     <SelectPrimitive.Content
       ref={ref}
