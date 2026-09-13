@@ -32,7 +32,7 @@ import {
   worldCanon,
   questFamiliarity,
 } from "../data/lionTails";
-import { CROSSING_OVER_DRESS, STONE_IN_PICTURES } from "../data/referencePlates";
+import { CROSSING_OVER_DRESS } from "../data/referencePlates";
 
 export type CustomPrompts = {
   systemPrompt?: string;
@@ -397,6 +397,22 @@ const partOfIt = (name: string) =>
  * disclaimer." The rules above still bind what HAPPENS; this one binds what
  * gets written about it, and points at the note the app appends.
  */
+/**
+ * Knowing the shop is not knowing the story.
+ *
+ * questFamiliarity() tells a returning traveller they know the shop, the man
+ * and what the lantern does -- and nothing anywhere said that is ALL they
+ * know. So a girl on her third quest arrived in Jericho and "knew they had
+ * come from the camp of Israel" with nobody having told her. The brief hands
+ * the model the whole account; this says the traveller was not handed it.
+ * Blake: "that should ONLY pertain to the Timekeeper and knowing more about
+ * him, not the actual quest." Every quest, every chapter.
+ */
+export const FAR_SIDE_UNKNOWN =
+  "A traveller, however many times before, arrives on the far side knowing " +
+  "nothing of this account that could not be seen or be told there. What the " +
+  "narrator tells the reader, the traveller learns by watching, or by asking.";
+
 const notNarrated = (name: string) =>
   `Never write what ${name} did not do, could not change, or only watched, ` +
   `and never say ${name} was merely there. A note the app adds after the ` +
@@ -499,6 +515,7 @@ function participationPremise(
       // but an outline that has heard "does not change what happened" and
       // nothing about how to write that plans a chapter around the not-doing.
       out.push(notNarrated(name));
+      out.push(FAR_SIDE_UNKNOWN);
     }
     return {
       lines: out,
@@ -506,7 +523,7 @@ function participationPremise(
       // same accounts, and a reader who made them has the same question.
       // The permission FIRST: a chapter prompt that opens with four things
       // they must not do is one that writes somebody standing still.
-      anchor: [hasSource ? partOfIt(name) : "", hasSource ? HISTORY_FIXED : "", neverDies(name)]
+      anchor: [hasSource ? partOfIt(name) : "", hasSource ? HISTORY_FIXED : "", hasSource ? FAR_SIDE_UNKNOWN : "", neverDies(name)]
         .filter(Boolean)
         .join(" "),
       // CROSSING_OVER_DRESS rides with the canon so the STORY says it too.
@@ -1290,8 +1307,8 @@ export function buildStoryBrief(
      *
      * The quest line answers the question the canon leaves open for a group,
      * and it does it WITHOUT touching the canon, which is capped by a test and
-     * written in the singular on purpose: one of them carries the stone, and
-     * "the traveller" is read as all of them.
+     * written in the singular on purpose: "the traveller" is read as all of
+     * them.
      */
     if (ensemble) {
       premise.push(
@@ -1299,8 +1316,7 @@ export function buildStoryBrief(
       );
       if (role === "travels") {
         premise.push(
-          `They go together. One of them carries the stone and the others take ` +
-            `hold when it opens, they arrive and leave in the same moment, and ` +
+          `They go together: they arrive and leave in the same moment, and ` +
             `where the world's rules say "the traveller" they mean all of them.`,
         );
       }
@@ -1742,10 +1758,6 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
      * prose canon says the same thing so the story and the picture agree.
      */
     const dress = brief.world && brief.sourceMaterial?.era ? ` ${CROSSING_OVER_DRESS}` : "";
-    // The stone rides in the pocket, in every quest picture -- the modern
-    // opening included, which is why this is gated on world alone and not,
-    // like the dress, on there being an era to dress for. See referencePlates.
-    const stone = brief.world ? ` ${STONE_IN_PICTURES}` : "";
     // A quest has two sides and the era names only one. Without this the
     // modern playground was captioned "in Haarlem, Netherlands" -- the picture
     // came out modern only because the model half-ignored its own prompt.
@@ -1759,7 +1771,7 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     if (brief.ensemble) {
       const who = `${everyone}${brief.sourceMaterial ? ` -- a scene from ${brief.sourceMaterial.label}` : ""}.`;
       return (
-        `${who}${era}${dress}${stone}${sides} ${brief.cast.map((c) => c.identity).join(" ")} ` +
+        `${who}${era}${dress}${sides} ${brief.cast.map((c) => c.identity).join(" ")} ` +
         `Draw at most three of them -- a picture with everyone in it is a crowd, not a scene.`
       );
     }
@@ -1767,8 +1779,8 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     // the fact "this is a quest", and a quest picture with nothing to dress
     // for still has a traveller with a pocket.
     const base = brief.sourceMaterial
-      ? `${lead.identity} -- a scene from ${brief.sourceMaterial.label}.${era}${dress}${stone}${sides}`
-      : `${lead.identity}${stone}`;
+      ? `${lead.identity} -- a scene from ${brief.sourceMaterial.label}.${era}${dress}${sides}`
+      : lead.identity;
     if (others.length === 0) return base;
     // Naming everyone would put eight children in one frame. An illustration
     // is a moment, and a moment has two or three people in it.

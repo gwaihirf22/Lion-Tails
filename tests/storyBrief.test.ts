@@ -14,7 +14,7 @@ import {
   worldAnchor,
 } from "../server/data/lionTails";
 import { BIBLICAL_EVENTS } from "../server/data/biblicalEvents";
-import { CROSSING_OVER_DRESS, STONE_IN_PICTURES } from "../server/data/referencePlates";
+import { CROSSING_OVER_DRESS } from "../server/data/referencePlates";
 import fs from "fs";
 import { readFileSync, writeFileSync } from "fs";
 import path from "path";
@@ -34,6 +34,7 @@ import {
   TITLE_SHAPE_RULE,
   buildSystemPrompt,
   questsSince,
+  FAR_SIDE_UNKNOWN,
 } from "../server/lib/storyBrief";
 import {
   characterIdsOf,
@@ -1816,9 +1817,13 @@ describe("the stone, and being seen again", () => {
    * account -- so the years pass without the child standing in them, and the
    * figure meets the same traveller twice.
    */
-  it("becomes a stone, and opens again", () => {
-    expect(DEVICE.rules).toMatch(/closes into a small smooth stone/);
-    expect(DEVICE.rules).toMatch(/opens back into the lantern/);
+  it("stays behind, and the way opens again on its own", () => {
+    // The stone is gone -- see DEVICE's doc comment for the quest that
+    // killed it. What survives is the half that mattered: it moves them
+    // again, inside the account, and never at their asking.
+    expect(DEVICE.rules).toMatch(/not there/);
+    expect(DEVICE.rules).toMatch(/opens again on its own/);
+    expect(DEVICE.rules).not.toMatch(/\bstone\b/i);
   });
 
   it("stays inside the account it was sent to", () => {
@@ -2207,7 +2212,7 @@ describe("no main character", () => {
     expect(quest).toContain("They go together");
     expect(quest).toContain('where the world\'s rules say "the traveller" they mean all of them');
     // The canon itself is unchanged -- it is capped by a test and singular on purpose.
-    expect(quest).toContain("the traveller keeps in a pocket");
+    expect(quest).toContain("carries nothing in its place");
   });
 
   it("leaves a story with a main character exactly as it was", () => {
@@ -2303,49 +2308,6 @@ describe("what a traveller is wearing when they arrive", () => {
     expect(CROSSING_OVER_DRESS).not.toMatch(/shimmer|transform|magically|glow/i);
   });
 
-  it("tells every quest picture the stone is small and in a pocket", () => {
-    // Every quest picture, the modern opening included: gated on world alone,
-    // not on there being an era, unlike the dress.
-    expect(renderBrief(questBrief(), "image")).toContain(STONE_IN_PICTURES);
-  });
-
-  it("keeps the stone rule out of the prose, which never had it wrong", () => {
-    expect(renderBrief(questBrief(), "single")).not.toContain(STONE_IN_PICTURES);
-    expect(renderBrief(questBrief(), "chapter")).not.toContain(STONE_IN_PICTURES);
-  });
-
-  it("says nothing about the stone in a picture with no quest in it", () => {
-    expect(renderBrief(alongsideBrief(), "image")).not.toContain(STONE_IN_PICTURES);
-  });
-
-  it("tells a quest picture which side of the crossing a scene is on", () => {
-    expect(renderBrief(questBrief(), "image")).toContain("begins in the present day and crosses over");
-    expect(renderBrief(alongsideBrief(), "image")).not.toContain("crosses over");
-  });
-
-  it("forbids narrating the limits, in both modes, in the brief and every chapter", () => {
-    for (const b of [questBrief(), alongsideBrief()]) {
-      expect(renderBrief(b, "single")).toContain("Never write what");
-      expect(renderBrief(b, "chapter")).toContain("Never write what");
-      expect(renderBrief(b, "single")).toContain("that note is the only place it is said");
-    }
-  });
-
-  it("still holds the account fixed while letting them help", () => {
-    // The permission is the chapter anchor's for a traveller, by design: a
-    // chapter prompt that opens with four prohibitions writes somebody standing
-    // still. So it is asserted where it renders, and the fixed account beside it.
-    const c = renderBrief(questBrief(), "chapter");
-    expect(c).toContain("is the reason a small thing goes right");
-    expect(c).toContain("never because of");
-    expect(renderBrief(questBrief(), "single")).toContain("does not change what happened");
-  });
-
-  it("describes the stone by a hand, not a ruler, and forbids the palm", () => {
-    expect(STONE_IN_PICTURES).toMatch(/closed hand/);
-    expect(STONE_IN_PICTURES).toMatch(/pocket/);
-    expect(STONE_IN_PICTURES).toMatch(/open palm/);
-  });
 
   it("is one person, not a group", () => {
     // Blake's rule, and this text broke it on the first draft: "the traveller
@@ -2467,5 +2429,52 @@ describe("counting a character's quests", () => {
   it("is untouched for a character who has never been reset", () => {
     const v = questsSince([quest(["a"], "2020-01-01")], [{ id: "a" }]);
     expect(v.a).toBe(1);
+  });
+});
+
+/**
+ * The Cord in Rahab's Window: what a real quest got wrong, pinned.
+ */
+describe("the lore, after Jericho", () => {
+  // The same two briefs the dress tests use, local to that describe; a quest
+  // with a source and a stay-put story with the same source.
+  const questBrief = () =>
+    buildStoryBrief(
+      { biblicalEvent: "joseph", characterIds: ["c1"], characterRole: "travels" } as StoryRequest,
+      [{ id: "c1", name: "Mia", kind: "human", sex: "female", age: 8, createdAt: "x" } as never],
+    );
+  const alongsideBrief = () =>
+    buildStoryBrief(
+      { biblicalEvent: "joseph", characterIds: ["c1"], characterRole: "alongside" } as StoryRequest,
+      [{ id: "c1", name: "Mia", kind: "human", sex: "female", age: 8, createdAt: "x" } as never],
+    );
+  it("has no stone anywhere the model can read", () => {
+    expect(DEVICE.rules).not.toMatch(/\bstone\b/i);
+    expect(DEVICE.brief).not.toMatch(/\bstone\b/i);
+    expect(renderBrief(questBrief(), "single")).not.toMatch(/carries the stone/);
+    // Not the bare noun: an era may honestly say "mud-brick and painted stone".
+    // What must be gone is the rule that told the picture where a stone lived.
+    expect(renderBrief(questBrief(), "image")).not.toMatch(/traveller's pocket|vanishes inside a closed hand|carries the stone/i);
+  });
+  it("says the lantern stays behind and the way opens again on its own", () => {
+    expect(DEVICE.rules).toMatch(/not there/);
+    expect(DEVICE.rules).toMatch(/opens again on its own/);
+  });
+  it("tells every quest, in the brief and every chapter, that knowing the shop is not knowing the story", () => {
+    expect(renderBrief(questBrief(), "single")).toContain(FAR_SIDE_UNKNOWN);
+    expect(renderBrief(questBrief(), "chapter")).toContain(FAR_SIDE_UNKNOWN);
+    expect(renderBrief(alongsideBrief(), "single")).not.toContain(FAR_SIDE_UNKNOWN);
+  });
+  it("lets Barnabas be surprised, and guess wrong", () => {
+    expect(KEEPER.who).not.toMatch(/entirely unsurprised/);
+    expect(KEEPER.who).toMatch(/surprised/);
+    expect(KEEPER.who).toMatch(/guess/);
+  });
+  it("no longer offers the frame that left a name and a date lying about", () => {
+    expect(FRAMING_APPROACHES.map((a) => a.id)).not.toContain("someone-else-first");
+    expect(framingApproachOf("someone-else-first").id).toBe(FRAMING_APPROACHES[0].id);
+  });
+  it("dresses only the traveller", () => {
+    expect(CROSSING_OVER_DRESS).toMatch(/Nobody else's clothes change/);
   });
 });

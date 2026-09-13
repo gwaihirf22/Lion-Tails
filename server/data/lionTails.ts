@@ -106,7 +106,8 @@ export const KEEPER = {
   who:
     "neither particularly old nor particularly young, with silver in his " +
     "hair and clothes from a century nobody could name; kind, dry, and " +
-    "entirely unsurprised by any of this. He has been doing whatever this is " +
+    "rarely surprised -- and it shows when he is. He may guess where the lantern " +
+    "will open, and be wrong. He has been doing whatever this is " +
     "for a very long time. He asks better questions than he answers, and he " +
     "notices what a person is actually asking rather than the words used.",
   /**
@@ -175,6 +176,29 @@ export const KEEPER_FACE_FILE = "barnabas-timekeeper.webp";
 
 /**
  * The device. A lantern, and one place to change it.
+ *
+ * THERE IS NO STONE ANY MORE. The first version had the lantern "close into a
+ * small smooth stone the traveller keeps in a pocket", which then warmed and
+ * opened again to move them elsewhere in the account -- Blake's own idea, so
+ * that nobody carried a lit lantern through a cistern and a throne room.
+ *
+ * It did not survive contact with real characters. The only two prompt lines
+ * that mentioned the stone both described it as a thing that OPENS ("the
+ * stone warms and opens back into the lantern"; "one of them carries the
+ * stone and the others take hold when it opens"), and neither said it does
+ * not exist until after the first crossing. So a girl whose sheet said she
+ * likes to find rocks arrived at the shop already holding a blue-veined stone
+ * from her collection, and the story made that the key that opened the
+ * lantern -- the stone and the lantern confused, the crossing backwards, and
+ * a sheet detail promoted to the plot in one move. Blake: "if that is causing
+ * problems we can forget about the stone and just have the lantern
+ * disappear." Done. The lantern opens the way; on the far side it is simply
+ * not there; when it is time to see more of the same account, the way opens
+ * again on its own. Nobody carries anything, so nothing on a character sheet
+ * can be mistaken for it.
+ *
+ * The prologue -- fixed text in every library -- has Barnabas hold out a
+ * LANTERN and the reader follow him through, and is untouched by this.
  */
 export const DEVICE = {
   name: "the lantern",
@@ -197,43 +221,20 @@ export const DEVICE = {
   /**
    * How it behaves once someone is through.
    *
-   * IT BECOMES A STONE, and that is not decoration. A child cannot carry a lit
-   * lantern through a cistern, a prison and a throne room without the story
-   * having to account for it every scene. Blake: "it is odd to have a
-   * character holding a lantern all the time. and so the magic lantern being
-   * magic forms itself into a small stone that the character keeps with them."
-   * The prologue -- fixed text in every library, and canon a reader can check
-   * -- has Barnabas hold out a LANTERN and the reader follow him through, so
-   * the stone is what it becomes afterwards, never what it was given as.
-   *
-   * AND IT MOVES THEM AGAIN. The first version of this said the lantern went
-   * dark and stayed dark, one crossing only. That broke on the accounts
-   * themselves: Joseph is seventeen in the cistern and about thirty before
-   * Pharaoh, and a traveller who may only see one afternoon sees him thrown
-   * into a pit and never sees him weep over his brothers. The alternative --
-   * letting them simply stand there for twenty years -- is worse, and is the
-   * classic time-travel wrench: nothing in the story can explain the child who
-   * does not grow.
-   *
-   * So the stone flares when it is time, and only ever WITHIN the account they
-   * were sent to. That keeps a quest one story: a lantern that could reach
-   * anywhere is what turned a quest about C. S. Lewis into a tour of Oxford in
-   * 1931, a BBC microphone in 1941 and the Narnia years.
-   *
-   * NEVER AT THEIR ASKING. This is the half of the old rule that survives
-   * intact, and the reason it existed: a device the traveller can work is an
-   * escape hatch, and a story where the child can leave whenever it gets hard
-   * is a story with nothing at stake. What decides is withheld -- see
-   * CANON.lion, and the doc.
+   * IT IS NOT THERE. The traveller crosses and the lantern stays behind with
+   * the shop; nobody carries it, or anything in its place. AND IT MOVES THEM
+   * AGAIN: an account is not one afternoon -- Joseph is seventeen in the
+   * cistern and about thirty before Pharaoh -- so when it is time to see
+   * another part of the same account the way simply opens again, of its own
+   * accord, and never to a different story and never home early.
    */
   rules:
-    "Once through, the lantern goes dark and closes into a small smooth " +
-    "stone the traveller keeps in a pocket. When it is time to see another " +
-    "part of the same account, the stone warms and opens back into the " +
-    "lantern; the traveller takes hold of it and the story moves, forward " +
-    "or back, to somewhere else in that account. It decides, the traveller " +
-    "does not, and it never answers being asked. It will not reach another " +
-    "story and will not take the traveller home early.",
+    "Once through, the lantern is not there: it stays behind with the shop, " +
+    "and the traveller carries nothing in its place. When it is time to see " +
+    "another part of the same account, the way opens again on its own and " +
+    "the story moves, forward or back, to somewhere else in that account. It " +
+    "decides, the traveller does not, and it never answers being asked. It " +
+    "will not reach another story and will not take the traveller home early.",
 } as const;
 
 /**
@@ -438,19 +439,6 @@ export const FRAMING_APPROACHES: readonly FramingApproach[] = [
       "noticing. Do not explain what it means.",
   },
   {
-    id: "someone-else-first",
-    label: "someone was here first",
-    opening:
-      "Open in the traveller's day with something small that would rather not be " +
-      "done well. Once the shop arrives and the traveller is inside it, there is " +
-      "evidence that someone else has been here recently -- a name, a date, " +
-      `an object left where it should not be. ${KEEPER.name} sees it and says ` +
-      "nothing useful. Do not resolve who it was; this story is not about that.",
-    closing:
-      "At the end, the evidence is still there and still unexplained. Let the " +
-      "traveller notice it again.",
-  },
-  {
     id: "wrong-arrival",
     label: "not where the traveller meant to be",
     opening:
@@ -612,7 +600,8 @@ export function questFamiliarity(travellers: readonly Traveller[]): string {
     out.push(
       `${list(seasoned)} ${verb} the shop, the man and what the lantern does. Explain ` +
         `none of it again, and do not have ${who} marvel at the shop itself; ` +
-        `whatever is strange this time is strange to ${who} too.`,
+        `whatever is strange this time is strange to ${who} too. Knowing the shop is ` +
+        `not knowing the story.`,
     );
   }
   if (newcomers.length > 0 && seasoned.length + returning.length > 0) {

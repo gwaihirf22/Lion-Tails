@@ -319,7 +319,7 @@ sentence here. **Two or three share the lead's full description**
 the "eight equal names is eight protagonists" argument is about eight, not two.
 The companion animal stays one per story. A shared quest adds two lines to the
 brief and **does not touch the canon**, which is capped by a test and singular
-on purpose: one of them carries the stone, and "the traveller" means all of
+on purpose: "the traveller" means all of
 them. The crowns in `CharacterPicker` disappear when it is ticked — a crown on
 screen while the prompt says nobody leads is the UI contradicting the model.
 Verified on real generations: ticked, Ada 26 / Eli 24; unticked, Ada 38 / Eli 15.
@@ -599,19 +599,14 @@ different child, and the only sign was one line in the log.
   field being filled at all, because the two mistakes do not cost the same.
   A missing face is a generic picture; a wrong face in a biblical scene is
   the Esther bug with a camera.
-- **Two visual rules ride on the image projection of a quest brief, and only
-  there.** `CROSSING_OVER_DRESS` (the lantern outfits the traveller for the
-  place; goes to the prose too, so story and picture agree on clothes) and
-  `STONE_IN_PICTURES` (the stone is small — it vanishes inside a closed hand —
-  and stays in the traveller's pocket; picture only, because the prose never
-  had it wrong). Both live in `referencePlates.ts`, beside the plates, not in
-  `lionTails.ts`: visual rules stay in one file, and CANON is edited often
-  enough that a new key there is a merge conflict waiting to happen. The stone
-  rule is gated on `world` alone — the modern opening has a pocket too — where
-  the dress needs an era to dress for. Found on a real quest: the prose kept
-  the stone pocketed for 2,800 words while the cover and all three passage
-  pictures drew a fist-sized rock held out on an open palm, because nothing on
-  the picture side had ever said what it was like or where it lived.
+- **One visual rule rides on the image projection of a quest brief, and only
+  there:** `CROSSING_OVER_DRESS` — the lantern outfits the traveller for the
+  place, and *nobody else's* clothes change (the spies in Jericho were once
+  dressed by it too). It goes to the prose as well, so story and picture agree.
+  It lives in `referencePlates.ts`, beside the plates: visual rules stay in one
+  file, and CANON is edited often enough that a new key there is a merge
+  conflict waiting to happen. There used to be a second one for the stone; the
+  stone is gone from the canon (see the Quests section) and the rule with it.
 - **At most three faces**, which is the rule the brief's `"image"`
   projection already states in words.
 - **The Timekeeper has one face and it is a file.**
@@ -1029,6 +1024,31 @@ projection; `StoryBrief.participationAnchor` carries both modes' "stays on
 their mission / does not die / do not change history" lines into every
 chapter too. Both are absent on briefs frozen before they existed, and those
 render exactly as before.
+
+**There is no stone.** The lantern stays behind with the shop; the traveller
+carries nothing; the way opens again on its own. The stone was Blake's idea and
+it was his call to drop it, after a real quest made a girl's rock-collection
+stone the key that opened the lantern — the only two prompt lines about it
+both described a thing that *opens*, and neither said it does not exist before
+the first crossing. `DEVICE`'s doc comment records the whole argument.
+
+**Knowing the shop is not knowing the story.** `questFamiliarity()` tells a
+returning traveller they know the shop, the man and the lantern — and nothing
+said that was all they know, so one arrived in Jericho already knowing where
+the spies had come from. `FAR_SIDE_UNKNOWN` (every quest, brief and every
+chapter): a traveller arrives knowing nothing of the account they could not
+see or be told; what the narrator tells the reader, the traveller learns by
+watching or asking. Blake: familiarity "should ONLY pertain to the Timekeeper."
+
+**Four framing approaches, not five.** `someone-else-first` — "evidence that
+someone else has been here recently: a name, a date" — twice produced a brass
+tag naming the destination. Dropped; a frozen request carrying it resolves to
+the fallback deterministically, and old briefs have the frame text baked in.
+
+**Barnabas is rarely surprised, not never.** `KEEPER.who` said "entirely
+unsurprised by any of this"; it now says it shows when he is, and that he may
+guess where the lantern will open and be wrong. Blake: "things should still
+surprise him… he might be able to guess."
 
 **The prologue is a constant.** `server/data/questPrologue.ts` is in every
 library, pinned first, and refused by every mutating route through

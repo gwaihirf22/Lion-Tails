@@ -166,17 +166,21 @@ name — the lantern decides, the traveller does not, nobody in the story knows
 how — plus `CANON.lion`, which lets him say the name once and mysteriously and
 forbids the Lion appearing at all.
 
-The stone is the same fact at a smaller scale. It sleeps in a pocket and wakes
-when it wants; a reader who asks *why it chose that moment* is asking the
-question this file answers and the stories do not.
+There is no stone any more. The first canon had the lantern close into a small
+stone the traveller carried, which woke to move them on; a real quest then had a
+girl arrive at the shop already holding a stone from her rock collection, and
+the story made it the key. The lantern now stays behind with the shop, nobody
+carries anything, and the way opens again on its own when it is time. A reader
+who asks *why it chose that moment* is still asking the question this file
+answers and the stories do not.
 
 ## Canon, and still open
 
 **Settled** (in `lionTails.ts`, and in the prologue a reader can check):
 Mr Barnabas, the Timekeeper; the shop, *Barnabas & Co. — Keepers of Things
-Lost to Time*; the shelf; the lantern that answers to stories, goes dark on
-the far side and closes into a small stone the traveller carries — waking and
-opening again, of its own accord, to move them elsewhere in the same account;
+Lost to Time*; the shelf; the lantern that answers to stories, stays behind
+with the shop when the traveller crosses, and opens the way again of its own
+accord to move them elsewhere in the same account;
 that a quest begins in the traveller's own life and the shop comes to them,
 seen by nobody else; that a figure may meet the same traveller years apart and
 the traveller has not aged; that he lends it to the person and never chooses

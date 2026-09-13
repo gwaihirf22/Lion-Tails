@@ -284,10 +284,16 @@ export default function CharacterForm({
   // form says so under the age rather than letting the brief surprise anyone.
   const watchedAge = form.watch("age");
   const storyNoun = characterKind({ kind, age: watchedAge, sex: form.watch("sex") });
+  const article = (n: string) => (/^[aeiou]/i.test(n) ? "an" : "a");
   const ageNounHint =
     kind && storyNoun && storyNoun !== kind && typeof watchedAge === "number"
-      ? `At ${watchedAge}, the story will call ${form.watch("name") || "them"} ${/^[aeiou]/i.test(storyNoun) ? "an" : "a"} ${storyNoun}.`
-      : undefined;
+      ? `At ${watchedAge}, the story will call ${form.watch("name") || "them"} ${article(storyNoun)} ${storyNoun}.`
+      // A blank age on a person is not "no age" to the story: it is a child.
+      // A 33-year-old saved without one was written as "a boy", and the
+      // picture prompt then put another man's face on him. Say so here.
+      : kind && storyNoun && typeof watchedAge !== "number" && categoryOf(kind) === "human"
+        ? `Leave the age blank and the story will call ${form.watch("name") || "them"} ${article(storyNoun)} ${storyNoun}.`
+        : undefined;
 
   // Stats live in form state like everything else; these are just the readouts.
   // earned comes from the SAVED row, never the form -- how many stories a
