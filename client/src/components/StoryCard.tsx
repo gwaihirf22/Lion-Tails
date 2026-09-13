@@ -144,8 +144,13 @@ export default function StoryCard({
                 12px of side padding it does not need for a lone icon, and with
                 three of them a 390px card's title column fell from 102px to
                 58px -- titles that fitted before were clipped. */}
-            {!story.builtIn && (
-              <div className="ml-auto flex shrink-0 gap-1">
+            {/* Share is the ONE action a built-in story has. Favouriting and
+                removing are about a row in your library, and it has none --
+                but a link to it is the thing most worth sending to somebody
+                who has no account. One button on that card, not three, so the
+                title column keeps the width the note below is about. */}
+            <div className="ml-auto flex shrink-0 gap-1">
+                {!story.builtIn && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -160,6 +165,7 @@ export default function StoryCard({
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                 </Button>
+                )}
                 {/* Lucide, not an inline svg like this row's other icons: it is
                     the same action as the reader's Share button and should be
                     the same glyph. stopPropagation, or the card opens the story
@@ -176,7 +182,7 @@ export default function StoryCard({
                 >
                   <Share2 className="h-[18px] w-[18px]" aria-hidden="true" />
                 </Button>
-                {onRemoveFromUniverse && (
+                {!story.builtIn && onRemoveFromUniverse && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -192,6 +198,7 @@ export default function StoryCard({
                     </svg>
                   </Button>
                 )}
+                {!story.builtIn && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -206,8 +213,8 @@ export default function StoryCard({
                     <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
                   </svg>
                 </Button>
+                )}
               </div>
-            )}
           </div>
 
           {!story.builtIn && (
@@ -243,14 +250,12 @@ export default function StoryCard({
           the card navigates on click, and React events follow the React tree,
           so every button and the overlay inside a dialog nested in <Card
           onClick> would open the story. */}
-      {!story.builtIn && (
-        <ShareStoryDialog
-          storyId={story.id}
-          title={story.story.title}
-          open={shareOpen}
-          onOpenChange={setShareOpen}
-        />
-      )}
+      <ShareStoryDialog
+        storyId={story.id}
+        title={story.story.title}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>

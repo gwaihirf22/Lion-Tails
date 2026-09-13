@@ -4,7 +4,13 @@ import path, { dirname } from "path";
 import { fileURLToPath } from "url";
 import { SHARE_TOKEN_PATTERN, sharePathFor, sharedStoryView } from "@shared/sharedStory";
 import { splitAppendices } from "@shared/storyAppendices";
-import { previewDescription, renderSharePage, type ShareMeta } from "./lib/pageMeta";
+import {
+  previewDescription,
+  renderSharePage,
+  shareCardImage,
+  type ShareMeta,
+} from "./lib/pageMeta";
+import { builtInStoryById } from "./lib/builtInStories";
 import { storage } from "./storage";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -50,20 +56,26 @@ export function serveStatic(app: Express) {
   app.get("/s/:token", async (req, res) => {
     let meta: ShareMeta | null = null;
     try {
-      if (SHARE_TOKEN_PATTERN.test(req.params.token)) {
-        const saved = await storage.getSharedStory(req.params.token);
-        if (saved) {
-          const view = sharedStoryView(saved);
-          const origin = `${req.protocol}://${req.get("host")}`;
-          const absolute = (u?: string) =>
-            !u ? undefined : /^https?:\/\//i.test(u) ? u : `${origin}${u.startsWith("/") ? "" : "/"}${u}`;
-          meta = {
-            title: view.title,
-            description: previewDescription(splitAppendices(view.content).body),
-            url: `${origin}${sharePathFor(req.params.token)}`,
-            image: absolute(view.imageUrl),
-          };
-        }
+      // A built-in story is shared by its own id rather than a token: it ships
+      // with the app, is in every library, and has no row to hang a token on.
+      // See server/lib/builtInStories.ts.
+      const builtIn = builtInStoryById(req.params.token);
+      const saved = builtIn
+        ? builtIn
+        : SHARE_TOKEN_PATTERN.test(req.params.token)
+          ? await storage.getSharedStory(req.params.token)
+          : undefined;
+      if (saved) {
+        const view = sharedStoryView(saved);
+        const origin = `${req.protocol}://${req.get("host")}`;
+        const absolute = (u?: string) =>
+          !u ? undefined : /^https?:\/\//i.test(u) ? u : `${origin}${u.startsWith("/") ? "" : "/"}${u}`;
+        meta = {
+          title: view.title,
+          description: previewDescription(splitAppendices(view.content).body),
+          url: `${origin}${sharePathFor(req.params.token)}`,
+          ...shareCardImage(absolute(view.imageUrl), (u) => absolute(u)!),
+        };
       }
     } catch (error) {
       // A preview is a nicety. Never let it stop the page from loading.

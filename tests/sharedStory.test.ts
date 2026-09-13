@@ -1,7 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { sharedStoryView, SHARE_TOKEN_PATTERN, sharePathFor } from "../shared/sharedStory";
+import { sharedStoryView, isShareTarget, SHARE_TOKEN_PATTERN, sharePathFor } from "../shared/sharedStory";
+import { BUILT_IN_STORY_IDS } from "../shared/quests";
 import { newShareToken } from "../server/lib/sharing";
-import { escapeHtml, previewDescription, renderSharePage } from "../server/lib/pageMeta";
+import {
+  escapeHtml,
+  previewDescription,
+  renderSharePage,
+  shareCardImage,
+  SITE_COVER_ALT,
+  SITE_COVER_HEIGHT,
+  SITE_COVER_PATH,
+  SITE_COVER_WIDTH,
+} from "../server/lib/pageMeta";
+import { builtInStoryById, isBuiltInStoryId } from "../server/lib/builtInStories";
+import { QUEST_PROLOGUE, QUEST_PROLOGUE_ID } from "../server/data/questPrologue";
 
 /**
  * Sharing a story by link.
@@ -171,10 +183,119 @@ describe("the preview card for a share link", () => {
     expect(dead).toContain("generic description"); // otherwise untouched
   });
 
-  it("falls back to the small card when the story has no picture", () => {
+  it("falls back to the small card when given no picture at all", () => {
+    // The contract of the renderer on its own. The app never reaches it --
+    // shareCardImage always supplies one, see below -- but a caller that
+    // passes nothing must still get valid tags rather than an empty og:image.
     const html = renderSharePage(TEMPLATE, { ...meta, image: undefined });
     expect(html).not.toContain('property="og:image"');
     expect(html).toContain('name="twitter:card" content="summary"');
+  });
+
+  it("declares the cover's size, and never a story picture's", () => {
+    // A crawler given the dimensions lays the card out without fetching the
+    // image, and some show nothing while they wait. The cover's size is known;
+    // a story picture's is not, and a WRONG width is worse than none.
+    const cover = renderSharePage(TEMPLATE, {
+      ...meta,
+      ...shareCardImage(undefined, (u) => `https://liontails.paul-blake.com${u}`),
+    });
+    expect(cover).toContain(`content="${SITE_COVER_WIDTH}"`);
+    expect(cover).toContain(`content="${SITE_COVER_HEIGHT}"`);
+
+    const picture = renderSharePage(TEMPLATE, {
+      ...meta,
+      ...shareCardImage(meta.image, (u) => u),
+    });
+    expect(picture).not.toContain('property="og:image:width"');
+  });
+});
+
+/**
+ * WHICH picture the card carries.
+ *
+ * This page removes every og:image tag the template had before writing its
+ * own, so a story with no picture used to strip the site cover and add
+ * nothing: the shared link -- the one a stranger sees first -- was the only
+ * page on the site with a blank card.
+ */
+describe("the picture on a share card", () => {
+  const abs = (u: string) => `https://liontails.paul-blake.com${u}`;
+
+  it("uses the story's own picture when it has one", () => {
+    const chosen = shareCardImage("https://liontails.paul-blake.com/p/story_1.png", abs);
+    expect(chosen.image).toBe("https://liontails.paul-blake.com/p/story_1.png");
+    expect(chosen.imageIsCover).toBeUndefined();
+  });
+
+  it("uses the Lion Tails cover when the story has none", () => {
+    const chosen = shareCardImage(undefined, abs);
+    expect(chosen.image).toBe(`https://liontails.paul-blake.com${SITE_COVER_PATH}`);
+    expect(chosen.imageAlt).toBe(SITE_COVER_ALT);
+    expect(chosen.imageIsCover).toBe(true);
+  });
+
+  it("always chooses something, whatever it is handed", () => {
+    // The invariant, stated once: there is no input that produces a blank card.
+    for (const input of [undefined, "", "https://example.test/a.png"]) {
+      expect(shareCardImage(input || undefined, abs).image).toBeTruthy();
+    }
+  });
+
+  it("gives the built-in story the cover, because it has no picture", () => {
+    // The case Blake asked for by name: the Timekeeper prologue ships with no
+    // illustration, so its link is the cover art or nothing.
+    const view = sharedStoryView(QUEST_PROLOGUE);
+    expect(view.imageUrl).toBeUndefined();
+    expect(shareCardImage(view.imageUrl, abs).imageIsCover).toBe(true);
+  });
+});
+
+/**
+ * The one story that is shared by its id rather than a token.
+ *
+ * story_shares.story_id is a foreign key to user_stories, and a built-in has
+ * no row there -- so it CANNOT hold a token, by the shape of the database. It
+ * needs none: nothing about it is private, it is already in every library, and
+ * the link is the same for everyone.
+ */
+describe("sharing the story the app ships with", () => {
+  it("is a built-in, found by its own id", () => {
+    expect(isBuiltInStoryId(QUEST_PROLOGUE_ID)).toBe(true);
+    expect(builtInStoryById(QUEST_PROLOGUE_ID)?.story.title).toBe(QUEST_PROLOGUE.story.title);
+  });
+
+  it("is recognised as a share target, by the check the CLIENT runs", () => {
+    // The bug this pins: the share page tested the token shape alone and
+    // answered "This story is no longer shared" for a link that worked,
+    // without ever asking the server. Caught only by opening it in a browser.
+    expect(isShareTarget(QUEST_PROLOGUE_ID)).toBe(true);
+    expect(isShareTarget(newShareToken())).toBe(true);
+    expect(isShareTarget("nonsense")).toBe(false);
+    expect(isShareTarget("")).toBe(false);
+  });
+
+  it("lists the same built-ins on both sides", () => {
+    // The client cannot import server/lib/builtInStories, so shared/quests.ts
+    // carries a copy of the ids. Copies drift; this is what stops it.
+    for (const id of BUILT_IN_STORY_IDS) expect(isBuiltInStoryId(id)).toBe(true);
+    expect(isBuiltInStoryId(QUEST_PROLOGUE_ID)).toBe(true);
+    expect(BUILT_IN_STORY_IDS).toContain(QUEST_PROLOGUE_ID);
+  });
+
+  it("has an id that could never be mistaken for a token", () => {
+    // Both arrive as the same :token path segment, so the one must not match
+    // the other's shape -- otherwise a built-in id would be looked up as a
+    // token, or worse, a minted token could collide with a built-in id.
+    expect(SHARE_TOKEN_PATTERN.test(QUEST_PROLOGUE_ID)).toBe(false);
+    expect(isBuiltInStoryId(newShareToken())).toBe(false);
+  });
+
+  it("shares a readable story, with nothing of anyone's in it", () => {
+    const view = sharedStoryView(QUEST_PROLOGUE);
+    expect(view.title.length).toBeGreaterThan(0);
+    expect(view.content.length).toBeGreaterThan(500);
+    expect(view.editLog).toEqual([]);
   });
 });
 

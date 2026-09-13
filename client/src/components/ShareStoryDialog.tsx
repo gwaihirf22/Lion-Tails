@@ -56,11 +56,18 @@ export function ShareStoryDialog({
   const { toast } = useToast();
 
   const shareKey = [`/api/stories/${storyId}/share`];
-  const { data, isLoading } = useQuery<{ token: string | null }>({
+  const { data, isLoading } = useQuery<{ token: string | null; permanent?: boolean }>({
     queryKey: shareKey,
     enabled: open,
   });
   const token = data?.token ?? null;
+  /**
+   * A story the app ships with: its link is its id, the same for everyone, and
+   * always on. There is no link to make and none to stop, so the dialog opens
+   * straight to the link and the whole stopping section is absent rather than
+   * present-but-refused. The server is the one that decides this.
+   */
+  const permanent = data?.permanent === true;
   const url = token ? `${window.location.origin}${sharePathFor(token)}` : "";
 
   // The same key StoryExtras reads, so this is normally already cached.
@@ -175,11 +182,23 @@ export function ShareStoryDialog({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Anyone with this link can read the story, including the names in it.
-              {keptUntil && ` It works until ${keptUntil}, when the story is due to be cleared — favourite it to keep it for good.`}
+              {permanent ? (
+                <>
+                  This story comes with Lion Tails, so the link is the same for everyone
+                  and always works. Nothing of yours is in it — no names, no characters.
+                </>
+              ) : (
+                <>
+                  Anyone with this link can read the story, including the names in it.
+                  {keptUntil && ` It works until ${keptUntil}, when the story is due to be cleared — favourite it to keep it for good.`}
+                </>
+              )}
             </p>
 
-            {/* Stopping is never gated, and asks once. */}
+            {/* Stopping is never gated, and asks once. Absent entirely for a
+                story the app ships with: there is no row to remove, and an
+                offer that can only be refused is worse than no offer. */}
+            {!permanent && (
             <div className="border-t pt-3">
               {confirmStop ? (
                 <div className="space-y-2">
@@ -208,6 +227,7 @@ export function ShareStoryDialog({
                 </Button>
               )}
             </div>
+            )}
           </div>
         ) : parentMode ? (
           <div className="space-y-3">

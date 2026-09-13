@@ -336,7 +336,10 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
           </Button>
         )}
-        {storyId && !builtIn && !shared && (
+        {/* A built-in story CAN be shared -- its link is permanent and the
+            same for everyone. `shared` still excludes it: this is already the
+            shared page, and offering to share it from there is a loop. */}
+        {storyId && !shared && (
           <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={() => setShareOpen(true)}>
             <Share2 className="h-3.5 w-3.5" aria-hidden="true" /> Share
           </Button>
@@ -415,7 +418,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
         </div>
       )}
 
-      {storyId && !builtIn && !shared && (
+      {storyId && !shared && (
         <ShareStoryDialog
           storyId={storyId}
           title={story.title}
