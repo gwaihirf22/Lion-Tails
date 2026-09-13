@@ -83,6 +83,7 @@ import {
   FREE_STORIES_PER_MONTH,
   storyAllowance,
   startingOver,
+  startingQuestsAgain,
   statsOf,
   virtueLevels,
   avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, characterIdsOf, characterRoleOf,
@@ -224,6 +225,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching characters:", error);
       res.status(500).json({ message: "Failed to fetch characters" });
+    }
+  });
+
+  /**
+   * How many quests each character has been on, by id.
+   *
+   * Derived, not stored -- countQuestsFor reads the library -- so it is not on
+   * the character row and a card that wants to say "Paul has been on 3 quests"
+   * has to ask. Registered BEFORE /api/characters/:id, or Express reads
+   * "quests" as an id and answers 404.
+   */
+  app.get("/api/characters/quests", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const characters = await storage.getAllCharacters(userId);
+      res.json(await countQuestsFor(userId, characters));
+    } catch (error) {
+      console.error("Error counting quests:", error);
+      res.status(500).json({ message: "Failed to count quests" });
     }
   });
 
@@ -444,6 +464,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * character. The gate is the dialog, which names the character and counts
    * what is being taken.
    */
+  /**
+   * The next quest is a first visit again. Nothing on the sheet moves.
+   *
+   * Separate from /reset on purpose -- see startingQuestsAgain. Same ownership
+   * shape: updateCharacter reads under the user id, so a miss is a 404 whether
+   * the character is someone else's or nobody's.
+   */
+  app.post("/api/characters/:id/reset-quests", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const character = await storage.updateCharacter(req.params.id, userId, startingQuestsAgain());
+      if (!character) {
+        return res.status(404).json({ message: "Character not found" });
+      }
+      res.json(character);
+    } catch (error) {
+      console.error("Error resetting character's quests:", error);
+      res.status(500).json({ message: "Failed to reset quests" });
+    }
+  });
+
   app.post("/api/characters/:id/reset", requireAuth, async (req, res) => {
     try {
       const userId = (req.user as any).id;

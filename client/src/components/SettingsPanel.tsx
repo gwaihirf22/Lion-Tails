@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import ReadingSettingsCard from "@/components/reader/ReadingSettingsCard";
 import ParentModeToggle from "@/components/ParentModeToggle";
 import ResetSheetCard from "@/components/ResetSheetCard";
+import ResetQuestsCard from "@/components/ResetQuestsCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -272,6 +273,11 @@ export function SettingsPanel() {
             Parent Mode wrote over budget, which the Stats tab cannot save its
             way out of one click at a time. */}
         <ResetSheetCard />
+
+        {/* The other reset. Its own card because it is its own thing: the
+            quest count is not on the sheet, and a character with stats off
+            still goes on quests. */}
+        <ResetQuestsCard />
 
         {/* Story Generation Stats */}
         <Card className="bg-card rounded-2xl shadow-xl">
