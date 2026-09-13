@@ -317,7 +317,7 @@ for them" is what MAKES a supporting character, so it needs the opposite
 sentence here. **Two or three share the lead's full description**
 (`ENSEMBLE_FULL_DETAIL_MAX`), four or more fall back to the two-fact ration —
 the "eight equal names is eight protagonists" argument is about eight, not two.
-The companion animal stays one per story. A shared quest adds two lines to the
+The story form's companion animal stays one per story. A shared quest adds two lines to the
 brief and **does not touch the canon**, which is capped by a test and singular
 on purpose: "the traveller" means all of
 them. The crowns in `CharacterPicker` disappear when it is ticked — a crown on
@@ -334,6 +334,38 @@ be as influential as they are." This was the first change to move the
 compatibility goldens on purpose, at his say-so: ten cases × (single + outline),
 each by exactly that relocation. Hair, eyes, nature, the companion and the notes
 stay in `colour`; the supporting cast's two-fact ration is untouched.
+
+**A favourite animal is not a pet, and a pet is named.** The brief used to fall
+back to the sheet's favourite animal as the story's companion ("give it a name
+and a personality"), so every story grew a rabbit with a new name. Blake: "that
+is not the way I want that to work." The favourite animal is now the third
+may-notice fact, followed once per brief by `FAVOURITE_IS_NOT_A_PET`; only the
+story form's own animal (relabelled "An animal in this story") is a companion.
+Pets are on the sheet (`pets`, Basics tab: name, animal, **In stories**), and
+`petsComingAlong()` brings the ticked ones across the whole cast, once each by
+name and kind, into single/outline ("give no one another pet"), every chapter,
+and the picture. On a quest `PET_CROSSES_OVER` sends it through the lantern —
+said only when there is a pet, not as a `DEVICE` rule. "Include animals" off
+removes the favourite animal and the pets too. Compatibility cases 2 and 5
+moved for this, by exactly that relocation, with Blake's yes.
+
+**Family is by id, in the brief by name, and only among the cast.**
+`relations` (`shared/family.ts`) is `{ relativeId, relation }` — `relativeId`,
+not `characterId`, which a test reserves for the legacy request field. Stored
+gender-neutral (parent, sibling, auntUncle, spouse, stepparent, parentInLaw…);
+"Dad"/"Mom" is `relationLabel()` from the related character's sex at render.
+**Server-owned and mirrored:** omitted from all four write schemas and from
+the form's schema; `PUT|DELETE /api/characters/:id/relations/:otherId` calls
+`setRelation`, which writes both rows in one transaction, and
+`updateCharacter` keeps the row's live `relations` in its UPDATE so a stale
+form cannot undo a mirror. Deleting a character strips it from its family in
+the same transaction. A new character's family waits in the form and is sent
+after the create returns an id. In the brief, `familySentences()` ("Paul is
+Lucy's father.") covers only pairs where both are in the cast — relatives
+outside it are left out, Blake's choice — and `namesakeLines()` adds one
+sentence when a cast member's first name is in the account or is the
+Timekeeper's. Whole-word match without a regex: names are user text. Ids never
+reach a prompt; a test holds that. See `docs/decisions.md` §28.
 
 **Nothing on a character is defaulted.** Every field is optional, and the form
 starts empty except the name. Six defaults — brown hair, brown eyes, blue,
@@ -353,7 +385,7 @@ The strict path validates **the patch, not the merged character**, or a parent's
 custom value would block a child's unrelated edit.
 
 Before changing `storyBrief.ts`, know that `tests/fixtures/brief-golden.json`
-holds 48 captured strings (12 cases × 4 projections) asserting the rendered
+holds 68 captured strings (17 cases × 4 projections) asserting the rendered
 brief. **Cases 1–5 are the compatibility set and must not move**: they are
 what a 0/1-character request rendered before any of this. **Case 6, "time
 travel", is the lore's own golden** — it embeds the Lion Tails canon verbatim

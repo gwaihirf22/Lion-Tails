@@ -174,6 +174,12 @@ carries anything, and the way opens again on its own when it is time. A reader
 who asks *why it chose that moment* is still asking the question this file
 answers and the stories do not.
 
+**A pet goes through too.** Blake's call: a character's pet, ticked "in
+stories", arrives beside its owner on the far side and stays close, and the
+account goes on exactly as it was. It is said only in a brief that has a pet
+(`PET_CROSSES_OVER`), never as a `DEVICE` rule, so the lantern's rules stay
+"the traveller carries nothing" and no quest without an animal is handed one.
+
 ## Canon, and still open
 
 **Settled** (in `lionTails.ts`, and in the prologue a reader can check):

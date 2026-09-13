@@ -103,6 +103,7 @@ import {
   AVATAR_DIR,
 } from "./lib/avatar";
 import { statsAreAffordable } from "@shared/schema";
+import { RELATIONS } from "@shared/family";
 import { sharedStoryView, SHARE_TOKEN_PATTERN } from "@shared/sharedStory";
 import { z, ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
@@ -211,6 +212,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // silence its own notification.
     seenVirtues: true,
     travelsResetAt: true,
+    // It changes two characters at once, so only setRelation writes it -- see
+    // PUT /api/characters/:id/relations/:otherId.
+    relations: true,
     // Derived from `kind` below, never taken from the client: a body claiming
     // {kind: "dragon", category: "human"} would otherwise pick the human
     // colour lists to validate against.
@@ -318,7 +322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsed = characterSchema
         .omit({ id: true, createdAt: true, customFields: true, adventures: true,
                  avatarUrl: true, avatarPrompt: true, avatars: true,
-                 seenVirtues: true, travelsResetAt: true })
+                 seenVirtues: true, travelsResetAt: true, relations: true })
         .parse(req.body);
 
       const customFields = Object.keys(parsed).filter((k) => k !== "category");
@@ -412,7 +416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updates = characterSchema
         .omit({ id: true, createdAt: true, customFields: true, adventures: true,
                  avatarUrl: true, avatarPrompt: true, avatars: true,
-                 seenVirtues: true, travelsResetAt: true })
+                 seenVirtues: true, travelsResetAt: true, relations: true })
         .partial()
         .parse(req.body);
 
@@ -959,6 +963,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting character:", error);
       res.status(500).json({ message: "Failed to delete character" });
+    }
+  });
+
+  /**
+   * Family: `otherId` is <relation> to `id`, and the mirror is written onto
+   * `otherId` in the same transaction ("Paul is Lucy's dad" is also "Lucy is
+   * Paul's daughter"). Saved the moment it is chosen rather than with the
+   * form, because it changes a character whose form is not the one open.
+   *
+   * 404 for a self-relation as well as for a character that is not this
+   * user's -- there is no second owner's character to link to, and saying
+   * which of the two was wrong would confirm an id is real.
+   */
+  const relationBody = z.object({ relation: z.enum(RELATIONS) });
+
+  app.put("/api/characters/:id/relations/:otherId", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const { relation } = relationBody.parse(req.body);
+      const pair = await storage.setRelation(req.params.id, req.params.otherId, userId, relation);
+      if (!pair) return res.status(404).json({ message: "Character not found" });
+      res.json(pair);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ message: fromZodError(error).message });
+      }
+      console.error("Error saving relation:", error);
+      res.status(500).json({ message: "Failed to save that family member" });
+    }
+  });
+
+  app.delete("/api/characters/:id/relations/:otherId", requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any).id;
+      const pair = await storage.setRelation(req.params.id, req.params.otherId, userId, null);
+      if (!pair) return res.status(404).json({ message: "Character not found" });
+      res.json(pair);
+    } catch (error) {
+      console.error("Error removing relation:", error);
+      res.status(500).json({ message: "Failed to remove that family member" });
     }
   });
   

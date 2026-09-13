@@ -94,6 +94,30 @@ const bolt: Character = {
   hair: "copper", hobby: "inventing", createdAt: "2026-01-01",
 };
 
+/**
+ * A family: Paul is Lucy's father, and the mirror is on his sheet too, as
+ * setRelation writes it. Ernie is Lucy's brother and is NOT in any cast below,
+ * so he must never be mentioned. Biscuit comes along; Moss stays home.
+ */
+const lucy: Character = {
+  id: "f1", name: "Lucy", kind: "girl", sex: "female", age: 9, hobby: "finding rocks",
+  favoriteAnimal: "otter",
+  relations: [
+    { relativeId: "f2", relation: "parent" },
+    { relativeId: "f3", relation: "sibling" },
+  ],
+  pets: [
+    { id: "p1", name: "Biscuit", kind: "dog", inStories: true },
+    { id: "p2", name: "Moss", kind: "cat", inStories: false },
+  ],
+  createdAt: "2026-01-01",
+};
+const paul: Character = {
+  id: "f2", name: "Paul", kind: "man", sex: "male", age: 33,
+  relations: [{ relativeId: "f1", relation: "child" }],
+  createdAt: "2026-01-01",
+};
+
 const base = {
   storyLength: "medium", storyType: "regular", useAnimal: true, theme: "kindness",
 } as unknown as StoryRequest;
@@ -174,6 +198,20 @@ const cases: Record<string, () => ReturnType<typeof buildStoryBrief>> = {
       useCharacter: false, characterIds: [], customPrompt: "", biblePassage: "",
       learningFocus: "", heroOfFaith: "", biblicalEvent: "", useTimeTravel: false,
     } as unknown as StoryRequest, []),
+
+  // Family, pets and namesakes. Added with them; nothing above may move for them.
+  "family and a pet": () =>
+    buildStoryBrief({ ...base, characterIds: ["f1", "f2"] } as StoryRequest, [lucy, paul]),
+  "a namesake in the account": () =>
+    buildStoryBrief(
+      { ...base, characterIds: ["f1", "f2"], characterRole: "alongside", biblicalEvent: "paul" } as StoryRequest,
+      [lucy, paul],
+    ),
+  "a quest with a pet": () =>
+    buildStoryBrief(
+      { ...base, characterIds: ["f1"], characterRole: "travels", biblicalEvent: "noah" } as StoryRequest,
+      [lucy],
+    ),
 };
 
 if (process.env.UPDATE_GOLDEN) {
@@ -299,11 +337,14 @@ describe("a cast is weighted, not enumerated", () => {
 
   it("gives the lead full colour and the others at most two facts", () => {
     const brief = make(3);
-    // The lead keeps eyes and the animal companion in colour; the favourite
-    // colour is graded down to "may notice" now, but it is still the lead's.
+    // The lead keeps eyes in colour; the favourite colour and the favourite
+    // animal are graded down to "may notice", but they are still the lead's.
+    // The favourite animal is NOT a companion any more -- see
+    // "a favourite animal is not a pet".
     expect(brief.cast[0].colour).toContain("eyes");
     expect(brief.cast[0].mayNotice).toContain("favourite colour");
-    expect(brief.cast[0].colour).toContain("as a companion");
+    expect(brief.cast[0].mayNotice).toContain("favourite animal rabbit");
+    expect(brief.cast[0].colour).not.toContain("as a companion");
     // The supporting cast keeps none of those: they are sheet data with nothing
     // for a scene to do, and eight companions is a menagerie.
     for (const c of brief.cast.slice(1)) {
@@ -2184,8 +2225,9 @@ describe("no main character", () => {
     expect(e.colour).toContain("emerald scales");
     expect(e.colour).toContain("gold eyes");
     expect(e.colour).toContain("a patient nature");
-    // The companion animal stays one per story, on the first character only.
-    expect(m.colour).toContain("as a companion");
+    // Nobody's favourite animal is a companion; Mia's is something she likes.
+    expect(m.colour).not.toContain("as a companion");
+    expect(m.mayNotice).toContain("favourite animal rabbit");
     expect(e.colour).not.toContain("as a companion");
 
     const four = buildStoryBrief(
