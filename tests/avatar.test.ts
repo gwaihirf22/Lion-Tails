@@ -22,6 +22,7 @@ import {
   STAT_BASE,
   statsAreAffordable,
   startingOver,
+  startingQuestsAgain,
   statsOf,
   unseenVirtues,
   virtueLevels,
@@ -329,14 +330,14 @@ describe("skills cost points", () => {
 // startingOver() IS what POST /api/characters/:id/reset writes -- the route
 // passes it straight to storage. Restating the payload here instead would let
 // the route stop clearing a field while these kept passing.
-const RESET = startingOver("2026-01-01T00:00:00.000Z");
+const RESET = startingOver();
 
 describe("starting a character again", () => {
-  it("draws a line under the quests too", () => {
-    // The count is derived from the library, so the reset stamps a date and
-    // only quests after it count. Without this field a reset character on
-    // their fifth visit is still greeted as a veteran.
-    expect(RESET.travelsResetAt).toBe("2026-01-01T00:00:00.000Z");
+  it("leaves the quests alone -- that is the other reset's job", () => {
+    // Two separate things, per Blake. A sheet reset that also stamped
+    // travelsResetAt would make a character on their fifth visit a newcomer
+    // for choosing to respec.
+    expect("travelsResetAt" in RESET).toBe(false);
   });
 
   const sk = (name: string, value: number) => ({ name, value });
@@ -676,5 +677,12 @@ describe("telling a refusal from a failure", () => {
     expect(looksLikeRefusal({ status: 429, message: "rate limited" })).toBe(false);
     expect(looksLikeRefusal(new Error("socket hang up"))).toBe(false);
     expect(looksLikeRefusal(undefined)).toBe(false);
+  });
+});
+
+describe("making the next quest a first visit", () => {
+  it("stamps the date and nothing else", () => {
+    const r = startingQuestsAgain("2026-01-01T00:00:00.000Z");
+    expect(r).toEqual({ travelsResetAt: "2026-01-01T00:00:00.000Z" });
   });
 });

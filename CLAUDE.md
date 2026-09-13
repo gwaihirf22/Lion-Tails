@@ -284,12 +284,18 @@ feathers, scales, plating), so the story sees only `kind` and a girl renders "a
 girl" rather than "a human". A row saved before any of this has no category and
 falls through to "hair", which is what keeps the golden briefs identical.
 
-**A reset takes the quests too, by date.** How many quests a character has
-been on is derived from the library (`countQuestsFor` → `questsSince`), not
-stored, so `startingOver()` cannot clear it — it stamps `travelsResetAt`
-(server-owned, omitted from every write schema) and only quests written after
-it count. Absent means count everything. A story with no usable date counts,
-so an older row never drops out of a veteran's history over a null column.
+**Two resets, in Settings, and they are separate things.** "Start a
+character's sheet again" (`startingOver()`, `POST …/reset`) clears attributes,
+skills, adventures and the virtue receipts — offered only to a character with
+stats on. "Make the next quest a first visit" (`startingQuestsAgain()`,
+`POST …/reset-quests`) stamps `travelsResetAt` and nothing else — offered to
+everyone, because a character with stats off still goes on quests. The quest
+count is derived from the library (`countQuestsFor` → `questsSince`), not
+stored, so a reset cannot clear it: only quests written after the stamp count,
+absent means count everything, and a story with no usable date counts so an
+older row never drops out of a veteran's history over a null column.
+`GET /api/characters/quests` is the count by id, for the card; it is registered
+before `/api/characters/:id` or Express reads "quests" as an id.
 
 **The four human age-nouns are reconciled with the age.** `characterKind()`
 turns `boy`/`girl`/`man`/`woman` plus an age into the right one of the

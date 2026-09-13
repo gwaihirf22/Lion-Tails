@@ -1070,10 +1070,10 @@ export const characterSchema = z.object({
    * How many quests a character has been on is not stored: countQuestsFor()
    * derives it from the library, so a deleted story lowers it. A reset cannot
    * clear what is derived from stories the reader still has -- so it stamps
-   * this, and only quests written after it count. Blake: the reset should
-   * "also be able to reset the number of times the character has time
-   * traveled." Absent means count everything, which is what every older row
-   * does.
+   * this, and only quests written after it count. Stamped by
+   * POST /api/characters/:id/reset-quests (startingQuestsAgain) and by nothing
+   * else -- it is deliberately NOT part of the sheet reset. Absent means count
+   * everything, which is what every older row does.
    */
   travelsResetAt: z.string().optional(),
 
@@ -1174,13 +1174,30 @@ export function baseStats(): CharacterStats {
  * derived from `adventures`: leaving it behind is a receipt for something that
  * no longer exists, and shows up later as a badge that never appears.
  */
-export function startingOver(
-  /** Injectable so a test can compare the payload without a moving clock in it. */
+export function startingOver(): Pick<
+  Character,
+  "stats" | "skills" | "adventures" | "seenVirtues"
+> {
+  return { stats: baseStats(), skills: [], adventures: [], seenVirtues: [] };
+}
+
+/**
+ * The OTHER reset: the next quest is a first visit again. Nothing else moves.
+ *
+ * Its own helper and its own route, not a fifth field on startingOver(). Blake:
+ * "that is tied to attributes/skills and they need to be 2 separate things."
+ * They also have different audiences -- the sheet reset is only offered to a
+ * character with the stat system on, and a character with it off still goes
+ * on quests.
+ *
+ * The quest count is derived from the library, not stored, so this cannot
+ * clear it; it stamps a date and only quests after it count. Injectable clock
+ * so a test can compare the payload without a moving timestamp in it.
+ */
+export function startingQuestsAgain(
   now: string = new Date().toISOString(),
-): Pick<Character, "stats" | "skills" | "adventures" | "seenVirtues" | "travelsResetAt"> {
-  // travelsResetAt is the fifth: the quest count is derived from the library,
-  // not stored, so the only way to take it back to zero is to say from when.
-  return { stats: baseStats(), skills: [], adventures: [], seenVirtues: [], travelsResetAt: now };
+): Pick<Character, "travelsResetAt"> {
+  return { travelsResetAt: now };
 }
 
 export type CharacterSkill = NonNullable<Character["skills"]>[number];
