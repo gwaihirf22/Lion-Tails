@@ -6,6 +6,7 @@ import {
   MAX_PETS,
   RELATIONS,
   relationLabel,
+  sexForWords,
   type CharacterRelation,
   type Pet,
   type Relation,
@@ -92,7 +93,7 @@ export function FamilyEditor({
         title: relation ? "Family saved" : "Removed from family",
         description: other
           ? relation
-            ? `${other.name} is ${whose}'s ${relationLabel(relation, other.sex).toLowerCase()}.`
+            ? `${other.name} is ${whose}'s ${relationLabel(relation, sexForWords(other)).toLowerCase()}.`
             : `${other.name} and ${whose} are no longer listed as family.`
           : undefined,
       });
@@ -125,7 +126,7 @@ export function FamilyEditor({
               <li key={r.relativeId} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
                 <span className="min-w-0 flex-1 truncate">
                   <span className="font-medium">{other.name}</span>
-                  <span className="text-muted-foreground"> — {relationLabel(r.relation, other.sex)}</span>
+                  <span className="text-muted-foreground"> — {relationLabel(r.relation, sexForWords(other))}</span>
                 </span>
                 <Button
                   type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0"
@@ -177,7 +178,7 @@ export function FamilyEditor({
             </SelectTrigger>
             <SelectContent>
               {RELATIONS.map((r) => (
-                <SelectItem key={r} value={r}>{relationLabel(r, relative?.sex)}</SelectItem>
+                <SelectItem key={r} value={r}>{relationLabel(r, sexForWords(relative))}</SelectItem>
               ))}
             </SelectContent>
           </Select>

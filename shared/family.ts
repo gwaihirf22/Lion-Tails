@@ -102,6 +102,27 @@ const PROMPT_LABELS: Record<Relation, Worded> = {
 };
 
 /**
+ * A character's sex for choosing a word, including one that only its KIND says.
+ *
+ * `sex` is newer than `kind`, and the gendered kinds -- boy, girl, man, woman,
+ * grandmother, grandfather -- never needed it: a "boy" saved before the sex
+ * question existed has none. Read from `sex` alone, Paul on the dev box was
+ * everybody's "Parent". The legacy `gender` is the same word under its old name.
+ * Kept here, not taken from characterVocab, because shared/schema.ts imports
+ * this file and the vocabulary would make that a cycle.
+ */
+const MALE_WORDS = new Set(["boy", "man", "grandfather"]);
+const FEMALE_WORDS = new Set(["girl", "woman", "grandmother"]);
+export function sexForWords(c: { sex?: string; kind?: string; gender?: string } | undefined): string | undefined {
+  if (!c) return undefined;
+  if (c.sex) return c.sex;
+  const word = (c.kind || c.gender || "").trim().toLowerCase();
+  if (MALE_WORDS.has(word)) return "male";
+  if (FEMALE_WORDS.has(word)) return "female";
+  return undefined;
+}
+
+/**
  * The word for what a character IS to someone, from that character's own sex.
  *
  * `relationLabel("parent", paul.sex)` is "Dad": Paul is the parent, so Paul's

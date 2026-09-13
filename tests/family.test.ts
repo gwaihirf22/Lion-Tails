@@ -6,6 +6,7 @@ import {
   withRelation,
   withoutCharacter,
   relationSchema,
+  sexForWords,
 } from "../shared/family";
 import { characterSchema, type Character, type StoryRequest } from "../shared/schema";
 import { vocabularyErrors } from "../shared/characterVocab";
@@ -51,6 +52,19 @@ describe("relations mirror", () => {
     expect(relationLabel("parent", "it")).toBe("Parent");
     expect(relationLabel("child", "female", "prompt")).toBe("daughter");
     expect(relationLabel("parentInLaw", "male", "prompt")).toBe("father-in-law");
+  });
+
+  it("a character whose kind says it needs no sex field to be a Dad", () => {
+    // Every "boy" saved before the sex question existed has kind and no sex.
+    expect(relationLabel("parent", sexForWords({ kind: "boy" }))).toBe("Dad");
+    expect(relationLabel("parent", sexForWords({ gender: "girl" }))).toBe("Mom");
+    expect(relationLabel("parent", sexForWords({ kind: "grandmother" }))).toBe("Mom");
+    expect(relationLabel("parent", sexForWords({ kind: "dragon" }))).toBe("Parent");
+    expect(sexForWords({ kind: "boy", sex: "female" })).toBe("female");
+    expect(familySentences([
+      { id: "a", name: "Ann", kind: "girl", createdAt: "x", relations: [{ relativeId: "b", relation: "parent" }] },
+      { id: "b", name: "Bob", kind: "man", createdAt: "x" },
+    ])).toEqual(["Bob is Ann's father."]);
   });
 
   it("one relation per pair: a new one replaces the old, and null removes it", () => {

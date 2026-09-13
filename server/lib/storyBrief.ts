@@ -22,7 +22,7 @@ import {
   type HeroOfFaith,
 } from "@shared/schema";
 import { coveringNoun, GENDERED_KINDS, type CharacterCategory } from "@shared/characterVocab";
-import { isRelation, relationLabel } from "@shared/family";
+import { isRelation, relationLabel, sexForWords } from "@shared/family";
 import { storage } from "../storage";
 import { getBiblicalEvent } from "../data/biblicalEvents";
 import {
@@ -910,7 +910,7 @@ export function familySentences(characters: Character[]): string[] {
       const pair = [c.id, other.id].sort().join("|");
       if (said.has(pair)) continue;
       said.add(pair);
-      out.push(`${other.name} is ${c.name}'s ${relationLabel(r.relation, other.sex, "prompt")}.`);
+      out.push(`${other.name} is ${c.name}'s ${relationLabel(r.relation, sexForWords(other), "prompt")}.`);
     }
   }
   return out;

@@ -353,7 +353,7 @@ moved for this, by exactly that relocation, with Blake's yes.
 `relations` (`shared/family.ts`) is `{ relativeId, relation }` — `relativeId`,
 not `characterId`, which a test reserves for the legacy request field. Stored
 gender-neutral (parent, sibling, auntUncle, spouse, stepparent, parentInLaw…);
-"Dad"/"Mom" is `relationLabel()` from the related character's sex at render.
+"Dad"/"Mom" is `relationLabel()` from the related character's sex at render — through `sexForWords()`, because every "boy" or "man" saved before the sex question has a kind that says it and no `sex`.
 **Server-owned and mirrored:** omitted from all four write schemas and from
 the form's schema; `PUT|DELETE /api/characters/:id/relations/:otherId` calls
 `setRelation`, which writes both rows in one transaction, and
