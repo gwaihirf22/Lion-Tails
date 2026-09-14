@@ -59,6 +59,26 @@ export const SHOP = {
     "a tiny crown",
     "a broken watch",
   ],
+  /**
+   * Things from Bible times and church history, tucked where only a close look
+   * finds them. Blake had them drawn into the shop (the world sheet), then:
+   * "whatever we did to get those objects in the store we need to add that to
+   * the prompting to get that in a story." Same grading as the shelf -- one may
+   * be noticed, none has to be -- and deliberately WITHOUT owners: the shelf
+   * says whose coat the button was from; these say nothing, so a reader who
+   * spots the sling or the grave cloths is the one who works it out.
+   */
+  hidden: [
+    "sling",
+    "shepherd's crook",
+    "Roman sandal",
+    "cross on a cord",
+    "folded grave cloths",
+    "ram's horn",
+    "scroll",
+    "oil lamp",
+    "carpenter's plane",
+  ],
   /** Never uncovered, never described. The one thing the model may not use. */
   underTheCloth: "one small thing under a cloth",
 } as const;
@@ -533,7 +553,8 @@ export function worldCanon(frame: FramingApproach): string[] {
     CANON.wayBack,
     CANON.ending,
     `On the shelves: ${SHOP.shelf.join("; ")}; and ` +
-      `${SHOP.underTheCloth}. One may be noticed in passing; none has to be. ` +
+      `${SHOP.underTheCloth}. Half-hidden: ${SHOP.hidden.join(", ")}. ` +
+      "One may be noticed in passing; none has to be. " +
       "Never the thing under the cloth.",
     KEEPER.never,
     CANON.lion,

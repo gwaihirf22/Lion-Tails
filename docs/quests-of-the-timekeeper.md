@@ -174,6 +174,21 @@ carries anything, and the way opens again on its own when it is time. A reader
 who asks *why it chose that moment* is still asking the question this file
 answers and the stories do not.
 
+**Hidden in the shop's art, and on its shelf.** The world sheet
+(`public/images/timekeeper-world.webp`) was redrawn in September 2026 with
+things from Bible times and church history tucked where only a close look
+finds them -- a sling, a shepherd's crook, a Roman soldier's sandal, a small
+cross on a cord, folded grave cloths, a ram's horn, a scroll, an oil lamp, a
+carpenter's plane -- and, on the back wall, a faint shadow of a great lion
+across the door with nothing in the room to cast it. None of it is named in
+`WORLD_SHEET_PANELS`, the picture prompt: named there, they would stop being
+hidden in every quest picture, and a prompt that says "lion" draws one. The
+objects ARE on the story shelf (`SHOP.hidden`), as bare nouns with no owners,
+at Blake's request -- a story may notice one, as it may the compass. The
+lion's shadow is in no story prompt. Blake knows the sheet goes with every
+quest picture of the shop and that the shadow may surface in one; that is his
+call ("leaks OK"). The Lion still never appears in a story.
+
 **A pet goes through too.** Blake's call: a character's pet, ticked "in
 stories", arrives beside its owner on the far side and stays close, and the
 account goes on exactly as it was. It is said only in a brief that has a pet

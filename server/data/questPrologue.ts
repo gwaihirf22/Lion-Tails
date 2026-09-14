@@ -309,7 +309,7 @@ export const QUEST_PROLOGUE: SavedStory & { builtIn: true } = {
     inText(
       "prologue-shop",
       "quest-prologue-shop.webp",
-      "A quiet evening street: between a lit bakery and a boarded-up building, a small old shop with the sign Barnabas & Co., and a child looking up at it",
+      "A quiet evening street seen from along the pavement: a lit bakery, a small old shop with the sign Barnabas & Co. and a window of strange old things, boarded-up windows beyond, and a child looking up at it",
       "You stared at it.",
     ),
     inText(

@@ -1665,7 +1665,12 @@ describe("the world of a quest", () => {
     const b = quest();
     expect(b.world).toBeDefined();
     /**
-     * 1000, from 925, from 750.
+     * 1010, from 1000, from 925, from 750.
+     *
+     * The last ten words were Blake's: the things hidden in the shop's art
+     * (a sling, a shepherd's crook, grave cloths...) had to be things a story
+     * can notice too. Bare nouns, no owners, and graded like the rest of the
+     * shelf -- about twenty words, of which ten came out of the wording.
      *
      * THE CAP IS A RATCHET, NOT A BUDGET. Its job is to make somebody stop and
      * justify the lore the next time it grows, which is exactly what happened
@@ -1682,7 +1687,7 @@ describe("the world of a quest", () => {
      * That ratio is the thing to watch, not this number. Raise it again when
      * there is a reason; look at the ratio first.
      */
-    expect(words(b.world!.canon.join(" "))).toBeLessThanOrEqual(1000);
+    expect(words(b.world!.canon.join(" "))).toBeLessThanOrEqual(1010);
     // 450, from 350, for the same field and the same reason.
     expect(words(Object.values(CANON).join(" "))).toBeLessThanOrEqual(450);
     // UNCHANGED, and the tightest budget in the system: this one repeats on

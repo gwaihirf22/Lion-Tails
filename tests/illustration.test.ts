@@ -426,7 +426,16 @@ describe("the Timekeeper world sheet", () => {
     const panels = WORLD_SHEET_PANELS.join(" | ");
     expect(panels).toMatch(/the lantern, lit/);
     expect(panels).toMatch(/the lantern, dark/);
-    expect(panels).toMatch(/stone/);
+  });
+
+  it("has no stone on it, and never asks for the lion", () => {
+    // The stone left the canon, and a prologue picture drawn with the old
+    // sheet put one on Barnabas's counter. The lion's shadow on the back wall
+    // is in the ART by Blake's choice; the words never name it, because a
+    // prompt that says "lion" draws one.
+    const panels = WORLD_SHEET_PANELS.join(" | ");
+    expect(panels).not.toMatch(/stone|pebble/i);
+    expect(panels).not.toMatch(/lion/i);
   });
 
   it("keeps the white flame off it", () => {

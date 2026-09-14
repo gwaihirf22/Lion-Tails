@@ -1134,6 +1134,16 @@ the reader renders it as a poem, and a test holds the shape. It carries the home
 is `QUEST_SERIES_TITLE` in `shared/quests.ts`, because the card and the
 prologue heading both print it.
 
+**The world sheet has no stone, and a lion's shadow the prompt never names.**
+Redrawn panels (shop sign mounted on the wall, books and hidden biblical
+objects inside, the back wall with a faint lion's shadow in place of the old
+stone panel), each chosen by Blake. `WORLD_SHEET_PANELS` describes the shadow
+only as "a large soft shadow" and names none of the hidden objects; a test
+holds that neither "stone" nor "lion" is in it. The same objects are on the story's shelf as bare nouns (`SHOP.hidden`,
+"Half-hidden: …"), graded like the rest of it, so a story may notice one;
+the world cap went 1000 → 1010 for them. The lion's shadow is not in any story
+prompt. See the doc's "Hidden in the shop's art".
+
 **The Lion is a name, not a character, in the model canon.** `CANON.lion` lets
 Barnabas say "I have no control over this" and, pressed, "The great Lion knows
 no bounds" — once, mysteriously — and forbids the Lion appearing at all. He

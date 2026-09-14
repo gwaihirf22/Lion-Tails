@@ -3,7 +3,7 @@
  *
  * A character is consistent because a file of their face is attached to every
  * picture they are in. Everything else in this world -- the shop, its sign, the
- * lantern lit and the lantern dark, the stone it closes into -- was anchored to
+ * lantern lit and the lantern dark, the back of the shop -- was anchored to
  * one sentence: "Render in a beautiful biblical storybook illustration style
  * with soft colors." A sentence cannot pin a building.
  *
@@ -117,14 +117,33 @@ export type ReferencePlate = {
  * be found, and it belongs to Movement III (docs/quests-of-the-timekeeper.md).
  * Putting it on a sheet every quest sees would spend the reveal before it is
  * written.
+ *
+ * NO STONE, since 2026-09-14. The sixth panel was the small smooth stone the
+ * lantern used to close into, kept after the stone left the canon because the
+ * art had it -- and a prologue picture drawn with this sheet put a smooth stone
+ * on Barnabas's counter. So it is redrawn. Blake had three panels redone at the
+ * same time, each checked by eye and chosen by him:
+ *  - the shop front, whose sign floated beside the wall: its bracket is bolted
+ *    to the wall now and reaches out over the pavement;
+ *  - the inside, with books, and things from Bible times and church history
+ *    hidden where only a close look finds them;
+ *  - the back wall, which replaces the stone: more of those things, and a faint
+ *    shadow of a great lion across it, large enough to cover the door, with
+ *    nothing in the room to cast it. BLAKE CHOSE THIS KNOWING THE SHEET GOES
+ *    WITH EVERY QUEST PICTURE OF THE SHOP, and that the shadow may sometimes
+ *    turn up in one: "leaks OK". It is described below only as "a large soft
+ *    shadow", so the prompt never asks for a lion -- CANON.lion still forbids
+ *    the Lion appearing in any story.
+ * The hidden objects are not listed here either: named in the prompt, they
+ * would stop being hidden in every picture the sheet goes to.
  */
 export const WORLD_SHEET_PANELS = [
-  "the shop from the street, with its sign hanging over the door",
+  "the shop from the street, its sign hanging from an iron bracket fixed to the wall and reaching out over the pavement",
   "the sign on its own, the paint cracked and the brass letters gone green at the edges",
-  "the inside of the shop: crowded shelves, a counter, none of it labelled",
+  "the inside of the shop: crowded shelves of old books and old things, a counter, none of it labelled",
   "the lantern, lit",
   "the lantern, dark",
-  "the small smooth stone the lantern closes into",
+  "the back wall of the shop around a plain closed door, crowded with old things, a large soft shadow across it",
 ] as const;
 
 export const WORLD_SHEET_FILE = "timekeeper-world.webp";
