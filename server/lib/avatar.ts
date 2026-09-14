@@ -29,6 +29,7 @@ import { coveringNoun } from "@shared/characterVocab";
 import { characterKind, type Character } from "@shared/schema";
 import { toFile } from "openai";
 import { resolveModel, createClient, inputFidelityFor } from "./modelPolicy";
+import { recordModelCall } from "./modelCalls";
 
 /** Where portraits live. See the note above about why it is under `stories`. */
 export const AVATAR_DIR = path.join(process.cwd(), "public", "images", "stories", "avatars");
@@ -388,6 +389,11 @@ export async function generateAvatar(
     // optional in the openai 7.x types and genuinely absent on some responses,
     // so this is a real guard rather than a cast to satisfy the compiler --
     // the same one generateStoryImage needs, for the same reason.
+    void recordModelCall(
+      { userId, resolved, purpose: "avatar", imageSize: "1024x1024", imageQuality: "auto" },
+      response.usage,
+      "succeeded",
+    );
     const b64 = response.data?.[0]?.b64_json;
     if (!b64) {
       console.error(

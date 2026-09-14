@@ -28,6 +28,7 @@
 
 import type OpenAI from "openai";
 import { requestModelJson, TOKEN_BUDGET } from "./openai-implementation";
+import type { ModelCallContext } from "./modelCalls";
 import { temperatureFor, tokenLimitFor } from "./modelPolicy";
 // The cap the route already refuses on. One number: a second copy here would
 // be a slice that silently disagrees with a 400.
@@ -87,7 +88,7 @@ export function buildPassageScenePrompt(opts: {
 export async function sceneFromPassage(
   client: OpenAI,
   model: string,
-  opts: { title: string; passage: string; brief?: string },
+  opts: { title: string; passage: string; brief?: string; ledger?: ModelCallContext },
 ): Promise<string | undefined> {
   const user = buildPassageScenePrompt(opts);
   const debugData: unknown[] = [];
@@ -95,6 +96,7 @@ export async function sceneFromPassage(
     const reply = await requestModelJson<{ imagePrompt: string }>({
       step: "passageScene",
       model,
+      ledger: opts.ledger,
       debugData: debugData as any[],
       maxTokens: TOKEN_BUDGET.json,
       prompt: user,
@@ -114,6 +116,7 @@ export async function sceneFromPassage(
         return {
           content: response.choices[0]?.message?.content ?? "",
           finishReason: response.choices[0]?.finish_reason,
+          usage: response.usage,
         };
       },
       validate: (parsed) =>

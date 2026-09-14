@@ -1758,6 +1758,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         title: saved.story.title,
         passage: text,
         brief,
+        ledger: { userId, storyId: saved.id, resolved, purpose: "passage-scene" },
       });
     } catch (error) {
       console.error("[illustrate] could not describe a passage:", error);
@@ -1906,6 +1907,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
         await illustrationCast(saved.request, userId, prompt),
         extras,
+        {
+          ledger: {
+            purpose: passage.success && passage.data ? "passage-picture" : "redraw",
+            storyId: saved.id,
+          },
+        },
       );
       const imageUrl = drawn?.url;
       if (!imageUrl) {
