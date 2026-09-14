@@ -9,7 +9,10 @@ import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
 import { isModelAllowedFor, listSelectableModels, MODEL_CATALOG, DEFAULTS,
   avatarCapFor,
+  defaultChatModelFor,
   hasUnlimitedUse,
+  modelName,
+  storyCreditsFor,
   avatarsRemaining,
   MAX_FREE_AVATARS,
 } from "./lib/modelPolicy";
@@ -87,7 +90,7 @@ import {
   statsOf,
   virtueLevels,
   avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, characterIdsOf, characterRoleOf,
-  type SavedStory, type Character, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
+  type SavedStory, type Character, type StoryUsage, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
@@ -1395,14 +1398,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // next request recomputes it from the same stale count for ever.
       const { count, lastResetDate } = await storage.applyStoryTopUp(userId);
       const allowance = storyAllowance({ count, lastResetDate });
-      res.json({
+      // What the NEXT story costs, priced by the model it would actually run
+      // on -- resolveModel, not the stored choice, because a stored premium
+      // model the account has lost the key for falls back, and the price
+      // shown has to be the price charged. Null when no model is available;
+      // the enqueue path reports that, not this screen.
+      const resolved = await resolveModel(userId, "chat", { forStory: true }).catch(() => null);
+      const entitlement = resolved
+        ? { isAdmin: resolved.isAdmin, hasOwnKey: resolved.usingOwnKey }
+        : null;
+      const usage: StoryUsage = {
+        unlimited: entitlement ? hasUnlimitedUse(entitlement) : false,
+        model: resolved?.model ?? null,
+        modelName: resolved ? modelName(resolved.model) : null,
+        storyCredits: resolved && entitlement ? storyCreditsFor(resolved.model, entitlement) : 0,
         used: allowance.used,
         remaining: allowance.remaining,
         total: allowance.total,
         perMonth: FREE_STORIES_PER_MONTH,
         lastReset: lastResetDate ? new Date(lastResetDate).toISOString() : null,
         nextTopUp: allowance.nextTopUp.toISOString(),
-      });
+      };
+      res.json(usage);
     } catch (error) {
       console.error("Error fetching usage stats:", error);
       res.status(500).json({ message: "Failed to fetch usage statistics" });
@@ -2417,7 +2434,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // The policy's default, not a literal of this route's own. Reporting
       // a model the user is not entitled to would make the settings page and
       // the story-form accuracy note both lie about what is generating.
-      const model = (await storage.getUserOpenAIModel(userId)) || DEFAULTS.chat;
+      // Terra for an admin or an own-key account, Luna for everyone else:
+      // defaultChatModelFor is what resolveModel starts from too.
+      const hasOwnKey = Boolean(await storage.getUserOpenAIKey(userId));
+      const isAdmin = Boolean((req.user as any).isAdmin);
+      const model =
+        (await storage.getUserOpenAIModel(userId)) || defaultChatModelFor({ isAdmin, hasOwnKey });
       // The tier rides along so the story form can warn about local-model
       // accuracy without a second round trip and without the client keeping its
       // own copy of the catalogue -- there are already six model lists in this
@@ -2486,7 +2508,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!isModelAllowedFor(model, "chat", { isAdmin, hasOwnKey: Boolean(ownKey) })) {
         return res.status(403).json({
           message:
-            "That model is not available on your account. Premium models require your own OpenAI API key.",
+            "That model is not available on your account. GPT-6 Astra and GPT-4o need your own OpenAI API key.",
           allowed: listSelectableModels({ isAdmin, hasOwnKey: Boolean(ownKey) }),
         });
       }

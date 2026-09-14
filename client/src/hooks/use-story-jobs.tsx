@@ -113,6 +113,9 @@ export function StoryJobsProvider({ children }: { children: ReactNode }) {
       // nothing else would ever refetch them. Invisible while the universe
       // was a collapsed card; the first thing noticed on its own page.
       queryClient.invalidateQueries({ queryKey: ["/api/universes"] });
+      // And the credit balance: the worker charges when the story finishes,
+      // so the pill above the form is a story out of date until this runs.
+      queryClient.invalidateQueries({ queryKey: ["/api/story/usage"] });
     }
   }, [jobs, queryClient]);
 

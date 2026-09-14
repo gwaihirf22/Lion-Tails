@@ -1,10 +1,45 @@
-import { storyAllowance, type StoryRequest } from "@shared/schema";
+import { creditsLabel, FREE_STORIES_PER_MONTH, storyAllowance, type StoryRequest } from "@shared/schema";
 import { storage } from "../storage";
-import { resolveModel } from "./modelPolicy";
+import { DEFAULTS, MODEL_CATALOG, modelName, resolveModel, storyCreditsFor } from "./modelPolicy";
 import { StoryGenerationError } from "./storyErrors";
 
 /**
- * Has this account got a free story left?
+ * What to tell someone who cannot afford the story they asked for.
+ *
+ * It names the three ways out that actually exist, and only the ones that
+ * apply: a cheaper model is suggested only when they can afford it, because
+ * "switch to Luna" to someone with no credits at all is a second refusal
+ * waiting to happen.
+ *
+ * Pure, so the wording is tested rather than discovered by running out.
+ */
+export function notEnoughCreditsMessage(
+  model: string,
+  credits: number,
+  allowance: { remaining: number; nextTopUp: Date },
+): string {
+  // Local time, as startOfMonthAfter builds it: formatted in UTC, midnight on
+  // the 1st is still the 30th anywhere west of Greenwich.
+  const when = allowance.nextTopUp.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
+  const topUp = `or wait for ${FREE_STORIES_PER_MONTH} more on ${when}`;
+
+  const cheaper = DEFAULTS.chat;
+  const cheaperCost = MODEL_CATALOG[cheaper]?.storyCredits ?? 1;
+  if (model !== cheaper && allowance.remaining >= cheaperCost) {
+    return (
+      `A story on ${modelName(model)} costs ${creditsLabel(credits)} and you have ` +
+      `${creditsLabel(allowance.remaining)}. Switch to ${modelName(cheaper)} in Settings ` +
+      `(${creditsLabel(cheaperCost)} a story), add your own OpenAI key, ${topUp}.`
+    );
+  }
+  return (
+    `You have used all your credits. Choose a local model in Settings, ` +
+    `add your own OpenAI key, ${topUp}.`
+  );
+}
+
+/**
+ * How many free credits has this account got?
  *
  * The whole rule now lives in storyAllowance(). What was here was four things
  * at once and none of them right: its own copies of 50 and 10, a 30-day
@@ -15,18 +50,12 @@ import { StoryGenerationError } from "./storyErrors";
  * FIFTY more rather than ten a month. That is the behaviour Blake asked to
  * change, and it had never actually run.
  */
-async function canGenerateStoryWithFreeTier(userId: number = 1): Promise<boolean> {
-  // Admins bypass the quota. This used to compare username === 'paulblake',
-  // which is one rename away from locking the owner out and, worse, would grant
-  // the bypass to anyone who registered that name -- nothing reserves it.
-  const user = await storage.getUser(userId);
-  if (user?.isAdmin) return true;
-
+async function freeAllowanceFor(userId: number = 1) {
   // Forgive whatever months are owed first, and persist it -- otherwise the
   // allowance would be recomputed from a stale count on every request and the
   // top-up would never actually land in the row.
   const { count, lastResetDate } = await storage.applyStoryTopUp(userId);
-  return storyAllowance({ count, lastResetDate }).remaining > 0;
+  return storyAllowance({ count, lastResetDate });
 }
 
 /**
@@ -47,19 +76,29 @@ async function canGenerateStoryWithFreeTier(userId: number = 1): Promise<boolean
 export async function canEnqueueWithinQuota(
   userId: number,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  const resolved = await resolveModel(userId, "chat").catch(() => null);
+  const resolved = await resolveModel(userId, "chat", { forStory: true }).catch(() => null);
   // A missing model is not a quota problem; let the enqueue path report it.
   if (!resolved) return { ok: true };
-  if (resolved.provider !== "openai") return { ok: true };
-  if (resolved.usingOwnKey || resolved.isAdmin) return { ok: true };
 
-  const withinQuota = await canGenerateStoryWithFreeTier(userId);
-  if (!withinQuota) {
-    return {
-      ok: false,
-      message:
-        "You've reached your free story generation limit. Add your own OpenAI API key in Settings to continue, choose a local model, or wait until next month when your free quota refreshes.",
-    };
+  // The same price the worker will charge when the story finishes, from the
+  // same function -- so the check and the bill cannot disagree. Zero covers a
+  // local model, an admin, and anyone on their own key.
+  const credits = storyCreditsFor(resolved.model, {
+    isAdmin: resolved.isAdmin,
+    hasOwnKey: resolved.usingOwnKey,
+  });
+  if (credits === 0) return { ok: true };
+
+  /**
+   * ENOUGH FOR THIS STORY, not "any left". A flat price of 1 made those the
+   * same question. At 3 credits for Terra they are not: an account with 2
+   * credits has some left and cannot afford the story it is asking for, and
+   * letting it through would charge it into a negative balance the allowance
+   * then has to clamp away -- a free Terra story on the owner.
+   */
+  const allowance = await freeAllowanceFor(userId);
+  if (allowance.remaining < credits) {
+    return { ok: false, message: notEnoughCreditsMessage(resolved.model, credits, allowance) };
   }
   return { ok: true };
 }

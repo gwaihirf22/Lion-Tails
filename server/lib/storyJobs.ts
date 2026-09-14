@@ -80,7 +80,11 @@ export async function enqueueStoryJob(opts: {
     };
   }
 
-  const resolved = await resolveModel(opts.userId, "chat");
+  // forStory only for a story, so the concurrency limit and the model recorded
+  // on the job are the ones the worker will actually use.
+  const resolved = await resolveModel(opts.userId, "chat", {
+    forStory: (opts.kind ?? "story") === "story",
+  });
   if (!resolved) {
     return {
       ok: false,

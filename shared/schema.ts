@@ -675,6 +675,15 @@ const optionalText = (max: number) =>
  * shape moved nothing failed -- it just rendered undefined.
  */
 export type StoryUsage = {
+  /** Admin or own key: stories cost this account nothing, whatever the model. */
+  unlimited: boolean;
+  /** The model the next story would run on, after fallback. Null if none is available. */
+  model: string | null;
+  /** "GPT-5.6 Terra": the model's name, without the label's description. */
+  modelName: string | null;
+  /** Credits the next story costs on that model. 0 when unlimited or local. */
+  storyCredits: number;
+  /** Credits, not stories: a story costs storyCredits of these. */
   used: number;
   remaining: number;
   total: number;
@@ -682,6 +691,15 @@ export type StoryUsage = {
   lastReset: string | null;
   nextTopUp: string;
 };
+
+/**
+ * "1 credit", "3 credits". One spelling for the picker, the balance and the
+ * refusal, because a price written three ways is a price that reads as three
+ * different prices.
+ */
+export function creditsLabel(n: number): string {
+  return `${n} ${n === 1 ? "credit" : "credits"}`;
+}
 
 /** Where everyone starts, and the ceiling a top-up can never carry them past. */
 export const FREE_STORIES = 50;
