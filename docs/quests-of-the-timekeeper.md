@@ -117,9 +117,18 @@ Lion in the scene of every brief is a lion in every story (`docs/decisions.md`
 What the model *is* given is the hint, in Barnabas's mouth: asked how he does
 any of this — "I have no control over this." Pressed — "The great Lion knows
 no bounds." Mysteriously, once, and no more. `CANON.lion` says exactly that,
-and in the same breath that the Lion does not appear: not seen, not heard, not
-described. The prologue's last lines are fixed text and keep him: a lion, not
-roaring, calling; and at the end, beginning to walk.
+and in the same breath that the Lion does not appear. The prologue's last
+lines are fixed text and keep him: a lion, not roaring, calling; and at the
+end, beginning to walk.
+
+**His shadow is the one exception, and it is Blake's** (September 2026). The
+world sheet's back wall carries a faint lion's shadow across the door, and the
+canon now lets a story show the same thing: sometimes, when the lantern flares,
+a faint lion's shadow crosses the wall with nothing to cast it, and nobody
+explains it. A traveller only remarks on it after five quests
+(`LION_SHADOW_VISITS`), and even then "very rarely -- not in most stories";
+Barnabas will not explain. It is a shadow and not the Lion: he still does not
+appear, speak or act before Movement IV.
 
 ## Planted mysteries
 
@@ -173,6 +182,21 @@ the story made it the key. The lantern now stays behind with the shop, nobody
 carries anything, and the way opens again on its own when it is time. A reader
 who asks *why it chose that moment* is still asking the question this file
 answers and the stories do not.
+
+**Hidden in the shop's art, and on its shelf.** The world sheet
+(`public/images/timekeeper-world.webp`) was redrawn in September 2026 with
+things from Bible times and church history tucked where only a close look
+finds them -- a sling, a shepherd's crook, a Roman soldier's sandal, a small
+cross on a cord, folded grave cloths, a ram's horn, a scroll, an oil lamp, a
+carpenter's plane -- and, on the back wall, a faint shadow of a great lion
+across the door with nothing in the room to cast it. None of it is named in
+`WORLD_SHEET_PANELS`, the picture prompt: named there, they would stop being
+hidden in every quest picture, and a prompt that says "lion" draws one. The
+objects ARE on the story shelf (`SHOP.hidden`), as bare nouns with no owners,
+at Blake's request -- a story may notice one, as it may the compass. The
+lion's shadow is in no story prompt. Blake knows the sheet goes with every
+quest picture of the shop and that the shadow may surface in one; that is his
+call ("leaks OK"). The Lion still never appears in a story.
 
 **A pet goes through too.** Blake's call: a character's pet, ticked "in
 stories", arrives beside its owner on the far side and stays close, and the

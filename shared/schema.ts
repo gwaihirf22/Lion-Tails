@@ -19,7 +19,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { v4 as uuidv4 } from 'uuid';
 import { CHARACTER_CATEGORIES } from "./characterVocab";
-import { MAX_PETS, MAX_RELATIONS, petSchema, relationSchema } from "./family";
+import { MAX_PETS, MAX_RELATIONS, petSchema, relationSchema, withoutPictureRefs } from "./family";
 
 // Enhanced user table with email verification
 export const users = pgTable("users", {
@@ -1655,7 +1655,9 @@ export function storyImagesOf(
     {
       id: "legacy",
       url: story.story.imageUrl,
-      prompt: story.story.imagePrompt ?? "",
+      // The cover's prompt keeps its picture IDs for a redraw to bind by;
+      // this copy is for showing, so it goes without them.
+      prompt: withoutPictureRefs(story.story.imagePrompt ?? ""),
       createdAt: story.createdAt ?? new Date().toISOString(),
     },
   ];

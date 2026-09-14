@@ -22,7 +22,7 @@ import {
   type HeroOfFaith,
 } from "@shared/schema";
 import { coveringNoun, GENDERED_KINDS, type CharacterCategory } from "@shared/characterVocab";
-import { isRelation, relationLabel, sexForWords } from "@shared/family";
+import { isRelation, pictureRefs, relationLabel, sexForWords } from "@shared/family";
 import { storage } from "../storage";
 import { getBiblicalEvent } from "../data/biblicalEvents";
 import {
@@ -33,7 +33,7 @@ import {
   worldCanon,
   questFamiliarity,
 } from "../data/lionTails";
-import { CROSSING_OVER_DRESS } from "../data/referencePlates";
+import { ALONGSIDE_DRESS, ANIMALS_AS_THEY_ARE, CROSSING_OVER_DRESS } from "../data/referencePlates";
 
 export type CustomPrompts = {
   systemPrompt?: string;
@@ -799,6 +799,17 @@ export type BriefCharacter = {
    * reader below treats absence as "none" rather than reaching for a length.
    */
   skills?: CharacterSkill[];
+  /**
+   * Their picture ID, "[c6108b]" -- see pictureRef() in shared/family.ts.
+   * Rendered ONLY in the image projection, never where story text is written.
+   * Absent on briefs frozen before it existed, which then render as before.
+   */
+  ref?: string;
+  /**
+   * Who in the account shares their name -- "the Paul of the account" -- so the
+   * image projection can say that person is NOT this ID.
+   */
+  sharesNameWith?: string;
 };
 
 /**
@@ -880,6 +891,31 @@ export const PET_CROSSES_OVER =
   "A pet goes where its owner goes, through the lantern too: it arrives beside its owner and stays close, " +
   "and the account goes on exactly as it was.";
 
+/**
+ * The picture IDs, for whoever writes the image prompt. See pictureRef().
+ *
+ * In the IMAGE projection and nowhere else: the other projections write text a
+ * child reads, and an ID there is one that can end up on the page. The server
+ * turns every ID into a reference-image number before the image model sees the
+ * prompt (illustration.ts), so the image model never reads one either.
+ */
+function pictureIdLine(cast: BriefCharacter[]): string | undefined {
+  const tagged = cast.filter((c) => c.ref);
+  if (!tagged.length) return undefined;
+  const key = tagged.map((c) => `${c.name} is ${c.ref}`).join("; ");
+  const clashes = tagged
+    .filter((c) => c.sharesNameWith)
+    .map((c) => ` ${title(c.sharesNameWith!)} is someone else and never gets ${c.ref}.`)
+    .join("");
+  return (
+    `Picture IDs: ${key}. In the image prompt, every time one of these people is in the picture, ` +
+    `write that person's ID straight after the name, exactly as given -- "${tagged[0].name} ${tagged[0].ref}". ` +
+    `No one else gets an ID.${clashes}`
+  );
+}
+
+const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 /** "Biscuit, Lucy's dog" / "Biscuit, Lucy and Ernie's dog". */
 function petPhrase(p: BriefPet): string {
   return `${p.name}, ${nameList(p.owners)}'s ${p.kind}`;
@@ -944,17 +980,43 @@ export function containsWholeWord(text: string, word: string): boolean {
  * cast member's first name is in the account (or is the Timekeeper's), one
  * sentence says they are two people. Silent otherwise, so no other brief moves.
  */
-export function namesakeLines(
+export type NamesakeSources = { account?: string; keeper?: string };
+
+/**
+ * What a cast member's name could collide with: the account the story is
+ * about, and the Timekeeper. ONE definition, read by the brief (namesakeLines)
+ * and by the picture (illustrationCast), so the two can never disagree about
+ * who is a namesake.
+ */
+export function namesakeSourcesOf(
+  brief: Pick<StoryBrief, "sourceMaterial" | "world">,
+): NamesakeSources {
+  const sm = brief.sourceMaterial;
+  return {
+    account: sm ? [sm.label, sm.account, ...sm.cautions].join("\n") : undefined,
+    keeper: brief.world ? KEEPER.name : undefined,
+  };
+}
+
+/** The cast members whose first name is also someone in the account, with where. */
+export function namesakesIn(
   characters: Character[],
-  sources: { account?: string; keeper?: string },
-): string[] {
-  const out: string[] = [];
+  sources: NamesakeSources,
+): Array<{ character: Character; first: string; inAccount: boolean; isKeeper: boolean }> {
+  const out: Array<{ character: Character; first: string; inAccount: boolean; isKeeper: boolean }> = [];
   for (const c of characters) {
     const first = c.name.trim().split(/\s+/)[0] ?? "";
     if (first.length < 3) continue;
     const inAccount = !!sources.account && containsWholeWord(sources.account, first);
     const isKeeper = !!sources.keeper && containsWholeWord(sources.keeper, first);
-    if (!inAccount && !isKeeper) continue;
+    if (inAccount || isKeeper) out.push({ character: c, first, inAccount, isKeeper });
+  }
+  return out;
+}
+
+export function namesakeLines(characters: Character[], sources: NamesakeSources): string[] {
+  const out: string[] = [];
+  for (const { character: c, first, inAccount, isKeeper } of namesakesIn(characters, sources)) {
     const whose = inAccount && isKeeper
       ? `the ${first} of the account, or ${sources.keeper}`
       : inAccount ? `the ${first} of the account` : sources.keeper;
@@ -1685,14 +1747,27 @@ export function buildStoryBrief(
    */
   const family = anonymous ? [] : familySentences(characters);
   const pets = anonymous || !animalsAllowed ? [] : petsComingAlong(characters);
-  const namesakes = anonymous
-    ? []
-    : namesakeLines(characters, {
-        account: sourceMaterial
-          ? [sourceMaterial.label, sourceMaterial.account, ...sourceMaterial.cautions].join("\n")
-          : undefined,
-        keeper: world ? KEEPER.name : undefined,
-      });
+  const nameSources = namesakeSourcesOf({ sourceMaterial, world });
+  const namesakes = anonymous ? [] : namesakeLines(characters, nameSources);
+
+  /**
+   * Picture IDs. cast[i] is characters[i] whenever there are characters -- the
+   * lead is characters[0] and the rest follow in order -- and a story with none
+   * has only the form's quick character, who has no id and gets no ID.
+   */
+  if (!anonymous && characters.length) {
+    const refs = pictureRefs(characters.map((c) => c.id));
+    const clashes = new Map(namesakesIn(characters, nameSources).map((n) => [n.character.id, n]));
+    characters.forEach((c, i) => {
+      const member = cast[i];
+      if (!member) return;
+      member.ref = refs.get(c.id);
+      const clash = clashes.get(c.id);
+      if (clash) {
+        member.sharesNameWith = clash.inAccount ? `the ${clash.first} of the account` : nameSources.keeper;
+      }
+    });
+  }
 
   return {
     cast,
@@ -1948,7 +2023,16 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
      * the picture has to know that -- CROSSING_OVER_DRESS says it once, and the
      * prose canon says the same thing so the story and the picture agree.
      */
-    const dress = brief.world && brief.sourceMaterial?.era ? ` ${CROSSING_OVER_DRESS}` : "";
+    // "They were always there" is the other way into a real account: no
+    // lantern, so nothing crosses over -- they simply belong there, and the
+    // picture has to dress them as if they do. It is the only shape with a
+    // source, a cast in it, and no world.
+    const alongside = Boolean(brief.sourceMaterial?.era) && !brief.world && !brief.soloRetelling;
+    const dress = brief.world && brief.sourceMaterial?.era
+      ? ` ${CROSSING_OVER_DRESS}`
+      : alongside ? ` ${ALONGSIDE_DRESS}` : "";
+    const petsInThePast =
+      brief.pets?.length && brief.sourceMaterial?.era && (brief.world || alongside) ? ` ${ANIMALS_AS_THEY_ARE}` : "";
     // A quest has two sides and the era names only one. Without this the
     // modern playground was captioned "in Haarlem, Netherlands" -- the picture
     // came out modern only because the model half-ignored its own prompt.
@@ -1960,7 +2044,8 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     const people = [
       ...(brief.family ?? []),
       ...(brief.namesakes ?? []),
-      ...(brief.pets?.length ? [`With them: ${nameList(brief.pets.map(petPhrase))}.`] : []),
+      ...(brief.pets?.length ? [`With them: ${nameList(brief.pets.map(petPhrase))}.${petsInThePast}`] : []),
+      ...(pictureIdLine(brief.cast) ? [pictureIdLine(brief.cast)!] : []),
     ].map((line) => ` ${line}`).join("");
 
     // With no lead there is no one face to build the frame around, so the

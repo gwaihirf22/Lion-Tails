@@ -228,3 +228,41 @@ describe("namesakes", () => {
     expect(chapter).toContain("not the Paul of the account");
   });
 });
+
+describe("picture IDs reach the picture prompt and nothing else", () => {
+  it("only the image projection carries them, with the clash named", () => {
+    const brief = buildStoryBrief(
+      { ...base, characterRole: "alongside", biblicalEvent: "paul", characterIds: [lucy.id, paul.id] } as StoryRequest,
+      [lucy, paul],
+    );
+    const image = renderBrief(brief, "image");
+    expect(image).toContain("Lucy is [111111]; Paul is [222222]");
+    expect(image).toContain("The Paul of the account is someone else and never gets [222222].");
+    for (const p of ["single", "outline", "chapter"] as const) {
+      expect(renderBrief(brief, p)).not.toMatch(/\[[0-9a-f]{6,}\]/);
+    }
+  });
+});
+
+describe("the picture dresses a character who was always there", () => {
+  it("alongside carries its own dress rule; a quest keeps the lantern's; a pet loses modern gear in the past", async () => {
+    const { ALONGSIDE_DRESS, ANIMALS_AS_THEY_ARE, CROSSING_OVER_DRESS } = await import("../server/data/referencePlates");
+    const alongside = renderBrief(buildStoryBrief(
+      { ...base, characterRole: "alongside", biblicalEvent: "paul", characterIds: [lucy.id] } as StoryRequest, [lucy]), "image");
+    const quest = renderBrief(buildStoryBrief(
+      { ...base, characterRole: "travels", biblicalEvent: "paul", characterIds: [lucy.id] } as StoryRequest, [lucy]), "image");
+    const now = renderBrief(buildStoryBrief({ ...base, characterIds: [lucy.id] } as StoryRequest, [lucy]), "image");
+    expect(alongside).toContain(ALONGSIDE_DRESS);
+    expect(alongside).not.toContain(CROSSING_OVER_DRESS);
+    expect(quest).toContain(CROSSING_OVER_DRESS);
+    expect(quest).not.toContain(ALONGSIDE_DRESS);
+    expect(now).not.toContain(ALONGSIDE_DRESS);
+    expect(alongside).toContain(ANIMALS_AS_THEY_ARE);
+    expect(now).not.toContain(ANIMALS_AS_THEY_ARE);
+    // The story text already says it ("nothing from another century"); the
+    // new rule is the picture's, and the prose projections do not change.
+    expect(renderBrief(buildStoryBrief(
+      { ...base, characterRole: "alongside", biblicalEvent: "paul", characterIds: [lucy.id] } as StoryRequest, [lucy]), "single"))
+      .not.toContain(ALONGSIDE_DRESS);
+  });
+});

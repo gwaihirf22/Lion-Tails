@@ -991,6 +991,25 @@ the ticked ones come along, once each across the cast, and on a quest go
 through the lantern (Blake's call). This moved compatibility cases 2 and 5 on
 purpose, by exactly that relocation.
 
+**Then the picture put the dad's face on the apostle, and a name was the
+reason.** The story text of "From Stones to Rome" kept them apart perfectly;
+the cover drew Blake's Paul — portrait, cap — as the apostle in six panels.
+A picture crosses three model hops (brief → scene writer → image model with
+portraits), and only names crossed them: "the apostle Paul" in the scene, a
+reference labelled "Paul", and the image model joined the two. The first fix
+proposed was to leave a same-named character out of pictures; Blake refused
+it — "properly designate each one… if we standardize an id number then we
+avoid this altogether." The image model cannot look an id up, but it does
+understand WHICH ATTACHED PICTURE a person is. So each character has a picture
+ID from its character id, the scene writer tags the people it draws with it,
+and the server swaps each tag for "the person in reference image N" before
+sending — the image model never sees a name beside a portrait, nor an ID it
+could paint. A portrait is attached for a tagged person (or an untagged,
+unshared name); only an untagged shared name is left out, because that is the
+one case where nothing says which Paul is meant. Pictures only, by Blake's
+choice: IDs in story prompts could reach text a child reads, and the text was
+already right.
+
 ## 29. A price is measured, approved, and never a constant
 
 `server/lib/modelCalls.ts`, `costMath.ts`, `priceFeeds.ts`, `priceWatch.ts`, `costStats.ts`

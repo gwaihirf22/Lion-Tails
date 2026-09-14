@@ -13,6 +13,7 @@ import {
   nameList,
   TITLE_SHAPE_RULE,
 } from "./storyBrief";
+import { PICTURE_ID_REMINDER } from "@shared/family";
 
 /**
  * Everything the prompts need about what the user asked for, resolved once per
@@ -1016,6 +1017,7 @@ async function finalizeStoryDetails(
 
     The illustration must match the character, so carry this into the image prompt:
     ${renderBrief(ctx.brief, "image")}
+    ${/\[[0-9a-f]{6,32}\]/.test(renderBrief(ctx.brief, "image")) ? PICTURE_ID_REMINDER : ""}
 
     ${COVER_MONTAGE}
 

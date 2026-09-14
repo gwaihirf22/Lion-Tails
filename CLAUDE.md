@@ -467,7 +467,8 @@ Lucy's father.") covers only pairs where both are in the cast — relatives
 outside it are left out, Blake's choice — and `namesakeLines()` adds one
 sentence when a cast member's first name is in the account or is the
 Timekeeper's. Whole-word match without a regex: names are user text. Ids never
-reach a prompt; a test holds that. See `docs/decisions.md` §28.
+reach a STORY prompt; a test holds that — pictures are the exception, below.
+See `docs/decisions.md` §28.
 
 **Nothing on a character is defaulted.** Every field is optional, and the form
 starts empty except the name. Six defaults — brown hair, brown eyes, blue,
@@ -740,6 +741,17 @@ different child, and the only sign was one line in the log.
   file, and CANON is edited often enough that a new key there is a merge
   conflict waiting to happen. There used to be a second one for the stone; the
   stone is gone from the canon (see the Quests section) and the rule with it.
+- **"They were always there" dresses them too** (`ALONGSIDE_DRESS`, image
+  projection only; the prose already said "nothing from another century").
+  Blake's Paul stood in Lystra in a t-shirt, jeans and a cap because the image
+  prompt took each person's CLOTHING from their portrait. `illustrationCast`
+  now marks members `dressed: "always"` (alongside) or `"farSide"` (quests),
+  and then the portrait gives face, hair and colouring only, and the scene's
+  time and place gives the clothes; the cover-as-style line stops asking for
+  the same clothes too. Stories set now keep the sentence they always had.
+  **Animals are not dressed** (Blake: "Animals though, that may be
+  different"): a `notAPerson` member is drawn as shown, and in the past with
+  nothing modern on it; `ANIMALS_AS_THEY_ARE` says the same for a pet.
 - **At most three faces**, which is the rule the brief's `"image"`
   projection already states in words.
 - **The Timekeeper has one face and it is a file.**
@@ -777,6 +789,25 @@ different child, and the only sign was one line in the log.
   attaching him to a scene he is quietly in costs one generic old man;
   attaching him to a scene he is not in draws a real historical figure as a
   fictional character, in an app whose point is that the history is true.
+- **A face is bound by picture ID, not by name.** Blake's "From Stones to
+  Rome" put his character Paul's portrait on the apostle in all six panels:
+  the scene said "the apostle Paul", a reference image was labelled "Paul",
+  and every portrait was attached whatever the scene said. Each character
+  now has a picture ID, `pictureRef()` in `shared/family.ts` — `[c6108b]`,
+  the start of their character id. Only the brief's **image** projection
+  lists them (never single/outline/chapter, which write text a child reads),
+  and both scene writers are reminded to tag each person they draw
+  (`PICTURE_ID_REMINDER`). `drawnCharacters()`/`chooseDrawn()` attach a
+  portrait for a tagged person, or an untagged one whose name nobody in the
+  account shares; a shared name without its tag is left out, and a scene with
+  no tags at all (an older saved prompt, the single-call short story) keeps
+  the first-three rule less shared names. `withRefsResolved()` turns each ID
+  into "the person in reference image N" before the image model sees
+  anything, and a shared-name member's reference line drops the name.
+  Blake chose pictures only, not story prompts. **Readers never see an ID**:
+  `withoutPictureRefs()` on the stored gallery prompt, the legacy fold in
+  `storyImagesOf()`, and the three places the reader shows a prompt;
+  `story.imagePrompt` keeps its tags so a redraw binds by them.
 - **A story keeps its pictures.** A redraw APPENDS — Blake: "the chances are
   that the old one may be better than the last with AI" — up to
   `MAX_STORY_IMAGES` (5, the same as `MAX_AVATARS`), past which it is
@@ -1201,15 +1232,32 @@ surprise him… he might be able to guess."
 library, pinned first, and refused by every mutating route through
 `server/lib/builtInStories.ts` — the only place that knows its id. It is one
 sentence to a line, every line its own paragraph: joined with single newlines
-the reader renders it as a poem, and a test holds the shape. The series name
+the reader renders it as a poem, and a test holds the shape. It carries the home page picture as its own (`public/images/quest-prologue-cover.webp`, a copy of the bundled `cover.webp`, whose hashed name a constant cannot know), so it has a thumbnail and a picture at the end like any story. Two pictures sit IN its text (`quest-prologue-shop.webp` above "You stared at it.", `quest-prologue-door.webp` above "Barnabas held out the lantern."), anchored by quote through `inText()`, which throws at import if a line moves. They were drawn with the canonical face and world sheet, vetted against the prose, and chosen by Blake — never generated at request time. The gallery strip is hidden for built-in stories, whose pictures the server refuses to change. The series name
 is `QUEST_SERIES_TITLE` in `shared/quests.ts`, because the card and the
 prologue heading both print it.
 
+**The world sheet has no stone, and a lion's shadow the prompt never names.**
+Redrawn panels (shop sign mounted on the wall, books and hidden biblical
+objects inside, the back wall with a faint lion's shadow in place of the old
+stone panel), each chosen by Blake. `WORLD_SHEET_PANELS` describes the shadow
+only as "a large soft shadow" and names none of the hidden objects; a test
+holds that neither "stone" nor "lion" is in it. The same objects are on the story's shelf as bare nouns (`SHOP.hidden`,
+"Half-hidden: …"), graded like the rest of it, so a story may notice one;
+the world cap went 1000 → 1010 for them. The lion's shadow is not in any story
+prompt. See the doc's "Hidden in the shop's art".
+
 **The Lion is a name, not a character, in the model canon.** `CANON.lion` lets
 Barnabas say "I have no control over this" and, pressed, "The great Lion knows
-no bounds" — once, mysteriously — and forbids the Lion appearing at all. He
-belongs to the guided Quests page, which does not exist yet. The prologue's
-last lines are fixed text and keep him.
+no bounds" — once — and forbids the Lion appearing at all. He belongs to the
+guided Quests page, which does not exist yet. The prologue's last lines are
+fixed text and keep him. **His shadow is allowed, and only his shadow**
+(Blake, after it went onto the world sheet): sometimes, when the lantern
+flares, a faint lion's shadow crosses the wall with nothing to cast it, and
+nobody explains it. A traveller may remark on it only at
+`LION_SHADOW_VISITS` (5) quests or more, through `questFamiliarity()`, and is
+told "very rarely -- not in most stories" — a line in every veteran's brief is
+otherwise a line in every veteran's story. The world cap stayed at 1010: the
+Lion sentence was rewritten shorter rather than the cap raised again.
 
 ## The library
 

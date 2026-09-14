@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { StoryResponse, HeroOfFaith, SavedStory, StoryPicture } from "@shared/schema";
 import { MAX_STORY_IMAGES } from "@shared/schema";
+import { withoutPictureRefs } from "@shared/family";
 import { Trash2 } from "lucide-react";
 import type { StoryDoc } from "@/lib/storyContent";
 import lionTailsImage from "@/assets/illustrations/lion-tails.jpg";
@@ -247,14 +248,17 @@ export function StoryExtras({
             <figure className="m-0">
               <img
                 src={imageUrl}
-                alt={story.imagePrompt || `An illustration for ${story.title}`}
+                alt={withoutPictureRefs(story.imagePrompt) || `An illustration for ${story.title}`}
                 className="mx-auto max-h-[70vh] w-auto rounded-lg"
                 style={{ border: "1px solid var(--reader-border)" }}
               />
             </figure>
           )}
 
-          {showGallery && storyId && (
+          {/* Not for a built-in story: its pictures are fixed in the file, and
+              choosing or deleting one is refused by the server (refuseBuiltIn).
+              A strip that only ever answers 403 is worse than no strip. */}
+          {showGallery && storyId && !builtIn && (
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               {gallery.map((picture) => {
                 const chosen = picture.url === imageUrl;

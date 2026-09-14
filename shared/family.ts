@@ -5,10 +5,11 @@ import { z } from "zod";
  *
  * KEYED ON CHARACTER ID, NEVER ON NAME. A reader's Paul can be renamed and stay
  * Lucy's dad, and two characters who share a name are never crossed. The id
- * stops here, though: it never reaches a prompt. A uuid means nothing to the
- * model and can leak into a story, a note or a picture; what keeps Lucy's dad
- * apart from the apostle is the brief SAYING so, in sentences built from these
- * ids when the brief is made (storyBrief.ts, familySentences / namesakeLines).
+ * never reaches a STORY prompt: it can leak into text a child reads, and what
+ * keeps Lucy's dad apart from the apostle in prose is the brief SAYING so, in
+ * sentences built from these ids (storyBrief.ts, familySentences /
+ * namesakeLines). Pictures are the one exception, and a deliberate one -- see
+ * pictureRef() at the bottom of this file.
  *
  * Stored gender-neutral. "Dad" or "Mom" is decided when it is shown, from the
  * related character's sex, so changing a character's sex relabels everything
@@ -195,3 +196,64 @@ export const petSchema = z.object({
   inStories: z.boolean(),
 });
 export type Pet = z.infer<typeof petSchema>;
+
+/**
+ * A character's ID for PICTURES: `[c6108b]`, the start of their character id.
+ *
+ * WHY PICTURES NEED ONE. A picture crosses three hops -- the brief, a model
+ * writing the scene, the image model with the portraits -- and only names used
+ * to cross them. A story with the reader's Paul in Paul's Missionary Journeys
+ * came back with the apostle wearing Blake's portrait in all six panels: the
+ * scene said "the apostle Paul", a reference image was labelled "Paul", and
+ * the image model matched the two. Blake: "if we standardize an id number then
+ * we avoid this altogether."
+ *
+ * The image model cannot look an id up. What it DOES understand is which
+ * attached picture a person is -- "reference image 2" -- so this ID is written
+ * by the scene writer next to each person it draws, and the server turns it
+ * into that number before anything is sent (illustration.ts). It never reaches
+ * a story, and readers never see it: withoutPictureRefs() takes it off anything
+ * displayed.
+ *
+ * Hex only and bracketed, so PICTURE_REF_PATTERN is our own constant and never
+ * a pattern built from a name.
+ */
+export const PICTURE_REF_PATTERN = /\s?\[[0-9a-f]{6,32}\]/g;
+
+export function pictureRef(id: string, length = 6): string {
+  const hex = id.toLowerCase().replace(/[^0-9a-f]/g, "");
+  return `[${hex.slice(0, Math.max(6, length)).padEnd(6, "0")}]`;
+}
+
+/**
+ * The IDs for one cast, by character id, lengthened until no two are the same.
+ * Everything that needs a cast's IDs goes through here, so the brief that asks
+ * for them and the picture that reads them always agree.
+ */
+export function pictureRefs(characterIds: readonly string[]): Map<string, string> {
+  const unique = Array.from(new Set(characterIds));
+  for (let length = 6; length <= 32; length += 2) {
+    const refs = unique.map((id) => pictureRef(id, length));
+    if (new Set(refs).size === refs.length || length === 32) {
+      return new Map(unique.map((id, i) => [id, refs[i]]));
+    }
+  }
+  return new Map();
+}
+
+/** Any text a reader sees, with picture IDs taken off: "Lucy [9768fb]" -> "Lucy". */
+export function withoutPictureRefs(text: string): string;
+export function withoutPictureRefs(text: string | undefined): string | undefined;
+export function withoutPictureRefs(text: string | undefined): string | undefined {
+  return text === undefined ? undefined : text.replace(PICTURE_REF_PATTERN, "");
+}
+
+/**
+ * Said beside the image projection, by both writers of an image prompt (the
+ * cover's finalizeStoryDetails and a passage's buildPassageScenePrompt). The
+ * projection already asks for the IDs; this is the reminder where the prompt
+ * is actually written, because an ID the writer drops is a face that cannot
+ * be bound.
+ */
+export const PICTURE_ID_REMINDER =
+  "Keep every picture ID in square brackets exactly as given, straight after that person's name, each time they are in the picture.";

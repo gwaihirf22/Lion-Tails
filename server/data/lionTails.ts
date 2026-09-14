@@ -59,6 +59,26 @@ export const SHOP = {
     "a tiny crown",
     "a broken watch",
   ],
+  /**
+   * Things from Bible times and church history, tucked where only a close look
+   * finds them. Blake had them drawn into the shop (the world sheet), then:
+   * "whatever we did to get those objects in the store we need to add that to
+   * the prompting to get that in a story." Same grading as the shelf -- one may
+   * be noticed, none has to be -- and deliberately WITHOUT owners: the shelf
+   * says whose coat the button was from; these say nothing, so a reader who
+   * spots the sling or the grave cloths is the one who works it out.
+   */
+  hidden: [
+    "sling",
+    "shepherd's crook",
+    "Roman sandal",
+    "cross on a cord",
+    "folded grave cloths",
+    "ram's horn",
+    "scroll",
+    "oil lamp",
+    "carpenter's plane",
+  ],
   /** Never uncovered, never described. The one thing the model may not use. */
   underTheCloth: "one small thing under a cloth",
 } as const;
@@ -342,15 +362,20 @@ export const CANON = {
     "is there when the traveller comes back; during a journey he appears " +
     "purposefully and never conveniently, and he is not omniscient.",
   /**
-   * A HINT, in his mouth, and never in the scene. Blake's line. The model
-   * gets the allusion; who the Lion is, and the Lion himself, are withheld --
-   * one Lion in the scene of every brief is a lion in every story.
+   * A HINT, in his mouth -- and now a SHADOW, never the Lion. Blake's line
+   * first; then, after the lion's shadow went onto the world sheet's back wall:
+   * "it will be fine to post in the prompt something like an obscure shadow of
+   * a lion when the lantern flares." Who the Lion is, and the Lion himself, are
+   * still withheld -- one Lion in the scene of every brief is a lion in every
+   * story -- so the shadow is sometimes, faint, uncast and unexplained, and who
+   * may remark on it is questFamiliarity's business (LION_SHADOW_VISITS).
    */
   lion:
-    "Asked how he does any of this, Barnabas says he does not: \"I have no " +
-    "control over this.\" Pressed, he may say \"The great Lion knows no " +
-    "bounds\" -- mysteriously, once, and no more. He never says who the Lion " +
-    "is, and the Lion does not appear: not seen, not heard, not described.",
+    "Asked how he does this, Barnabas says \"I have no control over " +
+    "this.\" Pressed, he may say \"The great Lion knows no bounds\" -- once, " +
+    "and no more. He never says who the Lion is, and the Lion does not appear. " +
+    "Sometimes, when the lantern flares, a faint lion's shadow crosses the wall " +
+    "with nothing to cast it; nobody explains it.",
   boundaries:
     "Barnabas is not God and nobody treats him as one. Invent no doctrine, " +
     "contradict no Scripture, and let a real account happen exactly as it is " +
@@ -533,7 +558,8 @@ export function worldCanon(frame: FramingApproach): string[] {
     CANON.wayBack,
     CANON.ending,
     `On the shelves: ${SHOP.shelf.join("; ")}; and ` +
-      `${SHOP.underTheCloth}. One may be noticed in passing; none has to be. ` +
+      `${SHOP.underTheCloth}. Half-hidden: ${SHOP.hidden.join(", ")}. ` +
+      "One may be noticed in passing; none has to be. " +
       "Never the thing under the cloth.",
     KEEPER.never,
     CANON.lion,
@@ -570,6 +596,17 @@ export type Traveller = { name: string; visits: number };
  * Outside worldCanon deliberately: the canon is the same for every story and
  * is capped as such, and this changes per cast. It renders beside it.
  */
+/**
+ * How many quests before a traveller may remark on the lion's shadow.
+ *
+ * Blake: "even the character to very occasionally note it after they have gone
+ * on at least 5 or so timekeeper adventures." Below this the shadow is the
+ * narrator's alone (CANON.lion); at it, the traveller has seen enough flares
+ * to have caught it before -- and is told it is rare, because a line handed to
+ * every veteran's brief is otherwise a line in every veteran's story.
+ */
+export const LION_SHADOW_VISITS = 5;
+
 export function questFamiliarity(travellers: readonly Traveller[]): string {
   const newcomers = travellers.filter((t) => t.visits === 0).map((t) => t.name);
   const returning = travellers.filter((t) => t.visits === 1).map((t) => t.name);
@@ -602,6 +639,16 @@ export function questFamiliarity(travellers: readonly Traveller[]): string {
         `none of it again, and do not have ${who} marvel at the shop itself; ` +
         `whatever is strange this time is strange to ${who} too. Knowing the shop is ` +
         `not knowing the story.`,
+    );
+  }
+  const veterans = travellers.filter((t) => t.visits >= LION_SHADOW_VISITS).map((t) => t.name);
+  if (veterans.length > 0) {
+    const verb = veterans.length === 1 ? "has" : "have";
+    const who = veterans.length === 1 ? "that traveller" : "those travellers";
+    out.push(
+      `${list(veterans)} ${verb} been on enough quests to have glimpsed that shadow before. ` +
+        `Very rarely -- not in most stories -- ${who} may notice it again and wonder; ` +
+        `${KEEPER.shortName} will not explain.`,
     );
   }
   if (newcomers.length > 0 && seasoned.length + returning.length > 0) {

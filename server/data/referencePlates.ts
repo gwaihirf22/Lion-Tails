@@ -3,7 +3,7 @@
  *
  * A character is consistent because a file of their face is attached to every
  * picture they are in. Everything else in this world -- the shop, its sign, the
- * lantern lit and the lantern dark, the stone it closes into -- was anchored to
+ * lantern lit and the lantern dark, the back of the shop -- was anchored to
  * one sentence: "Render in a beautiful biblical storybook illustration style
  * with soft colors." A sentence cannot pin a building.
  *
@@ -57,6 +57,34 @@ export const CROSSING_OVER_DRESS =
   " someone of that age would wear there, as though it had always been so. Nobody remarks on it" +
   " and nobody explains it.";
 
+/**
+ * "THEY WERE ALWAYS THERE" DRESSES THEM TOO. Blake, after a Lystra scene with
+ * his character Paul in a grey t-shirt, jeans and a baseball cap: "We need a
+ * they were always there to take the character and make them fit the scene."
+ *
+ * The prose already had it -- "do not give them anything from another century"
+ * (participationPremise) -- and the picture never heard it. Worse, the image
+ * prompt took each person's clothing from their PORTRAIT, so a character drawn
+ * at home in modern clothes wore them into the first century. This is the
+ * alongside counterpart of CROSSING_OVER_DRESS, and illustration.ts stops
+ * taking clothes from the portrait whenever it applies.
+ *
+ * People only. Blake: "Animals though, that may be different" -- an animal is
+ * not given a costume; see ANIMALS_AS_THEY_ARE.
+ */
+export const ALONGSIDE_DRESS =
+  "Everyone from the reader's own characters belongs to this time and place, and is dressed the way" +
+  " people of that age were dressed there -- nothing from another century.";
+
+/**
+ * An animal in a scene from the past: itself, and nothing modern on it. A dog in
+ * Lystra came back on a chain lead. Said only in the image projection, and only
+ * when a period scene has a pet in it, so no other brief moves.
+ */
+export const ANIMALS_AS_THEY_ARE =
+  "In a scene set in the past, an animal is drawn as the animal it is, not dressed up, and with" +
+  " nothing modern on it -- no collar tag, harness or lead from another century.";
+
 /** What the picture is of, as the model wrote it. All a gate gets to see. */
 export type PlateContext = {
   /** The image prompt for THIS picture -- not the story, not the brief. */
@@ -89,14 +117,33 @@ export type ReferencePlate = {
  * be found, and it belongs to Movement III (docs/quests-of-the-timekeeper.md).
  * Putting it on a sheet every quest sees would spend the reveal before it is
  * written.
+ *
+ * NO STONE, since 2026-09-14. The sixth panel was the small smooth stone the
+ * lantern used to close into, kept after the stone left the canon because the
+ * art had it -- and a prologue picture drawn with this sheet put a smooth stone
+ * on Barnabas's counter. So it is redrawn. Blake had three panels redone at the
+ * same time, each checked by eye and chosen by him:
+ *  - the shop front, whose sign floated beside the wall: its bracket is bolted
+ *    to the wall now and reaches out over the pavement;
+ *  - the inside, with books, and things from Bible times and church history
+ *    hidden where only a close look finds them;
+ *  - the back wall, which replaces the stone: more of those things, and a faint
+ *    shadow of a great lion across it, large enough to cover the door, with
+ *    nothing in the room to cast it. BLAKE CHOSE THIS KNOWING THE SHEET GOES
+ *    WITH EVERY QUEST PICTURE OF THE SHOP, and that the shadow may sometimes
+ *    turn up in one: "leaks OK". It is described below only as "a large soft
+ *    shadow", so the prompt never asks for a lion -- CANON.lion still forbids
+ *    the Lion appearing in any story.
+ * The hidden objects are not listed here either: named in the prompt, they
+ * would stop being hidden in every picture the sheet goes to.
  */
 export const WORLD_SHEET_PANELS = [
-  "the shop from the street, with its sign hanging over the door",
+  "the shop from the street, its sign hanging from an iron bracket fixed to the wall and reaching out over the pavement",
   "the sign on its own, the paint cracked and the brass letters gone green at the edges",
-  "the inside of the shop: crowded shelves, a counter, none of it labelled",
+  "the inside of the shop: crowded shelves of old books and old things, a counter, none of it labelled",
   "the lantern, lit",
   "the lantern, dark",
-  "the small smooth stone the lantern closes into",
+  "the back wall of the shop around a plain closed door, crowded with old things, a large soft shadow across it",
 ] as const;
 
 export const WORLD_SHEET_FILE = "timekeeper-world.webp";

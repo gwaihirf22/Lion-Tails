@@ -1665,7 +1665,12 @@ describe("the world of a quest", () => {
     const b = quest();
     expect(b.world).toBeDefined();
     /**
-     * 1000, from 925, from 750.
+     * 1010, from 1000, from 925, from 750.
+     *
+     * The last ten words were Blake's: the things hidden in the shop's art
+     * (a sling, a shepherd's crook, grave cloths...) had to be things a story
+     * can notice too. Bare nouns, no owners, and graded like the rest of the
+     * shelf -- about twenty words, of which ten came out of the wording.
      *
      * THE CAP IS A RATCHET, NOT A BUDGET. Its job is to make somebody stop and
      * justify the lore the next time it grows, which is exactly what happened
@@ -1682,7 +1687,7 @@ describe("the world of a quest", () => {
      * That ratio is the thing to watch, not this number. Raise it again when
      * there is a reason; look at the ratio first.
      */
-    expect(words(b.world!.canon.join(" "))).toBeLessThanOrEqual(1000);
+    expect(words(b.world!.canon.join(" "))).toBeLessThanOrEqual(1010);
     // 450, from 350, for the same field and the same reason.
     expect(words(Object.values(CANON).join(" "))).toBeLessThanOrEqual(450);
     // UNCHANGED, and the tightest budget in the system: this one repeats on
@@ -2515,5 +2520,31 @@ describe("the lore, after Jericho", () => {
   it("no longer offers the frame that left a name and a date lying about", () => {
     expect(FRAMING_APPROACHES.map((a) => a.id)).not.toContain("someone-else-first");
     expect(framingApproachOf("someone-else-first").id).toBe(FRAMING_APPROACHES[0].id);
+  });
+});
+
+/**
+ * Blake: "an obscure shadow of a lion when the lantern flares. And even the
+ * character to very occasionally note it after they have gone on at least 5
+ * or so timekeeper adventures."
+ */
+describe("the lion's shadow", () => {
+  it("is a faint, uncast shadow in the canon, and the Lion still never appears", () => {
+    expect(CANON.lion).toMatch(/when the lantern flares/);
+    expect(CANON.lion).toMatch(/nothing to cast it/);
+    expect(CANON.lion).toMatch(/nobody explains it/i);
+    expect(CANON.lion).toMatch(/the Lion does not appear/);
+  });
+
+  it("is something only a traveller of five quests or more may remark on, and rarely", async () => {
+    const { LION_SHADOW_VISITS } = await import("../server/data/lionTails");
+    expect(LION_SHADOW_VISITS).toBe(5);
+    const at = (visits: number) => questFamiliarity([{ name: "Sam", visits }]);
+    expect(at(4)).not.toMatch(/shadow/);
+    expect(at(5)).toMatch(/Sam has been on enough quests to have glimpsed that shadow before/);
+    expect(at(5)).toMatch(/Very rarely -- not in most stories/);
+    const mixed = questFamiliarity([{ name: "Ada", visits: 7 }, { name: "Ben", visits: 1 }]);
+    expect(mixed).toMatch(/Ada has been on enough quests/);
+    expect(mixed).not.toMatch(/Ben has been on enough/);
   });
 });

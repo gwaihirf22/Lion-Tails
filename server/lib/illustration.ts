@@ -48,6 +48,15 @@ import { KEEPER, KEEPER_FACE_FILE } from "../data/lionTails";
 import { platesForScene } from "../data/referencePlates";
 import { storage } from "../storage";
 import { describeCharacter, looksLikeRefusal, readAvatarFile } from "./avatar";
+import { categoryOf } from "@shared/characterVocab";
+import { PICTURE_REF_PATTERN, pictureRefs } from "@shared/family";
+import {
+  buildStoryBrief,
+  containsWholeWord,
+  namesakeSourcesOf,
+  namesakesIn,
+  resolveHeroOfFaith,
+} from "./storyBrief";
 import { resolveModel, createClient, inputFidelityFor } from "./modelPolicy";
 import { recordModelCall } from "./modelCalls";
 import type { CallPurpose } from "./costMath";
@@ -99,6 +108,29 @@ export type IllustrationMember = {
    * face, do not take the medium -- and nothing else.
    */
   fromPhoto?: boolean;
+  /**
+   * Their picture ID, "[c6108b]", when the scene writer was given one. The
+   * scene carries it next to the person it means; composeIllustrationPrompt
+   * turns it into "reference image N" and the image model never sees it.
+   */
+  ref?: string;
+  /**
+   * Their name is also someone's in the account. Their reference line and
+   * description then go WITHOUT the name, because a portrait labelled "Paul"
+   * beside a scene about the apostle Paul is exactly how the apostle came out
+   * wearing Blake's face.
+   */
+  sharesAName?: boolean;
+  /**
+   * Where their clothes come from. Absent: the portrait, as always. "always":
+   * the scene's time and place ("They were always there"). "farSide": the
+   * scene's time and place on the far side of the lantern, the portrait at
+   * home. A portrait shows what someone wears NOW, and taking it into the first
+   * century is how Blake's Paul stood in Lystra in a baseball cap.
+   */
+  dressed?: "always" | "farSide";
+  /** Not a person -- an animal, a creature, a machine -- so never dressed up. */
+  notAPerson?: boolean;
 };
 
 /**
@@ -246,6 +278,76 @@ async function portraitFile(avatarUrl?: string): Promise<PictureFile | undefined
 }
 
 /**
+ * WHO IS IN THIS PICTURE, decided by picture ID first and by name second.
+ *
+ * Blake's picture of "From Stones to Rome" put his character Paul's portrait
+ * on the apostle in all six panels: every portrait was attached whatever the
+ * scene said, and one of them was labelled with a name the scene used for
+ * somebody else. The scene writer now tags each person it draws with their
+ * picture ID (pictureRef), so:
+ *
+ *  - TAGGED in the scene: drawn, and bound to their reference image.
+ *  - Not tagged, but NAMED, and nobody in the account shares the name: drawn.
+ *    A writer that dropped a tag must not cost a child their face.
+ *  - Not tagged, and the name IS shared: not attached. This is the one case
+ *    where nothing says which Paul the scene means -- and the cost is not
+ *    symmetric (the Barnabas rule below): a generic dad against the apostle
+ *    drawn as someone's father.
+ *  - A scene with NO tags at all -- an older story's saved prompt, the
+ *    single-call short story, a redraw of either -- keeps what this did
+ *    before, the first three in order, less anyone whose name is shared.
+ *
+ * Whether a name is shared is namesakesIn() over the brief's own sources, so
+ * the brief's "they only share a name" sentence and this can never disagree.
+ */
+export async function drawnCharacters(
+  request: StoryRequest,
+  characters: Character[],
+  scenePrompt: string,
+): Promise<{ drawn: Character[]; shared: Set<string> }> {
+  let shared = new Set<string>();
+  try {
+    const hero = await resolveHeroOfFaith(request);
+    const brief = buildStoryBrief(request, characters, undefined, hero);
+    shared = new Set(namesakesIn(characters, namesakeSourcesOf(brief)).map((n) => n.character.id));
+  } catch (error) {
+    console.error("[illustration] could not check names against the account:", error);
+  }
+  return { drawn: chooseDrawn(characters, scenePrompt, shared), shared };
+}
+
+/** The pure half of drawnCharacters, for tests. */
+export function chooseDrawn(
+  characters: Character[],
+  scenePrompt: string,
+  shared: ReadonlySet<string>,
+): Character[] {
+  const refs = pictureRefs(characters.map((c) => c.id));
+  const hasTags = new RegExp(PICTURE_REF_PATTERN.source).test(scenePrompt);
+  if (!hasTags) {
+    return characters.slice(0, MAX_DRAWN_CHARACTERS).filter((c) => !shared.has(c.id));
+  }
+  const tagged = characters.filter((c) => scenePrompt.includes(refs.get(c.id)!));
+  const named = characters.filter(
+    (c) => !tagged.includes(c) && !shared.has(c.id) &&
+      containsWholeWord(scenePrompt, c.name.trim().split(/\s+/)[0] ?? ""),
+  );
+  return [...tagged, ...named]
+    .sort((a, b) => characters.indexOf(a) - characters.indexOf(b))
+    .slice(0, MAX_DRAWN_CHARACTERS);
+}
+
+/**
+ * A person is dressed for the scene; anything else is drawn as it is. A kind
+ * this catalogue does not know -- one a parent typed -- counts as a person,
+ * because an unknown word is far more often "space pirate" than "whale".
+ */
+function isPerson(character: Character): boolean {
+  const category = character.category ?? categoryOf(character.kind ?? character.gender);
+  return !category || category === "human" || category === "folk";
+}
+
+/**
  * Who has to be recognisable in this story's picture.
  *
  * The characters are read LIVE rather than off the frozen brief: the brief is
@@ -264,15 +366,22 @@ export async function illustrationCast(
   if (charactersAreInTheStory(request)) {
     // In order: index 0 is the protagonist, and that is who gets drawn first
     // and therefore who gets reference image 1.
-    const ids = characterIdsOf(request).slice(0, MAX_DRAWN_CHARACTERS);
-    for (const id of ids) {
-      let character: Character | undefined;
+    const characters: Character[] = [];
+    for (const id of characterIdsOf(request)) {
       try {
-        character = await storage.getCharacterById(id, userId);
+        const character = await storage.getCharacterById(id, userId);
+        if (character) characters.push(character);
       } catch (error) {
         console.error(`[illustration] could not load character ${id}:`, error);
       }
-      if (!character) continue;
+    }
+    const { drawn, shared } = await drawnCharacters(request, characters, scenePrompt);
+    const refs = pictureRefs(characters.map((c) => c.id));
+    // charactersAreInTheStory() is true here, so a role other than "absent"
+    // means a real account with the cast inside it.
+    const role = characterRoleOf(request);
+    const dressed = role === "alongside" ? "always" : role === "travels" ? "farSide" : undefined;
+    for (const character of drawn) {
       cast.push({
         name: character.name,
         look: describeCharacter(character),
@@ -284,6 +393,10 @@ export async function illustrationCast(
         // drift: a character holding both a photograph and a drawing is only
         // "from a photo" while the photograph is the one chosen.
         fromPhoto: chosenAvatarIsPhoto(character),
+        ref: refs.get(character.id),
+        ...(shared.has(character.id) ? { sharesAName: true } : {}),
+        ...(dressed ? { dressed } : {}),
+        ...(isPerson(character) ? {} : { notAPerson: true }),
       });
     }
   }
@@ -414,14 +527,17 @@ export function classifyEditFailure(error: unknown): EditFailure {
  * the model placed it in the scene as one more face, and a shop front is the
  * same mistake waiting to happen.
  */
-function referenceLine(n: number, e: IllustrationReference): string {
+function referenceLine(n: number, e: IllustrationReference, periodDressed = false): string {
   const head = `Reference image ${n} is ${e.look}`;
   switch (e.role) {
     case "style":
       return (
         `${head} It is the look of this book, not a scene and not a person. Match its palette, its` +
         " linework and the way it is lit. Anyone in this picture who also appears in it must look the" +
-        " same here as they do there. Take nothing else from it — not its scene, its framing or its moment."
+        // A cover drawn before a period rule existed can show a character in
+        // modern clothes; "look the same" would carry them into this scene.
+        (periodDressed ? " same here as they do there — the same face and hair, but not necessarily the same clothes." : " same here as they do there.") +
+        " Take nothing else from it — not its scene, its framing or its moment."
       );
     case "background":
       return (
@@ -454,6 +570,71 @@ function referenceLine(n: number, e: IllustrationReference): string {
  * older row -- all of those must produce the string this function produced
  * before any of this existed, or an unrelated picture changes.
  */
+/**
+ * The clothing rule for a picture set in the past, by reference number.
+ * Grouped, so a cast of three is one sentence per rule and not three.
+ */
+function dressLines(matched: IllustrationMember[]): string[] {
+  const numbers = (pick: (m: IllustrationMember) => boolean) =>
+    matched.map((m, i) => (pick(m) ? i + 1 : 0)).filter(Boolean);
+  const list = (ns: number[]) =>
+    ns.length === 1 ? `reference image ${ns[0]}` : `reference images ${ns.slice(0, -1).join(", ")} and ${ns[ns.length - 1]}`;
+  const out: string[] = [];
+  const always = numbers((m) => m.dressed === "always" && !m.notAPerson);
+  const farSide = numbers((m) => m.dressed === "farSide" && !m.notAPerson);
+  const animals = numbers((m) => Boolean(m.dressed) && Boolean(m.notAPerson));
+  if (always.length) {
+    out.push(
+      `The clothes in ${list(always)} are not theirs here: dress ${always.length === 1 ? "that person" : "each of them"}` +
+        " the way people of that age were dressed in this scene's time and place, with nothing from another century.",
+    );
+  }
+  if (farSide.length) {
+    out.push(
+      `In a scene set in the past, dress the ${farSide.length === 1 ? "person" : "people"} in ${list(farSide)} the way people of` +
+        " that age were dressed there; only in a present-day scene are the clothes in the reference image worn.",
+    );
+  }
+  if (animals.length) {
+    out.push(
+      `${list(animals).replace(/^r/, "R")} ${animals.length === 1 ? "is not a person" : "are not people"}: draw ${animals.length === 1 ? "it" : "them"}` +
+        " exactly as shown and never dressed up; in a scene set in the past, with nothing modern on — no collar tag, harness or lead from another century.",
+    );
+  }
+  return out;
+}
+
+/** How a member is described: without the name, when the name is shared. */
+function lookFor(m: IllustrationMember): string {
+  if (!m.sharesAName) return m.look;
+  const prefix = `${m.name}, `;
+  return m.look.startsWith(prefix) ? m.look.slice(prefix.length) : m.look;
+}
+
+/**
+ * Every picture ID in a scene, swapped for who it means. Plain string
+ * replacement -- a name is user text and never goes into a pattern; the one
+ * pattern here is our own fixed hex format, and it only removes IDs that
+ * belong to nobody in this picture.
+ */
+export function withRefsResolved(
+  scenePrompt: string,
+  matched: IllustrationMember[],
+  described: IllustrationMember[],
+): string {
+  let out = scenePrompt;
+  const swap = (m: IllustrationMember, who: string) => {
+    if (!m.ref) return;
+    if (m.sharesAName) out = out.split(`${m.name} ${m.ref}`).join(who);
+    out = out.split(m.ref).join(`(${who})`);
+  };
+  matched.forEach((m, i) => swap(m, `the person in reference image ${i + 1}`));
+  // Beside a name the scene already wrote, the description goes without it:
+  // "Lucy (a 9-year-old girl)", not "Lucy (Lucy, a 9-year-old girl)".
+  described.forEach((m) => swap(m, lookFor({ ...m, sharesAName: true }).replace(/\.$/, "")));
+  return out.replace(PICTURE_REF_PATTERN, "");
+}
+
 export function composeIllustrationPrompt(
   scenePrompt: string,
   cast: IllustrationMember[] = [],
@@ -477,11 +658,19 @@ export function composeIllustrationPrompt(
     facesMustShow?: boolean;
   } = {},
 ): string {
-  const parts = [`${scenePrompt}. ${STYLE}`];
-
   const matched = cast.filter((m) => m.reference);
   const described = cast.filter((m) => !m.reference);
   const attached = extras.filter((e) => e.file);
+
+  /**
+   * THE IDS BECOME REFERENCE NUMBERS HERE, and nowhere else. "Paul [c6108b]"
+   * in the scene is "Paul (the person in reference image 2)" to the image
+   * model; a member whose name is shared loses the name as well, so the only
+   * "Paul" left in the prompt is the one who has no picture. A scene with no
+   * IDs passes through untouched, so every older prompt renders as it did.
+   */
+  const scene = withRefsResolved(scenePrompt, matched, described);
+  const parts = [`${scene}. ${STYLE}`];
 
   if (matched.length > 0) {
     parts.push(
@@ -491,7 +680,7 @@ export function composeIllustrationPrompt(
     // Numbered in the order they are handed to images.edit. The API has no way
     // to label an input image, so the prompt is what says which is which.
     matched.forEach((m, i) => {
-      parts.push(`Reference image ${i + 1} is ${m.look}`);
+      parts.push(`Reference image ${i + 1} is ${lookFor(m)}`);
       /**
        * A photograph is a likeness, not a style to copy.
        *
@@ -512,10 +701,18 @@ export function composeIllustrationPrompt(
         );
       }
     });
+    // WHERE CLOTHES COME FROM. A portrait shows what someone wears at home, so
+    // in a scene from the past the clothing comes from the scene instead. The
+    // sentence every other picture has always sent is unchanged.
+    const periodDressed = matched.some((m) => m.dressed);
     parts.push(
-      "Take each person's face, hair, colouring and clothing from their own reference image and nothing else" +
-        " from it — not its background, its framing, its lighting, or anything it happens to be holding.",
+      periodDressed
+        ? "Take each person's face, hair and colouring from their own reference image and nothing else" +
+            " from it — not its background, its framing, its lighting, or anything it happens to be holding."
+        : "Take each person's face, hair, colouring and clothing from their own reference image and nothing else" +
+            " from it — not its background, its framing, its lighting, or anything it happens to be holding.",
     );
+    if (periodDressed) parts.push(...dressLines(matched));
     /**
      * A LIKENESS IS NOT A POSE.
      *
@@ -545,7 +742,7 @@ export function composeIllustrationPrompt(
   // because a montage the model cannot navigate is a collage it must guess at.
   attached.forEach((e, i) => {
     const n = matched.length + i + 1;
-    parts.push(referenceLine(n, e));
+    parts.push(referenceLine(n, e, matched.some((m) => m.dressed)));
   });
 
   if (matched.length > 0 || attached.length > 0) {
@@ -564,7 +761,7 @@ export function composeIllustrationPrompt(
   }
 
   if (described.length > 0) {
-    parts.push(`Also in the picture: ${described.map((m) => m.look).join(" ")}`);
+    parts.push(`Also in the picture: ${described.map(lookFor).join(" ")}`);
   }
 
   return parts.join(" ").replace(/\s+/g, " ").trim();

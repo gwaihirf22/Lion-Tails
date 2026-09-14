@@ -242,12 +242,15 @@ describe("the picture on a share card", () => {
     }
   });
 
-  it("gives the built-in story the cover, because it has no picture", () => {
-    // The case Blake asked for by name: the Timekeeper prologue ships with no
-    // illustration, so its link is the cover art or nothing.
+  it("gives the built-in story its own picture, which is the home page's art", () => {
+    // The case Blake asked for by name. The prologue used to ship with no
+    // illustration, so its link fell back to the cover; it now carries the
+    // home page picture as its own, and the card uses that like any story's.
     const view = sharedStoryView(QUEST_PROLOGUE);
-    expect(view.imageUrl).toBeUndefined();
-    expect(shareCardImage(view.imageUrl, abs).imageIsCover).toBe(true);
+    expect(view.imageUrl).toBe(QUEST_PROLOGUE.story.imageUrl);
+    const card = shareCardImage(view.imageUrl, abs);
+    expect(card.imageIsCover).toBeFalsy();
+    expect(card.image).toContain("/public/images/quest-prologue-cover.webp");
   });
 });
 
