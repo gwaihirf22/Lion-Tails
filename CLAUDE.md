@@ -365,7 +365,8 @@ Lucy's father.") covers only pairs where both are in the cast — relatives
 outside it are left out, Blake's choice — and `namesakeLines()` adds one
 sentence when a cast member's first name is in the account or is the
 Timekeeper's. Whole-word match without a regex: names are user text. Ids never
-reach a prompt; a test holds that. See `docs/decisions.md` §28.
+reach a STORY prompt; a test holds that — pictures are the exception, below.
+See `docs/decisions.md` §28.
 
 **Nothing on a character is defaulted.** Every field is optional, and the form
 starts empty except the name. Six defaults — brown hair, brown eyes, blue,
@@ -675,6 +676,25 @@ different child, and the only sign was one line in the log.
   attaching him to a scene he is quietly in costs one generic old man;
   attaching him to a scene he is not in draws a real historical figure as a
   fictional character, in an app whose point is that the history is true.
+- **A face is bound by picture ID, not by name.** Blake's "From Stones to
+  Rome" put his character Paul's portrait on the apostle in all six panels:
+  the scene said "the apostle Paul", a reference image was labelled "Paul",
+  and every portrait was attached whatever the scene said. Each character
+  now has a picture ID, `pictureRef()` in `shared/family.ts` — `[c6108b]`,
+  the start of their character id. Only the brief's **image** projection
+  lists them (never single/outline/chapter, which write text a child reads),
+  and both scene writers are reminded to tag each person they draw
+  (`PICTURE_ID_REMINDER`). `drawnCharacters()`/`chooseDrawn()` attach a
+  portrait for a tagged person, or an untagged one whose name nobody in the
+  account shares; a shared name without its tag is left out, and a scene with
+  no tags at all (an older saved prompt, the single-call short story) keeps
+  the first-three rule less shared names. `withRefsResolved()` turns each ID
+  into "the person in reference image N" before the image model sees
+  anything, and a shared-name member's reference line drops the name.
+  Blake chose pictures only, not story prompts. **Readers never see an ID**:
+  `withoutPictureRefs()` on the stored gallery prompt, the legacy fold in
+  `storyImagesOf()`, and the three places the reader shows a prompt;
+  `story.imagePrompt` keeps its tags so a redraw binds by them.
 - **A story keeps its pictures.** A redraw APPENDS — Blake: "the chances are
   that the old one may be better than the last with AI" — up to
   `MAX_STORY_IMAGES` (5, the same as `MAX_AVATARS`), past which it is

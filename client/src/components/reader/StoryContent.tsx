@@ -1,6 +1,7 @@
 import { Fragment, useMemo } from "react";
 import { anchorBlock, type Block, type Inline, type StoryDoc } from "@/lib/storyContent";
 import type { StoryPicture } from "@shared/schema";
+import { withoutPictureRefs } from "@shared/family";
 
 /**
  * The story text itself, and nothing else.
@@ -133,7 +134,7 @@ function StoryFigure({
         aria-label="See this picture larger"
         className="reader-figure-button"
       >
-        <img src={picture.url} alt={picture.prompt || "A picture from this story."} loading="lazy" />
+        <img src={picture.url} alt={withoutPictureRefs(picture.prompt) || "A picture from this story."} loading="lazy" />
       </button>
     </figure>
   );

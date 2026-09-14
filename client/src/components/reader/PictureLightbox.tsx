@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import type { StoryPicture } from "@shared/schema";
+import { withoutPictureRefs } from "@shared/family";
 
 /**
  * A picture, as big as the screen allows.
@@ -34,13 +35,13 @@ export function PictureLightbox({
             content. */}
         <DialogTitle className="sr-only">Picture from this story</DialogTitle>
         <DialogDescription className="sr-only">
-          {picture?.prompt || "A picture from this story."}
+          {withoutPictureRefs(picture?.prompt) || "A picture from this story."}
         </DialogDescription>
         {picture && (
           <figure className="m-0">
             <img
               src={picture.url}
-              alt={picture.prompt || "A picture from this story."}
+              alt={withoutPictureRefs(picture.prompt) || "A picture from this story."}
               className="mx-auto max-h-[85dvh] w-auto max-w-full rounded-lg"
             />
             {/* No caption when there is no prompt: a shared story's pictures are
@@ -48,7 +49,7 @@ export function PictureLightbox({
                 empty caption is a small blank box under the picture. */}
             {picture.prompt && (
               <figcaption className="mx-auto mt-3 max-w-2xl rounded-md bg-background/90 px-3 py-2 text-center text-xs text-muted-foreground">
-                {picture.prompt}
+                {withoutPictureRefs(picture.prompt)}
               </figcaption>
             )}
           </figure>

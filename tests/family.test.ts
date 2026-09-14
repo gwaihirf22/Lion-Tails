@@ -228,3 +228,18 @@ describe("namesakes", () => {
     expect(chapter).toContain("not the Paul of the account");
   });
 });
+
+describe("picture IDs reach the picture prompt and nothing else", () => {
+  it("only the image projection carries them, with the clash named", () => {
+    const brief = buildStoryBrief(
+      { ...base, characterRole: "alongside", biblicalEvent: "paul", characterIds: [lucy.id, paul.id] } as StoryRequest,
+      [lucy, paul],
+    );
+    const image = renderBrief(brief, "image");
+    expect(image).toContain("Lucy is [111111]; Paul is [222222]");
+    expect(image).toContain("The Paul of the account is someone else and never gets [222222].");
+    for (const p of ["single", "outline", "chapter"] as const) {
+      expect(renderBrief(brief, p)).not.toMatch(/\[[0-9a-f]{6,}\]/);
+    }
+  });
+});

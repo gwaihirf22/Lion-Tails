@@ -598,3 +598,74 @@ describe("the reference budget", () => {
     expect(out.cast.length + out.extras.length).toBeLessThanOrEqual(REFERENCE_BUDGET);
   });
 });
+
+/**
+ * Blake's "From Stones to Rome": his character Paul's portrait on the apostle
+ * in all six panels. Each character now has a picture ID that the scene writer
+ * puts next to the person it draws, and that the server turns into a
+ * reference-image number before anything is sent.
+ */
+describe("picture IDs bind a face to the right person", () => {
+  const LUCY = "9768fbc6-b78e-475d-83e2-ec61723b6420";
+  const PAUL = "c6108b7f-155f-4da5-ba81-89594ebb0353";
+  const lucy = mk({ id: LUCY, name: "Lucy", kind: "girl", age: 9 });
+  const paul = mk({ id: PAUL, name: "Paul", kind: "man", age: 33 });
+  const shared = new Set([PAUL]);
+
+  it("an ID is standard, and two in one cast are never the same", async () => {
+    const { pictureRef, pictureRefs, withoutPictureRefs } = await import("@shared/family");
+    expect(pictureRef(PAUL)).toBe("[c6108b]");
+    const twins = pictureRefs(["abcdef01-1", "abcdef02-2"]);
+    expect(twins.get("abcdef01-1")).not.toBe(twins.get("abcdef02-2"));
+    expect(withoutPictureRefs("Lucy [9768fb] and Paul [c6108b] watch.")).toBe("Lucy and Paul watch.");
+  });
+
+  it("a tagged person is drawn; an untagged shared name is not; an untagged unique name still is", async () => {
+    const { chooseDrawn } = await import("../server/lib/illustration");
+    const scene = "Lucy [9768fb] and her father Paul [c6108b] watch the apostle Paul preach.";
+    expect(chooseDrawn([lucy, paul], scene, shared).map((c) => c.name)).toEqual(["Lucy", "Paul"]);
+    // The writer left her father out and tagged only Lucy: the apostle's
+    // "Paul" must not pull the portrait in.
+    const withoutDad = "Lucy [9768fb] watches the apostle Paul preach.";
+    expect(chooseDrawn([lucy, paul], withoutDad, shared).map((c) => c.name)).toEqual(["Lucy"]);
+    // A writer that forgot Lucy's tag does not cost her her face.
+    const forgot = "Lucy watches as Paul [c6108b] ties the boat.";
+    expect(chooseDrawn([lucy, paul], forgot, shared).map((c) => c.name)).toEqual(["Lucy", "Paul"]);
+  });
+
+  it("a scene with no IDs keeps the old rule, less a shared name", async () => {
+    const { chooseDrawn } = await import("../server/lib/illustration");
+    const old = "Lucy and the apostle Paul on a ship.";
+    expect(chooseDrawn([lucy, paul], old, new Set()).map((c) => c.name)).toEqual(["Lucy", "Paul"]);
+    expect(chooseDrawn([lucy, paul], old, shared).map((c) => c.name)).toEqual(["Lucy"]);
+  });
+
+  it("the image model gets reference numbers, never an ID, and the apostle keeps his name", () => {
+    const scene = "Lucy [9768fb] clutches the sleeve of her father Paul [c6108b] as the apostle Paul speaks";
+    const prompt = composeIllustrationPrompt(scene, [
+      member({ name: "Lucy", look: "Lucy, a 9-year-old girl.", reference: file(), ref: "[9768fb]" }),
+      member({ name: "Paul", look: "Paul, a 33-year-old man.", reference: file(), ref: "[c6108b]", sharesAName: true }),
+    ]);
+    expect(prompt).not.toMatch(/\[[0-9a-f]{6,}\]/);
+    expect(prompt).toContain("Lucy (the person in reference image 1) clutches");
+    expect(prompt).toContain("her father the person in reference image 2 as the apostle Paul speaks");
+    // The portrait is not labelled with the name the apostle has.
+    expect(prompt).toContain("Reference image 2 is a 33-year-old man.");
+    expect(prompt).not.toContain("Reference image 2 is Paul");
+    // Lucy's name is not shared, so her line is what it always was.
+    expect(prompt).toContain("Reference image 1 is Lucy, a 9-year-old girl.");
+  });
+
+  it("a scene with no IDs renders exactly the string it always did", () => {
+    const cast = [member({ reference: file(), ref: "[9768fb]" })];
+    expect(composeIllustrationPrompt(SCENE, cast)).toBe(composeIllustrationPrompt(SCENE, [member({ reference: file() })]));
+  });
+
+  it("no reader ever sees an ID in a picture's caption", () => {
+    const pictures = storyImagesOf({
+      createdAt: "2026-01-01",
+      story: { imageUrl: "/x.png", imagePrompt: "Lucy [9768fb] on the road" },
+    });
+    expect(pictures[0].prompt).toBe("Lucy on the road");
+  });
+});

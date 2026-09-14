@@ -32,6 +32,7 @@ import { temperatureFor, tokenLimitFor } from "./modelPolicy";
 // The cap the route already refuses on. One number: a second copy here would
 // be a slice that silently disagrees with a 400.
 import { MAX_PASSAGE_CHARS } from "@shared/schema";
+import { PICTURE_ID_REMINDER } from "@shared/family";
 
 const SYSTEM =
   "You are a helpful assistant. Given one moment from a story, you write a single short description for an illustrator.";
@@ -68,7 +69,8 @@ export function buildPassageScenePrompt(opts: {
     brief
       ? `The illustration must match the character, so carry this into the image prompt:\n${brief}\n\n` +
         "Take only WHO the people are from that. Where this happens, and what is " +
-        "happening, come from the passage above and from nothing else."
+        "happening, come from the passage above and from nothing else." +
+        (/\[[0-9a-f]{6,32}\]/.test(brief) ? ` ${PICTURE_ID_REMINDER}` : "")
       : "",
     'Respond with ONLY a valid JSON object: { "imagePrompt": "..." }',
   ]

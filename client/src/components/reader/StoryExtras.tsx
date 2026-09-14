@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { StoryResponse, HeroOfFaith, SavedStory, StoryPicture } from "@shared/schema";
 import { MAX_STORY_IMAGES } from "@shared/schema";
+import { withoutPictureRefs } from "@shared/family";
 import { Trash2 } from "lucide-react";
 import type { StoryDoc } from "@/lib/storyContent";
 import lionTailsImage from "@/assets/illustrations/lion-tails.jpg";
@@ -247,7 +248,7 @@ export function StoryExtras({
             <figure className="m-0">
               <img
                 src={imageUrl}
-                alt={story.imagePrompt || `An illustration for ${story.title}`}
+                alt={withoutPictureRefs(story.imagePrompt) || `An illustration for ${story.title}`}
                 className="mx-auto max-h-[70vh] w-auto rounded-lg"
                 style={{ border: "1px solid var(--reader-border)" }}
               />

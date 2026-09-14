@@ -103,7 +103,7 @@ import {
   AVATAR_DIR,
 } from "./lib/avatar";
 import { statsAreAffordable } from "@shared/schema";
-import { RELATIONS } from "@shared/family";
+import { RELATIONS, withoutPictureRefs } from "@shared/family";
 import { sharedStoryView, SHARE_TOKEN_PATTERN } from "@shared/sharedStory";
 import { z, ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
@@ -1919,7 +1919,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           {
             id: uuidv4(),
             url: imageUrl,
-            prompt,
+            // Stored for display only (the lightbox caption, alt text), so
+            // without picture IDs: a reader never sees "Lucy [9768fb]".
+            prompt: withoutPictureRefs(prompt),
             createdAt: new Date().toISOString(),
             // Where it goes, when it goes anywhere. The quote is the durable
             // half: see pictureAnchorSchema.
