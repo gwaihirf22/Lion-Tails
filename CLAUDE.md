@@ -266,6 +266,62 @@ process.env.OPENAI_API_KEY server/` should return nothing outside
 Extend `MODEL_CATALOG` rather than adding another hardcoded model list — there
 are already six, and the settings UI still uses its own.
 
+## What things cost
+
+Blake wants a pay-as-you-go price that covers costs with a small margin, so
+the app measures what a story and a picture really cost, keeps prices as data
+someone approves, and warns when OpenAI's prices move. **No charging exists
+yet** -- the balance and Stripe are the next plan (`docs/roadmap.md`), built on
+these numbers. `/admin/costs` is the page.
+
+- **The ledger is `model_calls`: one row per paid call ATTEMPT**, retries and
+  failures included, because they were paid for. Tokens are split the way they
+  are billed (`usageBreakdown()` in `server/lib/costMath.ts`): uncached,
+  cached and cache-write input, image input, text and image output. Reasoning
+  is recorded and never added -- it is already inside output, which is how it
+  is billed. Ollama calls are not recorded.
+- **`cost_micros` is frozen at write** from the approved price in effect, and
+  is **null, never zero**, when there was none. A later price change never
+  rewrites a past story's cost. Micros because `tokens × $/1M` is micros
+  exactly.
+- **Every paid call reaches the ledger**, and a test fails when one does not:
+  `requestModelJson`/`requestModelText` take a `ledger` context and record
+  each attempt (story, outline, chapter, finalize, digging deeper, extraction,
+  summary); the passage scene, pictures, avatars, chords and vision record
+  directly. `tests/modelCallsLedger.test.ts` greps `server/` for any file that
+  makes a paid call without reaching the recorder -- a new call path that
+  records nothing reads exactly like a cheap app. Pass `ledger` to any new
+  wrapper call.
+- **Prices are rows, never constants.** `price_versions` (proposed / approved /
+  dismissed) and `model_prices`, dollars per million per unit. A model's price
+  is its newest APPROVED version, whole -- never merged unit by unit across
+  versions. `MODEL_CATALOG` has no price field on purpose; `storyCredits` is
+  what a free account is charged in credits, a different fact.
+- **The watch** (`server/lib/priceWatch.ts`, daily and on "Check now") reads
+  LiteLLM's price file and OpenAI's `pricing.md`, Standard tier only
+  (`priceFeeds.ts`, pure, tested against saved real copies). OpenAI's page
+  wins where both have a price; every disagreement is kept and shown. A
+  difference files ONE proposal (fingerprinted, never twice) and **nothing is
+  applied until a person approves it**. A feed that changes shape is a
+  warning, not "no change". A unit a feed stops listing is carried forward, not
+  made free.
+- **The bill check** needs `OPENAI_ADMIN_KEY` (an organisation Admin key, read
+  in `priceWatch.ts` only, never returned by a route) and optionally
+  `OPENAI_PROJECT_ID`. The Costs API grouped by line item gives amount ÷
+  quantity = what was actually charged per model and unit, flagged beyond 2%
+  of the approved price; the billed week against `SUM(cost_micros)` of
+  owner-paid calls is flagged beyond 5%. Without a project id it compares the
+  whole organisation, and the warning says so.
+- **Costs are measured, not estimated** (`costStats.ts`): a story is the sum of
+  its job's calls plus the extraction it caused, by length and model; a story
+  with any unpriced call is left out, not counted cheap. Pictures by purpose.
+- **The price list is published, never live.** Suggested = p75 × (1 + margin,
+  default 20%, `app_settings.pricing_margin_pct`), rounded UP to a cent, and
+  only for items with `MIN_SAMPLES` (5). Publishing computes the list on the
+  server -- a client-supplied list could be set to zero. A published price
+  below today's measured p75 is a warning. `GET /api/pricing` returns prices
+  only, no costs.
+
 ## Environment
 
 See `.env.example`. **`SESSION_SECRET` is the only secret required in

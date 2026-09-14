@@ -151,7 +151,12 @@ export async function runPriceCheck(): Promise<{ proposalId?: number; changes: n
       proposalId = Number(pending[0].id);
     } else {
       proposalId = await fileProposal(rows, {
-        source: page.missing.length < litellm.missing.length ? "openai-page" : "litellm",
+        // Which feeds this proposal actually stands on, so "from litellm" is
+        // never shown for prices OpenAI's own page supplied.
+        source: [
+          ...(Object.keys(litellm.sheets).length ? ["litellm"] : []),
+          ...(Object.keys(page.sheets).length ? ["openai-page"] : []),
+        ].join("+") || "none",
         note: `${changes.length} price${changes.length === 1 ? "" : "s"} differ from what is approved.`,
         evidence: { fingerprint, changes, conflicts, missing: { litellm: litellm.missing, page: page.missing } },
       });
