@@ -16,6 +16,8 @@ import { useReadingPrefs } from "@/hooks/use-reading-prefs";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import type { StoryRequest, StoryResponse, StoryPicture } from "@shared/schema";
 import { parseStoryContent, storyToPrintHtml } from "@/lib/storyContent";
+import { AI_NOTE, AI_NOTE_TITLE } from "@shared/aiNote";
+import type { Resource } from "@shared/furtherReading";
 import ReaderBar from "@/components/reader/ReaderBar";
 import ReadingSurface from "@/components/reader/ReadingSurface";
 import StoryExtras from "@/components/reader/StoryExtras";
@@ -48,9 +50,11 @@ interface StoryDisplayProps {
    * path); this hides the rest -- Favourite, and Share itself.
    */
   shared?: boolean;
+  /** Derived by the server; see StoryExtras. */
+  furtherReading?: Resource[];
 }
 
-export default function StoryDisplay({ story, storyId, storyType, builtIn, editLog, images, onEdited, onPictures, shared }: StoryDisplayProps) {
+export default function StoryDisplay({ story, storyId, storyType, builtIn, editLog, images, onEdited, onPictures, shared, furtherReading }: StoryDisplayProps) {
   const [isFavorite, setIsFavorite] = useState(false);
   /**
    * A parent editing the title and text, in place.
@@ -197,7 +201,10 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
     // replaces two separate `story.content.replace(/\n/g, '<br>')` calls that
     // wrote raw model output into the DOM -- one of them into a document that
     // was then handed to the printer.
-    const body = storyToPrintHtml(doc, story.title, story.bibleVerse);
+    const body = storyToPrintHtml(doc, story.title, story.bibleVerse, {
+      aiNote: !builtIn,
+      furtherReading,
+    });
     w.document.write(
       `<!DOCTYPE html><html><head><title></title><style>` +
         `body{font-family:Georgia,serif;line-height:1.6;color:#222;max-width:34em;margin:0 auto;padding:2rem}` +
@@ -213,7 +220,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
     w.document.close();
     w.print();
     w.onafterprint = () => w.close();
-  }, [doc, story.title, story.bibleVerse]);
+  }, [doc, story.title, story.bibleVerse, builtIn, furtherReading]);
 
   const handleDownload = useCallback(() => {
     const text = [
@@ -221,6 +228,10 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
       "",
       story.content,
       story.bibleVerse ? `\n"${story.bibleVerse.text}"\n— ${story.bibleVerse.reference}` : "",
+      builtIn ? "" : `\n${AI_NOTE_TITLE} ${AI_NOTE}`,
+      furtherReading?.length
+        ? `\nFurther reading:\n${furtherReading.map((r) => `- ${r.label}${r.url ? ` <${r.url}>` : ""}`).join("\n")}`
+        : "",
     ].join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
@@ -229,7 +240,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
-  }, [story]);
+  }, [story, builtIn, furtherReading]);
 
   const startEdit = () => {
     setDraftTitle(story.title);
@@ -488,6 +499,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
         builtIn={builtIn}
         images={images}
         onPictures={onPictures}
+        furtherReading={furtherReading}
       />
     </div>
   );

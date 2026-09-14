@@ -1012,6 +1012,25 @@ already right.
 
 ---
 
+## 29. Sources come from the data, and the AI note is the reader's, not the story's
+
+`shared/furtherReading.ts`, `shared/aiNote.ts`
+
+Blake asked for the sources behind each story. A story model here is a chat
+completion with no browsing; asked to cite, it produces the shape of a
+bibliography -- plausible titles, plausible URLs -- with nothing behind it,
+which in a Further reading section is worse than none. So the list is derived
+from what the story was actually checked against (the event, the hero, the
+passage), at serve time. Live web search exists in the API and was offered;
+Blake chose verified data, accepting that adding people means verifying them.
+
+The AI note is rendered, not appended, for the same reason the disclaimer that
+a character was invented IS appended: that one describes THIS story and must
+be exactly right inside it; this one describes every story and must reach the
+ones already written. Rendering it reaches them; appending would not.
+
+---
+
 ## Recurring failure shape
 
 Most incidents here have had the same form: **a check that reported success

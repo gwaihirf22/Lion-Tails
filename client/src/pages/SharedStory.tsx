@@ -74,6 +74,8 @@ export default function SharedStoryPage() {
     <div>
       <StoryDisplay
         shared
+        builtIn={view.builtIn}
+        furtherReading={view.furtherReading}
         story={{
           title: view.title,
           content: view.content,

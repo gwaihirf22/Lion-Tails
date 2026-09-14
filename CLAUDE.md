@@ -1296,6 +1296,33 @@ not.
   Production only; dev serves the generic card. `index.html`'s own
   `og:image` is absolute too — the spec wants a full URL.
 
+## The AI note and Further reading
+
+**Every AI-written story says so.** `AI_NOTE` (`shared/aiNote.ts`): "Written
+with AI. … AI can get things wrong …". Rendered by the READER (`StoryExtras`),
+the print path (`storyToPrintHtml` `aiNote`) and the .txt download — never
+written into `story.content` — so stories already in a library have it, the
+universe summariser cannot read it as an event, and a parent edit cannot remove
+it. Not on a built-in story (a person wrote it); `sharedStoryView` carries
+`builtIn` so a shared prologue shows none either.
+
+**Further reading is built from checked data, never from a model.** The story
+calls cannot browse, and a model asked for sources from memory invents books
+and links. `furtherReadingFor()` (`shared/furtherReading.ts`, pure) turns the
+account a story was written against into links: the event's passage and key
+verse and the request's own passage on Bible Gateway (WEB, the translation the
+app's verses were fetched in), a hero's Wikipedia article, verse and up to
+three key-event references, and the books on their profile (unlinked — the
+data has no URLs and none is invented). Capped at eight, then the two general
+links every story always had. **Derived when served**
+(`furtherReadingForRequest` on `GET /api/stories/:id` and `/api/shared/:token`),
+not stored, so old stories get it and a book added to a hero shows everywhere.
+The fixed "For Further Learning" block still goes into new stories' text and
+is the fallback when a payload has no list (the just-generated view). Links
+were fetched and read: the pages are the right passages and people.
+Blake chose this over live web search (`responses` + a search tool, never
+used here), knowing it puts verification on whoever adds people.
+
 ## Editing what the app wrote
 
 - **A story edit is a leaf merge, never read-mutate-write.** `editStory` is

@@ -104,6 +104,7 @@ import {
 } from "./lib/avatar";
 import { statsAreAffordable } from "@shared/schema";
 import { RELATIONS, withoutPictureRefs } from "@shared/family";
+import { furtherReadingForRequest } from "./lib/furtherReading";
 import { sharedStoryView, SHARE_TOKEN_PATTERN } from "@shared/sharedStory";
 import { z, ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
@@ -2105,7 +2106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // A built-in story has no row and belongs to everyone.
       const builtIn = builtInStoryById(req.params.id);
-      if (builtIn) return res.json(builtIn);
+      if (builtIn) return res.json({ ...builtIn, furtherReading: await furtherReadingForRequest(builtIn.request) });
 
       // Get the story, but only if it belongs to the authenticated user
       const userId = (req.user as any).id;
@@ -2114,8 +2115,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!story) {
         return res.status(404).json({ message: "Story not found" });
       }
-      
-      res.json(story);
+
+      // Derived, never stored: see shared/furtherReading.ts.
+      res.json({ ...story, furtherReading: await furtherReadingForRequest(story.request) });
     } catch (error) {
       console.error("Error fetching story:", error);
       res.status(500).json({ message: "Failed to fetch story" });
@@ -2243,11 +2245,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // A built-in story is shared by its own id: it has no row, so no token
       // can point at it, and it needs none -- nothing about it is private.
       const builtIn = builtInStoryById(req.params.token);
-      if (builtIn) return res.json(sharedStoryView(builtIn));
+      if (builtIn) return res.json(sharedStoryView(builtIn, await furtherReadingForRequest(builtIn.request)));
       if (!SHARE_TOKEN_PATTERN.test(req.params.token)) return notShared();
       const saved = await storage.getSharedStory(req.params.token);
       if (!saved) return notShared();
-      res.json(sharedStoryView(saved));
+      res.json(sharedStoryView(saved, await furtherReadingForRequest(saved.request)));
     } catch (error) {
       console.error("Error reading a shared story:", error);
       res.status(500).json({ message: "Failed to load this story" });

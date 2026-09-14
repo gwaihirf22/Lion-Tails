@@ -23,6 +23,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { StoryResponse, HeroOfFaith, SavedStory, StoryPicture } from "@shared/schema";
 import { MAX_STORY_IMAGES } from "@shared/schema";
 import { withoutPictureRefs } from "@shared/family";
+import { AI_NOTE, AI_NOTE_TITLE } from "@shared/aiNote";
+import type { Resource } from "@shared/furtherReading";
 import { Trash2 } from "lucide-react";
 import type { StoryDoc } from "@/lib/storyContent";
 import lionTailsImage from "@/assets/illustrations/lion-tails.jpg";
@@ -44,7 +46,14 @@ export function StoryExtras({
   builtIn,
   images,
   onPictures,
+  furtherReading,
 }: {
+  /**
+   * The story's sources, derived by the server from the account it was
+   * written against (shared/furtherReading.ts). Absent on the just-generated
+   * view and an old ?data= link, which fall back to the block in the text.
+   */
+  furtherReading?: Resource[];
   story: StoryResponse;
   storyId?: string;
   doc: StoryDoc | null;
@@ -211,7 +220,7 @@ export function StoryExtras({
    */
   const answeredTheirOwn = (story.content ?? "").includes(DIGGING_DEEPER_HEADING);
   const questions = answeredTheirOwn ? [] : (story.applicationQuestions ?? []);
-  const further = doc?.furtherLearning ?? [];
+  const further = furtherReading?.length ? furtherReading : (doc?.furtherLearning ?? []);
 
   /**
    * Whether the strip is worth showing.
@@ -399,6 +408,14 @@ export function StoryExtras({
             — {story.bibleVerse.reference}
           </cite>
         </blockquote>
+      )}
+
+      {/* Every story a model wrote says so. Not a banner: a note, in the
+          reader's own colours, before the extras. See shared/aiNote.ts. */}
+      {!builtIn && (
+        <p className="my-6 text-sm leading-relaxed" style={{ color: "var(--reader-muted)" }}>
+          <strong style={{ color: "var(--reader-fg)" }}>{AI_NOTE_TITLE}</strong> {AI_NOTE}
+        </p>
       )}
 
       <Accordion type="multiple" className="w-full">
