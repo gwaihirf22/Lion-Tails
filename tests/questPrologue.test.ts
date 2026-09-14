@@ -99,3 +99,22 @@ describe("isTimekeeperStory", () => {
     expect(isTimekeeperStory({})).toBe(false);
   });
 });
+
+describe("the prologue's picture", () => {
+  it("is the home page's picture, shipped where the server can serve it", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const { storyImagesOf } = await import("../shared/schema");
+    const url = QUEST_PROLOGUE.story.imageUrl!;
+    expect(url).toBe("/public/images/quest-prologue-cover.webp");
+    // /public/... is served from the repo's public/ directory. A missing file
+    // is a broken thumbnail in every library, with nothing in any log.
+    const onDisk = path.resolve(__dirname, "..", url.replace(/^\//, ""));
+    expect(fs.existsSync(onDisk)).toBe(true);
+    // One picture, and it is the chosen one, so the reader shows it with no
+    // gallery strip -- there is nothing to choose between or delete.
+    const pictures = storyImagesOf(QUEST_PROLOGUE);
+    expect(pictures).toHaveLength(1);
+    expect(pictures[0].url).toBe(url);
+  });
+});

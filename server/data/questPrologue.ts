@@ -241,6 +241,17 @@ export const QUEST_PROLOGUE: SavedStory & { builtIn: true } = {
   story: {
     title: "The Shop That Wasn't There",
     content: paragraphs.join("\n\n"),
+    /**
+     * The home page's picture, so the prologue has a thumbnail and a picture at
+     * the end like every other story. A COPY of client/src/assets/cover.webp:
+     * that one is bundled under a hashed name a server constant cannot know.
+     * public/images ships and outlives a redeploy (only public/images/stories
+     * is the volume), like the Timekeeper's face beside it. The alt text is
+     * the home page's own.
+     */
+    imageUrl: "/public/images/quest-prologue-cover.webp",
+    imagePrompt:
+      "A lion and a lantern-keeper outside Barnabas & Co., with scenes from Scripture and church history winding away behind them",
     storyType: "regular",
     moralOutcome: "creative",
     bibleVerse: {

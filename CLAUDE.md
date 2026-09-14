@@ -1130,7 +1130,7 @@ surprise him… he might be able to guess."
 library, pinned first, and refused by every mutating route through
 `server/lib/builtInStories.ts` — the only place that knows its id. It is one
 sentence to a line, every line its own paragraph: joined with single newlines
-the reader renders it as a poem, and a test holds the shape. The series name
+the reader renders it as a poem, and a test holds the shape. It carries the home page picture as its own (`public/images/quest-prologue-cover.webp`, a copy of the bundled `cover.webp`, whose hashed name a constant cannot know), so it has a thumbnail and a picture at the end like any story. The series name
 is `QUEST_SERIES_TITLE` in `shared/quests.ts`, because the card and the
 prologue heading both print it.
 
