@@ -991,6 +991,37 @@ the ticked ones come along, once each across the cast, and on a quest go
 through the lantern (Blake's call). This moved compatibility cases 2 and 5 on
 purpose, by exactly that relocation.
 
+## 29. A price is measured, approved, and never a constant
+
+`server/lib/modelCalls.ts`, `costMath.ts`, `priceFeeds.ts`, `priceWatch.ts`, `costStats.ts`
+
+Blake's brief: cover costs with a slight incentive, prices that update "when
+told", and a warning when OpenAI's change. Three choices follow from it.
+
+**Measured p75, not a price-sheet estimate.** "A medium story is about N
+tokens" is the cost of the story that goes right. Real stories retry a
+truncated chapter, re-ask a malformed outline, add digging deeper and a world
+extraction, and a price built on the plan sells those at a loss. So every
+attempt is recorded with its tokens and a frozen cost, and a suggested price is
+the 75th percentile of what finished stories actually cost -- three in four
+cost that or less -- plus the margin. The median would sell half of them below
+cost before the margin did any work.
+
+**Prices are data a person approves.** OpenAI has no price API (`/v1/models`
+carries none). A constant in the catalogue is right until the day it is not,
+and wrong silently. Two public feeds are watched instead, and a difference is a
+proposal, not an update: a feed can be wrong, and a price that moved on its own
+would move a family's cost between two stories. Nothing reprices by itself --
+not the cost prices, not the published list.
+
+**The bill check exists because a ledger can be incomplete.** Every check here
+could pass while a call path records nothing: the ledger would simply show a
+cheaper app. The Costs API is the one source that knows what was spent, so the
+billed week is compared with the ledger, and the per-unit rate with the
+approved price. The same "a check that cannot fail" rule is applied inside the
+repo: a test greps `server/` for paid calls that never reach the recorder, and
+was shown to fail with a hook removed.
+
 ---
 
 ## Recurring failure shape

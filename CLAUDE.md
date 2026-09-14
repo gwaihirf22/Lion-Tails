@@ -266,6 +266,74 @@ process.env.OPENAI_API_KEY server/` should return nothing outside
 Extend `MODEL_CATALOG` rather than adding another hardcoded model list — there
 are already six, and the settings UI still uses its own.
 
+## What things cost
+
+Blake wants a pay-as-you-go price that covers costs with a small margin, so
+the app measures what a story and a picture really cost, keeps prices as data
+someone approves, and warns when OpenAI's prices move. **No charging exists
+yet** -- the balance and Stripe are the next plan (`docs/roadmap.md`), built on
+these numbers. `/admin/costs` is the page.
+
+- **The ledger is `model_calls`: one row per paid call ATTEMPT**, retries and
+  failures included, because they were paid for. Tokens are split the way they
+  are billed (`usageBreakdown()` in `server/lib/costMath.ts`): uncached,
+  cached and cache-write input, image input, text and image output. Reasoning
+  is recorded and never added -- it is already inside output, which is how it
+  is billed. Ollama calls are not recorded.
+- **`cost_micros` is frozen at write** from the approved price in effect, and
+  is **null, never zero**, when there was none. A later price change never
+  rewrites a past story's cost. Micros because `tokens × $/1M` is micros
+  exactly.
+- **Every paid call reaches the ledger**, and a test fails when one does not:
+  `requestModelJson`/`requestModelText` take a `ledger` context and record
+  each attempt (story, outline, chapter, finalize, digging deeper, extraction,
+  summary); the passage scene, pictures, avatars, chords and vision record
+  directly. `tests/modelCallsLedger.test.ts` greps `server/` for any file that
+  makes a paid call without reaching the recorder -- a new call path that
+  records nothing reads exactly like a cheap app. Pass `ledger` to any new
+  wrapper call.
+- **Prices are rows, never constants.** `price_versions` (proposed / approved /
+  dismissed) and `model_prices`, dollars per million per unit. A model's price
+  is its newest APPROVED version, whole -- never merged unit by unit across
+  versions. `MODEL_CATALOG` has no price field on purpose; `storyCredits` is
+  what a free account is charged in credits, a different fact.
+- **The watch** (`server/lib/priceWatch.ts`, daily and on "Check now") reads
+  LiteLLM's price file and OpenAI's `pricing.md`, Standard tier only
+  (`priceFeeds.ts`, pure, tested against saved real copies). OpenAI's page
+  wins where both have a price; every disagreement is kept and shown. A
+  difference files ONE proposal (fingerprinted, never twice) and **nothing is
+  applied until a person approves it**. A feed that changes shape is a
+  warning, not "no change". A unit a feed stops listing is carried forward, not
+  made free.
+- **The bill check** needs an organisation Admin key: `OPENAI_ADMIN_KEY_FILE`
+  (a root-only file mounted read-only -- production's is
+  `/mnt/user/appdata/lion-tails/openai-admin-key`) or `OPENAI_ADMIN_KEY`, read
+  by `adminKey()` in `priceWatch.ts` only and never returned by a route -- and
+  `OPENAI_PROJECT_ID` (Lion Tails is "Lion's Tail",
+  `proj_uQjN5Xv24HRqdr0AqaV9E0zp`; the organisation also holds Open WebUI's
+  project, so without it the check compares both). **Written against a real
+  bill, not the docs** (`parseLineItem`, `readBill`): line items are
+  `gpt-5.6-luna, cache writes` and `gpt-image-2-2026-04-21 image, output` --
+  dated snapshots, the modality after the model, token types in words -- and
+  rows come per day AND per project. **Free rows are not a price**: whole days
+  of Luna were billed $0 (the organisation's complimentary allowance) beside
+  rows at exactly list, and averaging them read as Luna at a fifth of its
+  price. The charged rate comes from paid rows only, flagged beyond 2%; the
+  comparison with the ledger uses every token at the APPROVED price (the
+  ledger prices at list too), flagged beyond 5%, and starts at the ledger's
+  first whole day, so a new ledger is not read as every call going unrecorded.
+  First real check, 2026-09-07 to 09-14: $10.49 charged, $2.42 of free usage
+  at list, gpt-image-2 at exactly $30 / $8 / $5.
+- **Costs are measured, not estimated** (`costStats.ts`): a story is the sum of
+  its job's calls plus the extraction it caused, by length and model; a story
+  with any unpriced call is left out, not counted cheap. Pictures by purpose.
+- **The price list is published, never live.** Suggested = p75 × (1 + margin,
+  default 20%, `app_settings.pricing_margin_pct`), rounded UP to a cent, and
+  only for items with `MIN_SAMPLES` (5). Publishing computes the list on the
+  server -- a client-supplied list could be set to zero. A published price
+  below today's measured p75 is a warning. `GET /api/pricing` returns prices
+  only, no costs.
+
 ## Environment
 
 See `.env.example`. **`SESSION_SECRET` is the only secret required in

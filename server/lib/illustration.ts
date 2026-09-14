@@ -49,6 +49,8 @@ import { platesForScene } from "../data/referencePlates";
 import { storage } from "../storage";
 import { describeCharacter, looksLikeRefusal, readAvatarFile } from "./avatar";
 import { resolveModel, createClient, inputFidelityFor } from "./modelPolicy";
+import { recordModelCall } from "./modelCalls";
+import type { CallPurpose } from "./costMath";
 
 /** Where story pictures are written. The `story_images` volume mounts here. */
 const STORY_IMAGE_DIR = path.join(process.cwd(), "public", "images", "stories");
@@ -596,6 +598,11 @@ export async function generateStoryImage(
      * instead of spreading the same budget thinner.
      */
     size?: StoryImageSize;
+    /**
+     * What this picture is, for the cost ledger: a cover belongs to the job
+     * that wrote the story, a later picture to the story it was drawn for.
+     */
+    ledger?: { purpose: CallPurpose; jobId?: string; storyId?: string };
   } = {},
 ): Promise<StoryImageResult | undefined> {
   /**
@@ -616,6 +623,22 @@ export async function generateStoryImage(
       );
       return undefined;
     }
+    // Only a call that RETURNED is recorded. A refused or failed edit throws
+    // before anything is billed, and the fallback is its own paid call.
+    const record = (usage: unknown) =>
+      void recordModelCall(
+        {
+          userId,
+          resolved,
+          purpose: opts.ledger?.purpose ?? "other",
+          jobId: opts.ledger?.jobId,
+          storyId: opts.ledger?.storyId,
+          imageSize: opts.size ?? PAGE_SIZE,
+          imageQuality: "auto",
+        },
+        usage,
+        "succeeded",
+      );
     if (!fs.existsSync(STORY_IMAGE_DIR)) {
       fs.mkdirSync(STORY_IMAGE_DIR, { recursive: true });
     }
@@ -676,6 +699,7 @@ export async function generateStoryImage(
           n: 1,
           size: opts.size ?? PAGE_SIZE,
         });
+        record(response.usage);
       } catch (editError) {
         /**
          * THE MOST EXPENSIVE LINE IN THIS FILE, AND IT USED TO BE ONE LOG.
@@ -715,6 +739,7 @@ export async function generateStoryImage(
         n: 1,
         size: opts.size ?? PAGE_SIZE,
       });
+      record(response.usage);
     }
 
     // openai 7.x made ImagesResponse.data optional (`data?: Array<Image>`), so

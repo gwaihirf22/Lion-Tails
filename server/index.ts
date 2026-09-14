@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { seedReferenceData } from "./seed";
 import { startStoryWorker } from "./lib/storyWorker";
+import { startPriceWatch } from "./lib/priceWatch";
 import { log } from "./static";
 import path from "path";
 import type { Server } from "http";
@@ -129,6 +130,8 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   // new infrastructure. startStoryWorker awaits databaseReady itself and returns
   // without starting when there is none, so this does not block startup.
   startStoryWorker();
+  // Behind the same gate, for the same reasons. See server/lib/priceWatch.ts.
+  startPriceWatch();
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

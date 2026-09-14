@@ -10,6 +10,7 @@ import SavedStories from "@/pages/SavedStories";
 import UniversePage from "@/pages/Universe";
 import Settings from "@/pages/Settings";
 import AdminStats from "@/pages/AdminStats";
+import AdminCosts from "@/pages/AdminCosts";
 import Characters from "@/pages/Characters";
 import HeroesOfFaith from "@/pages/HeroesOfFaith";
 import ImageAnalysis from "@/pages/ImageAnalysis";
@@ -46,6 +47,7 @@ function Router() {
       {/* The page itself renders the server 403 for a non-admin; the guard that
           matters is requireAdmin on the endpoint, not route visibility. */}
       <ProtectedRoute path="/admin/stats" component={AdminStats} />
+      <ProtectedRoute path="/admin/costs" component={AdminCosts} />
       <ProtectedRoute path="/characters" component={Characters} />
       <Route path="/heroes-of-faith" component={HeroesOfFaith} />
       <Route path="/image-analysis" component={ImageAnalysis} />

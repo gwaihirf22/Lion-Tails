@@ -453,6 +453,9 @@ async function runExtractJob(job: JobRow, resolved: ResolvedModel): Promise<void
     const patch = await requestModelJson<WorldPatch>({
       step: "extractWorld",
       model: resolved.model,
+      // Attributed to the STORY it was extracted from: background work a story
+      // caused is part of what that story cost.
+      ledger: { userId: job.user_id, jobId: job.job_id, storyId: job.story_id ?? undefined, resolved, purpose: "extract" },
       debugData,
       maxTokens: TOKEN_BUDGET.json,
       prompt,
@@ -551,6 +554,7 @@ async function runSummaryJob(job: JobRow, resolved: ResolvedModel): Promise<void
     const parsed = await requestModelJson<{ summary: string; proposedCanon?: string[] }>({
       step: "summariseUniverse",
       model: resolved.model,
+      ledger: { userId: job.user_id, jobId: job.job_id, resolved, purpose: "summary" },
       debugData,
       maxTokens: TOKEN_BUDGET.json,
       prompt: summaryUserPrompt(job.brief, job.target_word_count),

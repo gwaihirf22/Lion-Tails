@@ -208,6 +208,24 @@ account-synced is a schema change.
 
 ---
 
+### Pay-as-you-go charging -- the plan after the costs page
+
+The costs page measures, prices and warns (CLAUDE.md, "What things cost"); it
+charges nobody. What is left:
+
+- **A balance and top-ups.** Stripe Checkout for one-off top-ups, tracked in our
+  own database. At 2.9% + 30¢ the fixed fee is 62.9% of a $0.50 charge, 8.9%
+  of $5 and 5.9% of $10 -- so no top-up below $5, and $10 as the default.
+  Stripe's terms on stored value need reading before a balance ships; its
+  real-time prepaid credits are Metronome-only.
+- **Reserve at enqueue, settle at finish**, the avatar pattern: the published
+  price for the chosen length and model is reserved, and refunded if nothing is
+  written.
+- **How it sits with the free credits.** The free 50 (and 10 a month) are
+  counted in credits today; whether paid stories draw the free balance first,
+  and what a credit is worth in cents, is Blake's call.
+- **Own-key users** pay OpenAI directly and are charged nothing, as now.
+
 ## Known-but-unfixed, recorded so they are not rediscovered
 
 | | |
