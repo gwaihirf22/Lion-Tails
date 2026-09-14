@@ -132,9 +132,10 @@ export default function Characters() {
     },
   });
 
-  const handleCreateCharacter = (values: CharacterFormValues, custom: boolean) => {
-    createMutation.mutate({ values, custom });
-  };
+  // Returns the created row: the form needs its id to save any family chosen
+  // before the character existed.
+  const handleCreateCharacter = (values: CharacterFormValues, custom: boolean) =>
+    createMutation.mutateAsync({ values, custom });
 
   const handleEditCharacter = (character: Character) => {
     setEditingId(character.id);

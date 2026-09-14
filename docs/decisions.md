@@ -948,6 +948,49 @@ both directions.
 The log says "a parent", never a name, and keeps no before/after. It is
 reader-visible, like `debugData`, and a reader may be a child.
 
+## 28. Family is stored by id and said in names, and a relation is two writes
+
+`shared/family.ts`, `server/db-storage.ts` (`setRelation`, `updateCharacter`),
+`server/lib/storyBrief.ts` (`familySentences`, `namesakeLines`, `petsComingAlong`)
+
+Blake's worry was concrete: Paul is Lucy's dad, and in a story about the
+apostle the model makes the apostle her father. His proposal was character
+ids. **Ids are the storage, not the prompt.** A relation points at a
+character id, so renaming Paul keeps him her dad and two characters who share
+a name are never crossed. A uuid in the prompt does nothing for the model and
+can leak into the story, the note or the picture. What stops the confusion is
+the brief SAYING it: "Paul is Lucy's father." built from the ids at enqueue,
+only when both are in the cast, and — when a cast member's first name is in
+the account or is the Timekeeper's — one sentence that they are two people
+who share a name. Both reach the chapter projection, which is where drift
+happens.
+
+**Relatives outside the cast are left out.** Blake chose it, and the reason is
+the one this file keeps finding: anything in the brief is acted on. "Lucy's dad
+Paul is at home" is the exact line that becomes the apostle. He would like the
+model to be able to *look up* a relative only when it wants one — that is
+tool calling, and is deferred until it can be measured, because a model with a
+tool tends to use it because it is there.
+
+**A relation changes two characters, so it is not a form field.** Lucy's "Paul
+is my dad" writes "Lucy is my daughter" onto Paul in one transaction (both rows
+`FOR UPDATE`, ordered by id so two opposite edits queue rather than deadlock).
+It is omitted from every write schema and saved the moment it is chosen. And
+`updateCharacter` — a read, then a full-blob write — takes `relations` from the
+ROW in the UPDATE statement itself, not from its read: a save of Paul's form
+that read him before the mirror landed would otherwise put back the list
+without Lucy. Verified against a real Postgres, with the old statement run as
+a control to show it erases the mirror.
+
+**A favourite animal is not a pet.** The brief fell back to it as the story's
+companion — "has a rabbit as a companion; give it a name and a personality" —
+so every story invented a rabbit with a new name. It is graded now, with the
+hobby and the colour, plus one sentence that it brings no animal into the
+story. A pet is on the sheet with its real name and a tick for "in stories";
+the ticked ones come along, once each across the cast, and on a quest go
+through the lantern (Blake's call). This moved compatibility cases 2 and 5 on
+purpose, by exactly that relocation.
+
 ---
 
 ## Recurring failure shape

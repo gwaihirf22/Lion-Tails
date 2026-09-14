@@ -3,6 +3,7 @@ import {
   storyAllowance, users, type User, type InsertUser, type Song, type SavedStory, type GeneratedPicture, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory ,
   type ReadingPrefs,
 } from "@shared/schema";
+import { inverseOf, withoutCharacter, withRelation, type Relation } from "@shared/family";
 import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
 import createMemoryStore from 'memorystore';
@@ -92,6 +93,17 @@ export interface IStorage {
   createCharacter(character: Omit<Character, "id" | "createdAt">, userId: number): Promise<Character>;
   updateCharacter(id: string, userId: number, character: Partial<Character>): Promise<Character | undefined>;
   deleteCharacter(id: string, userId: number): Promise<boolean>;
+  /**
+   * Make `otherId` <relation> to `id`, and `id` the inverse to `otherId`, in
+   * one step -- or clear the pair with null. Both must be this user's.
+   * Undefined when either is not (the route's 404). Returns the pair as saved.
+   */
+  setRelation(
+    id: string,
+    otherId: string,
+    userId: number,
+    relation: Relation | null,
+  ): Promise<{ character: Character; other: Character } | undefined>;
 
   // Song related methods
   getAllSongs(): Promise<Song[]>;
@@ -477,9 +489,11 @@ export class MemStorage implements IStorage {
     const character = this.characters.get(id);
     if (!character) return undefined;
 
+    // relations are setRelation's alone; see DbStorage.updateCharacter.
+    const { relations: _ignored, ...rest } = updates;
     const updatedCharacter: Character = {
       ...character,
-      ...updates
+      ...rest,
     };
 
     this.characters.set(id, updatedCharacter);
@@ -491,7 +505,31 @@ export class MemStorage implements IStorage {
     if (!owned?.has(id)) return false;
 
     owned.delete(id);
+    for (const otherId of Array.from(owned)) {
+      const other = this.characters.get(otherId);
+      if (other?.relations?.some((r) => r.relativeId === id)) {
+        this.characters.set(otherId, { ...other, relations: withoutCharacter(other.relations, id) });
+      }
+    }
     return this.characters.delete(id);
+  }
+
+  async setRelation(
+    id: string,
+    otherId: string,
+    userId: number,
+    relation: Relation | null,
+  ): Promise<{ character: Character; other: Character } | undefined> {
+    if (id === otherId) return undefined;
+    const owned = this.userCharacters.get(userId);
+    const a = owned?.has(id) ? this.characters.get(id) : undefined;
+    const b = owned?.has(otherId) ? this.characters.get(otherId) : undefined;
+    if (!a || !b) return undefined;
+    const character = { ...a, relations: withRelation(a.relations, otherId, relation) };
+    const other = { ...b, relations: withRelation(b.relations, id, relation && inverseOf(relation)) };
+    this.characters.set(id, character);
+    this.characters.set(otherId, other);
+    return { character, other };
   }
 
   // Song methods

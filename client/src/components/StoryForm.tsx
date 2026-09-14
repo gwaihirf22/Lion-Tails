@@ -777,8 +777,10 @@ export default function StoryForm({
                   name="animal"
                   render={({ field }) => (
                     <FormItem>
+                      {/* Not the character's favourite animal: that is on the sheet and is
+                          only something they like. This is an animal for THIS story. */}
                       <FormLabel className="text-sm font-medium">
-                        Favorite Animal
+                        An animal in this story
                         <span className="ml-2 font-normal text-muted-foreground">(optional)</span>
                       </FormLabel>
                       <FormControl>

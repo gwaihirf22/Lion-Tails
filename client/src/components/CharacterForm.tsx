@@ -66,7 +66,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequestAllowingErrors } from "@/lib/queryClient";
+import { apiRequest, apiRequestAllowingErrors } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import FolderTabs from "@/components/FolderTabs";
@@ -100,6 +100,8 @@ import { useStories } from "@/hooks/use-stories";
 import { characterIdsOf } from "@shared/schema";
 import StoryRow from "@/components/StoryRow";
 import AnimalAutocomplete from "./AnimalAutocomplete";
+import { FamilyEditor, PetsEditor } from "./FamilySection";
+import type { CharacterRelation } from "@shared/family";
 
 /**
  * Making a character.
@@ -124,7 +126,9 @@ import AnimalAutocomplete from "./AnimalAutocomplete";
  *     route, which is the only one allowed to accept an off-catalogue value.
  */
 
-const formSchema = characterSchema.omit({ id: true, createdAt: true, customFields: true });
+// relations are not the form's: they change two characters and are saved the
+// moment they are chosen (FamilySection). Omitted so no Save can send a list.
+const formSchema = characterSchema.omit({ id: true, createdAt: true, customFields: true, relations: true });
 export type CharacterFormValues = z.infer<typeof formSchema>;
 
 /**
@@ -274,8 +278,11 @@ export default function CharacterForm({
       statsEnabled: initialCharacter?.statsEnabled,
       stats: initialCharacter?.stats,
       skills: initialCharacter?.skills,
+      pets: initialCharacter?.pets,
     },
   });
+  /** Family chosen before the character exists; sent once it does. */
+  const [pendingFamily, setPendingFamily] = useState<CharacterRelation[]>([]);
 
   const kind = form.watch("kind") ?? initialCharacter?.gender;
   const category = form.watch("category");
@@ -385,7 +392,27 @@ export default function CharacterForm({
       return;
     }
     try {
-      await onSubmit(values, isCustom(values));
+      const created = await onSubmit(values, isCustom(values));
+      // A new character's family could not be saved before it had an id. One
+      // request per relative, through the same route the edit form uses.
+      const newId = !saved?.id && created && typeof created === "object" && "id" in created
+        ? String((created as { id: unknown }).id)
+        : undefined;
+      if (newId && pendingFamily.length) {
+        try {
+          for (const r of pendingFamily) {
+            await apiRequest("PUT", `/api/characters/${newId}/relations/${r.relativeId}`, { relation: r.relation });
+          }
+        } catch (error) {
+          toast({
+            title: "The character was made, but not all of their family saved",
+            description: "Open the character and add them again.",
+            variant: "destructive",
+          });
+        }
+        setPendingFamily([]);
+        queryClient.invalidateQueries({ queryKey: ["/api/characters"] });
+      }
       // Reset TO THE SUBMITTED VALUES, not to the initial ones: this is what
       // clears isDirty, and it is why the button can grey out while the card
       // stays open. Only on success -- a failed save must stay dirty, or the
@@ -426,7 +453,7 @@ export default function CharacterForm({
                   <SelectValue placeholder="Not set" />
                 </SelectTrigger>
               </FormControl>
-              <SelectContent portalled={false}>
+              <SelectContent>
                 {optionsFor(name, category).map((o) => (
                   <SelectItem key={o} value={o}>{title(o)}</SelectItem>
                 ))}
@@ -1187,6 +1214,19 @@ export default function CharacterForm({
               />
             </div>
 
+            <div className="space-y-5 border-t pt-4">
+              <FamilyEditor
+                savedId={saved?.id}
+                name={form.watch("name") ?? ""}
+                pending={pendingFamily}
+                onPendingChange={setPendingFamily}
+              />
+              <PetsEditor
+                value={form.watch("pets") ?? []}
+                onChange={(next) => form.setValue("pets", next, { shouldDirty: true })}
+              />
+            </div>
+
             {/* ---- Everything else, folded away until it is wanted ---- */}
             </TabsContent>
 
@@ -1636,7 +1676,7 @@ export default function CharacterForm({
                           <SelectValue placeholder="Add a skill…" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent portalled={false}>
+                      <SelectContent>
                         {optionsFor("skill")
                           .filter((o) => !skillValues.some((sk: CharacterSkill) => sk.name === o))
                           .map((o) => (
@@ -1787,7 +1827,7 @@ export default function CharacterForm({
                           <FormControl>
                             <SelectTrigger><SelectValue placeholder="Not set — we will say hair" /></SelectTrigger>
                           </FormControl>
-                          <SelectContent portalled={false}>
+                          <SelectContent>
                             {CHARACTER_CATEGORIES.map((c) => (
                               <SelectItem key={c} value={c}>
                                 {CATEGORY_LABELS[c]} — {coveringNoun(c)}

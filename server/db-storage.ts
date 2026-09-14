@@ -3,6 +3,7 @@ import type { EditLogEntry } from "@shared/editLog";
 import { db, pool } from './db';
 import {
   FREE_STORIES_PER_MONTH, users, verificationTokens, readingPrefsSchema, storyRequestSchema, type ReadingPrefs, type User, type InsertUser, type SavedStory, type GeneratedPicture, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
+import { inverseOf, withRelation, type Relation } from "@shared/family";
 import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
 import { eq, and, desc, isNull, sql, or, like, ilike } from 'drizzle-orm';
@@ -419,33 +420,119 @@ export class DbStorage implements IStorage {
     const character = await this.getCharacterById(id, userId);
     if (!character) return undefined;
 
+    const { relations: _ignored, ...rest } = updates;
     const updatedCharacter: Character = {
       ...character,
-      ...updates
+      ...rest,
     };
 
     // user_id repeated on the write even though the read above already checked
     // it. The read and the write are two statements, and between them the row
     // can change owner or be deleted; a WHERE that only trusts the earlier
     // check is trusting a fact that has since expired.
+    //
+    // RELATIONS ARE TAKEN FROM THE ROW, NOT FROM THE READ. The same gap: Lucy's
+    // "Paul is my dad" writes a mirror onto Paul, and a save of Paul's form that
+    // read him a moment before would put back the list without Lucy. So the
+    // statement keeps whatever `relations` the row holds at the moment of the
+    // write -- setRelation is the only thing that changes it.
     const result = await pool!.query(
-      `UPDATE user_characters SET character_data = $1
-        WHERE character_id = $2 AND user_id = $3`,
+      `UPDATE user_characters
+          SET character_data = CASE
+                WHEN character_data ? 'relations'
+                  THEN ($1::jsonb - 'relations') || jsonb_build_object('relations', character_data->'relations')
+                ELSE $1::jsonb - 'relations'
+              END
+        WHERE character_id = $2 AND user_id = $3
+        RETURNING character_data`,
       [JSON.stringify(updatedCharacter), id, userId]
     );
     if (!result.rowCount) return undefined;
 
-    return updatedCharacter;
+    return result.rows[0].character_data as Character;
   }
 
   async deleteCharacter(id: string, userId: number): Promise<boolean> {
-    const result = await pool!.query(
-      `DELETE FROM user_characters
-        WHERE character_id = $1 AND user_id = $2 RETURNING character_id`,
-      [id, userId]
-    );
+    const client = await pool!.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query(
+        `DELETE FROM user_characters
+          WHERE character_id = $1 AND user_id = $2 RETURNING character_id`,
+        [id, userId]
+      );
+      // Their family forgets them in the same step. The brief also skips a
+      // relation whose id no longer resolves, so this is tidiness rather than
+      // the only guard -- but a sheet should not list someone who is gone.
+      if (result.rowCount) {
+        await client.query(
+          `UPDATE user_characters
+              SET character_data = character_data || jsonb_build_object('relations',
+                    COALESCE((SELECT jsonb_agg(r)
+                                FROM jsonb_array_elements(character_data->'relations') r
+                               WHERE r->>'relativeId' <> $1), '[]'::jsonb))
+            WHERE user_id = $2
+              AND character_data->'relations' @> jsonb_build_array(jsonb_build_object('relativeId', $1::text))`,
+          [id, userId]
+        );
+      }
+      await client.query("COMMIT");
+      return (result.rowCount || 0) > 0;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 
-    return (result.rowCount || 0) > 0;
+  async setRelation(
+    id: string,
+    otherId: string,
+    userId: number,
+    relation: Relation | null,
+  ): Promise<{ character: Character; other: Character } | undefined> {
+    if (id === otherId) return undefined;
+    const client = await pool!.connect();
+    try {
+      await client.query("BEGIN");
+      // Both rows locked, scoped to the owner in the statement. Ordered by id
+      // so two opposite edits (Lucy->Paul and Paul->Lucy at once) take the
+      // locks in the same order and queue rather than deadlock.
+      const { rows } = await client.query(
+        `SELECT character_id, character_data FROM user_characters
+          WHERE user_id = $1 AND character_id = ANY($2::text[])
+          ORDER BY character_id
+          FOR UPDATE`,
+        [userId, [id, otherId]]
+      );
+      const a = rows.find((r) => r.character_id === id)?.character_data as Character | undefined;
+      const b = rows.find((r) => r.character_id === otherId)?.character_data as Character | undefined;
+      if (!a || !b) {
+        await client.query("ROLLBACK");
+        return undefined;
+      }
+
+      const character = { ...a, relations: withRelation(a.relations, otherId, relation) };
+      const other = { ...b, relations: withRelation(b.relations, id, relation && inverseOf(relation)) };
+      // Only the relations key is written, so nothing else on either sheet can
+      // be reverted by this -- `||` replaces one top-level key.
+      for (const c of [character, other]) {
+        await client.query(
+          `UPDATE user_characters
+              SET character_data = character_data || jsonb_build_object('relations', $1::jsonb)
+            WHERE character_id = $2 AND user_id = $3`,
+          [JSON.stringify(c.relations), c.id, userId]
+        );
+      }
+      await client.query("COMMIT");
+      return { character, other };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   // Song methods - implementing temporary JSON storage

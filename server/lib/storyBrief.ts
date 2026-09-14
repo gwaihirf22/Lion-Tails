@@ -22,6 +22,7 @@ import {
   type HeroOfFaith,
 } from "@shared/schema";
 import { coveringNoun, GENDERED_KINDS, type CharacterCategory } from "@shared/characterVocab";
+import { isRelation, relationLabel, sexForWords } from "@shared/family";
 import { storage } from "../storage";
 import { getBiblicalEvent } from "../data/biblicalEvents";
 import {
@@ -806,11 +807,163 @@ export type BriefCharacter = {
  * Out of fullColour and into their own slot so the brief can grade them: see
  * BriefCharacter.mayNotice. Name-free, because the render line names them.
  */
-function softFacts(f: { hobby?: string; favoriteColor?: string }): string {
+function softFacts(f: { hobby?: string; favoriteColor?: string; favoriteAnimal?: string }): string {
   const parts: string[] = [];
   if (isSet(f.hobby)) parts.push(`likes ${f.hobby}`);
   if (isSet(f.favoriteColor)) parts.push(`favourite colour ${f.favoriteColor}`);
+  // Last, so a sheet with no favourite animal renders exactly as it did.
+  if (isSet(f.favoriteAnimal)) parts.push(`${FAVOURITE_ANIMAL_FACT} ${f.favoriteAnimal}`);
   return parts.join("; ");
+}
+
+/**
+ * The favourite animal, graded like the hobby -- and told what it is NOT.
+ *
+ * It used to be the companion: with the story form's animal left blank, the
+ * brief fell back to the sheet's favourite and said "has a rabbit as a
+ * companion; give it a name and a personality". So every story invented a
+ * rabbit with a new name. Blake: "if the character has a favorite animal it
+ * often becomes a pet with a random name. That is not the way I want that to
+ * work." A real pet is on the sheet now, named once (BriefPet). What someone
+ * likes may show in what they say or do; it does not walk into the story.
+ *
+ * The phrase is a constant because the render keys on it: the one sentence
+ * below is said once per brief, only when somebody's favourite animal is there.
+ */
+const FAVOURITE_ANIMAL_FACT = "favourite animal";
+export const FAVOURITE_IS_NOT_A_PET =
+  "A favourite animal is only a liking: it may show in what someone says or does, " +
+  "but no animal comes into the story because of it.";
+
+/**
+ * An animal that belongs to someone in the cast and comes along. Data, not a
+ * sentence, because each projection says it differently -- and a quest says
+ * where it goes.
+ */
+export type BriefPet = { name: string; kind: string; owners: string[] };
+
+/**
+ * The ticked pets of everyone in the cast, once each.
+ *
+ * Lucy and her brother may both list Biscuit the dog -- pets are not mirrored
+ * the way relations are -- so a pet is the same pet when its name and kind
+ * match, and it belongs to both. Order follows the cast, lead first.
+ */
+export function petsComingAlong(characters: Character[]): BriefPet[] {
+  const out: BriefPet[] = [];
+  for (const c of characters) {
+    for (const p of c.pets ?? []) {
+      if (!p.inStories || !isSet(p.name) || !isSet(p.kind)) continue;
+      const same = out.find(
+        (o) => o.name.toLowerCase() === p.name.trim().toLowerCase() &&
+          o.kind.toLowerCase() === p.kind.trim().toLowerCase(),
+      );
+      if (same) {
+        if (!same.owners.includes(c.name)) same.owners.push(c.name);
+      } else {
+        out.push({ name: p.name.trim(), kind: p.kind.trim(), owners: [c.name] });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * On a quest, where the pet goes. Blake chose that it goes too.
+ *
+ * Said only when there IS a pet, rather than as a DEVICE rule: the canon says
+ * the traveller carries nothing through, and a rule about animals in every
+ * quest would be furniture for the model to use. The last clause is the
+ * account's protection -- a dog in Jericho is a dog, not a plot.
+ */
+export const PET_CROSSES_OVER =
+  "A pet goes where its owner goes, through the lantern too: it arrives beside its owner and stays close, " +
+  "and the account goes on exactly as it was.";
+
+/** "Biscuit, Lucy's dog" / "Biscuit, Lucy and Ernie's dog". */
+function petPhrase(p: BriefPet): string {
+  return `${p.name}, ${nameList(p.owners)}'s ${p.kind}`;
+}
+
+/**
+ * How the people in this cast are related, as sentences, each pair once.
+ *
+ * BUILT FROM IDS, SAID IN NAMES. The relation is stored against a character id
+ * (shared/family.ts), so it can only ever point at the Paul on this reader's
+ * shelf -- and it is turned into "Paul is Lucy's father." here, with both of
+ * them in the cast, so the sentence has nothing to attach to but them.
+ *
+ * ONLY BETWEEN PEOPLE IN THIS STORY. Blake chose to leave out family who are
+ * not in it: a brief that says "Lucy's dad Paul is at home" is a brief the
+ * model acts on, and in a story about the apostle it is exactly the line that
+ * makes him her father. A relation whose id is not in the cast -- including one
+ * pointing at a deleted character -- says nothing.
+ */
+export function familySentences(characters: Character[]): string[] {
+  const byId = new Map(characters.map((c) => [c.id, c]));
+  const said = new Set<string>();
+  const out: string[] = [];
+  for (const c of characters) {
+    for (const r of c.relations ?? []) {
+      const other = byId.get(r.relativeId);
+      if (!other || other.id === c.id || !isRelation(r.relation)) continue;
+      const pair = [c.id, other.id].sort().join("|");
+      if (said.has(pair)) continue;
+      said.add(pair);
+      out.push(`${other.name} is ${c.name}'s ${relationLabel(r.relation, sexForWords(other), "prompt")}.`);
+    }
+  }
+  return out;
+}
+
+/**
+ * Whether `word` appears in `text` as a whole word, case-sensitively.
+ *
+ * NO REGEX: the word is a character's name, which is user text, and compiling
+ * user text is an escaping bug waiting (the skillLeakage rule). "Paul" is found
+ * in "Paul's Missionary Journeys" and not in "Pauline".
+ */
+export function containsWholeWord(text: string, word: string): boolean {
+  if (!word) return false;
+  const isLetter = (ch: string | undefined) => !!ch && /\p{L}|\p{N}/u.test(ch);
+  let at = text.indexOf(word);
+  while (at !== -1) {
+    if (!isLetter(text[at - 1]) && !isLetter(text[at + word.length])) return true;
+    at = text.indexOf(word, at + 1);
+  }
+  return false;
+}
+
+/**
+ * A cast member who shares a name with someone the story is ABOUT.
+ *
+ * Blake: "If I (Paul) am Lucy's dad … the AI might put Paul the apostle as her
+ * dad in a story about Paul the Apostle." The brief had nothing that told a
+ * reader's character apart from a figure of the same name -- the Esther/Caleb
+ * story was the same collision, read as the app confusing two people. So when a
+ * cast member's first name is in the account (or is the Timekeeper's), one
+ * sentence says they are two people. Silent otherwise, so no other brief moves.
+ */
+export function namesakeLines(
+  characters: Character[],
+  sources: { account?: string; keeper?: string },
+): string[] {
+  const out: string[] = [];
+  for (const c of characters) {
+    const first = c.name.trim().split(/\s+/)[0] ?? "";
+    if (first.length < 3) continue;
+    const inAccount = !!sources.account && containsWholeWord(sources.account, first);
+    const isKeeper = !!sources.keeper && containsWholeWord(sources.keeper, first);
+    if (!inAccount && !isKeeper) continue;
+    const whose = inAccount && isKeeper
+      ? `the ${first} of the account, or ${sources.keeper}`
+      : inAccount ? `the ${first} of the account` : sources.keeper;
+    out.push(
+      `${c.name} in this story is one of the reader's own characters, and is not ${whose}: ` +
+        `they only share a name. Wherever both could be meant, make it plain which one.`,
+    );
+  }
+  return out;
 }
 
 /**
@@ -954,6 +1107,16 @@ export type StoryBrief = {
    * long story forgot them by chapter 3.
    */
   participationAnchor?: string;
+  /**
+   * "Paul is Lucy's father." -- how the people in THIS cast are related, each
+   * pair once. See familySentences(). Absent when nobody is, and on every brief
+   * frozen before it existed; both render as they always did.
+   */
+  family?: string[];
+  /** Ticked pets across the cast, named. See petsComingAlong(). */
+  pets?: BriefPet[];
+  /** A cast member who shares a name with someone in the account. See namesakeLines(). */
+  namesakes?: string[];
   /** Free-text steering from the user. Deliberately last and unqualified. */
   userInstructions?: string;
   /**
@@ -1108,9 +1271,16 @@ export function buildStoryBrief(
   const favoriteColor = details?.favoriteColor || d?.favoriteColor;
   const hobby = details?.hobby || d?.hobby;
   const personality = details?.personality || d?.personality;
-  const favoriteAnimal = details?.favoriteAnimal || d?.favoriteAnimal;
+  // "Include animals" off means no animals, and that includes one they like:
+  // the form promises "the story will not mention any animals".
+  const animalsAllowed = request.useAnimal !== false;
+  const favoriteAnimal = animalsAllowed ? details?.favoriteAnimal || d?.favoriteAnimal : undefined;
 
-  const animalRaw = request.useAnimal === false ? undefined : request.animal || favoriteAnimal;
+  // The story form's own animal, and ONLY that. It used to fall back to the
+  // sheet's favourite animal, which is how every story grew a rabbit with a
+  // made-up name -- see FAVOURITE_ANIMAL_FACT. A pet that should come along is
+  // on the sheet as a pet now, with its name.
+  const animalRaw = request.useAnimal === false ? undefined : request.animal;
   const animal = isSet(animalRaw) ? animalRaw : undefined;
 
   // ---- The real account, if there is one ------------------------------------
@@ -1271,7 +1441,7 @@ export function buildStoryBrief(
         name, kind, hair, eyes, personality, hobby, favoriteColor, animal,
         category: details?.category, notes: details?.notes,
       });
-  const mayNotice = anonymous ? "" : softFacts({ hobby, favoriteColor });
+  const mayNotice = anonymous ? "" : softFacts({ hobby, favoriteColor, favoriteAnimal });
 
   // ---- WHAT: the thing to invent around ------------------------------------
   const premise: string[] = [];
@@ -1353,15 +1523,17 @@ export function buildStoryBrief(
    * died there". A quest about C. S. Lewis with no episode chosen came back as
    * a tour of Oxford in 1931, a BBC microphone in 1941 and the Narnia years.
    *
-   * Allowed rather than refused, because the lantern-stone gave a whole life a
-   * mechanism it did not have: it wakes and carries them elsewhere in the same
-   * account, and the figure meets the same traveller years apart and remembers
-   * them (DEVICE.rules, CANON.seenAgain). Three real scenes across a life is
-   * that device working, not the failure it used to be. What is refused is the
-   * thing in between -- narrating the years to join the scenes up.
+   * Allowed rather than refused, because the lantern's rules give a whole life
+   * a mechanism it did not have: the way opens again on its own and carries
+   * them elsewhere in the same account, and the figure meets the same traveller
+   * years apart and remembers them (DEVICE.rules, CANON.seenAgain). Three real
+   * scenes across a life is that device working, not the failure it used to
+   * be. What is refused is the thing in between -- narrating the years to join
+   * the scenes up. (This premise said "the stone carries the traveller across"
+   * for a release after the stone left the canon; the two must say the same.)
    *
    * QUEST ONLY: world is set for "travels" and nothing else, and on an
-   * ordinary retelling a whole life has no stone to move through it.
+   * ordinary retelling a whole life has no way across to move through it.
    */
   const wholeLifeQuest = world && (!focus || focus.mode === "whole" || !isSet(focus.text));
   if (wholeLifeQuest && sourceMaterial?.kind === "hero-of-faith") {
@@ -1369,8 +1541,8 @@ export function buildStoryBrief(
       `This story covers more than one moment of ${sourceMaterial.label}'s ` +
         "life. Choose two or three, far apart, that belong together, and play " +
         "each as a real scene -- somewhere, with someone, something happening. " +
-        "Do not narrate the years between those moments: the stone carries the " +
-        "traveller across, and the gap is felt rather than explained.",
+        "Do not narrate the years between those moments: the way opens again and " +
+        "carries the traveller across, and the gap is felt rather than explained.",
     );
   }
   if (focus && focus.mode !== "whole" && isSet(focus.text)) {
@@ -1499,15 +1671,34 @@ export function buildStoryBrief(
               favoriteColor: c.favoriteColor, category: c.category, notes: c.notes,
             })
           : (both ?? one),
-        ...(shareEverything && softFacts({ hobby: c.hobby, favoriteColor: c.favoriteColor })
-          ? { mayNotice: softFacts({ hobby: c.hobby, favoriteColor: c.favoriteColor }) }
+        ...(shareEverything && softFacts({ hobby: c.hobby, favoriteColor: c.favoriteColor, favoriteAnimal: animalsAllowed ? c.favoriteAnimal : undefined })
+          ? { mayNotice: softFacts({ hobby: c.hobby, favoriteColor: c.favoriteColor, favoriteAnimal: animalsAllowed ? c.favoriteAnimal : undefined }) }
           : {}),
       };
     }),
   ];
 
+  /**
+   * Family, pets and namesakes: about the people IN the story, so nothing for a
+   * retelling nobody was written into. Each is omitted when empty, which is
+   * what keeps every brief without them rendering as it always did.
+   */
+  const family = anonymous ? [] : familySentences(characters);
+  const pets = anonymous || !animalsAllowed ? [] : petsComingAlong(characters);
+  const namesakes = anonymous
+    ? []
+    : namesakeLines(characters, {
+        account: sourceMaterial
+          ? [sourceMaterial.label, sourceMaterial.account, ...sourceMaterial.cautions].join("\n")
+          : undefined,
+        keeper: world ? KEEPER.name : undefined,
+      });
+
   return {
     cast,
+    ...(family.length ? { family } : {}),
+    ...(pets.length ? { pets } : {}),
+    ...(namesakes.length ? { namesakes } : {}),
     soloRetelling: anonymous,
     ensemble,
     cliffhanger: request.cliffhanger === true,
@@ -1764,6 +1955,13 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     const sides = brief.world && brief.sourceMaterial?.era
       ? " The story begins in the present day and crosses over: draw each scene where that scene is, and only the far side in the era above."
       : "";
+    // Who is whose, who is not the apostle, and the dog. Last, after the cast
+    // and the cap, and empty for every brief without them.
+    const people = [
+      ...(brief.family ?? []),
+      ...(brief.namesakes ?? []),
+      ...(brief.pets?.length ? [`With them: ${nameList(brief.pets.map(petPhrase))}.`] : []),
+    ].map((line) => ` ${line}`).join("");
 
     // With no lead there is no one face to build the frame around, so the
     // subject is the group -- but the cap does not move: a picture with
@@ -1772,21 +1970,18 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
       const who = `${everyone}${brief.sourceMaterial ? ` -- a scene from ${brief.sourceMaterial.label}` : ""}.`;
       return (
         `${who}${era}${dress}${sides} ${brief.cast.map((c) => c.identity).join(" ")} ` +
-        `Draw at most three of them -- a picture with everyone in it is a crowd, not a scene.`
+        `Draw at most three of them -- a picture with everyone in it is a crowd, not a scene.${people}`
       );
     }
-    // The stone rides even with no source to be a scene from: world alone is
-    // the fact "this is a quest", and a quest picture with nothing to dress
-    // for still has a traveller with a pocket.
     const base = brief.sourceMaterial
       ? `${lead.identity} -- a scene from ${brief.sourceMaterial.label}.${era}${dress}${sides}`
       : lead.identity;
-    if (others.length === 0) return base;
+    if (others.length === 0) return `${base}${people}`;
     // Naming everyone would put eight children in one frame. An illustration
     // is a moment, and a moment has two or three people in it.
     return (
       `${base} Also in the story: ${otherNames.join(", ")}. Draw ${lead.name} and ` +
-      `at most two of the others -- a picture with everyone in it is a crowd, not a scene.`
+      `at most two of the others -- a picture with everyone in it is a crowd, not a scene.${people}`
     );
   }
 
@@ -1865,7 +2060,15 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     const about = brief.ensemble
       ? `The story is about ${brief.cast.map((c) => c.identity).join(" ")} Keep this consistent.`
       : `The story is about ${lead.identity} Keep this consistent.`;
-    return `${about}${soloLine}${alsoLine}${holdLine}${participationLine}${sourceLine}${worldLine}${canonLine}`;
+    // Beside the cast they are about. A relation and a namesake are identity --
+    // chapter 4 is exactly where "her father" drifts onto the wrong Paul -- and a
+    // pet's name is what a chapter writer would otherwise re-invent.
+    const familyLine = [...(brief.family ?? []), ...(brief.namesakes ?? [])].map((l) => ` ${l}`).join("");
+    const petsLine = brief.pets?.length
+      ? ` ${brief.pets.length === 1 ? "The pet" : "Pets"} in this story: ${nameList(brief.pets.map(petPhrase))} -- keep ${brief.pets.length === 1 ? "that name" : "their names"}, and give no one another pet.` +
+        (brief.world ? ` ${PET_CROSSES_OVER}` : "")
+      : "";
+    return `${about}${soloLine}${alsoLine}${holdLine}${familyLine}${petsLine}${participationLine}${sourceLine}${worldLine}${canonLine}`;
   }
 
   const out: string[] = [];
@@ -1905,6 +2108,20 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     for (const c of others) {
       out.push(`  - ${[c.identity, c.colour, c.mayNotice ? mayNoticeLine(c.name, c.mayNotice) : ""].filter(Boolean).join(" ")}`);
     }
+  }
+  // Hard facts about the people just named, so straight after them. Each is
+  // guarded, so a brief without them renders as it did.
+  if (brief.family?.length) out.push(brief.family.join(" "));
+  out.push(...(brief.namesakes ?? []));
+  if (brief.pets?.length) {
+    out.push(
+      `${brief.pets.length === 1 ? "A pet comes" : "Pets come"} along: ${nameList(brief.pets.map(petPhrase))}. ` +
+        `Keep ${brief.pets.length === 1 ? "that name" : "their names"}, and give no one another pet or animal companion.` +
+        (brief.world ? ` ${PET_CROSSES_OVER}` : ""),
+    );
+  }
+  if (brief.cast.some((c) => c.mayNotice?.includes(FAVOURITE_ANIMAL_FACT))) {
+    out.push(FAVOURITE_IS_NOT_A_PET);
   }
   // Straight after the names, because that is what it is about. See
   // ONE_PERSON_PRONOUNS.

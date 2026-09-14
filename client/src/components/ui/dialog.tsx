@@ -4,6 +4,18 @@ import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * True for anything rendered inside one of OUR dialogs.
+ *
+ * Read by SelectContent, which must not portal inside a modal dialog: see the
+ * comment there. It is a context rather than a prop on every Select because a
+ * component cannot know where it will be mounted -- SettingsPanel is the
+ * Settings page AND the body of the gear-icon dialog in Header, and it got the
+ * portalled list in both, so its model picker would not scroll or highlight in
+ * the one place most people open it.
+ */
+export const InsideDialogContext = React.createContext(false)
+
 const Dialog = DialogPrimitive.Root
 
 const DialogTrigger = DialogPrimitive.Trigger
@@ -41,7 +53,7 @@ const DialogContent = React.forwardRef<
       )}
       {...props}
     >
-      {children}
+      <InsideDialogContext.Provider value={true}>{children}</InsideDialogContext.Provider>
       <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-accent-foreground">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>

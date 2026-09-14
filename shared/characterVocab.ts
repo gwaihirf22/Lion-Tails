@@ -533,7 +533,7 @@ const ANIMALS = new Set(animalDatabase);
  * edit to some other field must not trip over them.
  */
 export function vocabularyErrors(
-  patch: Partial<Record<VocabField | "kind" | "favoriteAnimal" | "sex" | "skills", unknown>>,
+  patch: Partial<Record<VocabField | "kind" | "favoriteAnimal" | "sex" | "skills" | "pets", unknown>>,
   category?: CharacterCategory | null,
 ): string[] {
   const errors: string[] = [];
@@ -580,6 +580,17 @@ export function vocabularyErrors(
 
   if (patch.favoriteAnimal !== undefined && !ANIMALS.has(String(patch.favoriteAnimal))) {
     errors.push(`"${String(patch.favoriteAnimal)}" is not one of the animals to choose from.`);
+  }
+
+  // A pet is an animal from the same list. Its NAME is free -- that is the
+  // point of a pet -- and is bounded by petSchema, not by a vocabulary.
+  if (Array.isArray(patch.pets)) {
+    for (const raw of patch.pets as Array<{ kind?: unknown }>) {
+      const kind = String(raw?.kind ?? "");
+      if (kind && !ANIMALS.has(kind)) {
+        errors.push(`"${kind}" is not one of the animals to choose from.`);
+      }
+    }
   }
 
   // A living thing is a he or a she. Only a made thing is an it.

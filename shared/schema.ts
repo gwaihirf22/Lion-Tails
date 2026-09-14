@@ -17,6 +17,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { v4 as uuidv4 } from 'uuid';
 import { CHARACTER_CATEGORIES } from "./characterVocab";
+import { MAX_PETS, MAX_RELATIONS, petSchema, relationSchema } from "./family";
 
 // Enhanced user table with email verification
 export const users = pgTable("users", {
@@ -1076,6 +1077,26 @@ export const characterSchema = z.object({
    * everything, which is what every older row does.
    */
   travelsResetAt: z.string().optional(),
+
+  /**
+   * Who among this reader's OTHER characters is family, by id. Server-owned.
+   *
+   * Written only by setRelation, which writes the mirror onto the other
+   * character in the same transaction -- Lucy's "Paul is my parent" and Paul's
+   * "Lucy is my child" are one edit, so no client-supplied list can leave the
+   * two sheets disagreeing. updateCharacter keeps the row's live value for the
+   * same reason: a form that was open while the mirror landed must not undo it.
+   * See shared/family.ts.
+   */
+  relations: z.array(relationSchema).max(MAX_RELATIONS).optional(),
+
+  /**
+   * Animals that are theirs, named. Saved with the form like any other field.
+   *
+   * Not mirrored: Lucy and her brother may both list Biscuit, and the brief
+   * de-duplicates them by name and kind rather than the sheets sharing a row.
+   */
+  pets: z.array(petSchema).max(MAX_PETS).optional(),
 
   adventures: z
     .array(
