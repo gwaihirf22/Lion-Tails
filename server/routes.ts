@@ -120,6 +120,8 @@ import { v4 as uuidv4 } from "uuid";
 import { setupAuth } from "./auth";
 import { registerSongRoutes } from "./songs";
 import { requireAdmin } from "./lib/requireAuth";
+import { costsReport, publishSuggestedPrices, publishedPriceList, writeMarginPct } from "./lib/costStats";
+import { decideProposal, runBillCheck, runPriceCheck } from "./lib/priceWatch";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication with passport and session
@@ -1362,6 +1364,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Failed to build generation stats:", error);
       res.status(500).json({ message: "Could not load generation stats" });
     }
+  });
+
+  /**
+   * What things really cost, and the prices built on it. All admin-only.
+   *
+   * Prices change only here, by a person: a proposal filed by the price watch
+   * is approved or dismissed, and a price list is published from what was
+   * measured. See server/lib/priceWatch.ts and costStats.ts.
+   */
+  app.get("/api/admin/costs", requireAdmin, async (_req, res) => {
+    try {
+      res.json(await costsReport());
+    } catch (error) {
+      console.error("Failed to build the costs report:", error);
+      res.status(500).json({ message: "Could not load costs" });
+    }
+  });
+
+  app.post("/api/admin/prices/check", requireAdmin, async (_req, res) => {
+    try {
+      const prices = await runPriceCheck();
+      const bill = await runBillCheck();
+      res.json({ proposalId: prices.proposalId ?? null, changes: prices.changes, billChecked: Boolean(bill) });
+    } catch (error) {
+      console.error("Price check failed:", error);
+      res.status(500).json({ message: "The price check failed" });
+    }
+  });
+
+  app.post("/api/admin/prices/:versionId/:decision", requireAdmin, async (req, res) => {
+    const id = Number(req.params.versionId);
+    const decision = req.params.decision === "approve" ? "approved" : req.params.decision === "dismiss" ? "dismissed" : null;
+    if (!Number.isInteger(id) || !decision) return res.status(404).json({ message: "Not found" });
+    const ok = await decideProposal(id, decision, (req.user as any).id);
+    if (!ok) return res.status(409).json({ message: "That proposal has already been decided" });
+    res.json({ id, status: decision });
+  });
+
+  app.put("/api/admin/pricing/margin", requireAdmin, async (req, res) => {
+    const parsed = z.object({ marginPct: z.number().min(0).max(200) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Margin must be between 0 and 200 percent" });
+    await writeMarginPct(parsed.data.marginPct);
+    res.json({ marginPct: parsed.data.marginPct });
+  });
+
+  app.post("/api/admin/pricing/publish", requireAdmin, async (req, res) => {
+    try {
+      res.json({ versionId: await publishSuggestedPrices((req.user as any).id) });
+    } catch (error) {
+      res.status(409).json({ message: error instanceof Error ? error.message : "Could not publish" });
+    }
+  });
+
+  /**
+   * The published price list, for a page that does not exist yet. Prices only:
+   * no costs, no margin, no samples -- what things cost the owner is not what
+   * a family needs to see.
+   */
+  app.get("/api/pricing", requireAuth, async (_req, res) => {
+    const list = await publishedPriceList().catch(() => undefined);
+    res.json({ items: (list?.items ?? []).map((i) => ({ item: i.item, priceCents: i.priceCents })) });
   });
 
   // In-flight jobs plus anything finished in the last hour. That window is how
