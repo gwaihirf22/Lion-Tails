@@ -563,7 +563,9 @@ export function withRefsResolved(
     out = out.split(m.ref).join(`(${who})`);
   };
   matched.forEach((m, i) => swap(m, `the person in reference image ${i + 1}`));
-  described.forEach((m) => swap(m, lookFor(m).replace(/\.$/, "")));
+  // Beside a name the scene already wrote, the description goes without it:
+  // "Lucy (a 9-year-old girl)", not "Lucy (Lucy, a 9-year-old girl)".
+  described.forEach((m) => swap(m, lookFor({ ...m, sharesAName: true }).replace(/\.$/, "")));
   return out.replace(PICTURE_REF_PATTERN, "");
 }
 

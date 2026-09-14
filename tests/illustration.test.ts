@@ -656,6 +656,13 @@ describe("picture IDs bind a face to the right person", () => {
     expect(prompt).toContain("Reference image 1 is Lucy, a 9-year-old girl.");
   });
 
+  it("someone with no portrait is described once, not named twice", () => {
+    const prompt = composeIllustrationPrompt("Lucy [9768fb] waves", [
+      member({ name: "Lucy", look: "Lucy, a 9-year-old girl.", ref: "[9768fb]" }),
+    ]);
+    expect(prompt).toContain("Lucy (a 9-year-old girl) waves");
+  });
+
   it("a scene with no IDs renders exactly the string it always did", () => {
     const cast = [member({ reference: file(), ref: "[9768fb]" })];
     expect(composeIllustrationPrompt(SCENE, cast)).toBe(composeIllustrationPrompt(SCENE, [member({ reference: file() })]));
