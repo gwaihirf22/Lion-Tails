@@ -2522,3 +2522,29 @@ describe("the lore, after Jericho", () => {
     expect(framingApproachOf("someone-else-first").id).toBe(FRAMING_APPROACHES[0].id);
   });
 });
+
+/**
+ * Blake: "an obscure shadow of a lion when the lantern flares. And even the
+ * character to very occasionally note it after they have gone on at least 5
+ * or so timekeeper adventures."
+ */
+describe("the lion's shadow", () => {
+  it("is a faint, uncast shadow in the canon, and the Lion still never appears", () => {
+    expect(CANON.lion).toMatch(/when the lantern flares/);
+    expect(CANON.lion).toMatch(/nothing to cast it/);
+    expect(CANON.lion).toMatch(/nobody explains it/i);
+    expect(CANON.lion).toMatch(/the Lion does not appear/);
+  });
+
+  it("is something only a traveller of five quests or more may remark on, and rarely", async () => {
+    const { LION_SHADOW_VISITS } = await import("../server/data/lionTails");
+    expect(LION_SHADOW_VISITS).toBe(5);
+    const at = (visits: number) => questFamiliarity([{ name: "Sam", visits }]);
+    expect(at(4)).not.toMatch(/shadow/);
+    expect(at(5)).toMatch(/Sam has been on enough quests to have glimpsed that shadow before/);
+    expect(at(5)).toMatch(/Very rarely -- not in most stories/);
+    const mixed = questFamiliarity([{ name: "Ada", visits: 7 }, { name: "Ben", visits: 1 }]);
+    expect(mixed).toMatch(/Ada has been on enough quests/);
+    expect(mixed).not.toMatch(/Ben has been on enough/);
+  });
+});

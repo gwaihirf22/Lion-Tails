@@ -1146,9 +1146,16 @@ prompt. See the doc's "Hidden in the shop's art".
 
 **The Lion is a name, not a character, in the model canon.** `CANON.lion` lets
 Barnabas say "I have no control over this" and, pressed, "The great Lion knows
-no bounds" — once, mysteriously — and forbids the Lion appearing at all. He
-belongs to the guided Quests page, which does not exist yet. The prologue's
-last lines are fixed text and keep him.
+no bounds" — once — and forbids the Lion appearing at all. He belongs to the
+guided Quests page, which does not exist yet. The prologue's last lines are
+fixed text and keep him. **His shadow is allowed, and only his shadow**
+(Blake, after it went onto the world sheet): sometimes, when the lantern
+flares, a faint lion's shadow crosses the wall with nothing to cast it, and
+nobody explains it. A traveller may remark on it only at
+`LION_SHADOW_VISITS` (5) quests or more, through `questFamiliarity()`, and is
+told "very rarely -- not in most stories" — a line in every veteran's brief is
+otherwise a line in every veteran's story. The world cap stayed at 1010: the
+Lion sentence was rewritten shorter rather than the cap raised again.
 
 ## The library
 

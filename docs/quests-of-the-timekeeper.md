@@ -117,9 +117,18 @@ Lion in the scene of every brief is a lion in every story (`docs/decisions.md`
 What the model *is* given is the hint, in Barnabas's mouth: asked how he does
 any of this — "I have no control over this." Pressed — "The great Lion knows
 no bounds." Mysteriously, once, and no more. `CANON.lion` says exactly that,
-and in the same breath that the Lion does not appear: not seen, not heard, not
-described. The prologue's last lines are fixed text and keep him: a lion, not
-roaring, calling; and at the end, beginning to walk.
+and in the same breath that the Lion does not appear. The prologue's last
+lines are fixed text and keep him: a lion, not roaring, calling; and at the
+end, beginning to walk.
+
+**His shadow is the one exception, and it is Blake's** (September 2026). The
+world sheet's back wall carries a faint lion's shadow across the door, and the
+canon now lets a story show the same thing: sometimes, when the lantern flares,
+a faint lion's shadow crosses the wall with nothing to cast it, and nobody
+explains it. A traveller only remarks on it after five quests
+(`LION_SHADOW_VISITS`), and even then "very rarely -- not in most stories";
+Barnabas will not explain. It is a shadow and not the Lion: he still does not
+appear, speak or act before Movement IV.
 
 ## Planted mysteries
 
