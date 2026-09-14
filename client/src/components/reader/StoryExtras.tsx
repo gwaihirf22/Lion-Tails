@@ -255,7 +255,10 @@ export function StoryExtras({
             </figure>
           )}
 
-          {showGallery && storyId && (
+          {/* Not for a built-in story: its pictures are fixed in the file, and
+              choosing or deleting one is refused by the server (refuseBuiltIn).
+              A strip that only ever answers 403 is worse than no strip. */}
+          {showGallery && storyId && !builtIn && (
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               {gallery.map((picture) => {
                 const chosen = picture.url === imageUrl;

@@ -111,10 +111,30 @@ describe("the prologue's picture", () => {
     // is a broken thumbnail in every library, with nothing in any log.
     const onDisk = path.resolve(__dirname, "..", url.replace(/^\//, ""));
     expect(fs.existsSync(onDisk)).toBe(true);
-    // One picture, and it is the chosen one, so the reader shows it with no
-    // gallery strip -- there is nothing to choose between or delete.
+    // The cover is in the gallery too, and it is the chosen one.
     const pictures = storyImagesOf(QUEST_PROLOGUE);
-    expect(pictures).toHaveLength(1);
-    expect(pictures[0].url).toBe(url);
+    expect(pictures.find((pic) => pic.url === url)).toBeTruthy();
+  });
+
+  it("has its vetted pictures in the text, each file shipped and each landing on its own line", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const { anchorBlock } = await import("../client/src/lib/storyContent");
+    const inText = (QUEST_PROLOGUE.images ?? []).filter((pic) => pic.anchor);
+    expect(inText.map((pic) => pic.id)).toEqual(["prologue-shop", "prologue-door"]);
+    const doc = parseStoryContent(QUEST_PROLOGUE.story.content);
+    for (const pic of inText) {
+      expect(fs.existsSync(path.resolve(__dirname, "..", pic.url.replace(/^\//, "")))).toBe(true);
+      // The reader draws a picture ABOVE the block its quote finds: the shop
+      // just after "There was a shop where there had never been a shop
+      // before.", the door just after "stars."
+      const at = anchorBlock(doc.blocks, pic.anchor!);
+      expect(at).toBeGreaterThan(0);
+      const before = JSON.stringify(doc.blocks[at - 1]);
+      expect(before).toContain(pic.id === "prologue-shop" ? "never been a shop before" : "stars.");
+      // No picture ID ever reaches a reader, and a caption says what is in it.
+      expect(pic.prompt).not.toMatch(/\[[0-9a-f]{6,}\]/);
+      expect(pic.prompt.length).toBeGreaterThan(20);
+    }
   });
 });

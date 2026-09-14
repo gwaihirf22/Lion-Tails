@@ -1130,7 +1130,7 @@ surprise him… he might be able to guess."
 library, pinned first, and refused by every mutating route through
 `server/lib/builtInStories.ts` — the only place that knows its id. It is one
 sentence to a line, every line its own paragraph: joined with single newlines
-the reader renders it as a poem, and a test holds the shape. It carries the home page picture as its own (`public/images/quest-prologue-cover.webp`, a copy of the bundled `cover.webp`, whose hashed name a constant cannot know), so it has a thumbnail and a picture at the end like any story. The series name
+the reader renders it as a poem, and a test holds the shape. It carries the home page picture as its own (`public/images/quest-prologue-cover.webp`, a copy of the bundled `cover.webp`, whose hashed name a constant cannot know), so it has a thumbnail and a picture at the end like any story. Two pictures sit IN its text (`quest-prologue-shop.webp` above "You stared at it.", `quest-prologue-door.webp` above "Barnabas held out the lantern."), anchored by quote through `inText()`, which throws at import if a line moves. They were drawn with the canonical face and world sheet, vetted against the prose, and chosen by Blake — never generated at request time. The gallery strip is hidden for built-in stories, whose pictures the server refuses to change. The series name
 is `QUEST_SERIES_TITLE` in `shared/quests.ts`, because the card and the
 prologue heading both print it.
 

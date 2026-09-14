@@ -235,6 +235,37 @@ const paragraphs: string[] = [
   "And somewhere in the darkness, a lion began to walk.",
 ];
 
+const COVER_URL = "/public/images/quest-prologue-cover.webp";
+const COVER_ALT =
+  "A lion and a lantern-keeper outside Barnabas & Co., with scenes from Scripture and church history winding away behind them";
+
+/**
+ * A picture set into the text, drawn ABOVE the paragraph its quote finds.
+ *
+ * VETTED BY HAND, not generated at request time: these were drawn with the
+ * Timekeeper's canonical face and the world sheet, checked line by line
+ * against the prose (bakery on one side, boarded windows on the other, the
+ * sign spelled right and hanging properly, the window's crown and toy and
+ * compass; the back door onto darkness and stars, the lantern held out), and
+ * chosen by Blake from the candidates. A picture that contradicts a story the
+ * whole library shares is not one to leave to a model on the day.
+ *
+ * Anchored by quote, like any passage picture (pictureAnchorSchema); the
+ * index comes from this file's own paragraph list, so reordering lines cannot
+ * leave it pointing at the wrong one -- a test holds that each quote is found.
+ */
+const inText = (id: string, file: string, prompt: string, above: string) => {
+  const blockIndex = paragraphs.indexOf(above);
+  if (blockIndex < 0) throw new Error(`questPrologue: no paragraph "${above}" to hang ${id} above`);
+  return {
+    id,
+    url: `/public/images/${file}`,
+    prompt,
+    createdAt: "2026-09-14T00:00:00.000Z",
+    anchor: { quote: above, blockIndex },
+  };
+};
+
 export const QUEST_PROLOGUE: SavedStory & { builtIn: true } = {
   id: QUEST_PROLOGUE_ID,
   builtIn: true,
@@ -249,9 +280,8 @@ export const QUEST_PROLOGUE: SavedStory & { builtIn: true } = {
      * is the volume), like the Timekeeper's face beside it. The alt text is
      * the home page's own.
      */
-    imageUrl: "/public/images/quest-prologue-cover.webp",
-    imagePrompt:
-      "A lion and a lantern-keeper outside Barnabas & Co., with scenes from Scripture and church history winding away behind them",
+    imageUrl: COVER_URL,
+    imagePrompt: COVER_ALT,
     storyType: "regular",
     moralOutcome: "creative",
     bibleVerse: {
@@ -274,5 +304,20 @@ export const QUEST_PROLOGUE: SavedStory & { builtIn: true } = {
   request: storyRequestSchema.parse({ biblePassage: "Psalm 78:4" }),
   createdAt: "2026-09-10T00:00:00.000Z",
   isFavorite: true,
+  images: [
+    { id: "prologue-cover", url: COVER_URL, prompt: COVER_ALT, createdAt: "2026-09-14T00:00:00.000Z" },
+    inText(
+      "prologue-shop",
+      "quest-prologue-shop.webp",
+      "A quiet evening street: between a lit bakery and a boarded-up building, a small old shop with the sign Barnabas & Co., and a child looking up at it",
+      "You stared at it.",
+    ),
+    inText(
+      "prologue-door",
+      "quest-prologue-door.webp",
+      "Mr Barnabas, looking back at the child beside him, holds a lantern out toward an open door at the back of the shop, and beyond it only darkness and stars",
+      `${B} held out the lantern.`,
+    ),
+  ],
   searchMetadata: { keywords: [], tags: [], characters: [], biblicalReferences: [], themes: [] },
 };
