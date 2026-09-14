@@ -75,7 +75,7 @@ describe("what the admin is warned about", () => {
         projectId: "proj_1",
         unmapped: [],
         rates: [{ model: "gpt-5.6-luna", unit: "output_text", charged: 1.6, approved: 1.2, off: true }],
-        window: { billedUsd: 10, ledgerUsd: 7, drift: 0.3, off: true },
+        window: { from: "2026-09-10T00:00:00.000Z", billedUsd: 10, listValueUsd: 10, ledgerUsd: 7, drift: 0.3, off: true },
       },
     });
     expect(w.map((x) => x.code)).toEqual(["charged-differently", "bill-drift"]);

@@ -305,13 +305,25 @@ these numbers. `/admin/costs` is the page.
   applied until a person approves it**. A feed that changes shape is a
   warning, not "no change". A unit a feed stops listing is carried forward, not
   made free.
-- **The bill check** needs `OPENAI_ADMIN_KEY` (an organisation Admin key, read
-  in `priceWatch.ts` only, never returned by a route) and optionally
-  `OPENAI_PROJECT_ID`. The Costs API grouped by line item gives amount ÷
-  quantity = what was actually charged per model and unit, flagged beyond 2%
-  of the approved price; the billed week against `SUM(cost_micros)` of
-  owner-paid calls is flagged beyond 5%. Without a project id it compares the
-  whole organisation, and the warning says so.
+- **The bill check** needs an organisation Admin key: `OPENAI_ADMIN_KEY_FILE`
+  (a root-only file mounted read-only -- production's is
+  `/mnt/user/appdata/lion-tails/openai-admin-key`) or `OPENAI_ADMIN_KEY`, read
+  by `adminKey()` in `priceWatch.ts` only and never returned by a route -- and
+  `OPENAI_PROJECT_ID` (Lion Tails is "Lion's Tail",
+  `proj_uQjN5Xv24HRqdr0AqaV9E0zp`; the organisation also holds Open WebUI's
+  project, so without it the check compares both). **Written against a real
+  bill, not the docs** (`parseLineItem`, `readBill`): line items are
+  `gpt-5.6-luna, cache writes` and `gpt-image-2-2026-04-21 image, output` --
+  dated snapshots, the modality after the model, token types in words -- and
+  rows come per day AND per project. **Free rows are not a price**: whole days
+  of Luna were billed $0 (the organisation's complimentary allowance) beside
+  rows at exactly list, and averaging them read as Luna at a fifth of its
+  price. The charged rate comes from paid rows only, flagged beyond 2%; the
+  comparison with the ledger uses every token at the APPROVED price (the
+  ledger prices at list too), flagged beyond 5%, and starts at the ledger's
+  first whole day, so a new ledger is not read as every call going unrecorded.
+  First real check, 2026-09-07 to 09-14: $10.49 charged, $2.42 of free usage
+  at list, gpt-image-2 at exactly $30 / $8 / $5.
 - **Costs are measured, not estimated** (`costStats.ts`): a story is the sum of
   its job's calls plus the extraction it caused, by length and model; a story
   with any unpriced call is left out, not counted cheap. Pictures by purpose.

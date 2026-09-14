@@ -5,7 +5,8 @@ import {
   combineFeeds,
   diffPrices,
   drift,
-  impliedPrices,
+  parseLineItem,
+  readBill,
   parseLiteLLM,
   parsePricingMd,
   proposedSheets,
@@ -117,21 +118,57 @@ describe("a feed that changed shape says so", () => {
 });
 
 describe("what OpenAI actually charged", () => {
-  it("divides amount by quantity, per model and unit", () => {
-    const { prices, unmapped } = impliedPrices([
-      { line_item: "gpt-5.6-luna, input_tokens", amount: { value: 0.4 }, quantity: 2_000_000, quantity_unit: "tokens" },
-      { line_item: "gpt-5.6-luna, output_tokens", amount: { value: 1.2 }, quantity: 1_000, quantity_unit: "1000_tokens" },
-      { line_item: "gpt-image-2, output_image_tokens", amount: { value: 3 }, quantity: 100_000, quantity_unit: "tokens" },
-      { line_item: "web search tool calls", amount: { value: 1 }, quantity: 10, quantity_unit: "calls" },
-    ]);
-    expect(prices).toEqual(
-      expect.arrayContaining([
-        { model: "gpt-5.6-luna", unit: "input_text", usdPerMillion: 0.2, amountUsd: 0.4 },
-        { model: "gpt-5.6-luna", unit: "output_text", usdPerMillion: 1.2, amountUsd: 1.2 },
-        { model: "gpt-image-2", unit: "output_image", usdPerMillion: 30, amountUsd: 3 },
-      ]),
+  // Shaped exactly like rows from a real bill (2026-09-14); ids removed.
+  const row = (line_item: string, value: number, quantity: number) => ({
+    line_item, amount: { currency: "usd", value }, quantity, quantity_unit: "tokens",
+  });
+  const approved = {
+    "gpt-5.6-luna": { input_text: 0.2, input_cached: 0.02, input_cache_write: 0.25, output_text: 1.2 },
+    "gpt-image-2": { input_text: 5, input_cached: 1.25, input_image: 8, input_image_cached: 2, output_image: 30 },
+  };
+
+  it("reads the real line-item names: snapshots, modality, token types in words", () => {
+    expect(parseLineItem("gpt-5.6-luna, cache writes")).toEqual({ model: "gpt-5.6-luna", unit: "input_cache_write" });
+    expect(parseLineItem("gpt-5.6-luna, cached input")).toEqual({ model: "gpt-5.6-luna", unit: "input_cached" });
+    expect(parseLineItem("gpt-5.6-luna, output")).toEqual({ model: "gpt-5.6-luna", unit: "output_text" });
+    expect(parseLineItem("gpt-image-2-2026-04-21 image, output")).toEqual({ model: "gpt-image-2", unit: "output_image" });
+    expect(parseLineItem("gpt-image-2-2026-04-21 image, cached input")).toEqual({ model: "gpt-image-2", unit: "input_image_cached" });
+    expect(parseLineItem("gpt-image-2-2026-04-21 text, input")).toEqual({ model: "gpt-image-2", unit: "input_text" });
+    expect(parseLineItem("gpt-4o-mini-2024-07-18, input")).toEqual({ model: "gpt-4o-mini", unit: "input_text" });
+    expect(parseLineItem("web search tool calls")).toBeUndefined();
+  });
+
+  it("takes the charged rate from paid rows only -- free rows are not a discount", () => {
+    const bill = readBill(
+      [
+        // The real bill's pattern: a free day beside a day at list price.
+        row("gpt-5.6-luna, output", 0, 19_287),
+        row("gpt-5.6-luna, output", 0.00915, 7_625),
+        row("gpt-5.6-luna, cache writes", 0.00116775, 4_671),
+        row("gpt-image-2-2026-04-21 image, output", 0.16545, 5_515),
+        row("gpt-5.6-luna, cached input", 0, 0),
+      ],
+      approved,
     );
-    expect(unmapped).toEqual(["web search tool calls (calls)"]);
+    const rate = (model: string, unit: string) => bill.prices.find((x) => x.model === model && x.unit === unit)?.usdPerMillion;
+    expect(rate("gpt-5.6-luna", "output_text")).toBe(1.2);
+    expect(rate("gpt-5.6-luna", "input_cache_write")).toBe(0.25);
+    expect(rate("gpt-image-2", "output_image")).toBe(30);
+    expect(bill.billedUsd).toBeCloseTo(0.00915 + 0.00116775 + 0.16545, 8);
+    // The free 19,287 output tokens, at list price.
+    expect(bill.freeValueUsd).toBeCloseTo(0.0231444, 6);
+    expect(bill.listValueUsd).toBeCloseTo(bill.billedUsd + bill.freeValueUsd, 8);
+    // A zero-quantity row is neither unmapped nor a price.
+    expect(bill.unmapped).toEqual([]);
+  });
+
+  it("names usage it cannot read or has no price for, rather than dropping it", () => {
+    const bill = readBill(
+      [row("chat-latest, input", 0.005, 1_000), { line_item: "web search tool calls", amount: { value: 1 }, quantity: 10, quantity_unit: "calls" }],
+      approved,
+    );
+    expect(bill.unpriced).toEqual(["chat-latest input text"]);
+    expect(bill.unmapped).toEqual(["web search tool calls (calls)"]);
   });
 
   it("measures drift against the larger amount", () => {

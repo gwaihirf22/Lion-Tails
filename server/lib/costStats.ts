@@ -11,7 +11,7 @@ import { pool, databaseReady } from "../db";
 import { characterRoleOf, type StoryRequest } from "@shared/schema";
 import { MODEL_CATALOG } from "./modelPolicy";
 import { loadApprovedPrices } from "./modelCalls";
-import { readBillCheck, readWatchStatus, watchedModels } from "./priceWatch";
+import { adminKey, readBillCheck, readWatchStatus, watchedModels } from "./priceWatch";
 import {
   buildWarnings,
   suggestPrices,
@@ -146,7 +146,7 @@ export async function costsReport() {
 
   const { models } = watchedModels();
   const unpricedModels = models.filter((m) => !book.sheets.has(m));
-  const billCheckEnabled = Boolean(process.env.OPENAI_ADMIN_KEY);
+  const billCheckEnabled = Boolean(adminKey());
 
   const warnings = buildWarnings({
     pendingProposals: proposals.map((p) => ({

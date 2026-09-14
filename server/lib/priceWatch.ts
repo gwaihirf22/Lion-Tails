@@ -14,10 +14,11 @@
  * failing -- "OpenAI's page could not be read" is itself a warning -- and the
  * next check runs anyway.
  *
- * OPENAI_ADMIN_KEY is read here and nowhere else. It is an organisation admin
+ * OPENAI_ADMIN_KEY (or OPENAI_ADMIN_KEY_FILE) is read here and nowhere else. It is an organisation admin
  * credential, not a model key: modelPolicy.ts never sees it, and it is never
  * returned by a route (the panel is told only whether it is set).
  */
+import fs from "fs";
 import { pool, databaseReady } from "../db";
 import { MODEL_CATALOG } from "./modelPolicy";
 import { forgetPrices, loadApprovedPrices } from "./modelCalls";
@@ -27,7 +28,7 @@ import {
   combineFeeds,
   diffPrices,
   drift,
-  impliedPrices,
+  readBill,
   parseLiteLLM,
   parsePricingMd,
   proposedSheets,
@@ -48,6 +49,27 @@ export const TOTAL_TOLERANCE = 0.05;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 30_000;
+
+/**
+ * The Admin key, from the environment or from a file.
+ *
+ * OPENAI_ADMIN_KEY_FILE is the preferred form in production: the key sits in a
+ * root-only file mounted read-only into the container, so it never has to be
+ * written into docker-compose.yml, which is copied into backups and diffs.
+ * OPENAI_ADMIN_KEY still works for a dev shell. Read on every use rather than
+ * cached, so replacing the file (rotating the key) needs no restart.
+ */
+export function adminKey(): string | undefined {
+  const direct = process.env.OPENAI_ADMIN_KEY?.trim();
+  if (direct) return direct;
+  const file = process.env.OPENAI_ADMIN_KEY_FILE;
+  if (!file) return undefined;
+  try {
+    return fs.readFileSync(file, "utf8").split(/\r?\n/)[0].trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /** The OpenAI models the app can call, and whether each is a picture model. */
 export function watchedModels(): { models: string[]; kinds: Record<string, "text" | "image"> } {
@@ -77,7 +99,15 @@ export type BillCheck = {
   /** Per model and unit: what was charged against what is approved. */
   rates: Array<{ model: string; unit: string; charged: number; approved?: number; off: boolean }>;
   unmapped: string[];
-  window?: { from: string; to: string; billedUsd: number; ledgerUsd: number; drift: number; off: boolean };
+  /** Usage with no approved price, so it counts toward neither side of the comparison. */
+  unpriced?: string[];
+  /**
+   * The week, three ways. billedUsd is what OpenAI charged. listValueUsd is
+   * every token on the bill at the approved price, free ones included, and it
+   * is what the ledger is compared with: the ledger prices at list too, so a
+   * gap between those two means a call the ledger missed -- not free tokens.
+   */
+  window?: { from: string; to: string; billedUsd: number; listValueUsd: number; freeValueUsd: number; ledgerUsd: number; drift: number; off: boolean };
 };
 
 async function getSetting<T>(key: string): Promise<T | undefined> {
@@ -223,8 +253,8 @@ export async function decideProposal(id: number, decision: "approved" | "dismiss
  * test if this app is the only thing spending in it -- the panel says which.
  */
 export async function runBillCheck(): Promise<BillCheck | undefined> {
-  const adminKey = process.env.OPENAI_ADMIN_KEY;
-  if (!adminKey) return undefined;
+  const key = adminKey();
+  if (!key) return undefined;
   const projectId = process.env.OPENAI_PROJECT_ID || undefined;
   const at = new Date().toISOString();
   const end = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00Z");
@@ -244,16 +274,19 @@ export async function runBillCheck(): Promise<BillCheck | undefined> {
       url.searchParams.set("limit", "180");
       if (page) url.searchParams.set("page", page);
       const body = JSON.parse(
-        await fetchText(url.toString(), { headers: { Authorization: `Bearer ${adminKey}` } }),
-      ) as { data?: Array<{ results?: CostRow[] }>; has_more?: boolean; next_page?: string };
-      for (const bucket of body.data ?? []) rows.push(...(bucket.results ?? []));
+        await fetchText(url.toString(), { headers: { Authorization: `Bearer ${key}` } }),
+      ) as { data?: Array<{ start_time?: number; results?: CostRow[] }>; has_more?: boolean; next_page?: string };
+      // Each row keeps its day, so the ledger comparison can start where the ledger does.
+      for (const bucket of body.data ?? []) {
+        rows.push(...(bucket.results ?? []).map((r) => ({ ...r, day: bucket.start_time })));
+      }
       if (!body.has_more || !body.next_page) break;
       page = body.next_page;
     }
 
-    const implied = impliedPrices(rows);
     const approved = Object.fromEntries((await loadApprovedPrices()).sheets);
-    result.rates = implied.prices.map((p) => {
+    const bill = readBill(rows, approved);
+    result.rates = bill.prices.map((p) => {
       const price = approved[p.model]?.[p.unit];
       return {
         model: p.model,
@@ -263,24 +296,40 @@ export async function runBillCheck(): Promise<BillCheck | undefined> {
         off: price === undefined ? false : drift(p.usdPerMillion, price) > RATE_TOLERANCE,
       };
     });
-    result.unmapped = implied.unmapped;
+    result.unmapped = bill.unmapped;
+    result.unpriced = bill.unpriced;
 
-    const billedUsd = rows.reduce((sum, r) => sum + (Number(r.amount?.value) || 0), 0);
-    const { rows: ledger } = await pool!.query(
-      `SELECT COALESCE(SUM(cost_micros), 0)::bigint AS micros FROM model_calls
-        WHERE owner_paid AND created_at >= $1 AND created_at < $2`,
-      [start, end],
-    );
-    const ledgerUsd = Number(ledger[0].micros) / 1_000_000;
-    const d = drift(billedUsd, ledgerUsd);
-    result.window = {
-      from: start.toISOString(),
-      to: end.toISOString(),
-      billedUsd,
-      ledgerUsd,
-      drift: d,
-      off: d > TOTAL_TOLERANCE && Math.abs(billedUsd - ledgerUsd) > 0.05,
-    };
+    /**
+     * ONLY THE DAYS THE LEDGER HAS BEEN RUNNING. The week before this shipped has
+     * a bill and no ledger, and comparing them reads as "every call is going
+     * unrecorded" for the first seven days. So the comparison starts at the
+     * first whole day after the ledger's first row, and is not made at all
+     * until there is one.
+     */
+    const { rows: first } = await pool!.query("SELECT MIN(created_at) AS at FROM model_calls");
+    const firstAt = first[0]?.at ? new Date(first[0].at) : undefined;
+    const firstWholeDay = firstAt ? new Date(firstAt.toISOString().slice(0, 10) + "T00:00:00Z").getTime() + DAY_MS : undefined;
+    const compareFrom = new Date(Math.max(start.getTime(), firstWholeDay ?? end.getTime()));
+    if (compareFrom.getTime() < end.getTime()) {
+      const inWindow = readBill(rows.filter((r) => (r.day ?? 0) * 1000 >= compareFrom.getTime()), approved);
+      const { rows: ledger } = await pool!.query(
+        `SELECT COALESCE(SUM(cost_micros), 0)::bigint AS micros FROM model_calls
+          WHERE owner_paid AND created_at >= $1 AND created_at < $2`,
+        [compareFrom, end],
+      );
+      const ledgerUsd = Number(ledger[0].micros) / 1_000_000;
+      const d = drift(inWindow.listValueUsd, ledgerUsd);
+      result.window = {
+        from: compareFrom.toISOString(),
+        to: end.toISOString(),
+        billedUsd: inWindow.billedUsd,
+        listValueUsd: inWindow.listValueUsd,
+        freeValueUsd: inWindow.freeValueUsd,
+        ledgerUsd,
+        drift: d,
+        off: d > TOTAL_TOLERANCE && Math.abs(inWindow.listValueUsd - ledgerUsd) > 0.05,
+      };
+    }
     result.ok = true;
   } catch (error) {
     // The message only: the key is in the request, never in an error we keep.

@@ -112,7 +112,7 @@ export function buildWarnings(input: {
   published: Array<{ item: string; priceCents: number }>;
   measured: CostGroup[];
   watch?: { litellm?: { ok: boolean; error?: string; problems?: string[] }; page?: { ok: boolean; error?: string; problems?: string[] }; lastRunAt?: string };
-  bill?: { ok: boolean; error?: string; rates: Array<{ model: string; unit: string; charged: number; approved?: number; off: boolean }>; unmapped: string[]; window?: { billedUsd: number; ledgerUsd: number; drift: number; off: boolean }; projectId?: string };
+  bill?: { ok: boolean; error?: string; rates: Array<{ model: string; unit: string; charged: number; approved?: number; off: boolean }>; unmapped: string[]; unpriced?: string[]; window?: { from: string; billedUsd: number; listValueUsd?: number; freeValueUsd?: number; ledgerUsd: number; drift: number; off: boolean }; projectId?: string };
   billCheckEnabled: boolean;
   now?: Date;
 }): Warning[] {
@@ -141,7 +141,8 @@ export function buildWarnings(input: {
       out.push({
         level: "action",
         code: "charged-differently",
-        message: `OpenAI charged $${r.charged}/M for ${r.model} ${r.unit.replace(/_/g, " ")}; the approved price is $${r.approved}/M.`,
+        message: `OpenAI charged $${r.charged}/M for ${r.model} ${r.unit.replace(/_/g, " ")} on paid usage; the approved price is $${r.approved}/M. ` +
+          "Either the price changed, or part of a day's usage was free.",
       });
     }
     if (input.bill.window?.off) {
@@ -149,8 +150,8 @@ export function buildWarnings(input: {
       out.push({
         level: input.bill.projectId ? "action" : "watch",
         code: "bill-drift",
-        message: `Last 7 days OpenAI billed $${w.billedUsd.toFixed(2)}, the ledger recorded $${w.ledgerUsd.toFixed(2)} ` +
-          `(${Math.round(w.drift * 100)}% apart)` +
+        message: `Since ${w.from.slice(0, 10)} the bill came to $${(w.listValueUsd ?? w.billedUsd).toFixed(2)} at list price, the ledger recorded $${w.ledgerUsd.toFixed(2)} ` +
+          `(${Math.round(w.drift * 100)}% apart) -- so a paid call may be going unrecorded` +
           (input.bill.projectId ? "." : " -- for the whole organisation, so other use of the key counts too."),
       });
     }
@@ -178,7 +179,7 @@ export function buildWarnings(input: {
     out.push({ level: "watch", code: "stale-check", message: `Prices were last checked ${input.watch.lastRunAt.slice(0, 10)}.` });
   }
   if (!input.billCheckEnabled) {
-    out.push({ level: "watch", code: "bill-check-off", message: "The bill check is off: set OPENAI_ADMIN_KEY to compare against what OpenAI actually charged." });
+    out.push({ level: "watch", code: "bill-check-off", message: "The bill check is off: set OPENAI_ADMIN_KEY_FILE (or OPENAI_ADMIN_KEY) to compare against what OpenAI actually charged." });
   }
   return out.sort((a, b) => (a.level === b.level ? 0 : a.level === "action" ? -1 : 1));
 }

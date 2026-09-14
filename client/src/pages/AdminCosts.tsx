@@ -44,7 +44,8 @@ type Report = {
     ok: boolean;
     error?: string;
     rates: Array<{ model: string; unit: string; charged: number; approved?: number; off: boolean }>;
-    window?: { from: string; to: string; billedUsd: number; ledgerUsd: number; drift: number; off: boolean };
+    unpriced?: string[];
+    window?: { from: string; to: string; billedUsd: number; listValueUsd: number; freeValueUsd: number; ledgerUsd: number; drift: number; off: boolean };
   } | null;
   billCheckEnabled: boolean;
   billProjectScoped: boolean;
@@ -359,9 +360,12 @@ export default function AdminCosts() {
           </p>
           {report.bill?.ok && report.bill.window && (
             <p className="text-muted-foreground">
-              {report.bill.window.from.slice(0, 10)} to {report.bill.window.to.slice(0, 10)}: OpenAI billed $
-              {report.bill.window.billedUsd.toFixed(2)}, the ledger recorded ${report.bill.window.ledgerUsd.toFixed(2)} (
-              {Math.round(report.bill.window.drift * 100)}% apart).
+              {report.bill.window.from.slice(0, 10)} to {report.bill.window.to.slice(0, 10)}: OpenAI charged $
+              {report.bill.window.billedUsd.toFixed(2)}
+              {report.bill.window.freeValueUsd > 0.005 &&
+                ` (free usage worth $${report.bill.window.freeValueUsd.toFixed(2)} at list price)`}
+              . At list price the bill is ${report.bill.window.listValueUsd.toFixed(2)} and the ledger recorded $
+              {report.bill.window.ledgerUsd.toFixed(2)} ({Math.round(report.bill.window.drift * 100)}% apart).
             </p>
           )}
         </CardContent>

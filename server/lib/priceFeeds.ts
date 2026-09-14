@@ -264,57 +264,119 @@ export function sheetsFingerprint(sheets: Record<string, ModelPriceSheet>): stri
 }
 
 /**
- * Prices as actually CHARGED, from the Costs API grouped by line item.
+ * What the bill says, from the Costs API grouped by line item.
  *
- * Each result carries amount, quantity and quantity_unit, and a line item that
- * names the model and what was billed ("gpt-6-astra, input_tokens" in OpenAI's
- * example). amount / quantity is the real rate. The docs show one example name;
- * the rest are mapped by the words they contain, and anything unrecognised is
- * returned as `unmapped` so the panel shows it instead of dropping it.
+ * READ FROM A REAL BILL (2026-09-14), not from the docs, which show one example
+ * name. Real line items look like:
+ *   "gpt-5.6-luna, cache writes"            "gpt-5.6-luna, cached input"
+ *   "gpt-image-2-2026-04-21 image, output"  "gpt-image-2-2026-04-21 text, input"
+ * -- a dated snapshot, the modality after the model for image models, and the
+ * token type in words. Rows arrive per day AND per project even when grouped by
+ * line item, with quantity in tokens.
+ *
+ * FREE ROWS ARE NOT A PRICE. The same bill carried whole days of Luna usage at
+ * $0 (the organisation's complimentary token allowance) beside rows at exactly
+ * the list price. Averaging them read as Luna costing a fifth of its price. So
+ * the charged RATE comes from paid rows only, and free usage is reported
+ * separately, priced at the approved rate so the panel can say what it saved.
  */
-export type CostRow = { line_item?: string; amount?: { value?: number }; quantity?: number; quantity_unit?: string };
-export function impliedPrices(rows: CostRow[]): {
-  prices: Array<{ model: string; unit: PriceUnit; usdPerMillion: number; amountUsd: number }>;
+export type CostRow = {
+  line_item?: string;
+  amount?: { value?: number };
+  quantity?: number;
+  quantity_unit?: string;
+  project_id?: string | null;
+  /** The bucket's start, in seconds, added when the rows are collected. */
+  day?: number;
+};
+
+/** "gpt-image-2-2026-04-21 image, cached input" -> { model: "gpt-image-2", unit: "input_image_cached" }. */
+export function parseLineItem(item: string): { model: string; unit: PriceUnit } | undefined {
+  const comma = item.lastIndexOf(",");
+  if (comma < 0) return undefined;
+  let modelPart = item.slice(0, comma).trim();
+  const type = item.slice(comma + 1).trim().toLowerCase();
+  let modality: "image" | "text" | undefined;
+  const m = /\s+(image|text)$/i.exec(modelPart);
+  if (m) {
+    modality = m[1].toLowerCase() as "image" | "text";
+    modelPart = modelPart.slice(0, m.index);
+  }
+  const model = modelPart.replace(/-\d{4}-\d{2}-\d{2}$/, "");
+  if (!model) return undefined;
+  const cached = /cached/.test(type);
+  const write = /cache\s*writ|cache\s*creation/.test(type);
+  const output = /output/.test(type);
+  const input = /input/.test(type) || write;
+  const image = modality === "image" || /image/.test(type);
+  const unit: PriceUnit | undefined = image
+    ? output ? "output_image" : cached ? "input_image_cached" : write ? undefined : input ? "input_image" : undefined
+    : output ? "output_text" : write ? "input_cache_write" : cached ? "input_cached" : input ? "input_text" : undefined;
+  return unit ? { model, unit } : undefined;
+}
+
+export type BillReading = {
+  /** Per model and unit, from rows that were actually charged. */
+  prices: Array<{ model: string; unit: PriceUnit; usdPerMillion: number; paidTokens: number; amountUsd: number }>;
+  /** What was billed, in dollars. */
+  billedUsd: number;
+  /** Every token on the bill at the APPROVED price, free ones included -- comparable with the ledger. */
+  listValueUsd: number;
+  /** The free tokens at the approved price: what the allowance saved. */
+  freeValueUsd: number;
+  /** Line items with usage that this could not read, or with no approved price. */
   unmapped: string[];
-} {
+  unpriced: string[];
+};
+
+export function readBill(rows: CostRow[], approved: Record<string, ModelPriceSheet>): BillReading {
   const scale: Record<string, number> = { tokens: 1_000_000, "1k_tokens": 1_000, "1000_tokens": 1_000, "1m_tokens": 1, "1M_tokens": 1 };
-  const acc = new Map<string, { model: string; unit: PriceUnit; amount: number; quantity: number }>();
+  const paid = new Map<string, { model: string; unit: PriceUnit; amount: number; millions: number }>();
   const unmapped = new Set<string>();
+  const unpriced = new Set<string>();
+  let billedUsd = 0;
+  let listValueUsd = 0;
+  let freeValueUsd = 0;
   for (const r of rows) {
+    const amount = Number(r.amount?.value) || 0;
+    billedUsd += amount;
+    const quantity = Number(r.quantity) || 0;
+    if (quantity <= 0) continue; // a zero row is not a finding
     const item = String(r.line_item ?? "");
-    const [modelPart, typePart = ""] = item.split(/,\s*/);
-    const t = typePart.toLowerCase();
-    const unit: PriceUnit | undefined =
-      /image/.test(t) && /output/.test(t) ? "output_image"
-      : /image/.test(t) && /cache/.test(t) ? "input_image_cached"
-      : /image/.test(t) ? "input_image"
-      : /cache.*(write|creation)/.test(t) ? "input_cache_write"
-      : /cache/.test(t) ? "input_cached"
-      : /output/.test(t) ? "output_text"
-      : /input/.test(t) ? "input_text"
-      : undefined;
+    const parsed = parseLineItem(item);
     const factor = scale[String(r.quantity_unit ?? "")];
-    const amount = Number(r.amount?.value);
-    const quantity = Number(r.quantity);
-    if (!modelPart || !unit || !factor || !Number.isFinite(amount) || !Number.isFinite(quantity) || quantity <= 0) {
-      if (item) unmapped.add(`${item} (${r.quantity_unit ?? "no unit"})`);
+    if (!parsed || !factor) {
+      unmapped.add(`${item} (${r.quantity_unit ?? "no unit"})`);
       continue;
     }
-    const key = `${modelPart}|${unit}`;
-    const prev = acc.get(key) ?? { model: modelPart, unit, amount: 0, quantity: 0 };
-    prev.amount += amount;
-    // In millions of tokens, the unit prices are quoted in.
-    prev.quantity += quantity / factor;
-    acc.set(key, prev);
+    const millions = quantity / factor;
+    const price = approved[parsed.model]?.[parsed.unit];
+    if (price === undefined) unpriced.add(`${parsed.model} ${parsed.unit.replace(/_/g, " ")}`);
+    else {
+      listValueUsd += millions * price;
+      if (amount === 0) freeValueUsd += millions * price;
+    }
+    if (amount > 0) {
+      const key = `${parsed.model}|${parsed.unit}`;
+      const prev = paid.get(key) ?? { model: parsed.model, unit: parsed.unit, amount: 0, millions: 0 };
+      prev.amount += amount;
+      prev.millions += millions;
+      paid.set(key, prev);
+    }
   }
   return {
-    prices: Array.from(acc.values()).map((v) => ({
+    prices: Array.from(paid.values()).map((v) => ({
       model: v.model,
       unit: v.unit,
-      usdPerMillion: v.quantity > 0 ? Math.round((v.amount / v.quantity) * 1e6) / 1e6 : 0,
+      usdPerMillion: Math.round((v.amount / v.millions) * 1e6) / 1e6,
+      paidTokens: Math.round(v.millions * 1_000_000),
       amountUsd: v.amount,
     })),
+    billedUsd,
+    listValueUsd,
+    freeValueUsd,
     unmapped: Array.from(unmapped),
+    unpriced: Array.from(unpriced),
   };
 }
 
