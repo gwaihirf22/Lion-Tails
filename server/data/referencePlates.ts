@@ -57,6 +57,34 @@ export const CROSSING_OVER_DRESS =
   " someone of that age would wear there, as though it had always been so. Nobody remarks on it" +
   " and nobody explains it.";
 
+/**
+ * "THEY WERE ALWAYS THERE" DRESSES THEM TOO. Blake, after a Lystra scene with
+ * his character Paul in a grey t-shirt, jeans and a baseball cap: "We need a
+ * they were always there to take the character and make them fit the scene."
+ *
+ * The prose already had it -- "do not give them anything from another century"
+ * (participationPremise) -- and the picture never heard it. Worse, the image
+ * prompt took each person's clothing from their PORTRAIT, so a character drawn
+ * at home in modern clothes wore them into the first century. This is the
+ * alongside counterpart of CROSSING_OVER_DRESS, and illustration.ts stops
+ * taking clothes from the portrait whenever it applies.
+ *
+ * People only. Blake: "Animals though, that may be different" -- an animal is
+ * not given a costume; see ANIMALS_AS_THEY_ARE.
+ */
+export const ALONGSIDE_DRESS =
+  "Everyone from the reader's own characters belongs to this time and place, and is dressed the way" +
+  " people of that age were dressed there -- nothing from another century.";
+
+/**
+ * An animal in a scene from the past: itself, and nothing modern on it. A dog in
+ * Lystra came back on a chain lead. Said only in the image projection, and only
+ * when a period scene has a pet in it, so no other brief moves.
+ */
+export const ANIMALS_AS_THEY_ARE =
+  "In a scene set in the past, an animal is drawn as the animal it is, not dressed up, and with" +
+  " nothing modern on it -- no collar tag, harness or lead from another century.";
+
 /** What the picture is of, as the model wrote it. All a gate gets to see. */
 export type PlateContext = {
   /** The image prompt for THIS picture -- not the story, not the brief. */

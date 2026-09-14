@@ -48,6 +48,7 @@ import { KEEPER, KEEPER_FACE_FILE } from "../data/lionTails";
 import { platesForScene } from "../data/referencePlates";
 import { storage } from "../storage";
 import { describeCharacter, looksLikeRefusal, readAvatarFile } from "./avatar";
+import { categoryOf } from "@shared/characterVocab";
 import { PICTURE_REF_PATTERN, pictureRefs } from "@shared/family";
 import {
   buildStoryBrief,
@@ -118,6 +119,16 @@ export type IllustrationMember = {
    * wearing Blake's face.
    */
   sharesAName?: boolean;
+  /**
+   * Where their clothes come from. Absent: the portrait, as always. "always":
+   * the scene's time and place ("They were always there"). "farSide": the
+   * scene's time and place on the far side of the lantern, the portrait at
+   * home. A portrait shows what someone wears NOW, and taking it into the first
+   * century is how Blake's Paul stood in Lystra in a baseball cap.
+   */
+  dressed?: "always" | "farSide";
+  /** Not a person -- an animal, a creature, a machine -- so never dressed up. */
+  notAPerson?: boolean;
 };
 
 /**
@@ -325,6 +336,16 @@ export function chooseDrawn(
 }
 
 /**
+ * A person is dressed for the scene; anything else is drawn as it is. A kind
+ * this catalogue does not know -- one a parent typed -- counts as a person,
+ * because an unknown word is far more often "space pirate" than "whale".
+ */
+function isPerson(character: Character): boolean {
+  const category = character.category ?? categoryOf(character.kind ?? character.gender);
+  return !category || category === "human" || category === "folk";
+}
+
+/**
  * Who has to be recognisable in this story's picture.
  *
  * The characters are read LIVE rather than off the frozen brief: the brief is
@@ -354,6 +375,10 @@ export async function illustrationCast(
     }
     const { drawn, shared } = await drawnCharacters(request, characters, scenePrompt);
     const refs = pictureRefs(characters.map((c) => c.id));
+    // charactersAreInTheStory() is true here, so a role other than "absent"
+    // means a real account with the cast inside it.
+    const role = characterRoleOf(request);
+    const dressed = role === "alongside" ? "always" : role === "travels" ? "farSide" : undefined;
     for (const character of drawn) {
       cast.push({
         name: character.name,
@@ -368,6 +393,8 @@ export async function illustrationCast(
         fromPhoto: chosenAvatarIsPhoto(character),
         ref: refs.get(character.id),
         ...(shared.has(character.id) ? { sharesAName: true } : {}),
+        ...(dressed ? { dressed } : {}),
+        ...(isPerson(character) ? {} : { notAPerson: true }),
       });
     }
   }
@@ -498,14 +525,17 @@ export function classifyEditFailure(error: unknown): EditFailure {
  * the model placed it in the scene as one more face, and a shop front is the
  * same mistake waiting to happen.
  */
-function referenceLine(n: number, e: IllustrationReference): string {
+function referenceLine(n: number, e: IllustrationReference, periodDressed = false): string {
   const head = `Reference image ${n} is ${e.look}`;
   switch (e.role) {
     case "style":
       return (
         `${head} It is the look of this book, not a scene and not a person. Match its palette, its` +
         " linework and the way it is lit. Anyone in this picture who also appears in it must look the" +
-        " same here as they do there. Take nothing else from it — not its scene, its framing or its moment."
+        // A cover drawn before a period rule existed can show a character in
+        // modern clothes; "look the same" would carry them into this scene.
+        (periodDressed ? " same here as they do there — the same face and hair, but not necessarily the same clothes." : " same here as they do there.") +
+        " Take nothing else from it — not its scene, its framing or its moment."
       );
     case "background":
       return (
@@ -538,6 +568,40 @@ function referenceLine(n: number, e: IllustrationReference): string {
  * older row -- all of those must produce the string this function produced
  * before any of this existed, or an unrelated picture changes.
  */
+/**
+ * The clothing rule for a picture set in the past, by reference number.
+ * Grouped, so a cast of three is one sentence per rule and not three.
+ */
+function dressLines(matched: IllustrationMember[]): string[] {
+  const numbers = (pick: (m: IllustrationMember) => boolean) =>
+    matched.map((m, i) => (pick(m) ? i + 1 : 0)).filter(Boolean);
+  const list = (ns: number[]) =>
+    ns.length === 1 ? `reference image ${ns[0]}` : `reference images ${ns.slice(0, -1).join(", ")} and ${ns[ns.length - 1]}`;
+  const out: string[] = [];
+  const always = numbers((m) => m.dressed === "always" && !m.notAPerson);
+  const farSide = numbers((m) => m.dressed === "farSide" && !m.notAPerson);
+  const animals = numbers((m) => Boolean(m.dressed) && Boolean(m.notAPerson));
+  if (always.length) {
+    out.push(
+      `The clothes in ${list(always)} are not theirs here: dress ${always.length === 1 ? "that person" : "each of them"}` +
+        " the way people of that age were dressed in this scene's time and place, with nothing from another century.",
+    );
+  }
+  if (farSide.length) {
+    out.push(
+      `In a scene set in the past, dress the ${farSide.length === 1 ? "person" : "people"} in ${list(farSide)} the way people of` +
+        " that age were dressed there; only in a present-day scene are the clothes in the reference image worn.",
+    );
+  }
+  if (animals.length) {
+    out.push(
+      `${list(animals).replace(/^r/, "R")} ${animals.length === 1 ? "is not a person" : "are not people"}: draw ${animals.length === 1 ? "it" : "them"}` +
+        " exactly as shown and never dressed up; in a scene set in the past, with nothing modern on — no collar tag, harness or lead from another century.",
+    );
+  }
+  return out;
+}
+
 /** How a member is described: without the name, when the name is shared. */
 function lookFor(m: IllustrationMember): string {
   if (!m.sharesAName) return m.look;
@@ -635,10 +699,18 @@ export function composeIllustrationPrompt(
         );
       }
     });
+    // WHERE CLOTHES COME FROM. A portrait shows what someone wears at home, so
+    // in a scene from the past the clothing comes from the scene instead. The
+    // sentence every other picture has always sent is unchanged.
+    const periodDressed = matched.some((m) => m.dressed);
     parts.push(
-      "Take each person's face, hair, colouring and clothing from their own reference image and nothing else" +
-        " from it — not its background, its framing, its lighting, or anything it happens to be holding.",
+      periodDressed
+        ? "Take each person's face, hair and colouring from their own reference image and nothing else" +
+            " from it — not its background, its framing, its lighting, or anything it happens to be holding."
+        : "Take each person's face, hair, colouring and clothing from their own reference image and nothing else" +
+            " from it — not its background, its framing, its lighting, or anything it happens to be holding.",
     );
+    if (periodDressed) parts.push(...dressLines(matched));
     /**
      * A LIKENESS IS NOT A POSE.
      *
@@ -668,7 +740,7 @@ export function composeIllustrationPrompt(
   // because a montage the model cannot navigate is a collage it must guess at.
   attached.forEach((e, i) => {
     const n = matched.length + i + 1;
-    parts.push(referenceLine(n, e));
+    parts.push(referenceLine(n, e, matched.some((m) => m.dressed)));
   });
 
   if (matched.length > 0 || attached.length > 0) {

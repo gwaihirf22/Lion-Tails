@@ -676,3 +676,43 @@ describe("picture IDs bind a face to the right person", () => {
     expect(pictures[0].prompt).toBe("Lucy on the road");
   });
 });
+
+/**
+ * Blake's Paul in Lystra in a grey t-shirt, jeans and a baseball cap: the
+ * prompt took each person's clothing from their portrait. "We need a they were
+ * always there to take the character and make them fit the scene. Animals
+ * though, that may be different."
+ */
+describe("a scene from the past dresses the people in it, not the animals", () => {
+  const paulRef = member({ name: "Paul", look: "Paul, a 33-year-old man.", reference: file() });
+  const dog = member({ name: "Rex", look: "Rex, a dog.", reference: file() });
+
+  it("they were always there: clothes come from the time and place, not the portrait", () => {
+    const prompt = composeIllustrationPrompt(SCENE, [{ ...paulRef, dressed: "always" }]);
+    expect(prompt).toContain("Take each person's face, hair and colouring from their own reference image");
+    expect(prompt).not.toContain("colouring and clothing from their own reference image");
+    expect(prompt).toContain("The clothes in reference image 1 are not theirs here");
+  });
+
+  it("a quest dresses them on the far side only", () => {
+    const prompt = composeIllustrationPrompt(SCENE, [{ ...paulRef, dressed: "farSide" }]);
+    expect(prompt).toContain("In a scene set in the past, dress the person in reference image 1");
+    expect(prompt).toContain("only in a present-day scene are the clothes in the reference image worn");
+  });
+
+  it("an animal is never dressed up, and loses anything modern in the past", () => {
+    const prompt = composeIllustrationPrompt(SCENE, [
+      { ...paulRef, dressed: "always" },
+      { ...dog, dressed: "always", notAPerson: true },
+    ]);
+    expect(prompt).toContain("The clothes in reference image 1 are not theirs here");
+    expect(prompt).not.toContain("reference images 1 and 2 are not theirs");
+    expect(prompt).toContain("Reference image 2 is not a person: draw it exactly as shown and never dressed up");
+  });
+
+  it("a story set now takes clothes from the portrait exactly as it always did", () => {
+    expect(composeIllustrationPrompt(SCENE, [paulRef])).toContain(
+      "Take each person's face, hair, colouring and clothing from their own reference image",
+    );
+  });
+});

@@ -639,6 +639,17 @@ different child, and the only sign was one line in the log.
   file, and CANON is edited often enough that a new key there is a merge
   conflict waiting to happen. There used to be a second one for the stone; the
   stone is gone from the canon (see the Quests section) and the rule with it.
+- **"They were always there" dresses them too** (`ALONGSIDE_DRESS`, image
+  projection only; the prose already said "nothing from another century").
+  Blake's Paul stood in Lystra in a t-shirt, jeans and a cap because the image
+  prompt took each person's CLOTHING from their portrait. `illustrationCast`
+  now marks members `dressed: "always"` (alongside) or `"farSide"` (quests),
+  and then the portrait gives face, hair and colouring only, and the scene's
+  time and place gives the clothes; the cover-as-style line stops asking for
+  the same clothes too. Stories set now keep the sentence they always had.
+  **Animals are not dressed** (Blake: "Animals though, that may be
+  different"): a `notAPerson` member is drawn as shown, and in the past with
+  nothing modern on it; `ANIMALS_AS_THEY_ARE` says the same for a pet.
 - **At most three faces**, which is the rule the brief's `"image"`
   projection already states in words.
 - **The Timekeeper has one face and it is a file.**

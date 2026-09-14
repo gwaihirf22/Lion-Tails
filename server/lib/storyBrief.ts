@@ -33,7 +33,7 @@ import {
   worldCanon,
   questFamiliarity,
 } from "../data/lionTails";
-import { CROSSING_OVER_DRESS } from "../data/referencePlates";
+import { ALONGSIDE_DRESS, ANIMALS_AS_THEY_ARE, CROSSING_OVER_DRESS } from "../data/referencePlates";
 
 export type CustomPrompts = {
   systemPrompt?: string;
@@ -2023,7 +2023,16 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
      * the picture has to know that -- CROSSING_OVER_DRESS says it once, and the
      * prose canon says the same thing so the story and the picture agree.
      */
-    const dress = brief.world && brief.sourceMaterial?.era ? ` ${CROSSING_OVER_DRESS}` : "";
+    // "They were always there" is the other way into a real account: no
+    // lantern, so nothing crosses over -- they simply belong there, and the
+    // picture has to dress them as if they do. It is the only shape with a
+    // source, a cast in it, and no world.
+    const alongside = Boolean(brief.sourceMaterial?.era) && !brief.world && !brief.soloRetelling;
+    const dress = brief.world && brief.sourceMaterial?.era
+      ? ` ${CROSSING_OVER_DRESS}`
+      : alongside ? ` ${ALONGSIDE_DRESS}` : "";
+    const petsInThePast =
+      brief.pets?.length && brief.sourceMaterial?.era && (brief.world || alongside) ? ` ${ANIMALS_AS_THEY_ARE}` : "";
     // A quest has two sides and the era names only one. Without this the
     // modern playground was captioned "in Haarlem, Netherlands" -- the picture
     // came out modern only because the model half-ignored its own prompt.
@@ -2035,7 +2044,7 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     const people = [
       ...(brief.family ?? []),
       ...(brief.namesakes ?? []),
-      ...(brief.pets?.length ? [`With them: ${nameList(brief.pets.map(petPhrase))}.`] : []),
+      ...(brief.pets?.length ? [`With them: ${nameList(brief.pets.map(petPhrase))}.${petsInThePast}`] : []),
       ...(pictureIdLine(brief.cast) ? [pictureIdLine(brief.cast)!] : []),
     ].map((line) => ` ${line}`).join("");
 
