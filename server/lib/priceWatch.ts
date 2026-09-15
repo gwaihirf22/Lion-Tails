@@ -6,7 +6,7 @@
  *     (priceFeeds.ts), and compare with the approved prices. A difference files
  *     ONE proposal -- the whole row set, with every change and every
  *     disagreement between the feeds as evidence. Never applied on its own.
- *  2. With OPENAI_ADMIN_KEY set, ask the Costs API what was actually charged:
+ *  2. With COSTS_ADMIN_KEY set, ask the Costs API what was actually charged:
  *     per-unit rates against the approved prices, and the billed total against
  *     the ledger, which is how a call path the ledger misses gets noticed.
  *
@@ -14,7 +14,7 @@
  * failing -- "OpenAI's page could not be read" is itself a warning -- and the
  * next check runs anyway.
  *
- * OPENAI_ADMIN_KEY (or OPENAI_ADMIN_KEY_FILE) is read here and nowhere else. It is an organisation admin
+ * COSTS_ADMIN_KEY (or COSTS_ADMIN_KEY_FILE) is read here and nowhere else. It is an organisation admin
  * credential, not a model key: modelPolicy.ts never sees it, and it is never
  * returned by a route (the panel is told only whether it is set).
  */
@@ -53,16 +53,16 @@ const FETCH_TIMEOUT_MS = 30_000;
 /**
  * The Admin key, from the environment or from a file.
  *
- * OPENAI_ADMIN_KEY_FILE is the preferred form in production: the key sits in a
+ * COSTS_ADMIN_KEY_FILE is the preferred form in production: the key sits in a
  * root-only file mounted read-only into the container, so it never has to be
  * written into docker-compose.yml, which is copied into backups and diffs.
- * OPENAI_ADMIN_KEY still works for a dev shell. Read on every use rather than
+ * COSTS_ADMIN_KEY still works for a dev shell. Read on every use rather than
  * cached, so replacing the file (rotating the key) needs no restart.
  */
 export function adminKey(): string | undefined {
-  const direct = process.env.OPENAI_ADMIN_KEY?.trim();
+  const direct = process.env.COSTS_ADMIN_KEY?.trim();
   if (direct) return direct;
-  const file = process.env.OPENAI_ADMIN_KEY_FILE;
+  const file = process.env.COSTS_ADMIN_KEY_FILE;
   if (!file) return undefined;
   try {
     return fs.readFileSync(file, "utf8").split(/\r?\n/)[0].trim() || undefined;
@@ -248,14 +248,14 @@ export async function decideProposal(id: number, decision: "approved" | "dismiss
  * What OpenAI actually charged, against what the ledger and the prices say.
  *
  * Costs are daily buckets, and today's is incomplete, so the window is the
- * seven whole days before today (UTC). Scoped to OPENAI_PROJECT_ID when set;
+ * seven whole days before today (UTC). Scoped to COSTS_PROJECT_ID when set;
  * without it the organisation's whole bill is compared, which is only a fair
  * test if this app is the only thing spending in it -- the panel says which.
  */
 export async function runBillCheck(): Promise<BillCheck | undefined> {
   const key = adminKey();
   if (!key) return undefined;
-  const projectId = process.env.OPENAI_PROJECT_ID || undefined;
+  const projectId = process.env.COSTS_PROJECT_ID || undefined;
   const at = new Date().toISOString();
   const end = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00Z");
   const start = new Date(end.getTime() - 7 * DAY_MS);

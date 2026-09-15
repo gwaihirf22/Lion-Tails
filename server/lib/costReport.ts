@@ -179,7 +179,7 @@ export function buildWarnings(input: {
     out.push({ level: "watch", code: "stale-check", message: `Prices were last checked ${input.watch.lastRunAt.slice(0, 10)}.` });
   }
   if (!input.billCheckEnabled) {
-    out.push({ level: "watch", code: "bill-check-off", message: "The bill check is off: set OPENAI_ADMIN_KEY_FILE (or OPENAI_ADMIN_KEY) to compare against what OpenAI actually charged." });
+    out.push({ level: "watch", code: "bill-check-off", message: "The bill check is off: set COSTS_ADMIN_KEY_FILE (or COSTS_ADMIN_KEY) to compare against what OpenAI actually charged." });
   }
   return out.sort((a, b) => (a.level === b.level ? 0 : a.level === "action" ? -1 : 1));
 }

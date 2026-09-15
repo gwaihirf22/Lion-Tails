@@ -351,7 +351,7 @@ export default function AdminCosts() {
           <p>
             Bill check:{" "}
             {!report.billCheckEnabled
-              ? "off (no OPENAI_ADMIN_KEY)."
+              ? "off (no COSTS_ADMIN_KEY)."
               : report.bill
                 ? report.bill.ok
                   ? `ran ${report.bill.at.slice(0, 16).replace("T", " ")}, ${report.billProjectScoped ? "for this app's project" : "for the whole organisation"}.`

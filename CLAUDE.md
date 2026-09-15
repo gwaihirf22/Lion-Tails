@@ -259,6 +259,17 @@ getting this wrong breaks generation for every user without their own key.
 `dall-e-3` was **shut down** on 2026-05-12 and is gone from the catalogue. Do
 not add it back.
 
+**Never give an app setting one of the OpenAI SDK's own names.** `new OpenAI()`
+reads `OPENAI_PROJECT_ID`, `OPENAI_ORG_ID`, `OPENAI_BASE_URL`,
+`OPENAI_ADMIN_KEY` and others from the environment and SENDS them. The cost
+bill check was given `OPENAI_PROJECT_ID` (2026-09-15); the SDK put it in an
+`OpenAI-Project` header on every story call, the app's key belongs to another
+project, and every story failed with "401 OpenAI-Project header should match
+project for API key". The cost settings are `COSTS_*`, and
+`tests/openaiEnvNames.test.ts` reads the SDK's names from the installed package
+and fails on any of them (but `OPENAI_API_KEY`) in `server/`, `shared/`,
+`client/src`, `scripts/` or the reference compose file.
+
 Authorisation is resolved at **use**, not at selection. `grep
 process.env.OPENAI_API_KEY server/` should return nothing outside
 `modelPolicy.ts`.
@@ -305,11 +316,11 @@ these numbers. `/admin/costs` is the page.
   applied until a person approves it**. A feed that changes shape is a
   warning, not "no change". A unit a feed stops listing is carried forward, not
   made free.
-- **The bill check** needs an organisation Admin key: `OPENAI_ADMIN_KEY_FILE`
+- **The bill check** needs an organisation Admin key: `COSTS_ADMIN_KEY_FILE`
   (a root-only file mounted read-only -- production's is
-  `/mnt/user/appdata/lion-tails/openai-admin-key`) or `OPENAI_ADMIN_KEY`, read
+  `/mnt/user/appdata/lion-tails/openai-admin-key`) or `COSTS_ADMIN_KEY`, read
   by `adminKey()` in `priceWatch.ts` only and never returned by a route -- and
-  `OPENAI_PROJECT_ID` (Lion Tails is "Lion's Tail",
+  `COSTS_PROJECT_ID` (Lion Tails is "Lion's Tail",
   `proj_uQjN5Xv24HRqdr0AqaV9E0zp`; the organisation also holds Open WebUI's
   project, so without it the check compares both). **Written against a real
   bill, not the docs** (`parseLineItem`, `readBill`): line items are

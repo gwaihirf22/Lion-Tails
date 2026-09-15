@@ -59,9 +59,9 @@ services:
       - MODEL_CONTEXT_LIMIT=16384
       - SESSION_SECRET=${SESSION_SECRET}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_ADMIN_KEY_FILE=/run/secrets/openai-admin-key
+      - COSTS_ADMIN_KEY_FILE=/run/secrets/openai-admin-key
       # Scopes the bill check to the Lion's Tail project (not a secret).
-      - OPENAI_PROJECT_ID=proj_uQjN5Xv24HRqdr0AqaV9E0zp
+      - COSTS_PROJECT_ID=proj_uQjN5Xv24HRqdr0AqaV9E0zp
       - EMAIL_HOST=${EMAIL_HOST}
       - EMAIL_PORT=587
       - EMAIL_SECURE=false

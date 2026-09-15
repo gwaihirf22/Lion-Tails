@@ -185,7 +185,7 @@ export async function costsReport() {
     watch: watch ?? null,
     bill: bill ?? null,
     billCheckEnabled,
-    billProjectScoped: Boolean(process.env.OPENAI_PROJECT_ID),
+    billProjectScoped: Boolean(process.env.COSTS_PROJECT_ID),
     windowDays: WINDOW_DAYS,
   };
 }
