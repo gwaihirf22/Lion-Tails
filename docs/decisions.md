@@ -1043,6 +1043,48 @@ was shown to fail with a hook removed.
 
 ---
 
+## 29. Sources come from the data, and the AI note is the reader's, not the story's
+
+`shared/furtherReading.ts`, `shared/aiNote.ts`
+
+Blake asked for the sources behind each story. A story model here is a chat
+completion with no browsing; asked to cite, it produces the shape of a
+bibliography -- plausible titles, plausible URLs -- with nothing behind it,
+which in a Further reading section is worse than none. So the list is derived
+from what the story was actually checked against (the event, the hero, the
+passage), at serve time. Live web search exists in the API and was offered;
+Blake chose verified data, accepting that adding people means verifying them.
+
+The AI note is rendered, not appended, for the same reason the disclaimer that
+a character was invented IS appended: that one describes THIS story and must
+be exactly right inside it; this one describes every story and must reach the
+ones already written. Rendering it reaches them; appending would not.
+
+## 30. Poems and moral stories are the free modes, and a story is a first draft
+
+`shared/storyTypes.ts`, `client/src/components/ParentModeUnlockDialog.tsx`
+
+Blake: Poem and Moral Story "are meant to be additional fun modes or just
+additional modes for creative story writing", locked out of the Timekeeper
+and "They were always there". Refused, not blended: a poem never reaches the
+chaptered path (under 1000 words), so a poem quest silently lost the whole
+quest shape and still carried the invented-character note; a moral story's
+"one clear moral" fought the account prompts' "let the lesson come out of what
+happened". Nothing in the form or the route stopped either. Now the form
+DISABLES each against the other (not hidden -- a vanished option explains
+nothing) and the route answers `story_type_needs_regular`.
+
+And "the user [should] feel free to edit stories after they are completed."
+Editing had been invisible without Parent Mode and signed "Edited by a
+parent", which framed a change as an exception. The Edit button now shows on
+every story you own and asks for the password in place when Parent Mode is
+off -- Blake kept the lock, so a child on a shared device still cannot change a
+story -- with a "Make it yours" invitation under the AI note. The label is
+"Edited"; the stored `by: "parent"` is data and did not change. The tagline
+stayed, by Blake's choice; the copy around it moved.
+
+---
+
 ## Recurring failure shape
 
 Most incidents here have had the same form: **a check that reported success

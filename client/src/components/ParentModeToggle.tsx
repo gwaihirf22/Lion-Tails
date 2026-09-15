@@ -1,18 +1,8 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import ParentModeUnlockDialog from "@/components/ParentModeUnlockDialog";
 import { useParentMode } from "@/hooks/use-parent-mode";
 import { Lock, Unlock, Clock, AlertTriangle } from "lucide-react";
 
@@ -23,7 +13,8 @@ import { Lock, Unlock, Clock, AlertTriangle } from "lucide-react";
  * "Keep it on" is a checkbox at the password prompt, chosen each time, never a
  * setting: a forgotten setting on a shared device is Parent Mode for the
  * children. It lasts until turned off or signed out; the login itself lapses
- * after a week away, and the copy says so.
+ * after a week away, and the copy says so. The prompt itself is
+ * ParentModeUnlockDialog, shared with the story Edit button.
  *
  * Lives in Settings. It was previously a full-width warning-coloured card
  * pinned under the Create Story form, which meant every visit to the page it
@@ -31,32 +22,14 @@ import { Lock, Unlock, Clock, AlertTriangle } from "lucide-react";
  * never turn on. It is an account setting and it sits with the others.
  */
 export default function ParentModeToggle() {
-  const { isActive, expiresAt, indefinite, verifyPassword, disable } = useParentMode();
-  const [password, setPassword] = useState("");
-  const [keep, setKeep] = useState(false);
+  const { isActive, expiresAt, indefinite, disable } = useParentMode();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
 
   const handleToggle = async () => {
     if (isActive) {
       disable();
     } else {
       setDialogOpen(true);
-    }
-  };
-
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!password.trim()) return;
-
-    setIsVerifying(true);
-    const success = await verifyPassword(password, keep);
-    setIsVerifying(false);
-
-    if (success) {
-      setPassword("");
-      setKeep(false);
-      setDialogOpen(false);
     }
   };
 
@@ -90,7 +63,7 @@ export default function ParentModeToggle() {
           />
         </div>
         <CardDescription className="text-warning">
-          Edit what the app wrote: a story's text, a universe's name and summary, the prompts.
+          Editing a story, a universe or the prompts asks for your password first.
         </CardDescription>
       </CardHeader>
 
@@ -99,7 +72,7 @@ export default function ParentModeToggle() {
           <div className="text-sm text-warning">
             <p className="font-medium mb-2">What Parent Mode enables:</p>
             <ul className="list-disc list-inside space-y-1 text-xs">
-              <li>Edit a story's title and text from its page</li>
+              <li>Edit a story's title and text (its Edit button asks for this password when Parent Mode is off)</li>
               <li>Rename a universe, edit its summary, pin what must never be forgotten</li>
               <li>Share a story by link, for someone without an account to read</li>
               <li>Edit AI prompts before story generation</li>
@@ -134,72 +107,7 @@ export default function ParentModeToggle() {
         </div>
       </CardContent>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center space-x-2">
-              <Lock className="h-5 w-5 text-warning" />
-              <span>Verify Password</span>
-            </DialogTitle>
-            <DialogDescription>
-              Enter your account password to turn Parent Mode on for 30 minutes, or until you
-              turn it off.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="password">Account Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                disabled={isVerifying}
-                autoFocus
-              />
-            </div>
-
-            <div className="flex items-start gap-3">
-              <Checkbox
-                id="keep-parent-mode"
-                checked={keep}
-                onCheckedChange={(v) => setKeep(v === true)}
-                disabled={isVerifying}
-                className="mt-0.5"
-              />
-              <div className="space-y-1 leading-none">
-                <Label htmlFor="keep-parent-mode" className="text-sm font-medium">
-                  Keep it on until I turn it off or sign out
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Otherwise it turns itself off after 30 minutes. On a shared device, leave
-                  this unticked.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDialogOpen(false)}
-                disabled={isVerifying}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={!password.trim() || isVerifying}
-                className="bg-warning hover:bg-warning"
-              >
-                {isVerifying ? "Verifying..." : "Turn Parent Mode on"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <ParentModeUnlockDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </Card>
   );
 }

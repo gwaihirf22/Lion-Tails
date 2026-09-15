@@ -1399,6 +1399,12 @@ have disagreed about it.
   **name**, **a story's title and text** (`PATCH /api/stories/:id`), and
   **creating a share link** (`POST /api/stories/:id/share`). Stopping a share
   is deliberately NOT gated.
+- **Editing is offered, then unlocked in place.** The story Edit button (and
+  the "Make it yours" invitation under the AI note) shows on every story you
+  own; with Parent Mode off it opens `ParentModeUnlockDialog` — the one
+  password prompt, shared with the Settings switch — then the editor. A save
+  refused with `parent_mode_required` (it lapsed mid-edit) re-opens the
+  prompt and keeps the draft. The PATCH keeps `requireParentMode`.
 
 ## Sharing a story by link
 
@@ -1446,6 +1452,45 @@ not.
   Production only; dev serves the generic card. `index.html`'s own
   `og:image` is absolute too — the spec wants a full URL.
 
+## The AI note and Further reading
+
+**Every AI-written story says so.** `AI_NOTE` (`shared/aiNote.ts`): "Written
+with AI. … AI can get things wrong …". Rendered by the READER (`StoryExtras`),
+the print path (`storyToPrintHtml` `aiNote`) and the .txt download — never
+written into `story.content` — so stories already in a library have it, the
+universe summariser cannot read it as an event, and a parent edit cannot remove
+it. Not on a built-in story (a person wrote it); `sharedStoryView` carries
+`builtIn` so a shared prologue shows none either.
+
+**Further reading is built from checked data, never from a model.** The story
+calls cannot browse, and a model asked for sources from memory invents books
+and links. `furtherReadingFor()` (`shared/furtherReading.ts`, pure) turns the
+account a story was written against into links: the event's passage and key
+verse and the request's own passage on Bible Gateway (WEB, the translation the
+app's verses were fetched in), a hero's Wikipedia article, verse and up to
+three key-event references, and the books on their profile (unlinked — the
+data has no URLs and none is invented). Capped at eight, then the two general
+links every story always had. **Derived when served**
+(`furtherReadingForRequest` on `GET /api/stories/:id` and `/api/shared/:token`),
+not stored, so old stories get it and a book added to a hero shows everywhere.
+The fixed "For Further Learning" block still goes into new stories' text and
+is the fallback when a payload has no list (the just-generated view). Links
+were fetched and read: the pages are the right passages and people.
+Blake chose this over live web search (`responses` + a search tool, never
+used here), knowing it puts verification on whoever adds people.
+
+## Poems and moral stories are the free modes
+
+Only a regular story is set somewhere real. `storyTypeFitsRole()`
+(`shared/storyTypes.ts`, with `STORY_TYPE_OPTIONS` — the select's words, one
+definition) is read by the form, which disables Poem/Moral while "Set it
+somewhere real" is on and disables that switch for a poem or moral story,
+and by the generate route, which refuses the pair with
+`story_type_needs_regular`. Read the role through `characterRoleOf`. A poem
+quest used to generate and silently lose the quest shape (decisions.md 30).
+The copy frames every story as a first draft to change; keep new copy that
+way, and keep the factual notes ("About this story", the AI note) factual.
+
 ## Editing what the app wrote
 
 - **A story edit is a leaf merge, never read-mutate-write.** `editStory` is
@@ -1460,15 +1505,15 @@ not.
   edits the BODY; the route re-attaches whatever the stored content carried
   via `splitAppendices()`. A parent cannot delete the disclaimer.
 - **The log is one module**, `shared/editLog.ts`: the entry type, the label
-  "Edited by a parent", `lastEditedAt()`. Stories keep it in
+  `EDITED_LABEL` ("Edited" — it was "Edited by a parent"; the stored
+  `by: "parent"` is unchanged), `lastEditedAt()`. Stories keep it in
   `story_data.editLog`; universes in `story_universes.edit_log` (migration
   0008), appended by `renameUniverse` and `editSummary`. `summary_edited_at`
   stays — it clears staleness, a different job. The log never carries a
   name: reader-visible provenance is for everyone, including a child.
 - **Story chips** (`client/src/lib/storyChips.ts`) are what a card says about
   a story, pure and tested: the source, the cast by name, the way in (via
-  `ROLE_OPTIONS`, never a second spelling), the length, "Edited by a
-  parent". The old details row read fields a modern request does not carry.
+  `ROLE_OPTIONS`, never a second spelling), the length, "Edited". The old details row read fields a modern request does not carry.
 - **"Add to this Universe"** sends `universeId` on the request — a field the
   server always resolved and no client ever sent. The worker's extraction
   condition includes it, or a story would be written against a world's

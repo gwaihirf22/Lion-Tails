@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * What a parent changed by hand, and when.
+ * What was changed by hand, and when.
  *
  * Stories and universes are written by a model; when a parent edits one, the
  * reader is told -- under the title, and in a history beside the AI's own
@@ -23,7 +23,12 @@ export const editLogEntrySchema = z.object({
 
 export type EditLogEntry = z.infer<typeof editLogEntrySchema>;
 
-export const EDITED_BY_PARENT = "Edited by a parent";
+/**
+ * "Edited", not "Edited by a parent": the app writes a first draft, and
+ * changing it is the point, not an exception to be signed for. The stored
+ * `by` stays "parent" -- it is data, and nothing reads it for words.
+ */
+export const EDITED_LABEL = "Edited";
 
 /** The most recent entry's time, or undefined for a record nobody has edited. */
 export function lastEditedAt(log: EditLogEntry[] | null | undefined): string | undefined {

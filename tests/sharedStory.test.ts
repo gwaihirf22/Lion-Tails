@@ -67,6 +67,9 @@ describe("what a stranger may see of a shared story", () => {
         "bibleVerse",
         "content",
         "editLog",
+        // Public reference data -- passages, an article, books -- derived
+        // from the account; see shared/furtherReading.ts.
+        "furtherReading",
         "imageUrl",
         "images",
         "moralOutcome",
@@ -74,6 +77,13 @@ describe("what a stranger may see of a shared story", () => {
         "title",
       ].sort(),
     );
+  });
+
+  it("says which stories a person wrote, so they show no AI note, and passes sources item by item", () => {
+    const withReading = sharedStoryView(saved, [{ label: "Genesis 1 (Bible Gateway)", url: "https://x.test", extra: "no" } as any]);
+    expect(withReading.furtherReading).toEqual([{ label: "Genesis 1 (Bible Gateway)", url: "https://x.test" }]);
+    expect(withReading.builtIn).toBeUndefined();
+    expect(sharedStoryView({ ...saved, builtIn: true }).builtIn).toBe(true);
   });
 
   it("carries no prompt, no model reply and none of the children's details, anywhere", () => {

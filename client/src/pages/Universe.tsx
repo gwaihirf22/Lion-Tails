@@ -22,7 +22,7 @@ import { useStories } from "@/hooks/use-stories";
 import { useParentMode } from "@/hooks/use-parent-mode";
 import { useChipSources } from "@/lib/useChipSources";
 import { storyChips } from "@/lib/storyChips";
-import { EDITED_BY_PARENT, lastEditedAt } from "@shared/editLog";
+import { EDITED_LABEL, lastEditedAt } from "@shared/editLog";
 import StoryCard from "@/components/StoryCard";
 import UniverseDetails, { Section } from "@/components/UniverseDetails";
 
@@ -211,7 +211,7 @@ export default function UniversePage() {
           {editedAt && (
             <>
               {" · "}
-              {EDITED_BY_PARENT} ·{" "}
+              {EDITED_LABEL} ·{" "}
               {new Date(editedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
             </>
           )}
@@ -234,14 +234,14 @@ export default function UniversePage() {
 
       {universe.editLog.length > 0 && (
         <div className="mt-3">
-          <Section title="Changes by a parent" hint={`${universe.editLog.length}`}>
+          <Section title="Your changes" hint={`${universe.editLog.length}`}>
             <ul className="ml-5 list-disc space-y-1 text-sm">
               {[...universe.editLog].reverse().map((e, i) => (
                 <li key={i}>
                   {new Date(e.at).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}
                   {" — "}
                   {e.changed.map((c) => (c === "name" ? "the name" : c === "summary" ? "the summary" : c)).join(" and ")}
-                  {" edited by a parent"}
+                  {" edited"}
                 </li>
               ))}
             </ul>

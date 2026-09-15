@@ -163,7 +163,7 @@ export default function SavedStories() {
         <Card className="mb-4 bg-card rounded-2xl shadow-lg">
           <CardContent className="p-8 text-center">
             <h3 className="text-2xl font-medium text-foreground mb-4">No Stories Yet</h3>
-            <p className="text-muted-foreground mb-6">You haven't created any stories yet. Create your first personalized story now!</p>
+            <p className="text-muted-foreground mb-6">You haven't written any stories yet. Start your first one; once it's finished you can change anything in it.</p>
             <Button onClick={() => navigate("/generate-story")}>Create Your First Story</Button>
           </CardContent>
         </Card>

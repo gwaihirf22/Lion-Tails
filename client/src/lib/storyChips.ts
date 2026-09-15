@@ -1,6 +1,6 @@
 import type { SavedStory } from "@shared/schema";
 import { characterIdsOf, characterRoleOf, isEnsemble } from "@shared/schema";
-import { EDITED_BY_PARENT } from "@shared/editLog";
+import { EDITED_LABEL } from "@shared/editLog";
 import { ROLE_OPTIONS } from "@/lib/characterRole";
 
 /**
@@ -68,7 +68,7 @@ export function storyChips(story: SavedStory, sources: ChipSources): string[] {
   const length = request.storyLength ? LENGTH_LABEL[request.storyLength] : undefined;
   if (length) chips.push(length);
 
-  if (story.editLog && story.editLog.length > 0) chips.push(EDITED_BY_PARENT);
+  if (story.editLog && story.editLog.length > 0) chips.push(EDITED_LABEL);
 
   return chips;
 }

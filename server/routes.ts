@@ -51,6 +51,7 @@ import {
 } from "./lib/illustration";
 import { sceneFromPassage } from "./lib/passageScene";
 import { questLengthAllowed, QUEST_SHORTEST_LENGTH } from "@shared/quests";
+import { storyTypeFitsRole, STORY_TYPE_ROLE_MESSAGE } from "@shared/storyTypes";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
 import {
@@ -108,6 +109,7 @@ import {
 } from "./lib/avatar";
 import { statsAreAffordable } from "@shared/schema";
 import { RELATIONS, withoutPictureRefs } from "@shared/family";
+import { furtherReadingForRequest } from "./lib/furtherReading";
 import { KEEPER } from "./data/lionTails";
 import { sharedStoryView, SHARE_TOKEN_PATTERN } from "@shared/sharedStory";
 import { z, ZodError } from "zod";
@@ -1118,6 +1120,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message:
             "A Quest with the Timekeeper needs room for the journey and the account it visits, and takes a few minutes to write. " +
             `Choose ${QUEST_SHORTEST_LENGTH} or longer.`,
+        });
+      }
+
+      // Poems and moral stories are the free modes; only a regular story is
+      // set somewhere real (shared/storyTypes.ts, decisions.md 30). The form
+      // disables the pair; this is the guard for anything else that posts.
+      if (!storyTypeFitsRole(validatedData.storyType, characterRoleOf(validatedData))) {
+        return res.status(400).json({
+          code: "story_type_needs_regular",
+          message: STORY_TYPE_ROLE_MESSAGE,
         });
       }
 
@@ -2236,7 +2248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // A built-in story has no row and belongs to everyone.
       const builtIn = builtInStoryById(req.params.id);
-      if (builtIn) return res.json(builtIn);
+      if (builtIn) return res.json({ ...builtIn, furtherReading: await furtherReadingForRequest(builtIn.request) });
 
       // Get the story, but only if it belongs to the authenticated user
       const userId = (req.user as any).id;
@@ -2245,8 +2257,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!story) {
         return res.status(404).json({ message: "Story not found" });
       }
-      
-      res.json(story);
+
+      // Derived, never stored: see shared/furtherReading.ts.
+      res.json({ ...story, furtherReading: await furtherReadingForRequest(story.request) });
     } catch (error) {
       console.error("Error fetching story:", error);
       res.status(500).json({ message: "Failed to fetch story" });
@@ -2374,11 +2387,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // A built-in story is shared by its own id: it has no row, so no token
       // can point at it, and it needs none -- nothing about it is private.
       const builtIn = builtInStoryById(req.params.token);
-      if (builtIn) return res.json(sharedStoryView(builtIn));
+      if (builtIn) return res.json(sharedStoryView(builtIn, await furtherReadingForRequest(builtIn.request)));
       if (!SHARE_TOKEN_PATTERN.test(req.params.token)) return notShared();
       const saved = await storage.getSharedStory(req.params.token);
       if (!saved) return notShared();
-      res.json(sharedStoryView(saved));
+      res.json(sharedStoryView(saved, await furtherReadingForRequest(saved.request)));
     } catch (error) {
       console.error("Error reading a shared story:", error);
       res.status(500).json({ message: "Failed to load this story" });

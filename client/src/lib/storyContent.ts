@@ -24,7 +24,9 @@ export type Block =
   | { kind: "list"; items: Inline[][] }
   | { kind: "sceneBreak" };
 
-export type Resource = { label: string; url?: string };
+import type { Resource } from "@shared/furtherReading";
+import { AI_NOTE, AI_NOTE_TITLE } from "@shared/aiNote";
+export type { Resource };
 
 export type StoryDoc = {
   blocks: Block[];
@@ -247,6 +249,7 @@ export function storyToPrintHtml(
   doc: StoryDoc,
   title: string,
   verse?: { text: string; reference: string },
+  opts: { aiNote?: boolean; furtherReading?: Resource[] } = {},
 ): string {
   const parts: string[] = [`<h1>${escapeHtml(title)}</h1>`];
 
@@ -275,10 +278,16 @@ export function storyToPrintHtml(
       `<blockquote><p>${escapeHtml(verse.text)}</p><cite>${escapeHtml(verse.reference)}</cite></blockquote>`,
     );
   }
-  if (doc.furtherLearning?.length) {
-    parts.push("<h3>For Further Learning</h3>");
+  if (opts.aiNote) {
+    parts.push(`<p class="ai-note"><strong>${escapeHtml(AI_NOTE_TITLE)}</strong> ${escapeHtml(AI_NOTE)}</p>`);
+  }
+  // The derived sources when there are some, with every address written out:
+  // a printed page cannot be clicked.
+  const reading = opts.furtherReading?.length ? opts.furtherReading : doc.furtherLearning;
+  if (reading?.length) {
+    parts.push("<h3>Further reading</h3>");
     parts.push(
-      `<ul>${doc.furtherLearning.map((r) => `<li>${escapeHtml(r.label)}</li>`).join("")}</ul>`,
+      `<ul>${reading.map((r) => `<li>${escapeHtml(r.label)}${r.url ? ` — ${escapeHtml(r.url)}` : ""}</li>`).join("")}</ul>`,
     );
   }
   return parts.join("\n");

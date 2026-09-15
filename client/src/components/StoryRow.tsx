@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import type { SavedStory } from "@shared/schema";
-import { EDITED_BY_PARENT } from "@shared/editLog";
+import { EDITED_LABEL } from "@shared/editLog";
 
 /**
  * A story as one line: where a list of stories sits inside something else --
@@ -30,7 +30,7 @@ export default function StoryRow({ story }: { story: SavedStory }) {
         </Link>
         <p className="text-xs text-muted-foreground">
           Created {formatDistanceToNow(new Date(story.createdAt))} ago
-          {story.editLog && story.editLog.length > 0 ? ` · ${EDITED_BY_PARENT}` : ""}
+          {story.editLog && story.editLog.length > 0 ? ` · ${EDITED_LABEL}` : ""}
         </p>
       </div>
     </div>

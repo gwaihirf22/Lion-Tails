@@ -87,7 +87,7 @@ export default function StoryGeneratorTabs({
           <div className="relative z-10">
             <div className="mb-4 text-center">
               <h3 className="text-xl font-heading font-bold text-secondary">Personalized Stories</h3>
-              <p className="text-sm text-muted-foreground">Invented stories, with characters you choose</p>
+              <p className="text-sm text-muted-foreground">Your ideas and your characters: a story, a poem, or a moral tale, yours to change afterwards</p>
             </div>
             
             <StoryForm 

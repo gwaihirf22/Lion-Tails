@@ -27,6 +27,7 @@
 import type { EditLogEntry } from "./editLog";
 import { storyImagesOf, type SavedStory, type StoryPicture } from "./schema";
 import { BUILT_IN_STORY_IDS } from "./quests";
+import type { Resource } from "./furtherReading";
 
 /**
  * A share token: 16 random bytes as base64url, which is always 22 characters.
@@ -79,12 +80,22 @@ export type SharedStoryView = {
    * changed} and editLog.ts guarantees the log never carries a name.
    */
   editLog: EditLogEntry[];
+  /**
+   * Further reading: Bible passages, a Wikipedia article, books -- public
+   * reference data derived from the account (shared/furtherReading.ts), with
+   * nothing about the reader in it.
+   */
+  furtherReading: Resource[];
+  /** Present on a story a person wrote, so the page shows no AI note. */
+  builtIn?: true;
 };
 
 export function sharedStoryView(
   saved: Pick<SavedStory, "story" | "images" | "createdAt"> & {
     editLog?: EditLogEntry[] | null;
+    builtIn?: boolean;
   },
+  furtherReading: Resource[] = [],
 ): SharedStoryView {
   const s = saved.story;
   return {
@@ -107,5 +118,8 @@ export function sharedStoryView(
     // Rebuilt entry by entry, for the same reason as the pictures: a spread
     // would carry along anything a future entry grows.
     editLog: (saved.editLog ?? []).map((e) => ({ at: e.at, by: e.by, changed: [...e.changed] })),
+    // Rebuilt item by item, like everything else here.
+    furtherReading: furtherReading.map((r) => ({ label: r.label, ...(r.url ? { url: r.url } : {}) })),
+    ...(saved.builtIn ? { builtIn: true as const } : {}),
   };
 }

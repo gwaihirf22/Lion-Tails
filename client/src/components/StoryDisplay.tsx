@@ -1,12 +1,13 @@
 import { requestPicture } from "@/lib/pictureRequest";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Star, Printer, Download, Pencil, ImagePlus, Loader2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useParentMode } from "@/hooks/use-parent-mode";
 import { apiRequestAllowingErrors, queryClient } from "@/lib/queryClient";
 import { splitAppendices } from "@shared/storyAppendices";
-import { EDITED_BY_PARENT, lastEditedAt, type EditLogEntry } from "@shared/editLog";
+import { EDITED_LABEL, lastEditedAt, type EditLogEntry } from "@shared/editLog";
+import ParentModeUnlockDialog from "@/components/ParentModeUnlockDialog";
 import { ShareStoryDialog } from "@/components/ShareStoryDialog";
 import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,8 @@ import { useReadingPrefs } from "@/hooks/use-reading-prefs";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import type { StoryRequest, StoryResponse, StoryPicture } from "@shared/schema";
 import { parseStoryContent, storyToPrintHtml } from "@/lib/storyContent";
+import { AI_NOTE, AI_NOTE_TITLE } from "@shared/aiNote";
+import type { Resource } from "@shared/furtherReading";
 import ReaderBar from "@/components/reader/ReaderBar";
 import ReadingSurface from "@/components/reader/ReadingSurface";
 import StoryExtras from "@/components/reader/StoryExtras";
@@ -49,16 +52,23 @@ interface StoryDisplayProps {
    * path); this hides the rest -- Favourite, and Share itself.
    */
   shared?: boolean;
+  /** Derived by the server; see StoryExtras. */
+  furtherReading?: Resource[];
 }
 
-export default function StoryDisplay({ story, storyId, storyType, builtIn, editLog, images, onEdited, onPictures, shared }: StoryDisplayProps) {
+export default function StoryDisplay({ story, storyId, storyType, builtIn, editLog, images, onEdited, onPictures, shared, furtherReading }: StoryDisplayProps) {
   const [isFavorite, setIsFavorite] = useState(false);
   /**
-   * A parent editing the title and text, in place.
+   * Editing the title and text, in place.
    *
-   * Gated on a saved row, not built-in, and Parent Mode ON -- which also
-   * hides it on the ?data= path and the just-generated view, neither of
-   * which has a row to PATCH. The Textarea holds the BODY only: the "About
+   * OFFERED on every story you own -- a saved row, not built-in, not a share
+   * link -- whether Parent Mode is on or not. Stories are a first draft to
+   * change, and a button that only exists after a trip to Settings told
+   * nobody that. With Parent Mode off, Edit asks for the password right here
+   * and then opens the editor; the PATCH still carries requireParentMode, so a
+   * child on a shared device can read and not change. No storyId also hides it
+   * on the ?data= path and the just-generated view, neither of which has a row
+   * to PATCH. The Textarea holds the BODY only: the "About
    * this story" note and the "Digging deeper" answers live inside content,
    * and the server re-attaches them on save, so they cannot be edited away.
    * Only the reading surface is swapped; the bar and the extras stay
@@ -69,7 +79,11 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
   const [draftTitle, setDraftTitle] = useState("");
   const [draftBody, setDraftBody] = useState("");
   const [saving, setSaving] = useState(false);
-  const canEdit = Boolean(storyId) && !builtIn && parentMode;
+  const canEdit = Boolean(storyId) && !builtIn && !shared;
+  // What to do once the password is accepted: open the editor, or retry a
+  // save whose Parent Mode lapsed mid-edit (the draft is kept either way).
+  const [unlockThen, setUnlockThen] = useState<"edit" | "save" | null>(null);
+  const editorRef = useRef<HTMLDivElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [showExpiryAlert, setShowExpiryAlert] = useState(true);
   // The share dialog is controlled from here now, because StoryCard opens the
@@ -204,7 +218,10 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
     // replaces two separate `story.content.replace(/\n/g, '<br>')` calls that
     // wrote raw model output into the DOM -- one of them into a document that
     // was then handed to the printer.
-    const body = storyToPrintHtml(doc, story.title, story.bibleVerse);
+    const body = storyToPrintHtml(doc, story.title, story.bibleVerse, {
+      aiNote: !builtIn,
+      furtherReading,
+    });
     w.document.write(
       `<!DOCTYPE html><html><head><title></title><style>` +
         `body{font-family:Georgia,serif;line-height:1.6;color:#222;max-width:34em;margin:0 auto;padding:2rem}` +
@@ -220,7 +237,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
     w.document.close();
     w.print();
     w.onafterprint = () => w.close();
-  }, [doc, story.title, story.bibleVerse]);
+  }, [doc, story.title, story.bibleVerse, builtIn, furtherReading]);
 
   const handleDownload = useCallback(() => {
     const text = [
@@ -228,6 +245,10 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
       "",
       story.content,
       story.bibleVerse ? `\n"${story.bibleVerse.text}"\n— ${story.bibleVerse.reference}` : "",
+      builtIn ? "" : `\n${AI_NOTE_TITLE} ${AI_NOTE}`,
+      furtherReading?.length
+        ? `\nFurther reading:\n${furtherReading.map((r) => `- ${r.label}${r.url ? ` <${r.url}>` : ""}`).join("\n")}`
+        : "",
     ].join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
@@ -236,13 +257,24 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(a.href);
-  }, [story]);
+  }, [story, builtIn, furtherReading]);
 
-  const startEdit = () => {
+  const openEditor = () => {
     setDraftTitle(story.title);
     setDraftBody(splitAppendices(story.content ?? "").body.trimEnd());
     setEditing(true);
   };
+
+  const startEdit = () => {
+    if (parentMode) openEditor();
+    else setUnlockThen("edit");
+  };
+
+  // The invitation at the end of the story opens the editor too, and the
+  // editor replaces the text at the top: bring it into view.
+  useEffect(() => {
+    if (editing) editorRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [editing]);
 
   const saveEdit = async () => {
     if (!storyId) return;
@@ -254,8 +286,12 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
     const body = await r.json().catch(() => ({}));
     setSaving(false);
     if (!r.ok) {
+      if (body.code === "parent_mode_required") {
+        setUnlockThen("save");
+        return;
+      }
       toast({
-        title: body.code === "parent_mode_required" ? "Parent Mode needed" : "Could not save",
+        title: "Could not save",
         description: body.message || "Please try again.",
         variant: "destructive",
       });
@@ -266,12 +302,12 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
     queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
     queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
     setEditing(false);
-    toast({ title: "Story saved", description: "Readers will see it was edited by a parent." });
+    toast({ title: "Story saved", description: "Your changes are in. The story is marked as edited." });
   };
 
   const editedAt = lastEditedAt(editLog);
   const editedNote = editedAt
-    ? `${EDITED_BY_PARENT} · ${new Date(editedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`
+    ? `${EDITED_LABEL} · ${new Date(editedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`
     : undefined;
 
   const handleToggleFavorite = useCallback(async () => {
@@ -449,7 +485,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
       )}
 
       {editing ? (
-        <div className="reader-chrome mx-auto w-full max-w-3xl space-y-3 px-3 py-4">
+        <div ref={editorRef} className="reader-chrome mx-auto w-full max-w-3xl scroll-mt-24 space-y-3 px-3 py-4">
           <Input
             value={draftTitle}
             onChange={(e) => setDraftTitle(e.target.value)}
@@ -463,7 +499,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
             className="min-h-[60vh] text-base leading-relaxed"
           />
           <p className="text-xs" style={{ color: "var(--reader-muted)" }}>
-            The note about this story and any answers below it stay as they are.
+            Change anything you like. The note about this story and any answers below it stay as they are.
           </p>
           <div className="flex gap-2">
             <Button size="sm" onClick={saveEdit} disabled={saving || !draftTitle.trim() || !draftBody.trim()}>
@@ -495,8 +531,30 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
         builtIn={builtIn}
         images={images}
         onPictures={onPictures}
+        furtherReading={furtherReading}
+        onEdit={canEdit && !editing ? startEdit : undefined}
         onOpenPicture={setLightbox}
       />
+
+      {canEdit && (
+        <ParentModeUnlockDialog
+          open={unlockThen !== null}
+          onOpenChange={(open) => {
+            if (!open) setUnlockThen(null);
+          }}
+          reason={
+            unlockThen === "save"
+              ? "Parent Mode turned off while you were editing. Your changes are still here."
+              : "Editing asks for your password, so a child on this device can read without changing anything."
+          }
+          onUnlocked={() => {
+            const then = unlockThen;
+            setUnlockThen(null);
+            if (then === "save") void saveEdit();
+            else openEditor();
+          }}
+        />
+      )}
     </div>
   );
 }

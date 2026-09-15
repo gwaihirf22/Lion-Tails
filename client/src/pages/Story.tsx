@@ -5,6 +5,7 @@ import StoryDisplay from "@/components/StoryDisplay";
 import { StoryResponse, StoryRequest } from "@shared/schema";
 import type { EditLogEntry } from "@shared/editLog";
 import { storyImagesOf, type StoryPicture } from "@shared/schema";
+import type { Resource } from "@shared/furtherReading";
 import { apiRequestAllowingErrors, queryClient } from "@/lib/queryClient";
 import { UNSEEN_STORIES_KEY } from "@/lib/unseenStories";
 
@@ -19,6 +20,8 @@ export default function Story() {
   // one. The per-user quest universe is what will make continuing it mean
   // something; until then the button would promise what it cannot do.
   const [builtIn, setBuiltIn] = useState(false);
+  // Derived by the server from the account the story was written against.
+  const [furtherReading, setFurtherReading] = useState<Resource[]>([]);
   // Both are on the payload and used to be discarded with the rest of the row.
   const [universeId, setUniverseId] = useState<string | null>(null);
   const [editLog, setEditLog] = useState<EditLogEntry[]>([]);
@@ -59,6 +62,7 @@ export default function Story() {
             const s = saved.story ?? saved;
             setStoryData(s);
             setBuiltIn(Boolean(saved.builtIn));
+            setFurtherReading(Array.isArray(saved.furtherReading) ? saved.furtherReading : []);
             setUniverseId(saved.universeId ?? null);
             setEditLog(saved.editLog ?? []);
             setImages(storyImagesOf(saved));
@@ -137,6 +141,7 @@ export default function Story() {
       </div>
       
       <StoryDisplay
+        furtherReading={furtherReading}
         story={storyData}
         storyId={storyId || undefined}
         storyType={storyType}
