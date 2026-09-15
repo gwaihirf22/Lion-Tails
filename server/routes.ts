@@ -47,6 +47,7 @@ import {
 } from "./lib/illustration";
 import { sceneFromPassage } from "./lib/passageScene";
 import { questLengthAllowed, QUEST_SHORTEST_LENGTH } from "@shared/quests";
+import { storyTypeFitsRole, STORY_TYPE_ROLE_MESSAGE } from "@shared/storyTypes";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
 import {
@@ -1112,6 +1113,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message:
             "A Quest with the Timekeeper needs room for the journey and the account it visits, and takes a few minutes to write. " +
             `Choose ${QUEST_SHORTEST_LENGTH} or longer.`,
+        });
+      }
+
+      // Poems and moral stories are the free modes; only a regular story is
+      // set somewhere real (shared/storyTypes.ts, decisions.md 30). The form
+      // disables the pair; this is the guard for anything else that posts.
+      if (!storyTypeFitsRole(validatedData.storyType, characterRoleOf(validatedData))) {
+        return res.status(400).json({
+          code: "story_type_needs_regular",
+          message: STORY_TYPE_ROLE_MESSAGE,
         });
       }
 

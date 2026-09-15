@@ -29,7 +29,7 @@ export function ReadingSurface({
   bodyBlocks?: number;
   onOpenPicture?: (picture: StoryPicture) => void;
   /**
-   * A line under the title -- "Edited by a parent · 3 Sep 2026". Inside the
+   * A line under the title -- "Edited · 3 Sep 2026". Inside the
    * article, because the reader's tokens are scoped to it (see above) and a
    * sibling outside would not inherit the palette.
    */

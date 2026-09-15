@@ -192,7 +192,7 @@ export default function GenerateStory() {
     setWatchingJobId(outcome.jobId);
     toast({
       title: "Writing your story",
-      description: "You can leave this page. It will appear in My Stories when it is done.",
+      description: "You can leave this page. It will appear in My Stories when it is done, ready for you to read or change.",
       // Actionable, because telling someone where a thing will appear and then
       // making them find it is most of the way to not telling them.
       action: (
@@ -281,7 +281,7 @@ export default function GenerateStory() {
               <br />
               <span className="text-sm text-muted-foreground">
                 You can leave this page — it keeps writing, and the story will
-                be in My Stories when it is done.
+                be in My Stories when it is done, ready for you to read or change.
               </span>
             </p>
             <Button

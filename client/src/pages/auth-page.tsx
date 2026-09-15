@@ -286,8 +286,8 @@ export default function AuthPage() {
           />
           <h1 className="text-3xl font-bold tracking-tight mb-4">Welcome to Lion Tails</h1>
           <p className="mb-6">
-            Create personalized Biblical stories that teach faith and Christian values. 
-            Stories that engage, inspire, and instill a love for God's Word.
+            Create personalized Biblical stories that teach faith and Christian values,
+            then shape them however you like. Stories that engage, inspire, and instill a love for God's Word.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-card rounded-lg p-4 shadow-sm">

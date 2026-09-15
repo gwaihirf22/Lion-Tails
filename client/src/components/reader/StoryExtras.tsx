@@ -16,14 +16,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ImagePlus, Loader2, RefreshCw } from "lucide-react";
+import { ImagePlus, Loader2, Pencil, RefreshCw } from "lucide-react";
 import { DebugPanel } from "@/components/DebugPanel";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { StoryResponse, HeroOfFaith, SavedStory, StoryPicture } from "@shared/schema";
 import { MAX_STORY_IMAGES } from "@shared/schema";
 import { withoutPictureRefs } from "@shared/family";
-import { AI_NOTE, AI_NOTE_TITLE } from "@shared/aiNote";
+import { AI_NOTE, AI_NOTE_TITLE, MAKE_IT_YOURS, MAKE_IT_YOURS_TITLE } from "@shared/aiNote";
 import type { Resource } from "@shared/furtherReading";
 import { Trash2 } from "lucide-react";
 import type { StoryDoc } from "@/lib/storyContent";
@@ -47,7 +47,14 @@ export function StoryExtras({
   images,
   onPictures,
   furtherReading,
+  onEdit,
 }: {
+  /**
+   * Open the editor (asking for the Parent Mode password first if it is off).
+   * Passed only where the reader may edit: a story you own, not built-in, not
+   * a share link, not already being edited.
+   */
+  onEdit?: () => void;
   /**
    * The story's sources, derived by the server from the account it was
    * written against (shared/furtherReading.ts). Absent on the just-generated
@@ -418,6 +425,20 @@ export function StoryExtras({
         </p>
       )}
 
+      {/* The other half of that note: a first draft is for changing. Beside
+          it, because "AI can get things wrong" is the moment a reader wants
+          to fix something. */}
+      {onEdit && (
+        <div className="-mt-3 mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm leading-relaxed" style={{ color: "var(--reader-muted)" }}>
+          <p className="min-w-0 flex-1">
+            <strong style={{ color: "var(--reader-fg)" }}>{MAKE_IT_YOURS_TITLE}</strong> {MAKE_IT_YOURS}
+          </p>
+          <Button variant="outline" size="sm" className="h-8 gap-1 px-3 text-xs" onClick={onEdit} style={{ borderColor: "var(--reader-border)", background: "transparent", color: "var(--reader-fg)" }}>
+            <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit this story
+          </Button>
+        </div>
+      )}
+
       <Accordion type="multiple" className="w-full">
         {questions.length > 0 && (
           <AccordionItem value="questions" style={{ borderColor: "var(--reader-border)" }}>
@@ -544,11 +565,11 @@ export function StoryExtras({
             is never passed off as all the AI's, or all a person's. */}
         {saved?.editLog && saved.editLog.length > 0 && (
           <AccordionItem value="edits" style={{ borderColor: "var(--reader-border)" }}>
-            <AccordionTrigger className="text-base">Changes to this story</AccordionTrigger>
+            <AccordionTrigger className="text-base">Your changes</AccordionTrigger>
             <AccordionContent>
               <p className="mb-2 text-sm" style={{ color: "var(--reader-muted)" }}>
-                The app wrote this story; a parent has changed it since. What the app
-                wrote is under &ldquo;How this story was made&rdquo;.
+                The app wrote the first draft, and it has been changed since. The first
+                draft is under &ldquo;How this story was made&rdquo;.
               </p>
               <ul className="ml-5 list-disc space-y-1 text-sm">
                 {[...saved.editLog].reverse().map((e, i) => (
@@ -556,7 +577,7 @@ export function StoryExtras({
                     {new Date(e.at).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}
                     {" — "}
                     {e.changed.map((c) => (c === "content" ? "the text" : c === "title" ? "the title" : c)).join(" and ")}
-                    {" edited by a parent"}
+                    {" edited"}
                   </li>
                 ))}
               </ul>

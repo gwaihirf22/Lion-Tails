@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { storyChips } from "../client/src/lib/storyChips";
 import { ROLE_OPTIONS } from "../client/src/lib/characterRole";
-import { EDITED_BY_PARENT } from "../shared/editLog";
+import { EDITED_LABEL } from "../shared/editLog";
 import type { SavedStory } from "../shared/schema";
 
 const sources = {
@@ -39,6 +39,6 @@ describe("storyChips", () => {
     expect(storyChips(story({}, { editLog: [] }), sources)).toEqual([]);
     expect(
       storyChips(story({}, { editLog: [{ at: "2026-09-10T00:00:00Z", by: "parent", changed: ["title"] }] }), sources),
-    ).toEqual([EDITED_BY_PARENT]);
+    ).toEqual([EDITED_LABEL]);
   });
 });

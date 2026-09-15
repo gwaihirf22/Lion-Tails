@@ -107,7 +107,7 @@ export default function Home() {
                 <PenTool className="h-8 w-8 text-foreground" />
               </div>
               <h3 className="text-xl font-heading font-bold mb-2">Create Stories</h3>
-              <p className="mb-4">Choose your characters, pick a theme or a real account, and read it in a reader made for the dark.</p>
+              <p className="mb-4">Choose your characters, pick a theme or a real account, and read it in a reader made for the dark. Every story is yours to change once it's written.</p>
               <Button 
                 className="bg-primary hover:bg-primary/90 text-primary-foreground border-none shadow-md"
                 onClick={() => navigate("/generate-story")}
@@ -169,7 +169,7 @@ export default function Home() {
       {/* Call to Action */}
       <div className="max-w-4xl mx-auto mb-12 text-center">
         <h2 className="text-3xl font-heading font-bold mb-4">Ready to Begin?</h2>
-        <p className="text-lg mb-6 max-w-2xl mx-auto">Start creating personalized faith-based stories that teach Biblical values in an engaging way.</p>
+        <p className="text-lg mb-6 max-w-2xl mx-auto">Start a story with the people you love, then make it your own: change a line, rename someone, rewrite the ending.</p>
         <Button 
           size="lg"
           className="bg-primary text-primary-foreground hover:bg-primary/90 border-none shadow-md font-bold"

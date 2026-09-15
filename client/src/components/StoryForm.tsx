@@ -44,6 +44,7 @@ import { useToast } from "@/hooks/use-toast";
 import PromptEditor from "./PromptEditor";
 import { ROLE_OPTIONS } from "@/lib/characterRole";
 import { questLengthAllowed, QUEST_PREFERRED_LENGTH } from "@shared/quests";
+import { STORY_TYPE_OPTIONS, STORY_TYPE_ROLE_MESSAGE, type StoryType } from "@shared/storyTypes";
 import { storyTakesAWhile } from "@shared/schema";
 import { QUEST_SERIES_TITLE } from "@shared/quests";
 import { cn } from "@/lib/utils";
@@ -524,6 +525,23 @@ export default function StoryForm({
   }, [isQuest, form]);
 
   /**
+   * Poems and moral stories are the free modes (shared/storyTypes.ts): only a
+   * regular story is set somewhere real. The controls disable each other, and
+   * this is the guard behind them for the same reason as the length effect --
+   * characterRole has more than one writer. The server refuses the pair too.
+   */
+  const regularStory = (form.watch("storyType") ?? "regular") === "regular";
+  useEffect(() => {
+    if (regularStory || !bringInHero) return;
+    setBringInHero(false);
+    form.setValue("characterRole", "absent");
+    writeSource(null);
+    // writeSource is a plain function re-created each render; the pair above
+    // is what this effect is about.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regularStory, bringInHero, form]);
+
+  /**
    * ONE choice, three frozen fields.
    *
    * biblicalEvent, heroOfFaith and biblePassage are three columns of one
@@ -951,21 +969,41 @@ export default function StoryForm({
                             <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
                           </svg>
                         </span>
+                        {/* Controlled, like Story Length: an uncontrolled Select
+                            keeps showing a value the form no longer holds.
+                            Poem and Moral are DISABLED while the story is set
+                            somewhere real, not hidden -- they are the free
+                            modes, and a choice that silently vanished would
+                            leave nobody knowing why (storyTypeFitsRole). */}
                         <Select
                           onValueChange={field.onChange}
-                          defaultValue={field.value}
+                          value={field.value}
                         >
                           <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
                             <SelectValue placeholder="Select story type" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="regular">Regular Story</SelectItem>
-                            <SelectItem value="poem">Poem</SelectItem>
-                            <SelectItem value="moral">Moral Story</SelectItem>
+                            {(Object.keys(STORY_TYPE_OPTIONS) as StoryType[]).map((key) => (
+                              <SelectItem
+                                key={key}
+                                value={key}
+                                disabled={key !== "regular" && bringInHero}
+                              >
+                                {STORY_TYPE_OPTIONS[key].label}
+                                {key !== "regular" && bringInHero && (
+                                  <span className="ml-2 text-xs text-muted-foreground">
+                                    Not with a real setting
+                                  </span>
+                                )}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
                     </FormControl>
+                    <FormDescription className="text-xs">
+                      {STORY_TYPE_OPTIONS[(field.value ?? "regular") as StoryType].description}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -1194,9 +1232,15 @@ export default function StoryForm({
                       Put your character into an event that happened, or beside
                       somebody who really lived.
                     </p>
+                    {!regularStory && (
+                      <p className="text-xs font-medium text-foreground">
+                        {STORY_TYPE_ROLE_MESSAGE}
+                      </p>
+                    )}
                   </div>
                   <Switch
                     checked={bringInHero}
+                    disabled={!regularStory}
                     onCheckedChange={(on) => {
                       setBringInHero(on);
                       if (on) {
