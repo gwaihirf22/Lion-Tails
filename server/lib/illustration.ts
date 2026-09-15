@@ -58,6 +58,8 @@ import {
   resolveHeroOfFaith,
 } from "./storyBrief";
 import { resolveModel, createClient, inputFidelityFor } from "./modelPolicy";
+import { recordModelCall } from "./modelCalls";
+import type { CallPurpose } from "./costMath";
 
 /** Where story pictures are written. The `story_images` volume mounts here. */
 const STORY_IMAGE_DIR = path.join(process.cwd(), "public", "images", "stories");
@@ -291,9 +293,14 @@ async function portraitFile(avatarUrl?: string): Promise<PictureFile | undefined
  *    where nothing says which Paul the scene means -- and the cost is not
  *    symmetric (the Barnabas rule below): a generic dad against the apostle
  *    drawn as someone's father.
- *  - A scene with NO tags at all -- an older story's saved prompt, the
- *    single-call short story, a redraw of either -- keeps what this did
- *    before, the first three in order, less anyone whose name is shared.
+ *  - A scene with NO tags at all is held to the same NAMED rule, and never
+ *    to "the first three". It used to fall back to the first three characters
+ *    for an older saved prompt -- and a passage about Mordecai riding while
+ *    Haman led the horse, which names nobody in the cast, came back with
+ *    Ellie in the crown and Elijah at the reins (2026-09-15). An untagged scene
+ *    that names nobody has nobody in it. An older prompt still keeps its faces,
+ *    because those name the children ("Make the faces of Esther, Ellie, and
+ *    Elijah clearly recognisable").
  *
  * Whether a name is shared is namesakesIn() over the brief's own sources, so
  * the brief's "they only share a name" sentence and this can never disagree.
@@ -321,10 +328,6 @@ export function chooseDrawn(
   shared: ReadonlySet<string>,
 ): Character[] {
   const refs = pictureRefs(characters.map((c) => c.id));
-  const hasTags = new RegExp(PICTURE_REF_PATTERN.source).test(scenePrompt);
-  if (!hasTags) {
-    return characters.slice(0, MAX_DRAWN_CHARACTERS).filter((c) => !shared.has(c.id));
-  }
   const tagged = characters.filter((c) => scenePrompt.includes(refs.get(c.id)!));
   const named = characters.filter(
     (c) => !tagged.includes(c) && !shared.has(c.id) &&
@@ -569,6 +572,23 @@ function referenceLine(n: number, e: IllustrationReference, periodDressed = fals
  * before any of this existed, or an unrelated picture changes.
  */
 /**
+ * Whether a scene says, in its first words, that it is set now.
+ *
+ * The passage-scene writer is told to open with "In the present day, …" when
+ * it is. That opening is load-bearing: a quest traveller is marked
+ * `dressed: "farSide"`, which used to leave "is this scene in the past?" to the
+ * image model -- and with "biblical storybook" in the style line, a montage
+ * that is four-sixths Persian as the look of the book, and a shop full of old
+ * things, it answered yes. The shop picture came back in Persian tunics under a
+ * scene that said "In the present day … in contemporary casual clothes"
+ * (2026-09-15). Anchored at the start, so a scene that merely mentions the
+ * present day in passing does not undress a traveller in Susa.
+ */
+export function isPresentDayScene(scenePrompt: string): boolean {
+  return /^\s*in the present day\b/i.test(scenePrompt);
+}
+
+/**
  * The clothing rule for a picture set in the past, by reference number.
  * Grouped, so a cast of three is one sentence per rule and not three.
  */
@@ -702,7 +722,16 @@ export function composeIllustrationPrompt(
     // WHERE CLOTHES COME FROM. A portrait shows what someone wears at home, so
     // in a scene from the past the clothing comes from the scene instead. The
     // sentence every other picture has always sent is unchanged.
-    const periodDressed = matched.some((m) => m.dressed);
+    // A traveller in a scene that says it is now wears their own clothes: the
+    // far-side rule does not apply, and saying so beats hoping the model agrees.
+    const presentDay = isPresentDayScene(scenePrompt);
+    const atHome = presentDay
+      ? matched.map((m, i) => (m.dressed === "farSide" && !m.notAPerson ? i + 1 : 0)).filter(Boolean)
+      : [];
+    const dressedHere = presentDay
+      ? matched.map((m) => (m.dressed === "farSide" ? { ...m, dressed: undefined } : m))
+      : matched;
+    const periodDressed = dressedHere.some((m) => m.dressed);
     parts.push(
       periodDressed
         ? "Take each person's face, hair and colouring from their own reference image and nothing else" +
@@ -710,7 +739,18 @@ export function composeIllustrationPrompt(
         : "Take each person's face, hair, colouring and clothing from their own reference image and nothing else" +
             " from it — not its background, its framing, its lighting, or anything it happens to be holding.",
     );
-    if (periodDressed) parts.push(...dressLines(matched));
+    if (periodDressed) parts.push(...dressLines(dressedHere));
+    if (atHome.length) {
+      const which =
+        atHome.length === 1
+          ? `reference image ${atHome[0]}`
+          : `reference images ${atHome.slice(0, -1).join(", ")} and ${atHome[atHome.length - 1]}`;
+      parts.push(
+        `This scene is in the present day: the ${atHome.length === 1 ? "person" : "people"} in ${which}` +
+          " wear present-day clothes like those in their own reference image — nothing from another century," +
+          " whatever anyone wears in the look of this book.",
+      );
+    }
     /**
      * A LIKENESS IS NOT A POSE.
      *
@@ -793,6 +833,11 @@ export async function generateStoryImage(
      * instead of spreading the same budget thinner.
      */
     size?: StoryImageSize;
+    /**
+     * What this picture is, for the cost ledger: a cover belongs to the job
+     * that wrote the story, a later picture to the story it was drawn for.
+     */
+    ledger?: { purpose: CallPurpose; jobId?: string; storyId?: string };
   } = {},
 ): Promise<StoryImageResult | undefined> {
   /**
@@ -813,6 +858,22 @@ export async function generateStoryImage(
       );
       return undefined;
     }
+    // Only a call that RETURNED is recorded. A refused or failed edit throws
+    // before anything is billed, and the fallback is its own paid call.
+    const record = (usage: unknown) =>
+      void recordModelCall(
+        {
+          userId,
+          resolved,
+          purpose: opts.ledger?.purpose ?? "other",
+          jobId: opts.ledger?.jobId,
+          storyId: opts.ledger?.storyId,
+          imageSize: opts.size ?? PAGE_SIZE,
+          imageQuality: "auto",
+        },
+        usage,
+        "succeeded",
+      );
     if (!fs.existsSync(STORY_IMAGE_DIR)) {
       fs.mkdirSync(STORY_IMAGE_DIR, { recursive: true });
     }
@@ -873,6 +934,7 @@ export async function generateStoryImage(
           n: 1,
           size: opts.size ?? PAGE_SIZE,
         });
+        record(response.usage);
       } catch (editError) {
         /**
          * THE MOST EXPENSIVE LINE IN THIS FILE, AND IT USED TO BE ONE LOG.
@@ -912,6 +974,7 @@ export async function generateStoryImage(
         n: 1,
         size: opts.size ?? PAGE_SIZE,
       });
+      record(response.usage);
     }
 
     // openai 7.x made ImagesResponse.data optional (`data?: Array<Image>`), so

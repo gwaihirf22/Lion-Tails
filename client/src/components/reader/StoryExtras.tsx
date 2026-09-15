@@ -1,3 +1,4 @@
+import { requestPicture } from "@/lib/pictureRequest";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -48,6 +49,7 @@ export function StoryExtras({
   onPictures,
   furtherReading,
   onEdit,
+  onOpenPicture,
 }: {
   /**
    * Open the editor (asking for the Parent Mode password first if it is off).
@@ -76,6 +78,8 @@ export function StoryExtras({
    * strip must take it out of the text as well, and a local copy cannot.
    */
   onPictures?: (images: StoryPicture[]) => void;
+  /** Show a picture as big as the screen allows -- the same viewer the pictures in the text open. */
+  onOpenPicture?: (picture: StoryPicture) => void;
 }) {
   const { toast } = useToast();
   const ref = useRef<HTMLDivElement>(null);
@@ -144,12 +148,18 @@ export function StoryExtras({
    * after the new one is attached -- so it asks first.
    */
   const illustrate = useMutation({
-    mutationFn: async (redraw: boolean = false) => {
-      const response = await apiRequest("POST", `/api/stories/${storyId}/illustrate`, { redraw });
-      return (await response.json()) as { imageUrl: string; images?: StoryPicture[] };
-    },
+    // Through requestPicture, for the reason in pictureRequest.ts: a slow
+    // picture is not a failed one, and a second press pays for a second.
+    mutationFn: async (redraw: boolean = false) =>
+      requestPicture(storyId!, { redraw }, {
+        onStillDrawing: () =>
+          toast({
+            title: "Still drawing…",
+            description: "Pictures can take a few minutes. It will appear here when it is ready. Please don't press again.",
+          }),
+      }),
     onSuccess: (data) => {
-      setImageUrl(data.imageUrl);
+      if (data.imageUrl) setImageUrl(data.imageUrl);
       if (data.images) {
         setGallery(data.images);
         onPictures?.(data.images);
@@ -262,12 +272,32 @@ export function StoryExtras({
               rather than filed away: no accordion, nothing to expand. */}
           {imageUrl && (
             <figure className="m-0">
-              <img
-                src={imageUrl}
-                alt={withoutPictureRefs(story.imagePrompt) || `An illustration for ${story.title}`}
-                className="mx-auto max-h-[70vh] w-auto rounded-lg"
-                style={{ border: "1px solid var(--reader-border)" }}
-              />
+              {/* A button, because a six-panel montage at the width of a
+                  page is six thumbnails. Blake: "I need a way to zoom in/make
+                  the montage picture bigger or full web page screen". */}
+              <button
+                type="button"
+                onClick={() =>
+                  onOpenPicture?.(
+                    gallery.find((p) => p.url === imageUrl) ?? {
+                      id: "chosen",
+                      url: imageUrl,
+                      prompt: story.imagePrompt ?? "",
+                      createdAt: "",
+                    },
+                  )
+                }
+                disabled={!onOpenPicture}
+                aria-label="See this picture full screen"
+                className="mx-auto block cursor-zoom-in rounded-lg disabled:cursor-default"
+              >
+                <img
+                  src={imageUrl}
+                  alt={withoutPictureRefs(story.imagePrompt) || `An illustration for ${story.title}`}
+                  className="mx-auto max-h-[70vh] w-auto rounded-lg"
+                  style={{ border: "1px solid var(--reader-border)" }}
+                />
+              </button>
             </figure>
           )}
 

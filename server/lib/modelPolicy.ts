@@ -78,6 +78,25 @@ type ModelSpec = {
    * has to say it takes this rather than being assumed to.
    */
   inputFidelity?: boolean;
+  /**
+   * What one story on this model costs an account the owner pays for, in
+   * credits -- and, by being present, the permission to use it at all.
+   *
+   * Blake: Terra on the free tier "will take 3 credits instead of just 1".
+   * A price per MODEL rather than per story, because the models genuinely
+   * cost different amounts: the catalogue puts Terra at roughly ten times
+   * Luna per story, and a flat 1 would make the better model a free upgrade
+   * paid for entirely by the owner.
+   *
+   * ABSENT ON A PREMIUM MODEL MEANS A FREE ACCOUNT MAY NOT USE IT. That is
+   * GPT-6 Astra and GPT-4o, on purpose: Blake chose not to offer GPT-6 to free
+   * accounts at any price. Absent on a local model means it is never charged,
+   * because Ollama costs electricity, not credits.
+   *
+   * Nobody paying for their own use is charged whatever this says --
+   * storyCreditsFor() asks hasUnlimitedUse() first.
+   */
+  storyCredits?: number;
 };
 
 export const MODEL_CATALOG: Record<string, ModelSpec> = {
@@ -105,6 +124,7 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
     provider: "openai",
     kinds: ["chat", "vision"],
     label: "GPT-4o mini — cheapest",
+    storyCredits: 1,
   },
   "gpt-4o": {
     tier: "premium",
@@ -125,6 +145,7 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
     label: "GPT-5.6 Luna — fast and cheap",
     tokenParam: "max_completion_tokens",
     fixedTemperature: true,
+    storyCredits: 1,
   },
   "gpt-5.6-terra": {
     tier: "premium",
@@ -134,6 +155,12 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
     warning: "Stronger reasoning than Luna at roughly ten times the cost per story.",
     tokenParam: "max_completion_tokens",
     fixedTemperature: true,
+    // Premium, and the one premium model a free account may choose. Three
+    // credits is Blake's price, not a cost-recovery figure: at roughly ten times
+    // Luna per story it still costs the owner more per credit than Luna does.
+    // Measured on the 2026-09-13 baseline, where it was the clear quality step
+    // over Luna for about a fifth of GPT-6's price.
+    storyCredits: 3,
   },
   "gpt-6-astra": {
     tier: "premium",
@@ -175,6 +202,26 @@ export const DEFAULTS: Record<ModelKind, string> = {
   vision: "gpt-5.6-luna",
   image: "gpt-image-2",
 };
+
+/**
+ * The story model for someone paying for their own use.
+ *
+ * Blake, after the 2026-09-13 baseline: Terra "will become the standard" for
+ * the paid tier -- quality over cost. The app has no paid plan, so the paid
+ * tier is exactly the accounts that are never charged: an admin, or anyone on
+ * their own OpenAI key.
+ *
+ * DEFAULTS.chat stays Luna and stays the FLOOR. It is what resolveModel falls
+ * back to when a stored choice is not permitted, and a premium floor would
+ * return null for every free account -- no story at all. So the paid default
+ * is a second, separate answer rather than a change to the first.
+ */
+export const PAID_DEFAULT_CHAT = "gpt-5.6-terra";
+
+/** Which story model an account gets when it has not chosen one. */
+export function defaultChatModelFor(opts: { isAdmin: boolean; hasOwnKey: boolean }): string {
+  return hasUnlimitedUse(opts) ? PAID_DEFAULT_CHAT : DEFAULTS.chat;
+}
 
 /** Container name, not an IP: the Ollama container's address is not stable. */
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://ollama:11434/v1";
@@ -289,8 +336,45 @@ export function isModelAllowedFor(
   const spec = MODEL_CATALOG[model];
   if (!spec) return false;
   if (!spec.kinds.includes(kind)) return false;
-  if (spec.tier === "premium") return hasUnlimitedUse(opts);
+  if (spec.tier === "premium") {
+    // A PRICED premium model is open to a free account for STORIES, and only
+    // for stories: credits are a story allowance, so they buy nothing in
+    // vision or image, where the gate is exactly what it was.
+    return hasUnlimitedUse(opts) || (kind === "chat" && spec.storyCredits !== undefined);
+  }
   return true;
+}
+
+/**
+ * "GPT-5.6 Terra", from "GPT-5.6 Terra — balanced": the name without the pitch,
+ * for sentences. The picker shows the whole label; a price or a refusal names
+ * the model.
+ */
+export function modelName(model: string): string {
+  return (MODEL_CATALOG[model]?.label ?? model).split(" — ")[0];
+}
+
+/**
+ * What one story on this model costs this account, in credits.
+ *
+ * Zero means "not charged", for three separate reasons that all end the same
+ * way: the account pays for its own use, the model runs locally, or the model
+ * is not in the catalogue at all (resolveModel never runs one of those).
+ *
+ * The one place a price is read. The enqueue check, the charge when a story
+ * finishes, and the price shown beside each model all call this, so a change to
+ * a price cannot make the three disagree -- the failure this codebase names
+ * most often, and the one that turns "3 credits" on screen into 1 on the bill.
+ */
+export function storyCreditsFor(model: string, opts: { isAdmin: boolean; hasOwnKey: boolean }): number {
+  const spec = MODEL_CATALOG[model];
+  if (!spec || spec.provider !== "openai") return 0;
+  if (hasUnlimitedUse(opts)) return 0;
+  // A free account can only have resolved to a priced model -- an unpriced
+  // premium one is refused by isModelAllowedFor and downgraded. 1 is the
+  // defensive answer for an economy model someone forgot to price, and it is
+  // never 0: a missing price must not become a free story on the owner's key.
+  return spec.storyCredits ?? 1;
 }
 
 /**
@@ -337,7 +421,40 @@ export function listSelectableModels(opts: { isAdmin: boolean; hasOwnKey: boolea
       tier: spec.tier,
       warning: spec.warning,
       allowed: isModelAllowedFor(id, "chat", opts),
+      /**
+       * Credits a story costs THIS account, or null when it is not charged.
+       * Null rather than 0 so the picker can tell "free for you" from "this
+       * model costs nothing" -- the screen says nothing about credits to
+       * someone on their own key.
+       */
+      credits: isModelAllowedFor(id, "chat", opts) ? storyCreditsFor(id, opts) || null : null,
+      isDefault: id === defaultChatModelFor(opts),
     }));
+}
+
+/**
+ * Is a premium model on the owner's key paid for, on THIS call?
+ *
+ * A free account reaches Terra by spending credits, and credits are charged
+ * for a story -- nothing else. Chord generation, a universe summary, a world
+ * extraction all resolve "chat" too and charge nothing, so without this a
+ * free account that picked Terra would run every one of them at ten times
+ * Luna's price for free, and chords can be asked for as often as you like.
+ * Those calls fall back to DEFAULTS.chat instead: the same model they ran on
+ * before Terra had a price.
+ *
+ * Only the story's own callers pass forStory, and forgetting to pass it fails
+ * cheap -- Luna, never an unpaid Terra.
+ */
+export function paidFor(
+  model: string,
+  kind: ModelKind,
+  opts: { isAdmin: boolean; hasOwnKey: boolean },
+  call: { forStory?: boolean },
+): boolean {
+  if (hasUnlimitedUse(opts)) return true;
+  if (MODEL_CATALOG[model]?.tier !== "premium") return true;
+  return kind === "chat" && Boolean(call.forStory);
 }
 
 /**
@@ -348,7 +465,7 @@ export function listSelectableModels(opts: { isAdmin: boolean; hasOwnKey: boolea
 export async function resolveModel(
   userId: number,
   kind: ModelKind = "chat",
-  opts: { grantedByAllowance?: boolean } = {},
+  opts: { grantedByAllowance?: boolean; forStory?: boolean } = {},
 ): Promise<ResolvedModel | null> {
   const [user, ownKey] = await Promise.all([
     storage.getUser(userId).catch(() => undefined),
@@ -376,7 +493,11 @@ export async function resolveModel(
     hasOwnKey,
   };
 
-  let requested = DEFAULTS[kind];
+  // Terra for someone paying for their own use, Luna for everyone else -- only
+  // until they choose. A stored choice always wins, so an account that picked
+  // Luna in Settings keeps Luna; nobody is moved onto a more expensive model
+  // they did not ask for.
+  let requested = kind === "chat" ? defaultChatModelFor(entitled) : DEFAULTS[kind];
   if (kind === "chat") {
     const stored = await storage.getUserOpenAIModel(userId).catch(() => null);
     if (stored) requested = stored;
@@ -385,7 +506,7 @@ export async function resolveModel(
   let model = requested;
   let downgradedFrom: string | undefined;
 
-  if (!isModelAllowedFor(model, kind, entitled)) {
+  if (!isModelAllowedFor(model, kind, entitled) || !paidFor(model, kind, entitled, opts)) {
     const fallback = DEFAULTS[kind];
     if (model !== fallback) {
       console.warn(

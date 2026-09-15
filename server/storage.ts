@@ -155,6 +155,11 @@ export interface IStorage {
     next: { imageUrl: string | null; images: GeneratedPicture[] },
   ): Promise<SavedStory | undefined>;
   /**
+   * Add entries to a story's look book (shared/lookBook.ts). Existing entries
+   * are never replaced, including by a request that raced this one.
+   */
+  addStoryLooks(storyId: string, userId: number, looks: Record<string, string>): Promise<void>;
+  /**
    * A parent's edit to the title and/or text, with an entry appended to the
    * story's edit log. The patch carries only the keys being changed.
    */
@@ -794,6 +799,12 @@ export class MemStorage implements IStorage {
     };
     this.stories.set(storyId, updated);
     return updated;
+  }
+
+  async addStoryLooks(storyId: string, userId: number, looks: Record<string, string>): Promise<void> {
+    const story = await this.getStoryById(storyId, userId);
+    if (!story) return;
+    this.stories.set(storyId, { ...story, lookBook: { ...looks, ...(story.lookBook ?? {}) } });
   }
 
   async editStory(

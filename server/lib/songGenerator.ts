@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { Song } from "@shared/schema";
 import { v4 as uuidv4 } from "uuid";
 import { resolveModel, createClient } from "./modelPolicy";
+import { recordModelCall } from "./modelCalls";
 import { StoryGenerationError } from "./storyErrors";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
@@ -255,6 +256,7 @@ export async function generateSongChords(
       ],
       response_format: { type: "json_object" }
     });
+    void recordModelCall({ userId, resolved, purpose: "song" }, response.usage, "succeeded");
     
     // The model's JSON, described only as far as this function reads it.
     // Everything is optional because the response is model output, not a

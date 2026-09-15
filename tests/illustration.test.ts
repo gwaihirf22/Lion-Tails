@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import {
   composeIllustrationPrompt,
+  isPresentDayScene,
   illustrationCast,
   charactersAreInTheStory,
   MAX_DRAWN_CHARACTERS,
@@ -642,11 +643,28 @@ describe("picture IDs bind a face to the right person", () => {
     expect(chooseDrawn([lucy, paul], forgot, shared).map((c) => c.name)).toEqual(["Lucy", "Paul"]);
   });
 
-  it("a scene with no IDs keeps the old rule, less a shared name", async () => {
+  it("a scene with no IDs draws only the characters it names, less a shared name", async () => {
     const { chooseDrawn } = await import("../server/lib/illustration");
     const old = "Lucy and the apostle Paul on a ship.";
     expect(chooseDrawn([lucy, paul], old, new Set()).map((c) => c.name)).toEqual(["Lucy", "Paul"]);
     expect(chooseDrawn([lucy, paul], old, shared).map((c) => c.name)).toEqual(["Lucy"]);
+  });
+
+  it("a scene that names nobody in the cast gets nobody's portrait", async () => {
+    // The real scene (2026-09-15). The old fallback attached the first three
+    // characters, and Ellie came back in Mordecai's crown with Elijah at the reins.
+    const { chooseDrawn } = await import("../server/lib/illustration");
+    const esther = mk({ id: "56c96936-3d57-4c39-9bdb-88cb32b150ea", name: "Esther", kind: "girl", age: 7 });
+    const ellie = mk({ id: "435d031c-8402-4fd2-8598-8a7fcbe7a0ec", name: "Ellie", kind: "girl", age: 10 });
+    const elijah = mk({ id: "106b7592-2f98-4c7d-85d6-15bf36b3daab", name: "Elijah", kind: "boy", age: 8 });
+    const scene =
+      "In ancient Susa, Persia, Mordecai rides proudly on a richly adorned royal horse through a sunlit palace street, " +
+      "dressed in magnificent Persian royal robes and a crown. Haman, humiliated and downcast, walks before the horse " +
+      "leading its reins as he publicly proclaims Mordecai's honor. Persian citizens watch from the edges of the street.";
+    expect(chooseDrawn([esther, ellie, elijah], scene, new Set([esther.id]))).toEqual([]);
+    // The same children, named in an older cover prompt, still keep their faces.
+    const cover = "Make the faces of Esther, Ellie, and Elijah clearly recognisable wherever they appear.";
+    expect(chooseDrawn([esther, ellie, elijah], cover, new Set([esther.id])).map((c) => c.name)).toEqual(["Ellie", "Elijah"]);
   });
 
   it("the image model gets reference numbers, never an ID, and the apostle keeps his name", () => {
@@ -707,6 +725,27 @@ describe("a scene from the past dresses the people in it, not the animals", () =
     const prompt = composeIllustrationPrompt(SCENE, [{ ...paulRef, dressed: "farSide" }]);
     expect(prompt).toContain("In a scene set in the past, dress the person in reference image 1");
     expect(prompt).toContain("only in a present-day scene are the clothes in the reference image worn");
+  });
+
+  it("a quest scene that SAYS it is the present day keeps a traveller in their own clothes", () => {
+    // The shop picture: "In the present day ... contemporary casual clothes",
+    // drawn in Persian tunics, because the far-side rule left the question to
+    // the image model.
+    const now = composeIllustrationPrompt(
+      "In the present day, inside the old shop, Paul holds the lantern.",
+      [{ ...paulRef, dressed: "farSide" }, { ...dog, dressed: "farSide", notAPerson: true }],
+      [{ role: "style", name: "the look of this book", look: "the cover of this same story.", file: file() }],
+    );
+    expect(now).toContain("Take each person's face, hair, colouring and clothing from their own reference image");
+    expect(now).not.toContain("In a scene set in the past, dress");
+    expect(now).toContain("This scene is in the present day: the person in reference image 1 wear");
+    // The cover may show them in Susa; that must not carry the clothes over.
+    expect(now).toContain("not necessarily the same clothes");
+    // Only an opening says it. A mention in passing does not.
+    expect(isPresentDayScene("  in the present day, a shop")).toBe(true);
+    expect(isPresentDayScene("In Susa, far from the present day, Paul watches.")).toBe(false);
+    expect(composeIllustrationPrompt("In Susa, far from the present day.", [{ ...paulRef, dressed: "farSide" }]))
+      .toContain("In a scene set in the past, dress the person in reference image 1");
   });
 
   it("an animal is never dressed up, and loses anything modern in the past", () => {

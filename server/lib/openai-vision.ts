@@ -4,6 +4,7 @@ import path from "path";
 import { promisify } from "util";
 import { storage } from "../storage";
 import { resolveModel, createClient, tokenLimitFor } from "./modelPolicy";
+import { recordModelCall } from "./modelCalls";
 
 // Promisify fs functions
 const readFile = promisify(fs.readFile);
@@ -36,7 +37,14 @@ async function getVisionClient(userId: number, kind: "vision" | "image") {
   // which is why generationRecords.ts copies its five fields out by hand and
   // CI asserts generation_records has no credential-shaped column. Do not copy
   // this line into any of those paths.
-  return { client: createClient({ ...resolved, apiKey }), model: resolved.model };
+  return {
+    client: createClient({ ...resolved, apiKey }),
+    model: resolved.model,
+    // Always the user's own key on this path, so never the owner's cost --
+    // recorded all the same, because a ledger that skips a path is a ledger
+    // the bill check cannot reconcile.
+    ledgerModel: { model: resolved.model, provider: resolved.provider, tier: resolved.tier, usingOwnKey: true },
+  };
 }
 
 /**
@@ -44,7 +52,7 @@ async function getVisionClient(userId: number, kind: "vision" | "image") {
  */
 export async function analyzeImage(base64Image: string, userId: number): Promise<string> {
   try {
-    const { client: openai, model } = await getVisionClient(userId, "vision");
+    const { client: openai, model, ledgerModel } = await getVisionClient(userId, "vision");
     
     const response = await openai.chat.completions.create({
       model,
@@ -71,6 +79,7 @@ export async function analyzeImage(base64Image: string, userId: number): Promise
       ],
       ...tokenLimitFor(model, 1000),
     });
+    void recordModelCall({ userId, resolved: ledgerModel, purpose: "vision" }, response.usage, "succeeded");
 
     return response.choices[0].message.content || "No analysis could be generated for this image.";
   } catch (error) {
@@ -90,7 +99,7 @@ export async function generateStoryFromImage(
   userId: number
 ): Promise<{ title: string; content: string }> {
   try {
-    const { client: openai, model } = await getVisionClient(userId, "vision");
+    const { client: openai, model, ledgerModel } = await getVisionClient(userId, "vision");
     
     // First, analyze the image to understand what's in it
     const imageAnalysis = await analyzeImage(base64Image, userId);
@@ -119,6 +128,7 @@ export async function generateStoryFromImage(
       response_format: { type: "json_object" },
       ...tokenLimitFor(model, 4000),
     });
+    void recordModelCall({ userId, resolved: ledgerModel, purpose: "vision" }, storyResponse.usage, "succeeded");
 
     // message.content is string | null. Parsing null would throw a confusing
     // "Unexpected token" from JSON.parse; say what actually went wrong.
@@ -143,7 +153,7 @@ export async function generateStoryFromImage(
  */
 export async function generateIllustrationPrompt(storyContent: string, userId: number): Promise<string> {
   try {
-    const { client: openai, model } = await getVisionClient(userId, "vision");
+    const { client: openai, model, ledgerModel } = await getVisionClient(userId, "vision");
     
     const response = await openai.chat.completions.create({
       model,
@@ -159,6 +169,7 @@ export async function generateIllustrationPrompt(storyContent: string, userId: n
       ],
       ...tokenLimitFor(model, 500),
     });
+    void recordModelCall({ userId, resolved: ledgerModel, purpose: "vision" }, response.usage, "succeeded");
 
     return response.choices[0].message.content || "A Christian storybook illustration, colorful, gentle style";
   } catch (error) {
@@ -172,7 +183,7 @@ export async function generateIllustrationPrompt(storyContent: string, userId: n
  */
 export async function generateIllustration(prompt: string, userId: number): Promise<string | null> {
   try {
-    const { client: openai, model } = await getVisionClient(userId, "image");
+    const { client: openai, model, ledgerModel } = await getVisionClient(userId, "image");
     
     const response = await openai.images.generate({
       model,
@@ -181,6 +192,7 @@ export async function generateIllustration(prompt: string, userId: number): Prom
       size: "1024x1024",
       quality: "standard",
     });
+    void recordModelCall({ userId, resolved: ledgerModel, purpose: "other", imageSize: "1024x1024" }, response.usage, "succeeded");
 
     // See the note in openai-implementation.ts: data is optional in openai 7.x.
     // This site had no guard at all, so an empty array threw as well.

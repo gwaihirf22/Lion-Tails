@@ -28,7 +28,16 @@ type StoryContext = {
   systemPrompt: string;
   /** Resolved once per request; every chat call in this file uses it. */
   resolved: ResolvedModel;
+  /** Who and which job the paid calls belong to, for the cost ledger. */
+  ledger?: { userId: number; jobId?: string };
 };
+
+/** The ledger context for one call of this story. See modelCalls.ts. */
+function ledgerFor(ctx: StoryContext, purpose: CallPurpose): ModelCallContext | undefined {
+  return ctx.ledger
+    ? { userId: ctx.ledger.userId, jobId: ctx.ledger.jobId, resolved: ctx.resolved, purpose }
+    : undefined;
+}
 import { getBibleVerseByTheme } from "../data/bibleVerses";
 import { CANON, DEVICE, KEEPER, questTitleRule } from "../data/lionTails";
 import { storage } from "../storage";
@@ -41,6 +50,8 @@ import {
 } from "./storyErrors";
 import { resolveModel, createClient, type ResolvedModel , tokenLimitFor, temperatureFor } from "./modelPolicy";
 import { newGenerationId, recordGeneration } from "./generationRecords";
+import { recordModelCall, type ModelCallContext } from "./modelCalls";
+import type { CallPurpose } from "./costMath";
 import {
   MEETING_NOTE_HEADING,
   DIGGING_DEEPER_HEADING,
@@ -399,6 +410,11 @@ export async function requestModelJson<T>(opts: {
   prompt?: string;
   call: (maxTokens: number) => Promise<ModelReply>;
   /**
+   * Where this call's cost is recorded. Every ATTEMPT is recorded, including
+   * the ones that are about to be retried: they were paid for.
+   */
+  ledger?: ModelCallContext;
+  /**
    * Narrows a parsed reply, or returns undefined if it is the wrong shape.
    *
    * Well-formed JSON with the wrong keys is a realistic failure for a weaker
@@ -472,6 +488,7 @@ export async function requestModelJson<T>(opts: {
 
     if (reply.finishReason === "length") {
       truncated = true;
+      if (opts.ledger) void recordModelCall(opts.ledger, reply.usage, "failed");
       if (isLastAttempt || !raiseBudget()) break;
       console.warn(
         `${step}: output was truncated (finish_reason=length); retrying with max_tokens=${budget}`,
@@ -487,6 +504,7 @@ export async function requestModelJson<T>(opts: {
       truncated = mayBeTruncated;
       debugData[debugData.length - 1].parseError =
         error instanceof Error ? error.message : String(error);
+      if (opts.ledger) void recordModelCall(opts.ledger, reply.usage, "failed");
       if (isLastAttempt) break;
       // Retrying a genuinely malformed reply at a larger budget costs only
       // time; retrying a truncated one at the same budget cannot work.
@@ -500,6 +518,7 @@ export async function requestModelJson<T>(opts: {
 
     const validated = opts.validate ? opts.validate(parsed) : (parsed as T);
     if (validated !== undefined) {
+      if (opts.ledger) void recordModelCall(opts.ledger, reply.usage, "succeeded");
       return validated;
     }
 
@@ -507,6 +526,7 @@ export async function requestModelJson<T>(opts: {
     truncated = mayBeTruncated;
     debugData[debugData.length - 1].shapeError =
       `expected keys were missing; got: ${Object.keys(parsed ?? {}).join(", ") || "(not an object)"}`;
+    if (opts.ledger) void recordModelCall(opts.ledger, reply.usage, "failed");
     if (isLastAttempt) break;
     if (mayBeTruncated && !raiseBudget()) break;
     console.warn(
@@ -545,6 +565,8 @@ async function requestModelText(opts: {
   maxTokens: number;
   prompt?: string;
   call: (maxTokens: number) => Promise<ModelReply>;
+  /** Where each attempt's cost is recorded; see requestModelJson. */
+  ledger?: ModelCallContext;
 }): Promise<string> {
   const { step, model, storyLength, debugData, prompt } = opts;
   const maxAttempts = 2;
@@ -579,6 +601,9 @@ async function requestModelText(opts: {
       wordCount: countWords(reply.content),
     });
 
+    if (opts.ledger) {
+      void recordModelCall(opts.ledger, reply.usage, reply.finishReason === "length" ? "failed" : "succeeded");
+    }
     if (reply.finishReason !== "length") {
       // Prose has no parse step, so unlike the JSON path there is no second
       // signal that a reply was cut off. finish_reason has been seen as null on
@@ -657,6 +682,7 @@ async function generateShortStorySingleCall(
   }>({
     step: "generateShortStorySingleCall",
     model: ctx.resolved.model,
+    ledger: ledgerFor(ctx, "story-single"),
     storyLength: request.storyLength,
     debugData,
     maxTokens: TOKEN_BUDGET.json,
@@ -713,6 +739,7 @@ ${questShape(ctx.brief, numberOfChapters)}
   const parsed = await requestModelJson<{ outline: string[] }>({
     step: "generateOutline",
     model: ctx.resolved.model,
+    ledger: ledgerFor(ctx, "outline"),
     storyLength: request.storyLength,
     debugData,
     maxTokens: TOKEN_BUDGET.json,
@@ -946,6 +973,7 @@ async function generateStoryChapter(
   return await requestModelText({
     step: `generateChapter: ${chapterOutline.substring(0, 30)}...`,
     model: ctx.resolved.model,
+    ledger: ledgerFor(ctx, "chapter"),
     storyLength: request.storyLength,
     debugData,
     maxTokens: TOKEN_BUDGET.chapter,
@@ -1009,6 +1037,7 @@ async function finalizeStoryDetails(
   }>({
     step: "finalizeStoryDetails",
     model: ctx.resolved.model,
+    ledger: ledgerFor(ctx, "finalize"),
     debugData,
     maxTokens: TOKEN_BUDGET.json,
     prompt: userPrompt,
@@ -1296,7 +1325,7 @@ async function runGeneration(
         // so the world's furniture has to be right HERE first -- an error on
         // the cover is inherited by every page that follows it.
         await illustrationPlates(finalDetails.imagePrompt),
-        { facesMustShow: true, size: COVER_SIZE },
+        { facesMustShow: true, size: COVER_SIZE, ledger: { purpose: "cover", jobId: ctx.ledger?.jobId } },
       );
       imageUrl = cover?.url;
       if (cover?.droppedReferences) {
@@ -1401,6 +1430,7 @@ async function runGeneration(
           source,
           studyQuestions,
           debugData,
+          ledgerFor(ctx, "digging"),
         );
       }
     }
@@ -1527,6 +1557,7 @@ export async function generateStoryFromJob(opts: {
     brief: deserialiseBrief(opts.brief),
     systemPrompt: opts.systemPrompt,
     resolved: opts.resolved,
+    ledger: { userId: opts.userId, jobId: opts.jobId },
   };
   return runGeneration(
     opts.request, opts.userId, ctx, opts.client, opts.targetWordCount, generationId, Date.now(),
@@ -1606,6 +1637,7 @@ export async function analyzeImageWithOpenAI(
       ],
       ...tokenLimitFor(resolved.model, 1000),
     });
+    void recordModelCall({ userId, resolved, purpose: "vision" }, response.usage, "succeeded");
     return (
       response.choices[0].message.content || "Could not analyze the image."
     );

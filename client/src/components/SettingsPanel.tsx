@@ -9,8 +9,8 @@
  * One copy, two presentations -- not two copies that drift.
  */
 import React, { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { type StoryUsage } from "@shared/schema";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { creditsLabel, type StoryUsage } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import ReadingSettingsCard from "@/components/reader/ReadingSettingsCard";
@@ -38,6 +38,21 @@ interface SelectableModel {
   tier: "local" | "economy" | "premium";
   warning?: string;
   allowed: boolean;
+  /** Credits a story costs this account; null when it is not charged. */
+  credits: number | null;
+  isDefault: boolean;
+}
+
+/**
+ * What the picker says after a model's name. The price is on every priced
+ * model, so choosing Terra is choosing three credits with the number in front
+ * of you; an own-key or admin account sees no prices, because it pays none.
+ */
+function modelSuffix(model: SelectableModel, charged: boolean): string {
+  if (!model.allowed) return " — needs your own API key";
+  if (model.credits) return ` — ${creditsLabel(model.credits)} a story`;
+  if (charged && model.tier === "local") return " — no credits";
+  return "";
 }
 
 const TIER_ORDER: SelectableModel["tier"][] = ["local", "economy", "premium"];
@@ -70,6 +85,12 @@ export function SettingsPanel() {
   const { data: storyStats, isLoading: isLoadingStats } = useQuery<StoryUsage>({
     queryKey: ["/api/story/usage"],
   });
+  // The usage answer carries the price of the next story, which depends on the
+  // model and on whether there is a key -- so all three changes refetch it, or
+  // the Create Story pill would quote the old model's price.
+  const queryClient = useQueryClient();
+  const refreshUsage = () => queryClient.invalidateQueries({ queryKey: ["/api/story/usage"] });
+  const charged = Boolean(storyStats && !storyStats.unlimited);
   const [models, setModels] = useState<SelectableModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
 
@@ -152,6 +173,7 @@ export function SettingsPanel() {
         setHasStoredKey(true);
         // Adding a key unlocks the premium tier.
         await loadModels();
+        refreshUsage();
         setApiKey(""); // Clear the input for security
         toast({
           title: "API Key Saved",
@@ -188,6 +210,7 @@ export function SettingsPanel() {
         // Removing a key revokes the premium tier; the server will downgrade a
         // stored premium selection at generation time regardless.
         await loadModels();
+        refreshUsage();
         toast({
           title: "API Key Removed",
           description: "Your OpenAI API key has been removed.",
@@ -220,11 +243,13 @@ export function SettingsPanel() {
       // apiRequest throws on a non-2xx response, so there is no falsy branch to
       // handle here.
       await apiRequest("POST", "/api/settings/openai-model", { model: value });
+      refreshUsage();
 
       const chosen = models.find((m) => m.id === value);
+      const price = chosen?.credits ? ` Each story costs ${creditsLabel(chosen.credits)}.` : "";
       toast({
         title: "Model updated",
-        description: chosen ? `Stories will now use ${chosen.label}.` : `Model set to ${value}.`,
+        description: chosen ? `Stories will now use ${chosen.label}.${price}` : `Model set to ${value}.`,
       });
     } catch (error) {
       // The server rejects a model the account is not entitled to. Put the
@@ -282,38 +307,53 @@ export function SettingsPanel() {
         {/* Story Generation Stats */}
         <Card className="bg-card rounded-2xl shadow-xl">
           <CardHeader>
-            <CardTitle className="text-xl font-heading">Story Generation Quota</CardTitle>
+            <CardTitle className="text-xl font-heading">Story Credits</CardTitle>
             <CardDescription>
-              Your free story generation usage and remaining quota
+              Each story costs credits, depending on the model that writes it
             </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoadingStats ? (
               <div className="py-8">
-                <p className="text-center text-muted-foreground">Loading your story statistics...</p>
+                <p className="text-center text-muted-foreground">Loading your credits...</p>
               </div>
+            ) : storyStats?.unlimited ? (
+              // An admin or own-key account is never charged, so a balance
+              // here would be a number that means nothing to them.
+              <p className="text-sm text-muted-foreground">
+                Your stories do not use credits
+                {storyStats.modelName ? `, on ${storyStats.modelName} or any other model` : ""}.
+              </p>
             ) : storyStats ? (
               <div className="space-y-6">
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-sm font-medium">Stories Generated</span>
+                    <span className="text-sm font-medium">Credits used</span>
                     <Badge variant="outline" className="bg-secondary/10">{storyStats.used}</Badge>
                   </div>
                   <Progress value={(storyStats.used / storyStats.total) * 100} className="h-2" />
                 </div>
-                
+
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Remaining Free Stories</span>
+                  <span className="text-sm font-medium">Credits left</span>
                   <span className="font-bold text-lg">{storyStats.remaining}</span>
                 </div>
-                
+
+                {storyStats.modelName && (
+                  <p className="text-sm">
+                    {storyStats.storyCredits > 0
+                      ? `A story on ${storyStats.modelName} costs ${creditsLabel(storyStats.storyCredits)}.`
+                      : `A story on ${storyStats.modelName} costs no credits.`}
+                  </p>
+                )}
+
                 <div className="text-sm text-muted-foreground">
                   {storyStats.lastReset && <p>Last top-up: {formatDate(storyStats.lastReset)}</p>}
                   {/* Interpolated, not restated. This said "10" in prose, which
                       is how a sentence outlives the number it describes. */}
                   <p className="mt-1">
-                    You start with {storyStats.total} and receive {storyStats.perMonth} more each
-                    month, up to {storyStats.total}. Next on {formatDate(storyStats.nextTopUp)}.
+                    You start with {storyStats.total} credits and receive {storyStats.perMonth} more
+                    each month, up to {storyStats.total}. Next on {formatDate(storyStats.nextTopUp)}.
                   </p>
                 </div>
               </div>
@@ -323,7 +363,9 @@ export function SettingsPanel() {
           </CardContent>
           <CardFooter className="border-t p-4 bg-muted rounded-b-2xl">
             <p className="text-sm text-muted-foreground">
-              Want unlimited stories? Add your own OpenAI API key.
+              {storyStats?.unlimited
+                ? "Stories on your own key are billed to your OpenAI account."
+                : "Want stories without credits, on any model? Add your own OpenAI API key."}
             </p>
           </CardFooter>
         </Card>
@@ -388,7 +430,7 @@ export function SettingsPanel() {
                             disabled={!model.allowed}
                           >
                             {model.label}
-                            {!model.allowed && " — needs your own API key"}
+                            {modelSuffix(model, charged)}
                           </SelectItem>
                         ))}
                       </SelectGroup>

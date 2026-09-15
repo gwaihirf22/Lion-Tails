@@ -16,7 +16,7 @@ import type { StoryRequest, StoryResponse } from "@shared/schema";
 import { useStoryJobs, describeJob } from "@/hooks/use-story-jobs";
 import ContinuationContext from "@/components/ContinuationContext";
 import {
-  type StoryUsage, characterIdsOf, type SavedStory } from "@shared/schema";
+  type StoryUsage, characterIdsOf, creditsLabel, type SavedStory } from "@shared/schema";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 
 export default function GenerateStory() {
@@ -235,18 +235,23 @@ export default function GenerateStory() {
             Generate personalized faith-based stories
           </p>
         </div>
-        {!statsLoading && generationStats && (
+        {/* Nothing for an admin or own-key account: they are never charged,
+            and a balance they cannot spend is noise above the form. */}
+        {!statsLoading && generationStats && !generationStats.unlimited && (
           <div className="bg-primary/10 rounded-lg p-3 mt-4 md:mt-0 text-sm">
-            {/* The balance, then the rule. This said "{remaining} / {limit}
-                stories remaining this month" against a LIFETIME count, so it
-                read 0 for anyone past ten stories while the server let them
-                run to fifty. */}
-            <p className="font-medium">
-              {generationStats.remaining} {generationStats.remaining === 1 ? "story" : "stories"} left
-            </p>
+            {/* The balance, then the price, then the rule. This said
+                "{remaining} / {limit} stories remaining this month" against a
+                LIFETIME count, so it read 0 for anyone past ten stories while
+                the server let them run to fifty. */}
+            <p className="font-medium">{creditsLabel(generationStats.remaining)} left</p>
+            {generationStats.modelName && generationStats.storyCredits > 0 && (
+              <p className="text-xs">
+                This story costs {creditsLabel(generationStats.storyCredits)} on{" "}
+                {generationStats.modelName}.
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">
-              You start with {generationStats.total} and get {generationStats.perMonth} more a month,
-              up to {generationStats.total}. Next on{" "}
+              You get {generationStats.perMonth} more a month, up to {generationStats.total}. Next on{" "}
               {new Date(generationStats.nextTopUp).toLocaleDateString()}.
             </p>
           </div>

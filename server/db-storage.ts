@@ -1042,6 +1042,24 @@ export class DbStorage implements IStorage {
     }
   }
 
+  async addStoryLooks(storyId: string, userId: number, looks: Record<string, string>): Promise<void> {
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in addStoryLooks(${storyId}).`);
+      return;
+    }
+    // ONE statement and a leaf merge, setStoryImages' rule: no read, no
+    // jsonb_set. The EXISTING book is on the right of ||, so it wins every
+    // key both sides have -- two pictures drawn at once cannot rewrite a look
+    // the other has already saved. Scoped to the user in the statement.
+    await pool!.query(
+      `UPDATE user_stories
+          SET story_data = story_data || jsonb_build_object(
+            'lookBook', $1::jsonb || COALESCE(story_data->'lookBook', '{}'::jsonb))
+        WHERE story_id = $2 AND user_id = $3`,
+      [JSON.stringify(looks), storyId, userId],
+    );
+  }
+
   async setStoryImages(
     storyId: string,
     userId: number,

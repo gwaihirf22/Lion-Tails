@@ -185,7 +185,9 @@ export default function Header() {
     // Hiding the link is convenience, not security: requireAdmin on
     // /api/admin/generation-stats is what actually protects the data, and the
     // page renders the server 403 for anyone who navigates here directly.
-    ...(user?.isAdmin ? [{ href: "/admin/stats", text: "Stats" }] : []),
+    ...(user?.isAdmin
+      ? [{ href: "/admin/stats", text: "Stats" }, { href: "/admin/costs", text: "Costs" }]
+      : []),
   ];
 
   useEffect(() => {

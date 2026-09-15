@@ -1,3 +1,4 @@
+import { requestPicture } from "@/lib/pictureRequest";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Star, Printer, Download, Pencil, ImagePlus, Loader2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -184,10 +185,16 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
   const canPicture = Boolean(modelInfo?.canIllustrate && !builtIn && storyId && !editing);
 
   const drawPassage = useMutation({
-    mutationFn: async (passage: { text: string; blockIndex: number }) => {
-      const response = await apiRequest("POST", `/api/stories/${storyId}/illustrate`, { passage });
-      return (await response.json()) as { images: StoryPicture[] };
-    },
+    // Through requestPicture: a picture takes minutes, the proxy gives up at
+    // 100 seconds, and the server finishes anyway -- see pictureRequest.ts.
+    mutationFn: async (passage: { text: string; blockIndex: number }) =>
+      requestPicture(storyId!, { passage }, {
+        onStillDrawing: () =>
+          toast({
+            title: "Still drawing…",
+            description: "Pictures can take a few minutes. It will appear in the story when it is ready. Please don't press again.",
+          }),
+      }),
     onSuccess: (data) => {
       onPictures?.(data.images ?? []);
       queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
@@ -526,6 +533,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
         onPictures={onPictures}
         furtherReading={furtherReading}
         onEdit={canEdit && !editing ? startEdit : undefined}
+        onOpenPicture={setLightbox}
       />
 
       {canEdit && (

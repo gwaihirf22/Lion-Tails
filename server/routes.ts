@@ -1,5 +1,6 @@
 import { parentModeActive, type ParentModeSession } from "@shared/parentMode";
-import { splitAppendices } from "@shared/storyAppendices";
+import { splitAppendices, storyWithoutAppendices } from "@shared/storyAppendices";
+import { lookBookOf, newLooks, withLooks } from "@shared/lookBook";
 import { builtInStoryById, isBuiltInStoryId, refuseBuiltIn, withBuiltInStories } from "./lib/builtInStories";
 // `express` itself, not only its types: the photo-upload route attaches its own
 // body parser (express.raw) rather than raising the global JSON limit for every
@@ -9,7 +10,10 @@ import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
 import { isModelAllowedFor, listSelectableModels, MODEL_CATALOG, DEFAULTS,
   avatarCapFor,
+  defaultChatModelFor,
   hasUnlimitedUse,
+  modelName,
+  storyCreditsFor,
   avatarsRemaining,
   MAX_FREE_AVATARS,
 } from "./lib/modelPolicy";
@@ -87,8 +91,8 @@ import {
   startingQuestsAgain,
   statsOf,
   virtueLevels,
-  avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, characterIdsOf, characterRoleOf,
-  type SavedStory, type Character, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
+  avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, type StoryPassage, characterIdsOf, characterRoleOf,
+  type SavedStory, type Character, type StoryUsage, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
@@ -106,6 +110,7 @@ import {
 import { statsAreAffordable } from "@shared/schema";
 import { RELATIONS, withoutPictureRefs } from "@shared/family";
 import { furtherReadingForRequest } from "./lib/furtherReading";
+import { KEEPER } from "./data/lionTails";
 import { sharedStoryView, SHARE_TOKEN_PATTERN } from "@shared/sharedStory";
 import { z, ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
@@ -119,6 +124,8 @@ import { v4 as uuidv4 } from "uuid";
 import { setupAuth } from "./auth";
 import { registerSongRoutes } from "./songs";
 import { requireAdmin } from "./lib/requireAuth";
+import { costsReport, publishSuggestedPrices, publishedPriceList, writeMarginPct } from "./lib/costStats";
+import { decideProposal, runBillCheck, runPriceCheck } from "./lib/priceWatch";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication with passport and session
@@ -1373,6 +1380,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /**
+   * What things really cost, and the prices built on it. All admin-only.
+   *
+   * Prices change only here, by a person: a proposal filed by the price watch
+   * is approved or dismissed, and a price list is published from what was
+   * measured. See server/lib/priceWatch.ts and costStats.ts.
+   */
+  app.get("/api/admin/costs", requireAdmin, async (_req, res) => {
+    try {
+      res.json(await costsReport());
+    } catch (error) {
+      console.error("Failed to build the costs report:", error);
+      res.status(500).json({ message: "Could not load costs" });
+    }
+  });
+
+  app.post("/api/admin/prices/check", requireAdmin, async (_req, res) => {
+    try {
+      const prices = await runPriceCheck();
+      const bill = await runBillCheck();
+      res.json({ proposalId: prices.proposalId ?? null, changes: prices.changes, billChecked: Boolean(bill) });
+    } catch (error) {
+      console.error("Price check failed:", error);
+      res.status(500).json({ message: "The price check failed" });
+    }
+  });
+
+  app.post("/api/admin/prices/:versionId/:decision", requireAdmin, async (req, res) => {
+    const id = Number(req.params.versionId);
+    const decision = req.params.decision === "approve" ? "approved" : req.params.decision === "dismiss" ? "dismissed" : null;
+    if (!Number.isInteger(id) || !decision) return res.status(404).json({ message: "Not found" });
+    const ok = await decideProposal(id, decision, (req.user as any).id);
+    if (!ok) return res.status(409).json({ message: "That proposal has already been decided" });
+    res.json({ id, status: decision });
+  });
+
+  app.put("/api/admin/pricing/margin", requireAdmin, async (req, res) => {
+    const parsed = z.object({ marginPct: z.number().min(0).max(200) }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Margin must be between 0 and 200 percent" });
+    await writeMarginPct(parsed.data.marginPct);
+    res.json({ marginPct: parsed.data.marginPct });
+  });
+
+  app.post("/api/admin/pricing/publish", requireAdmin, async (req, res) => {
+    try {
+      res.json({ versionId: await publishSuggestedPrices((req.user as any).id) });
+    } catch (error) {
+      res.status(409).json({ message: error instanceof Error ? error.message : "Could not publish" });
+    }
+  });
+
+  /**
+   * The published price list, for a page that does not exist yet. Prices only:
+   * no costs, no margin, no samples -- what things cost the owner is not what
+   * a family needs to see.
+   */
+  app.get("/api/pricing", requireAuth, async (_req, res) => {
+    const list = await publishedPriceList().catch(() => undefined);
+    res.json({ items: (list?.items ?? []).map((i) => ({ item: i.item, priceCents: i.priceCents })) });
+  });
+
   // In-flight jobs plus anything finished in the last hour. That window is how
   // a reloaded page rediscovers a job it was not watching, with no
   // localStorage involved.
@@ -1407,14 +1475,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // next request recomputes it from the same stale count for ever.
       const { count, lastResetDate } = await storage.applyStoryTopUp(userId);
       const allowance = storyAllowance({ count, lastResetDate });
-      res.json({
+      // What the NEXT story costs, priced by the model it would actually run
+      // on -- resolveModel, not the stored choice, because a stored premium
+      // model the account has lost the key for falls back, and the price
+      // shown has to be the price charged. Null when no model is available;
+      // the enqueue path reports that, not this screen.
+      const resolved = await resolveModel(userId, "chat", { forStory: true }).catch(() => null);
+      const entitlement = resolved
+        ? { isAdmin: resolved.isAdmin, hasOwnKey: resolved.usingOwnKey }
+        : null;
+      const usage: StoryUsage = {
+        unlimited: entitlement ? hasUnlimitedUse(entitlement) : false,
+        model: resolved?.model ?? null,
+        modelName: resolved ? modelName(resolved.model) : null,
+        storyCredits: resolved && entitlement ? storyCreditsFor(resolved.model, entitlement) : 0,
         used: allowance.used,
         remaining: allowance.remaining,
         total: allowance.total,
         perMonth: FREE_STORIES_PER_MONTH,
         lastReset: lastResetDate ? new Date(lastResetDate).toISOString() : null,
         nextTopUp: allowance.nextTopUp.toISOString(),
-      });
+      };
+      res.json(usage);
     } catch (error) {
       console.error("Error fetching usage stats:", error);
       res.status(500).json({ message: "Failed to fetch usage statistics" });
@@ -1712,7 +1794,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   /**
-   * A description of one moment, written against this story's own brief.
+   * A description of one moment, written against this story's own brief --
+   * and against the story itself.
    *
    * THE BRIEF IS REBUILT, NOT RESTATED. resolveHeroOfFaith + buildStoryBrief
    * are what the enqueue path uses, so what reaches the model here is the
@@ -1723,12 +1806,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * documented as prunable operational state and a permanent feature must not
    * read from a table that invites deletion.
    *
+   * THE STORY GOES WITH IT, for an OpenAI model: the body without its
+   * appendices (the AI note is not an event), the outline, and the cover's
+   * prompt. A local model gets the passage-only prompt -- its context cannot
+   * hold a story, and a truncated prompt draws worse than a short one.
+   *
+   * THE LOOK BOOK is read from the row and written back to it here: anyone the
+   * scene drew who has no portrait keeps the words they were first drawn with.
+   * A failure to save it is logged and the picture carries on.
+   *
    * Returns undefined on anything at all: no entitlement, no model, a bad
    * reply. The caller then draws the passage itself.
    */
   async function describePassage(
     saved: SavedStory,
-    text: string,
+    passage: StoryPassage,
     userId: number,
   ): Promise<string | undefined> {
     try {
@@ -1736,9 +1828,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!resolved) return undefined;
 
       let brief: string | undefined;
+      let characters: Character[] = [];
       try {
         const ids = characterIdsOf(saved.request);
-        const characters = (
+        characters = (
           await Promise.all(ids.map((id) => storage.getCharacterById(id, userId)))
         ).filter((c): c is Character => Boolean(c));
         const hero = await resolveHeroOfFaith(saved.request);
@@ -1749,11 +1842,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("[illustrate] could not rebuild the brief for a passage:", error);
       }
 
-      return await sceneFromPassage(createClient(resolved), resolved.model, {
+      const readsTheStory = resolved.provider !== "ollama";
+      const scene = await sceneFromPassage(createClient(resolved), resolved.model, {
         title: saved.story.title,
-        passage: text,
+        passage: passage.text,
         brief,
+        ...(readsTheStory
+          ? {
+              story: storyWithoutAppendices(saved.story.content ?? ""),
+              blockIndex: passage.blockIndex,
+              outline: saved.outline,
+              coverPrompt: withoutPictureRefs(saved.story.imagePrompt) || undefined,
+              lookBook: lookBookOf(saved.lookBook),
+            }
+          : {}),
+        ledger: { userId, storyId: saved.id, resolved, purpose: "passage-scene" },
+        cacheKey: `passage-scene:${saved.id}`,
       });
+      if (!scene) return undefined;
+
+      // Nobody with a face of their own goes in the book: a cast member has a
+      // portrait, and the Timekeeper has a file.
+      const faces = [
+        ...characters.flatMap((c) => [c.name, c.name.trim().split(/\s+/)[0] ?? ""]),
+        KEEPER.name,
+        KEEPER.shortName,
+      ];
+      const added = readsTheStory ? newLooks(saved.lookBook, scene.looks, faces) : {};
+      if (Object.keys(added).length) {
+        await storage.addStoryLooks(saved.id, userId, added).catch((error) =>
+          console.error("[illustrate] could not save the look book:", error),
+        );
+      }
+      // The stored book wins over what this reply proposed, as it does in the
+      // database: a look is the words someone was FIRST drawn with.
+      return readsTheStory
+        ? withLooks(scene.imagePrompt, { ...added, ...lookBookOf(saved.lookBook) })
+        : scene.imagePrompt;
     } catch (error) {
       console.error("[illustrate] could not describe a passage:", error);
       return undefined;
@@ -1843,7 +1968,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         `An illustration for a story titled "${saved.story.title}"`;
 
       if (passage.success && passage.data) {
-        const scene = await describePassage(saved, passage.data.text, userId);
+        const scene = await describePassage(saved, passage.data, userId);
         // A failed sentence is not worth failing the picture over: the passage
         // itself draws a worse picture, and draws one.
         prompt = scene ?? passage.data.text;
@@ -1901,6 +2026,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
         await illustrationCast(saved.request, userId, prompt),
         extras,
+        {
+          ledger: {
+            purpose: passage.success && passage.data ? "passage-picture" : "redraw",
+            storyId: saved.id,
+          },
+        },
       );
       const imageUrl = drawn?.url;
       if (!imageUrl) {
@@ -2432,7 +2563,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // The policy's default, not a literal of this route's own. Reporting
       // a model the user is not entitled to would make the settings page and
       // the story-form accuracy note both lie about what is generating.
-      const model = (await storage.getUserOpenAIModel(userId)) || DEFAULTS.chat;
+      // Terra for an admin or an own-key account, Luna for everyone else:
+      // defaultChatModelFor is what resolveModel starts from too.
+      const hasOwnKey = Boolean(await storage.getUserOpenAIKey(userId));
+      const isAdmin = Boolean((req.user as any).isAdmin);
+      const model =
+        (await storage.getUserOpenAIModel(userId)) || defaultChatModelFor({ isAdmin, hasOwnKey });
       // The tier rides along so the story form can warn about local-model
       // accuracy without a second round trip and without the client keeping its
       // own copy of the catalogue -- there are already six model lists in this
@@ -2501,7 +2637,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!isModelAllowedFor(model, "chat", { isAdmin, hasOwnKey: Boolean(ownKey) })) {
         return res.status(403).json({
           message:
-            "That model is not available on your account. Premium models require your own OpenAI API key.",
+            "That model is not available on your account. GPT-6 Astra and GPT-4o need your own OpenAI API key.",
           allowed: listSelectableModels({ isAdmin, hasOwnKey: Boolean(ownKey) }),
         });
       }

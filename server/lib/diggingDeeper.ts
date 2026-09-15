@@ -25,6 +25,7 @@
 
 import type OpenAI from "openai";
 import { requestModelJson, TOKEN_BUDGET } from "./openai-implementation";
+import type { ModelCallContext } from "./modelCalls";
 import { temperatureFor, tokenLimitFor } from "./modelPolicy";
 import { DIGGING_DEEPER_HEADING } from "@shared/storyAppendices";
 import type { StoryBrief } from "./storyBrief";
@@ -173,6 +174,8 @@ export async function generateDiggingDeeper(
   source: DiggingSource,
   questions: string[],
   debugData: unknown[],
+  /** Where this call's cost is recorded. Optional so a caller without a job still works. */
+  ledger?: ModelCallContext,
 ): Promise<string> {
   const asked = questions.map((q) => q.trim()).filter(Boolean);
   if (asked.length === 0) return "";
@@ -182,6 +185,7 @@ export async function generateDiggingDeeper(
     const reply = await requestModelJson<{ answers: DiggingAnswer[] }>({
       step: "diggingDeeper",
       model,
+      ledger,
       debugData: debugData as any[],
       maxTokens: TOKEN_BUDGET.json,
       prompt: user,

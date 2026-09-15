@@ -167,6 +167,10 @@ anyone who registers that name.
 
 ## The free story allowance
 
+**The unit is credits, not stories** (see "Model selection"): a Luna story is
+1, a Terra story 3, so the names below say STORIES and mean credits. `count`
+kept its column and its meaning — Luna-only history is identical either way.
+
 `FREE_STORIES` (50) and `FREE_STORIES_PER_MONTH` (10) in `shared/schema.ts`,
 and **one pure function, `storyAllowance()`**, which every screen and the
 enforcement path call. It is a balance that TOPS UP, not an allowance that
@@ -212,8 +216,38 @@ against purple prose, because that is the easy failure). No persona says
 
 `server/lib/modelPolicy.ts` is the only place the model, provider base URL and
 API key are decided. Tiers: local (Ollama, free, anyone), economy
-(`gpt-5.6-luna` default, anyone, owner's key), premium (`gpt-5.6-terra`,
-`gpt-6-astra`, `gpt-image-2`, admins or users with their own key).
+(`gpt-5.6-luna`, anyone, owner's key), premium (`gpt-5.6-terra`,
+`gpt-6-astra`, `gpt-4o`, `gpt-image-2`, admins or users with their own key —
+**except Terra for stories, which a free account buys with credits**).
+
+**Credits.** The free allowance is counted in credits, and a story costs
+`storyCreditsFor(model, entitlement)`: Luna 1, Terra 3, from `storyCredits`
+on the catalogue entry. Blake, 2026-09-13, after the Luna/Terra/Astra
+baseline: Terra on the free tier "will take 3 credits instead of just 1", Terra
+is the default for the paid tier, and Astra is not offered to free accounts.
+
+- **Paid tier = `hasUnlimitedUse`** (admin or own key). They are charged 0 on
+  every model and default to Terra (`defaultChatModelFor`). A stored choice
+  always wins, so nobody who picked Luna is moved onto Terra.
+- **`DEFAULTS.chat` stays Luna, and is the floor.** It is what a refused choice
+  falls back to; a premium floor is `null` — no story — for a free account.
+- **A premium model is open to a free account because it has a price.**
+  `isModelAllowedFor` lets a free account reach a premium model only for
+  `chat` and only when `storyCredits` is set; a test asserts every such model
+  is priced. Unpriced premium (Astra, gpt-4o) stays locked.
+- **One price, three readers**: the enqueue check (`canEnqueueWithinQuota`,
+  "enough for THIS story", not "any left"), the charge in `finishSucceeded`
+  (by the model that RAN, re-resolved at job start), and the price in the
+  picker and `/api/story/usage`.
+- **Credit-bought Terra is for the story only** — `resolveModel(..., {
+  forStory: true })`, checked by `paidFor()`. Chords, universe summaries and
+  world extractions charge nothing, so on Terra they would be free premium
+  calls as often as asked for; for a free account they run on Luna. Forgetting
+  `forStory` fails cheap.
+- A story enqueued on Luna and switched to Terra before the worker starts is
+  charged 3 into a balance that could not afford it. `used` keeps the overdraft
+  and the next top-up pays it back; the concurrency limit of 1 bounds it to one
+  story.
 
 **Request shape is per-model and lives in the catalogue, not at the call site.**
 The GPT-5.6 generation rejects `max_tokens` (wants `max_completion_tokens`)
@@ -225,12 +259,91 @@ getting this wrong breaks generation for every user without their own key.
 `dall-e-3` was **shut down** on 2026-05-12 and is gone from the catalogue. Do
 not add it back.
 
+**Never give an app setting one of the OpenAI SDK's own names.** `new OpenAI()`
+reads `OPENAI_PROJECT_ID`, `OPENAI_ORG_ID`, `OPENAI_BASE_URL`,
+`OPENAI_ADMIN_KEY` and others from the environment and SENDS them. The cost
+bill check was given `OPENAI_PROJECT_ID` (2026-09-15); the SDK put it in an
+`OpenAI-Project` header on every story call, the app's key belongs to another
+project, and every story failed with "401 OpenAI-Project header should match
+project for API key". The cost settings are `COSTS_*`, and
+`tests/openaiEnvNames.test.ts` reads the SDK's names from the installed package
+and fails on any of them (but `OPENAI_API_KEY`) in `server/`, `shared/`,
+`client/src`, `scripts/` or the reference compose file.
+
 Authorisation is resolved at **use**, not at selection. `grep
 process.env.OPENAI_API_KEY server/` should return nothing outside
 `modelPolicy.ts`.
 
 Extend `MODEL_CATALOG` rather than adding another hardcoded model list — there
 are already six, and the settings UI still uses its own.
+
+## What things cost
+
+Blake wants a pay-as-you-go price that covers costs with a small margin, so
+the app measures what a story and a picture really cost, keeps prices as data
+someone approves, and warns when OpenAI's prices move. **No charging exists
+yet** -- the balance and Stripe are the next plan (`docs/roadmap.md`), built on
+these numbers. `/admin/costs` is the page.
+
+- **The ledger is `model_calls`: one row per paid call ATTEMPT**, retries and
+  failures included, because they were paid for. Tokens are split the way they
+  are billed (`usageBreakdown()` in `server/lib/costMath.ts`): uncached,
+  cached and cache-write input, image input, text and image output. Reasoning
+  is recorded and never added -- it is already inside output, which is how it
+  is billed. Ollama calls are not recorded.
+- **`cost_micros` is frozen at write** from the approved price in effect, and
+  is **null, never zero**, when there was none. A later price change never
+  rewrites a past story's cost. Micros because `tokens × $/1M` is micros
+  exactly.
+- **Every paid call reaches the ledger**, and a test fails when one does not:
+  `requestModelJson`/`requestModelText` take a `ledger` context and record
+  each attempt (story, outline, chapter, finalize, digging deeper, extraction,
+  summary); the passage scene, pictures, avatars, chords and vision record
+  directly. `tests/modelCallsLedger.test.ts` greps `server/` for any file that
+  makes a paid call without reaching the recorder -- a new call path that
+  records nothing reads exactly like a cheap app. Pass `ledger` to any new
+  wrapper call.
+- **Prices are rows, never constants.** `price_versions` (proposed / approved /
+  dismissed) and `model_prices`, dollars per million per unit. A model's price
+  is its newest APPROVED version, whole -- never merged unit by unit across
+  versions. `MODEL_CATALOG` has no price field on purpose; `storyCredits` is
+  what a free account is charged in credits, a different fact.
+- **The watch** (`server/lib/priceWatch.ts`, daily and on "Check now") reads
+  LiteLLM's price file and OpenAI's `pricing.md`, Standard tier only
+  (`priceFeeds.ts`, pure, tested against saved real copies). OpenAI's page
+  wins where both have a price; every disagreement is kept and shown. A
+  difference files ONE proposal (fingerprinted, never twice) and **nothing is
+  applied until a person approves it**. A feed that changes shape is a
+  warning, not "no change". A unit a feed stops listing is carried forward, not
+  made free.
+- **The bill check** needs an organisation Admin key: `COSTS_ADMIN_KEY_FILE`
+  (a root-only file mounted read-only -- production's is
+  `/mnt/user/appdata/lion-tails/openai-admin-key`) or `COSTS_ADMIN_KEY`, read
+  by `adminKey()` in `priceWatch.ts` only and never returned by a route -- and
+  `COSTS_PROJECT_ID` (Lion Tails is "Lion's Tail",
+  `proj_uQjN5Xv24HRqdr0AqaV9E0zp`; the organisation also holds Open WebUI's
+  project, so without it the check compares both). **Written against a real
+  bill, not the docs** (`parseLineItem`, `readBill`): line items are
+  `gpt-5.6-luna, cache writes` and `gpt-image-2-2026-04-21 image, output` --
+  dated snapshots, the modality after the model, token types in words -- and
+  rows come per day AND per project. **Free rows are not a price**: whole days
+  of Luna were billed $0 (the organisation's complimentary allowance) beside
+  rows at exactly list, and averaging them read as Luna at a fifth of its
+  price. The charged rate comes from paid rows only, flagged beyond 2%; the
+  comparison with the ledger uses every token at the APPROVED price (the
+  ledger prices at list too), flagged beyond 5%, and starts at the ledger's
+  first whole day, so a new ledger is not read as every call going unrecorded.
+  First real check, 2026-09-07 to 09-14: $10.49 charged, $2.42 of free usage
+  at list, gpt-image-2 at exactly $30 / $8 / $5.
+- **Costs are measured, not estimated** (`costStats.ts`): a story is the sum of
+  its job's calls plus the extraction it caused, by length and model; a story
+  with any unpriced call is left out, not counted cheap. Pictures by purpose.
+- **The price list is published, never live.** Suggested = p75 × (1 + margin,
+  default 20%, `app_settings.pricing_margin_pct`), rounded UP to a cent, and
+  only for items with `MIN_SAMPLES` (5). Publishing computes the list on the
+  server -- a client-supplied list could be set to zero. A published price
+  below today's measured p75 is a warning. `GET /api/pricing` returns prices
+  only, no costs.
 
 ## Environment
 
@@ -698,8 +811,10 @@ different child, and the only sign was one line in the log.
   (`PICTURE_ID_REMINDER`). `drawnCharacters()`/`chooseDrawn()` attach a
   portrait for a tagged person, or an untagged one whose name nobody in the
   account shares; a shared name without its tag is left out, and a scene with
-  no tags at all (an older saved prompt, the single-call short story) keeps
-  the first-three rule less shared names. `withRefsResolved()` turns each ID
+  no tags at all is held to the same named rule and never to "the first
+  three" -- that fallback put Ellie in Mordecai's crown and Elijah at Haman's
+  reins for a passage naming neither (2026-09-15); older prompts name the
+  children, so they keep their faces. `withRefsResolved()` turns each ID
   into "the person in reference image N" before the image model sees
   anything, and a shared-name member's reference line drops the name.
   Blake chose pictures only, not story prompts. **Readers never see an ID**:
@@ -736,6 +851,38 @@ different child, and the only sign was one line in the log.
     setting rides along with the cast, and the first real generation put a
     moment set in Barnabas's shop "in the world of William Tyndale". The
     prompt now says so out loud.
+  - **For an OpenAI model it reads the whole story.** Passage-only, "They
+    crossed to the shop together" came back as the shop "in ancient Susa",
+    girls in Persian dress. Now `storyWithoutAppendices` of the body, the
+    outline, the brief and the cover's prompt (looks only) go FIRST and are
+    the same for every picture of a story, and end at an **explicit cache
+    breakpoint** (`passageScenePromptParts`, `prompt_cache_options: explicit`,
+    `prompt_cache_key` per story). The implicit one is not enough on gpt-5.6:
+    measured, it covered the whole prompt, so the second picture re-read the
+    story at full price. The look book, the lead-in and the passage go LAST.
+    The scene must open with when and where ("In the present day, …") and say
+    what everyone wears — an image model cannot see the story. **That opening
+    is read by the server**: `isPresentDayScene()` in `illustration.ts` turns a
+    quest traveller's far-side dress rule off and says "present-day clothes".
+    Left to the image model ("in a scene set in the past…"), a shop scene
+    that said "In the present day … contemporary clothes" still came back in
+    Persian tunics — "biblical storybook" style, a mostly-Persian montage as
+    the look of the book, and a room full of old things all said "past". Who,
+    where and what they wear come from the story up to the moment; what is
+    happening from the passage. Over `MAX_SCENE_STORY_CHARS` the part around
+    the passage is sent. **A local model gets the old passage-only prompt,
+    byte for byte** — its context cannot hold a story.
+  - **The look book** (`shared/lookBook.ts`, `story_data.lookBook`): the same
+    scene call returns one sentence of looks for each person it drew who has
+    no portrait. **The server attaches the saved sentences** (`withLooks`, by
+    whole-word name, only for names the scene uses) — asked to copy them in,
+    the model saved Mordecai's look and then described him in its own words. Blake: "every
+    character that appears in the generated story in words could then easily
+    appear in the pictures too." **First words win** — `newLooks` never
+    replaces an entry, and `addStoryLooks` puts the stored book on the right
+    of `||` so a racing picture cannot either. Cast names and Barnabas are
+    refused (they have faces). Server-owned, declared on `savedStorySchema`
+    or zod strips it, and not in `sharedStoryView`.
   - **The anchor is a quote first and an index second**
     (`pictureAnchorSchema`). The reader's blocks have no identity —
     `StoryContent` keys them by array index and the array is rebuilt whenever
@@ -759,6 +906,9 @@ different child, and the only sign was one line in the log.
     untouched and the parser stays a pure function of the text.
   - The lightbox carries **no `.reader-chrome`** — focus mode fades that to
     `opacity: 0; pointer-events: none`, taking the close button with it.
+    It is full screen, and a tap toggles fitted ↔ the file's own pixels in a
+    scrolling box (a six-panel cover fitted to a phone is six thumbnails). The
+    picture at the end opens it too.
   - **Twelve pictures a story**, not the five a character keeps: one is the
     picture at the end and the rest are the pictures in the story.
   - **A passage picture is a page, not a cover.** It never changes

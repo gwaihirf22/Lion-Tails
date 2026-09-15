@@ -11,6 +11,8 @@ import {
   timestamp,
   index,
   uniqueIndex,
+  numeric,
+  bigint,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -534,6 +536,156 @@ export const generationRecords = pgTable(
   }),
 );
 
+/**
+ * What things really cost. See server/lib/modelCalls.ts and priceWatch.ts.
+ *
+ * PRICES ARE DATA, NEVER CODE. OpenAI publishes no price API, prices change,
+ * and a constant in modelPolicy.ts would be wrong silently on the day they do.
+ * So a price is a row, a row belongs to a VERSION, and a version is proposed by
+ * a feed and approved by a person. Nothing reprices on its own.
+ */
+export const priceVersions = pgTable(
+  "price_versions",
+  {
+    id: serial("id").primaryKey(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    /** litellm | openai-page | costs-api | manual */
+    source: text("source").notNull(),
+    /** proposed | approved | dismissed */
+    status: text("status").notNull(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decidedBy: integer("decided_by").references(() => users.id, { onDelete: "set null" }),
+    note: text("note"),
+    /** What the watcher saw: each changed unit, old and new, and every source that disagreed. */
+    evidence: jsonb("evidence"),
+  },
+  (table) => ({
+    statusIdx: index("idx_price_versions_status").on(table.status),
+  }),
+);
+
+export const modelPrices = pgTable(
+  "model_prices",
+  {
+    id: serial("id").primaryKey(),
+    versionId: integer("version_id")
+      .references(() => priceVersions.id, { onDelete: "cascade" })
+      .notNull(),
+    model: text("model").notNull(),
+    /** A PriceUnit from server/lib/costMath.ts. */
+    unit: text("unit").notNull(),
+    /**
+     * Dollars per million tokens, as numeric so a price is never a float.
+     * Read back as a string by node-postgres; parsePrice() is the one reader.
+     */
+    usdPerMillion: numeric("usd_per_million", { precision: 14, scale: 6 }).notNull(),
+  },
+  (table) => ({
+    oneUnit: uniqueIndex("idx_model_prices_version_model_unit").on(table.versionId, table.model, table.unit),
+  }),
+);
+
+/**
+ * One row per PAID model call attempt, failures and retries included.
+ *
+ * Failures are here because they cost money: a story that needed a second try
+ * at chapter three cost two chapter threes, and a price that ignores that is a
+ * price below cost. Local (Ollama) calls are not recorded -- they cost nobody.
+ *
+ * The COST IS FROZEN when the row is written, from the approved price in
+ * effect. A later price change must never rewrite what a past story cost; the
+ * history is what the price list is suggested from. Null when there was no
+ * approved price for that model -- shown as "unpriced", never read as zero.
+ *
+ * Like generation_records: nothing copied from ResolvedModel but its
+ * descriptive fields. It carries the API key.
+ */
+export const modelCalls = pgTable(
+  "model_calls",
+  {
+    callId: text("call_id").primaryKey(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+    jobId: text("job_id").references(() => storyJobs.jobId, { onDelete: "set null" }),
+    /** The story a later picture was drawn for. A cover has a job and no story yet. */
+    storyId: text("story_id"),
+    /** A CallPurpose from server/lib/costMath.ts. */
+    purpose: text("purpose").notNull(),
+    model: text("model").notNull(),
+    provider: text("provider").notNull(),
+    tier: text("tier").notNull(),
+    /** OpenAI on the owner's key. A user's own key costs the owner nothing. */
+    ownerPaid: boolean("owner_paid").notNull(),
+    /** succeeded | failed */
+    outcome: text("outcome").notNull(),
+    inputText: integer("input_text").default(0).notNull(),
+    inputCached: integer("input_cached").default(0).notNull(),
+    inputCacheWrite: integer("input_cache_write").default(0).notNull(),
+    inputImage: integer("input_image").default(0).notNull(),
+    inputImageCached: integer("input_image_cached").default(0).notNull(),
+    outputText: integer("output_text").default(0).notNull(),
+    outputImage: integer("output_image").default(0).notNull(),
+    /** Informational: already inside output_text, which is how it is billed. */
+    reasoning: integer("reasoning").default(0).notNull(),
+    imageSize: text("image_size"),
+    imageQuality: text("image_quality"),
+    /** Millionths of a dollar. */
+    costMicros: bigint("cost_micros", { mode: "number" }),
+    priceVersionId: integer("price_version_id").references(() => priceVersions.id, { onDelete: "set null" }),
+  },
+  (table) => ({
+    createdIdx: index("idx_model_calls_created_at").on(table.createdAt),
+    jobIdx: index("idx_model_calls_job_id").on(table.jobId),
+    storyIdx: index("idx_model_calls_story_id").on(table.storyId),
+  }),
+);
+
+/**
+ * The prices a person would be charged, as a list someone PUBLISHED.
+ *
+ * Suggested from measured cost plus a margin, but never live: a price list that
+ * moved on its own would move under a family between two stories. Only one
+ * version is `published` at a time; publishing supersedes the last.
+ */
+export const priceListVersions = pgTable("price_list_versions", {
+  id: serial("id").primaryKey(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  /** published | superseded */
+  status: text("status").notNull(),
+  publishedBy: integer("published_by").references(() => users.id, { onDelete: "set null" }),
+  marginPct: numeric("margin_pct", { precision: 6, scale: 2 }).notNull(),
+});
+
+export const priceListItems = pgTable(
+  "price_list_items",
+  {
+    id: serial("id").primaryKey(),
+    versionId: integer("version_id")
+      .references(() => priceListVersions.id, { onDelete: "cascade" })
+      .notNull(),
+    /** story:<length>:<model> | picture:<purpose>:<model> */
+    item: text("item").notNull(),
+    priceCents: integer("price_cents").notNull(),
+    /** The measured cost the price was built on, and from how many samples. */
+    basisCostMicros: bigint("basis_cost_micros", { mode: "number" }).notNull(),
+    samples: integer("samples").notNull(),
+  },
+  (table) => ({
+    oneItem: uniqueIndex("idx_price_list_items_version_item").on(table.versionId, table.item),
+  }),
+);
+
+/**
+ * Small settings the admin panel changes: the pricing margin, and what the
+ * price watcher last saw. Key/value because each is one value, and a table per
+ * setting is a migration per setting.
+ */
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // Owned and written by connect-pg-simple, never by the ORM. Declared only so
 // migrations create it and verifyOrmSchema() checks it; db-storage.ts sets
 // createTableIfMissing:false accordingly.
@@ -675,6 +827,15 @@ const optionalText = (max: number) =>
  * shape moved nothing failed -- it just rendered undefined.
  */
 export type StoryUsage = {
+  /** Admin or own key: stories cost this account nothing, whatever the model. */
+  unlimited: boolean;
+  /** The model the next story would run on, after fallback. Null if none is available. */
+  model: string | null;
+  /** "GPT-5.6 Terra": the model's name, without the label's description. */
+  modelName: string | null;
+  /** Credits the next story costs on that model. 0 when unlimited or local. */
+  storyCredits: number;
+  /** Credits, not stories: a story costs storyCredits of these. */
   used: number;
   remaining: number;
   total: number;
@@ -682,6 +843,15 @@ export type StoryUsage = {
   lastReset: string | null;
   nextTopUp: string;
 };
+
+/**
+ * "1 credit", "3 credits". One spelling for the picker, the balance and the
+ * refusal, because a price written three ways is a price that reads as three
+ * different prices.
+ */
+export function creditsLabel(n: number): string {
+  return `${n} ${n === 1 ? "credit" : "credits"}`;
+}
 
 /** Where everyone starts, and the ceiling a top-up can never carry them past. */
 export const FREE_STORIES = 50;
@@ -2211,6 +2381,17 @@ export const savedStorySchema = z.object({
    * storyImagesOf() folds those rows in instead.
    */
   images: z.array(storyPictureSchema).max(MAX_STORY_IMAGES).optional(),
+
+  /**
+   * How the people this story invented look, one sentence each, keyed by the
+   * name the story tells them apart by. SERVER-OWNED: written only by the
+   * passage-picture route through storage.addStoryLooks, never from a request,
+   * never shown to a reader, and not in sharedStoryView. See shared/lookBook.ts.
+   *
+   * DECLARED HERE OR LOST: this is a z.object, which strips unknown keys, so a
+   * look book missing from the schema would be written and never read back.
+   */
+  lookBook: z.record(z.string()).optional(),
 
   /**
    * When the reader first opened it, or null if they have not.

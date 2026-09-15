@@ -9,6 +9,10 @@ import {
   hasUnlimitedUse,
   avatarsRemaining,
   MAX_FREE_AVATARS,
+  defaultChatModelFor,
+  modelName,
+  paidFor,
+  storyCreditsFor,
 } from "../server/lib/modelPolicy";
 
 /**
@@ -209,7 +213,125 @@ describe("the free avatar allowance", () => {
   });
 });
 
+/**
+ * Credits: what a story costs, by the model that writes it.
+ *
+ * Blake, 2026-09-13: "We can use terra on the free tier but it will take 3
+ * credits instead of just 1. And make Terra default for paid tier." Paid tier
+ * is own key or admin; Astra is not offered to free accounts at all.
+ */
+describe("story credits", () => {
+  const free = { isAdmin: false, hasOwnKey: false };
+  const paying = [
+    { isAdmin: true, hasOwnKey: false },
+    { isAdmin: false, hasOwnKey: true },
+  ];
+
+  it("prices Luna at 1 and Terra at 3 for a free account", () => {
+    expect(storyCreditsFor("gpt-5.6-luna", free)).toBe(1);
+    expect(storyCreditsFor("gpt-5.6-terra", free)).toBe(3);
+  });
+
+  it("charges nobody who pays for their own use, on any model", () => {
+    for (const opts of paying) {
+      for (const model of Object.keys(MODEL_CATALOG)) {
+        expect(storyCreditsFor(model, opts), `${model} ${JSON.stringify(opts)}`).toBe(0);
+      }
+    }
+  });
+
+  it("never charges for a local model, and never lets an OpenAI model be free", () => {
+    for (const [model, spec] of Object.entries(MODEL_CATALOG)) {
+      if (!spec.kinds.includes("chat")) continue;
+      const credits = storyCreditsFor(model, free);
+      if (spec.provider === "ollama") expect(credits, model).toBe(0);
+      // A missing price must cost something: zero on the owner's key is the
+      // one wrong answer that is also invisible.
+      else expect(credits, model).toBeGreaterThan(0);
+    }
+  });
+
+  it("lets a free account choose Terra for stories, and nothing else premium", () => {
+    expect(isModelAllowedFor("gpt-5.6-terra", "chat", free)).toBe(true);
+    expect(isModelAllowedFor("gpt-6-astra", "chat", free)).toBe(false);
+    expect(isModelAllowedFor("gpt-4o", "chat", free)).toBe(false);
+    // Credits are a story allowance. They buy no vision and no pictures.
+    expect(isModelAllowedFor("gpt-5.6-terra", "vision", free)).toBe(false);
+    expect(isModelAllowedFor("gpt-image-2", "image", free)).toBe(false);
+  });
+
+  it("prices every premium model a free account can reach", () => {
+    // The gate and the price are one fact: a premium model is open to a free
+    // account BECAUSE it has a price. If they ever came apart, a free account
+    // could run a premium model on the owner's key at the defensive 1 credit.
+    for (const [model, spec] of Object.entries(MODEL_CATALOG)) {
+      if (spec.tier !== "premium" || !isModelAllowedFor(model, "chat", free)) continue;
+      expect(spec.storyCredits, model).toBeGreaterThan(1);
+    }
+  });
+
+  it("defaults own-key and admin accounts to Terra, and free accounts to Luna", () => {
+    expect(defaultChatModelFor(free)).toBe("gpt-5.6-luna");
+    for (const opts of paying) expect(defaultChatModelFor(opts)).toBe("gpt-5.6-terra");
+    // The floor does not move: it is what a refused choice falls back to, and a
+    // premium floor is no story at all for a free account.
+    expect(DEFAULTS.chat).toBe("gpt-5.6-luna");
+  });
+
+  it("shows each model's price in the picker, and only a price that will be charged", () => {
+    const models = listSelectableModels(free);
+    const credits = Object.fromEntries(models.map((m) => [m.id, m.credits]));
+    expect(credits["gpt-5.6-luna"]).toBe(1);
+    expect(credits["gpt-5.6-terra"]).toBe(3);
+    // Not offered, so no price: "1 credit" beside a locked Astra would be a
+    // promise the server refuses.
+    expect(credits["gpt-6-astra"]).toBeNull();
+    expect(credits["gpt-oss:20b"]).toBeNull();
+    for (const opts of paying) {
+      expect(listSelectableModels(opts).every((m) => m.credits === null)).toBe(true);
+    }
+    expect(models.find((m) => m.isDefault)?.id).toBe("gpt-5.6-luna");
+    expect(listSelectableModels(paying[1]).find((m) => m.isDefault)?.id).toBe("gpt-5.6-terra");
+  });
+
+  it("spends credit-bought Terra on the story only", () => {
+    // Chords, universe summaries and world extractions resolve "chat" and
+    // charge nothing, so on Terra they would be free premium calls, as often
+    // as asked for.
+    expect(paidFor("gpt-5.6-terra", "chat", free, { forStory: true })).toBe(true);
+    expect(paidFor("gpt-5.6-terra", "chat", free, {})).toBe(false);
+    expect(paidFor("gpt-5.6-luna", "chat", free, {})).toBe(true);
+    for (const opts of paying) expect(paidFor("gpt-6-astra", "chat", opts, {})).toBe(true);
+  });
+
+  it("names the model in a sentence without its description", () => {
+    expect(modelName("gpt-5.6-terra")).toBe("GPT-5.6 Terra");
+    expect(modelName("not-a-model")).toBe("not-a-model");
+  });
+});
+
+describe("the not-enough-credits message", () => {
+  const nextTopUp = new Date(2026, 9, 1);
+
+  it("offers Luna when Terra is too dear but Luna is not", () => {
+    const msg = notEnoughCreditsMessage("gpt-5.6-terra", 3, { remaining: 2, nextTopUp });
+    expect(msg).toContain("GPT-5.6 Terra costs 3 credits and you have 2 credits");
+    expect(msg).toContain("Switch to GPT-5.6 Luna in Settings (1 credit a story)");
+    expect(msg).toContain("1 October");
+  });
+
+  it("does not suggest a model that would be refused too", () => {
+    const msg = notEnoughCreditsMessage("gpt-5.6-terra", 3, { remaining: 0, nextTopUp });
+    expect(msg).not.toContain("Luna");
+    expect(msg).toContain("used all your credits");
+    expect(notEnoughCreditsMessage("gpt-5.6-luna", 1, { remaining: 0, nextTopUp })).not.toContain(
+      "Switch",
+    );
+  });
+});
+
 import { READING_LEVELS, READING_LEVEL_AGES, READING_LEVEL_LABELS, readingLevelAges } from "../shared/schema";
+import { notEnoughCreditsMessage } from "../server/lib/openai";
 describe("reading levels", () => {
   it("has a label and an age range for every level, and reaches adults", () => {
     for (const l of READING_LEVELS) {
