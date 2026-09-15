@@ -293,9 +293,14 @@ async function portraitFile(avatarUrl?: string): Promise<PictureFile | undefined
  *    where nothing says which Paul the scene means -- and the cost is not
  *    symmetric (the Barnabas rule below): a generic dad against the apostle
  *    drawn as someone's father.
- *  - A scene with NO tags at all -- an older story's saved prompt, the
- *    single-call short story, a redraw of either -- keeps what this did
- *    before, the first three in order, less anyone whose name is shared.
+ *  - A scene with NO tags at all is held to the same NAMED rule, and never
+ *    to "the first three". It used to fall back to the first three characters
+ *    for an older saved prompt -- and a passage about Mordecai riding while
+ *    Haman led the horse, which names nobody in the cast, came back with
+ *    Ellie in the crown and Elijah at the reins (2026-09-15). An untagged scene
+ *    that names nobody has nobody in it. An older prompt still keeps its faces,
+ *    because those name the children ("Make the faces of Esther, Ellie, and
+ *    Elijah clearly recognisable").
  *
  * Whether a name is shared is namesakesIn() over the brief's own sources, so
  * the brief's "they only share a name" sentence and this can never disagree.
@@ -323,10 +328,6 @@ export function chooseDrawn(
   shared: ReadonlySet<string>,
 ): Character[] {
   const refs = pictureRefs(characters.map((c) => c.id));
-  const hasTags = new RegExp(PICTURE_REF_PATTERN.source).test(scenePrompt);
-  if (!hasTags) {
-    return characters.slice(0, MAX_DRAWN_CHARACTERS).filter((c) => !shared.has(c.id));
-  }
   const tagged = characters.filter((c) => scenePrompt.includes(refs.get(c.id)!));
   const named = characters.filter(
     (c) => !tagged.includes(c) && !shared.has(c.id) &&

@@ -1,3 +1,4 @@
+import { requestPicture } from "@/lib/pictureRequest";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -128,12 +129,18 @@ export function StoryExtras({
    * after the new one is attached -- so it asks first.
    */
   const illustrate = useMutation({
-    mutationFn: async (redraw: boolean = false) => {
-      const response = await apiRequest("POST", `/api/stories/${storyId}/illustrate`, { redraw });
-      return (await response.json()) as { imageUrl: string; images?: StoryPicture[] };
-    },
+    // Through requestPicture, for the reason in pictureRequest.ts: a slow
+    // picture is not a failed one, and a second press pays for a second.
+    mutationFn: async (redraw: boolean = false) =>
+      requestPicture(storyId!, { redraw }, {
+        onStillDrawing: () =>
+          toast({
+            title: "Still drawing…",
+            description: "Pictures can take a few minutes. It will appear here when it is ready. Please don't press again.",
+          }),
+      }),
     onSuccess: (data) => {
-      setImageUrl(data.imageUrl);
+      if (data.imageUrl) setImageUrl(data.imageUrl);
       if (data.images) {
         setGallery(data.images);
         onPictures?.(data.images);

@@ -1,3 +1,4 @@
+import { ApiError, errorMessageFor } from "./apiError";
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
@@ -5,15 +6,13 @@ async function throwIfResNotOk(res: Response) {
     // Parse first, throw after. Previously the throw sat inside the try, so its
     // own catch swallowed it and every error surfaced as "<status>: <raw json>"
     // -- the server's message was parsed and then discarded.
-    let message: string | undefined;
-    try {
-      const errorData = await res.clone().json();
-      message = errorData.error || errorData.message;
-    } catch {
-      const text = await res.clone().text().catch(() => "");
-      message = text || undefined;
-    }
-    throw new Error(message || `${res.status}: ${res.statusText}`);
+    //
+    // And never a PAGE: behind Cloudflare a slow request comes back as its
+    // HTML error page, which used to fill the whole toast. errorMessageFor
+    // keeps the server's own message and replaces anything else with a
+    // sentence chosen from the status.
+    const body = await res.clone().text().catch(() => "");
+    throw new ApiError(errorMessageFor(res.status, res.statusText, body), res.status);
   }
 }
 

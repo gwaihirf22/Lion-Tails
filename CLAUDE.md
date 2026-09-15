@@ -811,8 +811,10 @@ different child, and the only sign was one line in the log.
   (`PICTURE_ID_REMINDER`). `drawnCharacters()`/`chooseDrawn()` attach a
   portrait for a tagged person, or an untagged one whose name nobody in the
   account shares; a shared name without its tag is left out, and a scene with
-  no tags at all (an older saved prompt, the single-call short story) keeps
-  the first-three rule less shared names. `withRefsResolved()` turns each ID
+  no tags at all is held to the same named rule and never to "the first
+  three" -- that fallback put Ellie in Mordecai's crown and Elijah at Haman's
+  reins for a passage naming neither (2026-09-15); older prompts name the
+  children, so they keep their faces. `withRefsResolved()` turns each ID
   into "the person in reference image N" before the image model sees
   anything, and a shared-name member's reference line drops the name.
   Blake chose pictures only, not story prompts. **Readers never see an ID**:
