@@ -360,7 +360,10 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
 
       {/* flex-wrap: Share made this five buttons, which do not fit one line on
           a phone once Edit is showing too. */}
-      <div className="reader-chrome mx-auto flex w-full max-w-3xl flex-wrap items-center gap-1 px-3">
+      <div
+        data-guide="reader-actions"
+        className="reader-chrome mx-auto flex w-full max-w-3xl flex-wrap items-center gap-1 px-3"
+      >
         {!builtIn && !shared && (
           <Button
             size="sm"
@@ -369,13 +372,14 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
             disabled={busy || !storyId}
             onClick={handleToggleFavorite}
             aria-pressed={isFavorite}
+            data-guide="favourite"
           >
             <Star className={`h-3.5 w-3.5 ${isFavorite ? "fill-current" : ""}`} aria-hidden="true" />
             {isFavorite ? "Favourited" : "Favourite"}
           </Button>
         )}
         {canEdit && !editing && (
-          <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={startEdit}>
+          <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={startEdit} data-guide="edit-story">
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
           </Button>
         )}
@@ -383,11 +387,11 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
             same for everyone. `shared` still excludes it: this is already the
             shared page, and offering to share it from there is a loop. */}
         {storyId && !shared && (
-          <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={() => setShareOpen(true)}>
+          <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={() => setShareOpen(true)} data-guide="share">
             <Share2 className="h-3.5 w-3.5" aria-hidden="true" /> Share
           </Button>
         )}
-        <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={handlePrint}>
+        <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={handlePrint} data-guide="print">
           <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print
         </Button>
         <Button size="sm" variant="ghost" className="h-8 gap-1 px-2 text-xs" onClick={handleDownload}>
@@ -407,6 +411,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
       */}
       {picker.picking && (
         <div
+          data-guide="reader-picking"
           className="sticky z-20 mx-auto mt-2 w-full max-w-3xl rounded-md border px-3 py-2"
           style={{
             top: readerBarHeight,
@@ -436,6 +441,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
                 className="h-8 gap-1 px-3 text-xs"
                 disabled={!picker.passage || drawPassage.isPending}
                 onClick={() => picker.passage && drawPassage.mutate(picker.passage)}
+                data-guide="picking"
               >
                 {drawPassage.isPending ? (
                   <>

@@ -1356,6 +1356,67 @@ My Stories is four folders, every story one card, every universe one card.
   not `StoryCard`s: a card navigates on click and owns dialogs, and these sit
   inside an open Dialog over a form.
 
+## The guide ("How to use")
+
+Blake: *"an instructional welcome page/popup. Onboarding."* A dialog with four
+folder tabs; the Create a Story tab is an upside-down tree, root at the top,
+Quests its deepest branch. Every item says why a control exists, with a phone
+screenshot of it in place and the control ringed. Reachable from the **top
+left** of Create a Story, Characters, My Stories and the reader, and from
+Settings; it opens itself **once per account** (`user_settings.guide_seen_at`,
+mirrored in localStorage only to stop it flashing open before that answers).
+
+- **`shared/guide.ts` is the one table**: tabs, scenes, plates, nodes, and how
+  to photograph each. The dialog and `scripts/capture-guide.ts` read the same
+  list, so a node cannot point at a screenshot nobody took.
+- **Scene → plate → node.** A SCENE is a state worth getting into (one builder
+  each in the script, a total Record so a missing one will not compile); a
+  PLATE is one photograph taken in it; a NODE is one thing explained. Several
+  nodes share a plate -- the reader's bar has seven, and seven photographs of
+  one toolbar is seven times the bytes.
+- **`data-guide="<marker>"` is the joint, and the staleness gate.** Every
+  control the guide names carries one, and `tests/guide.test.ts` fails if a
+  marker is missing or appears twice -- the failure that actually misleads a
+  parent is a ring over whatever moved into that place. Labels here get
+  rewritten constantly, so a text selector would be that failure waiting.
+  `FormSection`, `FolderTabs` and `SourcePicker` take it as a `guide` prop,
+  which is what lets one component mean two things (the source picker is
+  "Where, or who?" on one tab and "What do you want to dig into?" on the
+  other). Never interpolate one: the test reads literals.
+- **The ring is drawn by the app, not painted into the file.**
+  `shared/guideShots.ts` (GENERATED) holds each plate's size and each control's
+  box as FRACTIONS of it, so the same webp rings correctly at 340px and 600px
+  and in all four palettes. An **outline**, not `ring-*`: Tailwind's ring is a
+  box-shadow and the scrim (`0 0 0 9999px rgba(0,0,0,0.45)`, inline) overwrote
+  it -- measured, the picture came back dimmed with no red anywhere. A box
+  covering the whole plate draws nothing: the picture is the subject.
+- **`grid-cols-1` on the dialog is load-bearing.** `DialogContent` is a grid,
+  and its implicit column is sized by content -- the 780px plates grew the
+  dialog to 780px inside a 390px phone. The dialog is also **anchored**
+  (`top-[4vh] translate-y-0`), the tabbed-dialog rule.
+- **Re-run the capture when Create a Story, the character sheet or the reader
+  changes.** It is dev-only and never in CI (`verify-heroes.ts`'s reasoning):
+
+  ```bash
+  . /root/.claude/tools/env.sh        # playwright-core + sharp are BORROWED
+  ./scripts/dev-stack.sh up && ./scripts/dev-stack.sh admin guide-demo
+  npx tsx scripts/capture-guide.ts [--base http://127.0.0.1:5250] [--only reader-bar]
+  ```
+
+  It uses its **own account** (`guide-demo`) holding only the four demo people
+  from `scripts/demoPeople.ts`, and **aborts if anyone else is in it**: these
+  images ship, so a real family must never be in one. It refuses any base but
+  a local app, needs `canIllustrate` for the reader's "Make a picture", turns
+  Parent Mode on for the run, and saves a hand-written demo story
+  (`scripts/guideDemoStory.ts`) rather than generating one -- the built-in
+  prologue hides Favourite, Edit and the picture button, which are exactly
+  what the Reading tab must show. A ring outside its plate is a hard failure,
+  which is how three plates came to be split.
+- Images live in `public/images/guide/` -- **not** under
+  `public/images/stories`, which the `story_images` volume mounts over. About
+  1.4MB of webp for 29 plates; a test holds 120KB a plate and 1.6MB the
+  directory.
+
 ## Tab strips
 
 Two, and the second is the template for any new one.

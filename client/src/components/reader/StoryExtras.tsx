@@ -253,6 +253,7 @@ export function StoryExtras({
   return (
     <div
       ref={ref}
+      data-guide="reader-extras"
       className="reader-chrome mx-auto w-full max-w-3xl px-4 pb-16"
       style={{ color: "var(--reader-fg)" }}
     >
@@ -469,7 +470,7 @@ export function StoryExtras({
         </div>
       )}
 
-      <Accordion type="multiple" className="w-full">
+      <Accordion type="multiple" className="w-full" data-guide="extras">
         {questions.length > 0 && (
           <AccordionItem value="questions" style={{ borderColor: "var(--reader-border)" }}>
             <AccordionTrigger className="text-base">Questions to talk about</AccordionTrigger>

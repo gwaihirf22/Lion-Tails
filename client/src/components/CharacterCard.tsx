@@ -62,6 +62,7 @@ export default function CharacterCard({
       they would on a button.
     */
     <Card
+      data-guide="character-card"
       className={cn(
         "relative transition-all duration-200",
         onEdit && "cursor-pointer hover:border-primary/50",

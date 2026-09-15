@@ -245,7 +245,7 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" className="bg-warning hover:bg-warning">
+              <Button size="sm" className="bg-warning hover:bg-warning" data-guide="prompt-editor">
                 <Edit3 className="h-4 w-4 mr-2" />
                 Edit Prompts
               </Button>

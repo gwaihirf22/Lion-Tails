@@ -76,6 +76,7 @@ export default function StoryCard({
   return (
     <>
       <Card
+        data-guide="story-card"
         className="bg-card overflow-hidden transition-all duration-200 hover:shadow-md cursor-pointer"
         onClick={open}
       >

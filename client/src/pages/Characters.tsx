@@ -1,3 +1,4 @@
+import GuideButton from "@/components/GuideButton";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest, getQueryFn } from "@/lib/queryClient";
@@ -164,12 +165,15 @@ export default function Characters() {
       {/* The button is above the description on a phone and beside the
           heading on a desktop -- either way above the text. It used to share a
           line with the paragraph and squeeze it into a narrow column. */}
+      <div className="-mt-1 mb-1 flex">
+        <GuideButton tab="characters" />
+      </div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
         <h1 className="min-w-0 text-2xl md:text-3xl font-bold">Your Characters</h1>
         
         <Dialog open={isCreating} onOpenChange={setIsCreating}>
           <DialogTrigger asChild>
-            <Button>
+            <Button data-guide="create-character">
               <PlusIcon className="h-4 w-4 mr-2" />
               Create Character
             </Button>

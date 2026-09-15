@@ -2671,6 +2671,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /**
+   * The how-to-use guide, shown once per account.
+   *
+   * Two tiny routes beside the reading ones, for the same reason that is a
+   * column rather than a blob: the client asks one place whether this account
+   * has been greeted. The client also mirrors it in localStorage, which is
+   * only there to stop the dialog flashing open before this answers.
+   */
+  app.get("/api/settings/guide", requireAuth, async (req, res) => {
+    try {
+      const seenAt = await storage.getGuideSeenAt((req.user as any).id);
+      res.json({ seenAt });
+    } catch (error) {
+      console.error("Error reading guide state:", error);
+      res.status(500).json({ message: "Failed to read the guide setting" });
+    }
+  });
+
+  app.post("/api/settings/guide", requireAuth, async (req, res) => {
+    try {
+      // What is ACTUALLY stored, read back -- not an echo of the request.
+      const seenAt = await storage.markGuideSeen((req.user as any).id);
+      res.json({ seenAt });
+    } catch (error) {
+      console.error("Error saving guide state:", error);
+      res.status(500).json({ message: "Failed to save the guide setting" });
+    }
+  });
+
   app.post("/api/settings/reading", requireAuth, async (req, res) => {
     try {
       const userId = (req.user as any).id;

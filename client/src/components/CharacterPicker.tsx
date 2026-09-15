@@ -145,6 +145,7 @@ export function CharacterPicker({
             aria-expanded={open}
             disabled={disabled || isLoading}
             className="w-full justify-between font-normal"
+            data-guide="cast"
           >
             <span className="flex min-w-0 items-center gap-2">
               {shared ? (
@@ -287,6 +288,7 @@ export function CharacterPicker({
                 onCheckedChange={(c) => onNoMainCharacterChange(Boolean(c))}
                 className="mt-0.5"
                 aria-label="No main character"
+                data-guide="shared-story"
               />
               <span>
                 No main character

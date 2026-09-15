@@ -109,7 +109,7 @@ export function FamilyEditor({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-guide="family">
       <div>
         <h3 className="text-sm font-medium">Family</h3>
         <p className="text-xs text-muted-foreground">
@@ -217,7 +217,7 @@ export function PetsEditor({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-guide="pets">
       <div>
         <h3 className="text-sm font-medium">Pets</h3>
         <p className="text-xs text-muted-foreground">

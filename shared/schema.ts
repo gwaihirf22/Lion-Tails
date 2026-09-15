@@ -308,6 +308,15 @@ export const userSettings = pgTable("user_settings", {
   readerFont: text("reader_font"),
   readerTypeset: text("reader_typeset"),
   readerFontStep: integer("reader_font_step"),
+  /**
+   * When this account was first shown the how-to-use guide, or NULL for never.
+   *
+   * ON THE ACCOUNT, not in the browser: Blake asked for once per account, so a
+   * second device does not greet you again. A named nullable column with no
+   * default, like the reading preferences above, for the same reasons -- and
+   * NULL meaning "never" is what makes it need no backfill.
+   */
+  guideSeenAt: timestamp("guide_seen_at", { withTimezone: true }),
 });
 
 /**

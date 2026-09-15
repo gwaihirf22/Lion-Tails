@@ -78,13 +78,16 @@ const TRIGGER =
 export default function FolderTabs({
   tabs,
   stripRef,
+  guide,
 }: {
   tabs: readonly FolderTab[];
   /** The scrolling wrapper, for a caller that needs to bring a tab into view on the one-row layout. */
   stripRef?: Ref<HTMLDivElement>;
+  /** `data-guide` for the how-to-use guide: see shared/guide.ts. */
+  guide?: string;
 }) {
   return (
-    <div className={SCROLLER} ref={stripRef}>
+    <div className={SCROLLER} ref={stripRef} data-guide={guide}>
       <TabsList className={LIST}>
         {tabs.map((t) => (
           <TabsTrigger key={t.value} value={t.value} className={cn(TRIGGER, t.tint, t.edge)}>

@@ -1746,6 +1746,47 @@ export class DbStorage implements IStorage {
     }
   }
 
+  async getGuideSeenAt(userId: number): Promise<string | null> {
+    if (!isDatabaseAvailable()) return null;
+    try {
+      const { rows } = await pool!.query(
+        `SELECT guide_seen_at FROM user_settings WHERE user_id = $1`,
+        [userId],
+      );
+      const at = rows[0]?.guide_seen_at;
+      return at ? new Date(at).toISOString() : null;
+    } catch (error) {
+      // Unknown means "offer it": one extra welcome, never a hidden guide.
+      console.error(`Error reading guide_seen_at for user ${userId}:`, error);
+      return null;
+    }
+  }
+
+  async markGuideSeen(userId: number): Promise<string | null> {
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in markGuideSeen(${userId}). Not saved.`);
+      return null;
+    }
+    try {
+      // COALESCE keeps the FIRST stamp: this column records when the guide was
+      // first shown, and a second open must not rewrite that. Every other
+      // column is left alone, the setUserReadingPrefs rule.
+      const { rows } = await pool!.query(
+        `INSERT INTO user_settings (user_id, guide_seen_at)
+         VALUES ($1, now())
+         ON CONFLICT (user_id) DO UPDATE SET
+           guide_seen_at = COALESCE(user_settings.guide_seen_at, now())
+         RETURNING guide_seen_at`,
+        [userId],
+      );
+      const at = rows[0]?.guide_seen_at;
+      return at ? new Date(at).toISOString() : null;
+    } catch (error) {
+      console.error(`Error stamping guide_seen_at for user ${userId}:`, error);
+      return null;
+    }
+  }
+
   async setUserReadingPrefs(
     userId: number,
     prefs: Partial<ReadingPrefs>,

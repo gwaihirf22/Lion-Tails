@@ -51,12 +51,13 @@ export function ReaderBar({
   return (
     <div
       ref={barRef}
+      data-guide="reader-bar"
       className="reader-chrome sticky top-0 z-30 mx-auto flex w-full max-w-3xl flex-wrap items-center gap-1 px-3 py-2"
       style={{ background: "var(--reader-surface)", color: "var(--reader-fg)" }}
     >
       {/* Text size. Two buttons rather than a slider: easier to hit on a phone
           in a dark room, and the value is announced for screen readers. */}
-      <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-0.5" data-guide="text-size">
         <Button
           size="icon"
           variant="ghost"
@@ -85,7 +86,7 @@ export function ReaderBar({
 
       {/* Palette. Each swatch paints itself from the very tokens it selects --
           see .reader-swatch in reader.css for why that matters. */}
-      <div className="ml-1 flex items-center gap-1" role="radiogroup" aria-label="Colour theme">
+      <div className="ml-1 flex items-center gap-1" role="radiogroup" aria-label="Colour theme" data-guide="palette">
         <Palette className="h-4 w-4 opacity-60" aria-hidden="true" />
         {READER_PALETTES.map((p: ReadingPrefs["palette"]) => (
           <button
@@ -105,7 +106,7 @@ export function ReaderBar({
 
       <Popover>
         <PopoverTrigger asChild>
-          <Button size="sm" variant="ghost" className="ml-1 h-8 gap-1 px-2 text-xs">
+          <Button size="sm" variant="ghost" className="ml-1 h-8 gap-1 px-2 text-xs" data-guide="font">
             {READER_FONT_META[prefs.font].label}
           </Button>
         </PopoverTrigger>
@@ -128,6 +129,7 @@ export function ReaderBar({
         aria-pressed={prefs.typeset === "classic"}
         onClick={() => setTypeset(prefs.typeset === "classic" ? "plain" : "classic")}
         title="Drop caps, indented paragraphs and ornamental scene breaks"
+        data-guide="classic"
       >
         <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
         Classic{prefs.typeset === "classic" ? "" : " off"}
@@ -143,6 +145,7 @@ export function ReaderBar({
           aria-pressed={Boolean(picking)}
           onClick={onTogglePicture}
           title="Highlight a part of the story and draw a picture of it"
+          data-guide="make-a-picture"
         >
           <ImagePlus className="h-3.5 w-3.5" aria-hidden="true" />
           {picking ? "Cancel" : "Make a picture"}
@@ -156,6 +159,7 @@ export function ReaderBar({
         aria-pressed={focusArmed}
         onClick={onToggleFocus}
         title="Fade everything but the story. Escape or move the pointer to bring it back."
+        data-guide="focus"
       >
         <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
         Focus

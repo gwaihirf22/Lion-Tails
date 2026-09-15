@@ -52,9 +52,10 @@ export default function StoryGeneratorTabs({
   return (
     <div>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-2 mb-6 gap-1 p-1">
+        <TabsList className="grid grid-cols-2 mb-6 gap-1 p-1" data-guide="story-tabs">
           <TabsTrigger 
             value="original" 
+            data-guide="original-tab"
             className="text-sm sm:text-base lg:text-lg py-2 sm:py-3 whitespace-normal h-auto data-[state=active]:shadow-sm data-[state=active]:font-semibold data-[state=active]:ring-1 transition-colors data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:ring-primary/30"
           >
             <span className="block sm:hidden">Original</span>
@@ -62,6 +63,7 @@ export default function StoryGeneratorTabs({
           </TabsTrigger>
           <TabsTrigger 
             value="historical" 
+            data-guide="historical-tab"
             className="text-sm sm:text-base lg:text-lg py-2 sm:py-3 whitespace-normal h-auto data-[state=active]:shadow-sm data-[state=active]:font-semibold data-[state=active]:ring-1 transition-colors data-[state=active]:bg-warning-surface data-[state=active]:text-warning data-[state=active]:ring-warning/40"
           >
             <span className="block sm:hidden">Historical</span>

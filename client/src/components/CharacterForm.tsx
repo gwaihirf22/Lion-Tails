@@ -893,6 +893,7 @@ export default function CharacterForm({
                 card's bubbles are not in a dialog and use a real tooltip.
               */}
               <FolderTabs
+                guide="character-tabs"
                 stripRef={stripRef}
                 tabs={TABS.map((t) => {
                   const count = t.value === "stats" ? unspent : t.value === "virtues" ? unseen : 0;
@@ -1283,9 +1284,10 @@ export default function CharacterForm({
                         const full = gallery.length >= avatarCap;
                         const busy = drawing || full;
                         return (
-                          <div className="space-y-3">
+                          <div className="space-y-3" data-guide="character-pictures">
                             <div className="space-y-1">
                               <Button type="button" variant="outline" size="sm"
+                                      data-guide="draw-a-picture"
                                       className="h-auto min-h-9 w-full justify-start whitespace-normal py-2 text-left sm:w-auto"
                                       onClick={() => setAskOpen(true)}
                                       disabled={busy}>
@@ -1301,6 +1303,7 @@ export default function CharacterForm({
 
                             <div className="space-y-1">
                               <Button type="button" variant="outline" size="sm"
+                                      data-guide="photo-to-drawing"
                                       className="h-auto min-h-9 w-full justify-start whitespace-normal py-2 text-left sm:w-auto"
                                       onClick={() => pickPhoto("drawing")}
                                       disabled={busy}>
@@ -1314,6 +1317,7 @@ export default function CharacterForm({
 
                             <div className="space-y-1">
                               <Button type="button" variant="outline" size="sm"
+                                      data-guide="photo-as-it-is"
                                       className="h-auto min-h-9 w-full justify-start whitespace-normal py-2 text-left sm:w-auto"
                                       onClick={() => pickPhoto("photo")}
                                       disabled={busy}>
@@ -1547,7 +1551,7 @@ export default function CharacterForm({
 
             </TabsContent>
 
-            <TabsContent value="stats" className="space-y-4 pt-4">
+            <TabsContent value="stats" className="space-y-4 pt-4" data-guide="stats">
               {/*
                 Points, not sliders you can drag to the top. Everyone starts
                 ordinary on everything; the only way to be good at something is
@@ -1803,7 +1807,7 @@ export default function CharacterForm({
             )}
 
             {parentMode && (
-              <TabsContent value="grown-ups" className="space-y-4 pt-4">
+              <TabsContent value="grown-ups" className="space-y-4 pt-4" data-guide="grown-ups">
                 {/*
                   What sort of thing a typed kind IS.
                   

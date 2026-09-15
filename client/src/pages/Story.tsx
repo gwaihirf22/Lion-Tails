@@ -1,3 +1,4 @@
+import GuideButton from "@/components/GuideButton";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -118,11 +119,15 @@ export default function Story() {
           in a space-x-3 div, and space-x-* only works on one line -- it puts a
           left margin on every child but the first, so a wrapped row got a
           stray indent. Bedtime Songs is gone; Music is in the nav. */}
-      <div className="reader-chrome mx-auto mb-2 flex w-full max-w-3xl flex-wrap justify-end gap-2 px-3 pt-3">
+      <div
+        data-guide="story-actions"
+        className="reader-chrome mx-auto mb-2 flex w-full max-w-3xl flex-wrap items-center justify-end gap-2 px-3 pt-3"
+      >
+        <GuideButton tab="reading" className="mr-auto" />
         {/* Continuing is what creates a universe: the parent adopts one if it
           has none, so the user never has to set one up first. */}
         {storyId && !builtIn && (
-          <Button onClick={() => navigate(`/generate-story?continues=${storyId}`)}>
+          <Button onClick={() => navigate(`/generate-story?continues=${storyId}`)} data-guide="continue-story">
             Continue this story
           </Button>
         )}

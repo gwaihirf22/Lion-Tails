@@ -73,14 +73,17 @@ import lantern from "@/assets/lantern.webp";
 function FormSection({
   tint,
   className,
+  guide,
   children,
 }: {
   tint: string;
   className?: string;
+  /** `data-guide` for the how-to-use guide: see shared/guide.ts. */
+  guide?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("rounded-lg border border-border p-3 sm:p-4", tint, className)}>
+    <div className={cn("rounded-lg border border-border p-3 sm:p-4", tint, className)} data-guide={guide}>
       {children}
     </div>
   );
@@ -122,6 +125,7 @@ function RoleChoices({
       value={value ?? options[0]}
       className="space-y-2"
       disabled={disabled}
+      data-guide="the-way-in"
     >
       {options.map((key) => {
         const isQuest = key === "travels";
@@ -151,7 +155,16 @@ function RoleChoices({
             )}
             <FormItem className="flex items-start space-x-3 space-y-0">
               <FormControl>
-                <RadioGroupItem value={key} className="mt-1" disabled={disabled} />
+                <RadioGroupItem
+                  value={key}
+                  className="mt-1"
+                  disabled={disabled}
+                  // A table, not a comparison: the guide's test counts each
+                  // marker's literal in the source and a comparison would
+                  // spell "alongside" twice. Absent for "absent", which is the
+                  // switch being off and has nothing to point at.
+                  data-guide={({ travels: "quest", alongside: "alongside" } as Partial<Record<CharacterRole, string>>)[key]}
+                />
               </FormControl>
               <div className="space-y-1 leading-none">
                 <FormLabel className="flex items-center gap-2 font-medium">
@@ -721,7 +734,7 @@ export default function StoryForm({
                 the same question and there was nothing to say that a name typed
                 here is thrown away when the story is written. */}
             {formType === "original" && showChildFields && characterIdsOf(form.watch()).length === 0 && (
-              <FormSection tint="bg-tab-basics/40" className="space-y-4">
+              <FormSection tint="bg-tab-basics/40" className="space-y-4" guide="quick-character">
                 <div className="space-y-1">
                   <h3 className="text-sm font-semibold">Quick Character</h3>
                   <p className="text-xs text-muted-foreground">
@@ -873,7 +886,7 @@ export default function StoryForm({
                           onValueChange={field.onChange}
                           defaultValue={field.value}
                         >
-                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary" data-guide="virtue">
                             <SelectValue placeholder="Select a theme if desired" />
                           </SelectTrigger>
                           <SelectContent>
@@ -944,7 +957,8 @@ export default function StoryForm({
                     </FormDescription>
                     <FormControl>
                       <Textarea
-                        placeholder="e.g. She was frightened of the thunderstorm last night and hid under the table. I'd like a story about being brave when you're scared."
+                        data-guide="what-should-happen"
+                    placeholder="e.g. She was frightened of the thunderstorm last night and hid under the table. I'd like a story about being brave when you're scared."
                         className="min-h-28 bg-card border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
                         {...field}
                       />
@@ -979,7 +993,7 @@ export default function StoryForm({
                           onValueChange={field.onChange}
                           value={field.value}
                         >
-                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary" data-guide="story-type">
                             <SelectValue placeholder="Select story type" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1019,7 +1033,7 @@ export default function StoryForm({
                 story know who appeared and what is now true, so it is opt-in --
                 a one-off story should not pay for it. A CONTINUATION implies it
                 without the box, which is why the box hides itself there. */}
-            <FormSection tint="bg-tab-stories/40" className="space-y-3">
+            <FormSection tint="bg-tab-stories/40" className="space-y-3" guide="series">
               <h3 className="text-sm font-semibold">Part of a series?</h3>
 
               {/* A quest has more to fit than one story can hold -- the way in,
@@ -1077,7 +1091,7 @@ export default function StoryForm({
                   render={({ field }) => (
                     <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                       <FormControl>
-                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} data-guide="cliffhanger" />
                       </FormControl>
                       <div className="space-y-1 leading-none">
                         <FormLabel className="text-sm font-medium">
@@ -1142,7 +1156,7 @@ export default function StoryForm({
                   What do you want to dig into?
                 </FormLabel>
                 <FormControl>
-                  <SourcePicker value={source} onChange={writeSource} />
+                  <SourcePicker value={source} onChange={writeSource} guide="dig-into" />
                 </FormControl>
                 <FormDescription>
                   An event, someone who really lived, or a passage. One of the
@@ -1172,6 +1186,7 @@ export default function StoryForm({
                     rows={3}
                     value={questionText}
                     onChange={(e) => writeQuestions(e.target.value)}
+                    data-guide="what-to-know"
                     placeholder={"One question per line.\ne.g. Why did they do it that way?"}
                     className="resize-y"
                   />
@@ -1258,6 +1273,7 @@ export default function StoryForm({
                       }
                     }}
                     aria-label="Set it somewhere real"
+                    data-guide="somewhere-real"
                   />
                 </div>
 
@@ -1280,7 +1296,7 @@ export default function StoryForm({
                       Where, or who?
                     </FormLabel>
                     <FormControl>
-                      <SourcePicker value={source} onChange={writeSource} disabled={!bringInHero} />
+                      <SourcePicker value={source} onChange={writeSource} disabled={!bringInHero} guide="source" />
                     </FormControl>
                   </FormItem>
 
@@ -1351,7 +1367,7 @@ export default function StoryForm({
                           }
                         }}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger data-guide="which-part">
                           <SelectValue placeholder="Their whole life" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1405,7 +1421,7 @@ export default function StoryForm({
                           onValueChange={field.onChange}
                           defaultValue={field.value}
                         >
-                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary" data-guide="reading-level">
                             <SelectValue placeholder="Select reading level" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1454,7 +1470,7 @@ export default function StoryForm({
                              the control lying about what it would generate. */
                           value={field.value}
                         >
-                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary">
+                          <SelectTrigger className="pl-10 pr-4 py-2 border border-secondary/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary/50 focus:border-secondary" data-guide="story-length">
                             <SelectValue placeholder="Select story length" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1533,6 +1549,7 @@ export default function StoryForm({
             <div className="rounded-xl overflow-hidden mt-6">
               <Button 
                 type="submit" 
+                data-guide="write-it"
                 className={`w-full py-4 px-4 ${formType === "historical" ? "bg-warning hover:bg-warning/90" : "bg-primary hover:bg-primary/90"} text-primary-foreground font-medium rounded-xl shadow-lg transition duration-200 flex items-center justify-center`}
                 disabled={loading}
               >

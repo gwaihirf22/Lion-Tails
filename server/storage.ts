@@ -260,6 +260,10 @@ export interface IStorage {
    * Returning what is actually there lets the client render truth.
    */
   getUserReadingPrefs(userId: number): Promise<Partial<ReadingPrefs>>;
+  /** When the how-to-use guide was first shown to this account, or null. */
+  getGuideSeenAt(userId: number): Promise<string | null>;
+  /** Stamped the first time it is shown; never cleared. */
+  markGuideSeen(userId: number): Promise<string | null>;
   setUserReadingPrefs(userId: number, prefs: Partial<ReadingPrefs>): Promise<Partial<ReadingPrefs>>;
 }
 
@@ -278,6 +282,7 @@ export class MemStorage implements IStorage {
   private userOpenAIKeys: Map<number, string>;
   private userOpenAIModels: Map<number, string>;
   private userReadingPrefs: Map<number, Partial<ReadingPrefs>>;
+  private guideSeen: Map<number, string>;
   private userCharacters: Map<number, Set<string>>;
   private userStories: Map<number, Set<string>>;
   sessionStore: session.Store;
@@ -300,6 +305,7 @@ export class MemStorage implements IStorage {
     this.userOpenAIKeys = new Map();
     this.userOpenAIModels = new Map();
     this.userReadingPrefs = new Map();
+    this.guideSeen = new Map();
     this.userCharacters = new Map();
     this.userStories = new Map();
     this.currentId = 1;
@@ -1132,6 +1138,19 @@ export class MemStorage implements IStorage {
 
   async getUserReadingPrefs(userId: number): Promise<Partial<ReadingPrefs>> {
     return this.userReadingPrefs.get(userId) ?? {};
+  }
+
+  async getGuideSeenAt(userId: number): Promise<string | null> {
+    return this.guideSeen.get(userId) ?? null;
+  }
+
+  async markGuideSeen(userId: number): Promise<string | null> {
+    // First stamp wins: this records WHEN it was first shown.
+    const already = this.guideSeen.get(userId);
+    if (already) return already;
+    const at = new Date().toISOString();
+    this.guideSeen.set(userId, at);
+    return at;
   }
 
   async setUserReadingPrefs(

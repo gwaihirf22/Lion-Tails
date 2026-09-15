@@ -59,11 +59,14 @@ export function SourcePicker({
   onChange,
   placeholder = "Choose an event, a person, or a passage",
   disabled,
+  guide,
 }: {
   value: StorySource;
   onChange: (next: StorySource) => void;
   placeholder?: string;
   disabled?: boolean;
+  /** `data-guide` for the how-to-use guide: see shared/guide.ts. */
+  guide?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -140,6 +143,7 @@ export function SourcePicker({
           aria-expanded={open}
           disabled={disabled || isLoading}
           className="w-full justify-between font-normal"
+          data-guide={guide}
         >
           <span className="flex min-w-0 items-center gap-2">
             {chosen ? (

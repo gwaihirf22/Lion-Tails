@@ -1,3 +1,4 @@
+import GuideButton from "@/components/GuideButton";
 import { useMemo, useState } from "react";
 import { Loader2, AlertCircle } from "lucide-react";
 import { useLocation } from "wouter";
@@ -82,6 +83,9 @@ export default function SavedStories() {
           rather than squeezing the heading into a column. Bedtime Songs is
           gone: Music is in the nav on every page, and the shortcut was the
           odd-sized one out. */}
+      <div className="-mt-1 mb-1 flex">
+        <GuideButton tab="reading" />
+      </div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h2 className="min-w-0 text-2xl md:text-3xl font-heading font-bold text-secondary">
           Your Saved Stories
@@ -183,6 +187,7 @@ export default function SavedStories() {
         {/* Slot for the lantern on the Timekeeper folder: an
             <img className="mr-2 h-4 w-4"> before the label. */}
         <FolderTabs
+          guide="folders"
           tabs={STORY_FOLDERS.map((f) => ({
             ...f,
             label: `${f.label} (${f.filter ? stories.filter(f.filter).length : universes.length})`,

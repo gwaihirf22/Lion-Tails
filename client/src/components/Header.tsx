@@ -462,7 +462,7 @@ export default function Header() {
               <DialogTitle className="text-2xl font-heading">Settings</DialogTitle>
               <DialogDescription>Changes save as you make them.</DialogDescription>
             </DialogHeader>
-            <SettingsPanel />
+            <SettingsPanel onClose={() => setSettingsOpen(false)} />
           </DialogContent>
         </Dialog>
 
@@ -479,7 +479,10 @@ export default function Header() {
             aria-hidden="true"
           />
 
-          <div className="absolute top-0 right-0 left-0 pt-20 pb-4 px-4 bg-card shadow-lg border-b border-border max-h-screen overflow-y-auto">
+          <div
+            data-guide="nav-panel"
+            className="absolute top-0 right-0 left-0 pt-20 pb-4 px-4 bg-card shadow-lg border-b border-border max-h-screen overflow-y-auto"
+          >
             <div className="container mx-auto">
               <nav>
                 <ul className="flex flex-col space-y-2 font-heading text-base">

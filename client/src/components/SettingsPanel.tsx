@@ -15,6 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import ReadingSettingsCard from "@/components/reader/ReadingSettingsCard";
 import ParentModeToggle from "@/components/ParentModeToggle";
+import { useGuide } from "@/hooks/use-guide";
+import { HelpCircle } from "lucide-react";
 import ResetSheetCard from "@/components/ResetSheetCard";
 import ResetQuestsCard from "@/components/ResetQuestsCard";
 import { Input } from "@/components/ui/input";
@@ -63,7 +65,8 @@ const TIER_LABELS: Record<SelectableModel["tier"], string> = {
   premium: "Premium",
 };
 
-export function SettingsPanel() {
+export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
+  const guide = useGuide();
   const { toast } = useToast();
   const [apiKey, setApiKey] = useState("");
   // Deliberately empty: the current selection comes from the server. Seeding a
@@ -280,6 +283,34 @@ export function SettingsPanel() {
 
   return (
     <div className="grid gap-8 md:grid-cols-2">
+        {/* First, and across both columns: somebody in Settings looking for
+            help should not have to scroll past the API key to find it.
+            Opening the guide CLOSES this panel when it is the header's dialog
+            (onClose), because two stacked dialogs on a 390px phone is one too
+            many -- the guide itself is mounted at the shell, not in here. */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">New here?</CardTitle>
+            <CardDescription>
+              Every button, what it is for, and a picture of where it is.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                guide?.openGuide("start");
+                onClose?.();
+              }}
+            >
+              <HelpCircle className="mr-2 h-4 w-4" aria-hidden="true" />
+              How to use Lion Tails
+            </Button>
+          </CardContent>
+        </Card>
+
         {/* Reading preferences. Same provider and same picker as the reader's
             own bar -- no duplicated state, no second list of palettes. */}
         <ReadingSettingsCard />
@@ -290,19 +321,25 @@ export function SettingsPanel() {
             setting -- password-gated, expires on a timer -- so it belongs with
             the other account settings. PromptEditor still says what is needed
             and now says where to find it. */}
-        <ParentModeToggle />
+        <div data-guide="parent-mode">
+          <ParentModeToggle />
+        </div>
 
         {/* Giving a character's spent points back. Here rather than on the
             character's own Stats tab because it is a grown-up's undo, not part
             of spending -- and because the sheet it rescues is usually one
             Parent Mode wrote over budget, which the Stats tab cannot save its
             way out of one click at a time. */}
-        <ResetSheetCard />
+        <div data-guide="start-sheet-again">
+          <ResetSheetCard />
+        </div>
 
         {/* The other reset. Its own card because it is its own thing: the
             quest count is not on the sheet, and a character with stats off
             still goes on quests. */}
-        <ResetQuestsCard />
+        <div data-guide="quest-first-visit">
+          <ResetQuestsCard />
+        </div>
 
         {/* Story Generation Stats */}
         <Card className="bg-card rounded-2xl shadow-xl">

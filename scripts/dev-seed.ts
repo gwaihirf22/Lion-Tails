@@ -16,12 +16,10 @@ const BASE = process.env.DEV_BASE ?? "http://127.0.0.1:5250";
 const USER = "blake";
 const PASS = "LionTails-Dev-6a0cff";
 
-const PEOPLE = [
-  { name: "Mia",  gender: "girl", age: 8,  hair: "brown", eyes: "blue",  favoriteColor: "purple", favoriteAnimal: "rabbit", hobby: "drawing",           personality: "curious" },
-  { name: "Noah", gender: "boy",  age: 6,  hair: "black", eyes: "brown", favoriteColor: "green",                            hobby: "building things",   personality: "patient" },
-  { name: "Ruth", gender: "girl", age: 10, hair: "red",   eyes: "green", favoriteColor: "yellow",                           hobby: "climbing trees",    personality: "brave" },
-  { name: "Sam",  gender: "boy",  age: 7,  hair: "blonde", eyes: "hazel", favoriteColor: "blue",                            hobby: "collecting rocks",  personality: "thoughtful" },
-];
+// One list, shared with the guide's screenshot capture: see scripts/demoPeople.ts.
+import { DEMO_PEOPLE } from "./demoPeople";
+
+const PEOPLE = DEMO_PEOPLE;
 
 async function main() {
   const health = await fetch(`${BASE}/api/health`).catch(() => null);

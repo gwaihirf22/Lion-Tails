@@ -5,6 +5,7 @@
 #   ./scripts/dev-stack.sh down    stop the server and remove the database
 #   ./scripts/dev-stack.sh status  what is running
 #   ./scripts/dev-stack.sh reset   down, then up -- a clean world
+#   ./scripts/dev-stack.sh admin [user]  make an account an admin (guide capture)
 #
 # WHY A THROWAWAY DATABASE AND NOT PRODUCTION. The dev server exists to try
 # changes that touch the schema and the story pipeline. Pointing it at the live
@@ -137,6 +138,18 @@ reset)
   echo "database removed. Run 'up' for a clean world."
   ;;
 
+admin)
+  # The guide's screenshots need the reader's "Make a picture" button, which
+  # only renders for an admin or an account with its own key (canIllustrate).
+  # Idempotent, and only ever the throwaway dev database. A username may be
+  # given (the guide's capture uses its own account, never yours).
+  WHO="${2:-blake}"
+  D exec -i "$CONTAINER" psql -U postgres -d liontails_dev -c \
+    "UPDATE users SET is_admin = true WHERE username = '$WHO'" >/dev/null 2>&1 \
+    && echo "$WHO is an admin now (throwaway database only)." \
+    || echo "could not reach the dev database; is it up?" >&2
+  ;;
+
 status)
   echo -n "database: "; D ps --format '{{.Names}} {{.Status}}' | grep "$CONTAINER" || echo "not running"
   echo -n "app:      "
@@ -144,7 +157,7 @@ status)
   ;;
 
 *)
-  echo "usage: $0 {up|down|reset|status}" >&2
+  echo "usage: $0 {up|down|reset|status|admin [user]}" >&2
   exit 1
   ;;
 esac

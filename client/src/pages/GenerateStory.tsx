@@ -1,3 +1,4 @@
+import GuideButton from "@/components/GuideButton";
 import UniverseContext from "@/components/UniverseContext";
 import { useUniverses } from "@/hooks/use-universes";
 import { useState, useEffect } from "react";
@@ -226,6 +227,9 @@ export default function GenerateStory() {
 
   return (
     <div className="space-y-6">
+      <div className="-mt-1 mb-1 flex">
+        <GuideButton tab="create" />
+      </div>
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
         <div>
           <h1 className="text-3xl md:text-4xl font-heading font-bold text-primary mb-2">

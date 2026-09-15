@@ -24,6 +24,7 @@ import { ProtectedRoute } from "@/lib/protected-route";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ParentModeProvider } from "@/hooks/use-parent-mode";
 import { ReadingPrefsProvider } from "@/hooks/use-reading-prefs";
+import { GuideProvider } from "@/hooks/use-guide";
 import { StoryJobsProvider } from "@/hooks/use-story-jobs";
 
 // Import the background image
@@ -89,6 +90,10 @@ function App() {
               watched after the user navigates away from the generate page,
               which is the whole point of the change. */}
           <StoryJobsProvider>
+          {/* Inside AuthProvider (it reads the account) and around the shell,
+              so the guide's dialog is a SIBLING of every page and of the
+              header's own Settings dialog rather than a child of either. */}
+          <GuideProvider>
           {/* Transparent on purpose: the BODY carries the background image and its
               palette veil (see theme.css). An opaque colour here would hide both. */}
           <div className="min-h-screen flex flex-col text-foreground">
@@ -118,6 +123,7 @@ function App() {
             </main>
             <Footer />
           </div>
+          </GuideProvider>
           <Toaster />
           </StoryJobsProvider>
         </ParentModeProvider>
