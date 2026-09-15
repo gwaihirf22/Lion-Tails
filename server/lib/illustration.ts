@@ -572,6 +572,23 @@ function referenceLine(n: number, e: IllustrationReference, periodDressed = fals
  * before any of this existed, or an unrelated picture changes.
  */
 /**
+ * Whether a scene says, in its first words, that it is set now.
+ *
+ * The passage-scene writer is told to open with "In the present day, …" when
+ * it is. That opening is load-bearing: a quest traveller is marked
+ * `dressed: "farSide"`, which used to leave "is this scene in the past?" to the
+ * image model -- and with "biblical storybook" in the style line, a montage
+ * that is four-sixths Persian as the look of the book, and a shop full of old
+ * things, it answered yes. The shop picture came back in Persian tunics under a
+ * scene that said "In the present day … in contemporary casual clothes"
+ * (2026-09-15). Anchored at the start, so a scene that merely mentions the
+ * present day in passing does not undress a traveller in Susa.
+ */
+export function isPresentDayScene(scenePrompt: string): boolean {
+  return /^\s*in the present day\b/i.test(scenePrompt);
+}
+
+/**
  * The clothing rule for a picture set in the past, by reference number.
  * Grouped, so a cast of three is one sentence per rule and not three.
  */
@@ -705,7 +722,16 @@ export function composeIllustrationPrompt(
     // WHERE CLOTHES COME FROM. A portrait shows what someone wears at home, so
     // in a scene from the past the clothing comes from the scene instead. The
     // sentence every other picture has always sent is unchanged.
-    const periodDressed = matched.some((m) => m.dressed);
+    // A traveller in a scene that says it is now wears their own clothes: the
+    // far-side rule does not apply, and saying so beats hoping the model agrees.
+    const presentDay = isPresentDayScene(scenePrompt);
+    const atHome = presentDay
+      ? matched.map((m, i) => (m.dressed === "farSide" && !m.notAPerson ? i + 1 : 0)).filter(Boolean)
+      : [];
+    const dressedHere = presentDay
+      ? matched.map((m) => (m.dressed === "farSide" ? { ...m, dressed: undefined } : m))
+      : matched;
+    const periodDressed = dressedHere.some((m) => m.dressed);
     parts.push(
       periodDressed
         ? "Take each person's face, hair and colouring from their own reference image and nothing else" +
@@ -713,7 +739,18 @@ export function composeIllustrationPrompt(
         : "Take each person's face, hair, colouring and clothing from their own reference image and nothing else" +
             " from it — not its background, its framing, its lighting, or anything it happens to be holding.",
     );
-    if (periodDressed) parts.push(...dressLines(matched));
+    if (periodDressed) parts.push(...dressLines(dressedHere));
+    if (atHome.length) {
+      const which =
+        atHome.length === 1
+          ? `reference image ${atHome[0]}`
+          : `reference images ${atHome.slice(0, -1).join(", ")} and ${atHome[atHome.length - 1]}`;
+      parts.push(
+        `This scene is in the present day: the ${atHome.length === 1 ? "person" : "people"} in ${which}` +
+          " wear present-day clothes like those in their own reference image — nothing from another century," +
+          " whatever anyone wears in the look of this book.",
+      );
+    }
     /**
      * A LIKENESS IS NOT A POSE.
      *

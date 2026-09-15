@@ -2383,6 +2383,17 @@ export const savedStorySchema = z.object({
   images: z.array(storyPictureSchema).max(MAX_STORY_IMAGES).optional(),
 
   /**
+   * How the people this story invented look, one sentence each, keyed by the
+   * name the story tells them apart by. SERVER-OWNED: written only by the
+   * passage-picture route through storage.addStoryLooks, never from a request,
+   * never shown to a reader, and not in sharedStoryView. See shared/lookBook.ts.
+   *
+   * DECLARED HERE OR LOST: this is a z.object, which strips unknown keys, so a
+   * look book missing from the schema would be written and never read back.
+   */
+  lookBook: z.record(z.string()).optional(),
+
+  /**
    * When the reader first opened it, or null if they have not.
    *
    * SERVER-OWNED, and stamped by POST /api/stories/:id/seen -- the seenVirtues

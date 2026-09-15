@@ -45,6 +45,7 @@ export function StoryExtras({
   builtIn,
   images,
   onPictures,
+  onOpenPicture,
 }: {
   story: StoryResponse;
   storyId?: string;
@@ -61,6 +62,8 @@ export function StoryExtras({
    * strip must take it out of the text as well, and a local copy cannot.
    */
   onPictures?: (images: StoryPicture[]) => void;
+  /** Show a picture as big as the screen allows -- the same viewer the pictures in the text open. */
+  onOpenPicture?: (picture: StoryPicture) => void;
 }) {
   const { toast } = useToast();
   const ref = useRef<HTMLDivElement>(null);
@@ -253,12 +256,32 @@ export function StoryExtras({
               rather than filed away: no accordion, nothing to expand. */}
           {imageUrl && (
             <figure className="m-0">
-              <img
-                src={imageUrl}
-                alt={withoutPictureRefs(story.imagePrompt) || `An illustration for ${story.title}`}
-                className="mx-auto max-h-[70vh] w-auto rounded-lg"
-                style={{ border: "1px solid var(--reader-border)" }}
-              />
+              {/* A button, because a six-panel montage at the width of a
+                  page is six thumbnails. Blake: "I need a way to zoom in/make
+                  the montage picture bigger or full web page screen". */}
+              <button
+                type="button"
+                onClick={() =>
+                  onOpenPicture?.(
+                    gallery.find((p) => p.url === imageUrl) ?? {
+                      id: "chosen",
+                      url: imageUrl,
+                      prompt: story.imagePrompt ?? "",
+                      createdAt: "",
+                    },
+                  )
+                }
+                disabled={!onOpenPicture}
+                aria-label="See this picture full screen"
+                className="mx-auto block cursor-zoom-in rounded-lg disabled:cursor-default"
+              >
+                <img
+                  src={imageUrl}
+                  alt={withoutPictureRefs(story.imagePrompt) || `An illustration for ${story.title}`}
+                  className="mx-auto max-h-[70vh] w-auto rounded-lg"
+                  style={{ border: "1px solid var(--reader-border)" }}
+                />
+              </button>
             </figure>
           )}
 

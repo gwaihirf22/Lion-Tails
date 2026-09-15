@@ -495,6 +495,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
         builtIn={builtIn}
         images={images}
         onPictures={onPictures}
+        onOpenPicture={setLightbox}
       />
     </div>
   );

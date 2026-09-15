@@ -1,5 +1,6 @@
 import { parentModeActive, type ParentModeSession } from "@shared/parentMode";
-import { splitAppendices } from "@shared/storyAppendices";
+import { splitAppendices, storyWithoutAppendices } from "@shared/storyAppendices";
+import { lookBookOf, newLooks, withLooks } from "@shared/lookBook";
 import { builtInStoryById, isBuiltInStoryId, refuseBuiltIn, withBuiltInStories } from "./lib/builtInStories";
 // `express` itself, not only its types: the photo-upload route attaches its own
 // body parser (express.raw) rather than raising the global JSON limit for every
@@ -89,7 +90,7 @@ import {
   startingQuestsAgain,
   statsOf,
   virtueLevels,
-  avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, characterIdsOf, characterRoleOf,
+  avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, type StoryPassage, characterIdsOf, characterRoleOf,
   type SavedStory, type Character, type StoryUsage, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
@@ -107,6 +108,7 @@ import {
 } from "./lib/avatar";
 import { statsAreAffordable } from "@shared/schema";
 import { RELATIONS, withoutPictureRefs } from "@shared/family";
+import { KEEPER } from "./data/lionTails";
 import { sharedStoryView, SHARE_TOKEN_PATTERN } from "@shared/sharedStory";
 import { z, ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
@@ -1780,7 +1782,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   /**
-   * A description of one moment, written against this story's own brief.
+   * A description of one moment, written against this story's own brief --
+   * and against the story itself.
    *
    * THE BRIEF IS REBUILT, NOT RESTATED. resolveHeroOfFaith + buildStoryBrief
    * are what the enqueue path uses, so what reaches the model here is the
@@ -1791,12 +1794,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * documented as prunable operational state and a permanent feature must not
    * read from a table that invites deletion.
    *
+   * THE STORY GOES WITH IT, for an OpenAI model: the body without its
+   * appendices (the AI note is not an event), the outline, and the cover's
+   * prompt. A local model gets the passage-only prompt -- its context cannot
+   * hold a story, and a truncated prompt draws worse than a short one.
+   *
+   * THE LOOK BOOK is read from the row and written back to it here: anyone the
+   * scene drew who has no portrait keeps the words they were first drawn with.
+   * A failure to save it is logged and the picture carries on.
+   *
    * Returns undefined on anything at all: no entitlement, no model, a bad
    * reply. The caller then draws the passage itself.
    */
   async function describePassage(
     saved: SavedStory,
-    text: string,
+    passage: StoryPassage,
     userId: number,
   ): Promise<string | undefined> {
     try {
@@ -1804,9 +1816,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!resolved) return undefined;
 
       let brief: string | undefined;
+      let characters: Character[] = [];
       try {
         const ids = characterIdsOf(saved.request);
-        const characters = (
+        characters = (
           await Promise.all(ids.map((id) => storage.getCharacterById(id, userId)))
         ).filter((c): c is Character => Boolean(c));
         const hero = await resolveHeroOfFaith(saved.request);
@@ -1817,12 +1830,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("[illustrate] could not rebuild the brief for a passage:", error);
       }
 
-      return await sceneFromPassage(createClient(resolved), resolved.model, {
+      const readsTheStory = resolved.provider !== "ollama";
+      const scene = await sceneFromPassage(createClient(resolved), resolved.model, {
         title: saved.story.title,
-        passage: text,
+        passage: passage.text,
         brief,
+        ...(readsTheStory
+          ? {
+              story: storyWithoutAppendices(saved.story.content ?? ""),
+              blockIndex: passage.blockIndex,
+              outline: saved.outline,
+              coverPrompt: withoutPictureRefs(saved.story.imagePrompt) || undefined,
+              lookBook: lookBookOf(saved.lookBook),
+            }
+          : {}),
         ledger: { userId, storyId: saved.id, resolved, purpose: "passage-scene" },
+        cacheKey: `passage-scene:${saved.id}`,
       });
+      if (!scene) return undefined;
+
+      // Nobody with a face of their own goes in the book: a cast member has a
+      // portrait, and the Timekeeper has a file.
+      const faces = [
+        ...characters.flatMap((c) => [c.name, c.name.trim().split(/\s+/)[0] ?? ""]),
+        KEEPER.name,
+        KEEPER.shortName,
+      ];
+      const added = readsTheStory ? newLooks(saved.lookBook, scene.looks, faces) : {};
+      if (Object.keys(added).length) {
+        await storage.addStoryLooks(saved.id, userId, added).catch((error) =>
+          console.error("[illustrate] could not save the look book:", error),
+        );
+      }
+      // The stored book wins over what this reply proposed, as it does in the
+      // database: a look is the words someone was FIRST drawn with.
+      return readsTheStory
+        ? withLooks(scene.imagePrompt, { ...added, ...lookBookOf(saved.lookBook) })
+        : scene.imagePrompt;
     } catch (error) {
       console.error("[illustrate] could not describe a passage:", error);
       return undefined;
@@ -1912,7 +1956,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         `An illustration for a story titled "${saved.story.title}"`;
 
       if (passage.success && passage.data) {
-        const scene = await describePassage(saved, passage.data.text, userId);
+        const scene = await describePassage(saved, passage.data, userId);
         // A failed sentence is not worth failing the picture over: the passage
         // itself draws a worse picture, and draws one.
         prompt = scene ?? passage.data.text;

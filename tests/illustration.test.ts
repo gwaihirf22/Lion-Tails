@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import {
   composeIllustrationPrompt,
+  isPresentDayScene,
   illustrationCast,
   charactersAreInTheStory,
   MAX_DRAWN_CHARACTERS,
@@ -724,6 +725,27 @@ describe("a scene from the past dresses the people in it, not the animals", () =
     const prompt = composeIllustrationPrompt(SCENE, [{ ...paulRef, dressed: "farSide" }]);
     expect(prompt).toContain("In a scene set in the past, dress the person in reference image 1");
     expect(prompt).toContain("only in a present-day scene are the clothes in the reference image worn");
+  });
+
+  it("a quest scene that SAYS it is the present day keeps a traveller in their own clothes", () => {
+    // The shop picture: "In the present day ... contemporary casual clothes",
+    // drawn in Persian tunics, because the far-side rule left the question to
+    // the image model.
+    const now = composeIllustrationPrompt(
+      "In the present day, inside the old shop, Paul holds the lantern.",
+      [{ ...paulRef, dressed: "farSide" }, { ...dog, dressed: "farSide", notAPerson: true }],
+      [{ role: "style", name: "the look of this book", look: "the cover of this same story.", file: file() }],
+    );
+    expect(now).toContain("Take each person's face, hair, colouring and clothing from their own reference image");
+    expect(now).not.toContain("In a scene set in the past, dress");
+    expect(now).toContain("This scene is in the present day: the person in reference image 1 wear");
+    // The cover may show them in Susa; that must not carry the clothes over.
+    expect(now).toContain("not necessarily the same clothes");
+    // Only an opening says it. A mention in passing does not.
+    expect(isPresentDayScene("  in the present day, a shop")).toBe(true);
+    expect(isPresentDayScene("In Susa, far from the present day, Paul watches.")).toBe(false);
+    expect(composeIllustrationPrompt("In Susa, far from the present day.", [{ ...paulRef, dressed: "farSide" }]))
+      .toContain("In a scene set in the past, dress the person in reference image 1");
   });
 
   it("an animal is never dressed up, and loses anything modern in the past", () => {

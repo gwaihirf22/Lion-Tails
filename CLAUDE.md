@@ -851,6 +851,38 @@ different child, and the only sign was one line in the log.
     setting rides along with the cast, and the first real generation put a
     moment set in Barnabas's shop "in the world of William Tyndale". The
     prompt now says so out loud.
+  - **For an OpenAI model it reads the whole story.** Passage-only, "They
+    crossed to the shop together" came back as the shop "in ancient Susa",
+    girls in Persian dress. Now `storyWithoutAppendices` of the body, the
+    outline, the brief and the cover's prompt (looks only) go FIRST and are
+    the same for every picture of a story, and end at an **explicit cache
+    breakpoint** (`passageScenePromptParts`, `prompt_cache_options: explicit`,
+    `prompt_cache_key` per story). The implicit one is not enough on gpt-5.6:
+    measured, it covered the whole prompt, so the second picture re-read the
+    story at full price. The look book, the lead-in and the passage go LAST.
+    The scene must open with when and where ("In the present day, …") and say
+    what everyone wears — an image model cannot see the story. **That opening
+    is read by the server**: `isPresentDayScene()` in `illustration.ts` turns a
+    quest traveller's far-side dress rule off and says "present-day clothes".
+    Left to the image model ("in a scene set in the past…"), a shop scene
+    that said "In the present day … contemporary clothes" still came back in
+    Persian tunics — "biblical storybook" style, a mostly-Persian montage as
+    the look of the book, and a room full of old things all said "past". Who,
+    where and what they wear come from the story up to the moment; what is
+    happening from the passage. Over `MAX_SCENE_STORY_CHARS` the part around
+    the passage is sent. **A local model gets the old passage-only prompt,
+    byte for byte** — its context cannot hold a story.
+  - **The look book** (`shared/lookBook.ts`, `story_data.lookBook`): the same
+    scene call returns one sentence of looks for each person it drew who has
+    no portrait. **The server attaches the saved sentences** (`withLooks`, by
+    whole-word name, only for names the scene uses) — asked to copy them in,
+    the model saved Mordecai's look and then described him in its own words. Blake: "every
+    character that appears in the generated story in words could then easily
+    appear in the pictures too." **First words win** — `newLooks` never
+    replaces an entry, and `addStoryLooks` puts the stored book on the right
+    of `||` so a racing picture cannot either. Cast names and Barnabas are
+    refused (they have faces). Server-owned, declared on `savedStorySchema`
+    or zod strips it, and not in `sharedStoryView`.
   - **The anchor is a quote first and an index second**
     (`pictureAnchorSchema`). The reader's blocks have no identity —
     `StoryContent` keys them by array index and the array is rebuilt whenever
@@ -874,6 +906,9 @@ different child, and the only sign was one line in the log.
     untouched and the parser stays a pure function of the text.
   - The lightbox carries **no `.reader-chrome`** — focus mode fades that to
     `opacity: 0; pointer-events: none`, taking the close button with it.
+    It is full screen, and a tap toggles fitted ↔ the file's own pixels in a
+    scrolling box (a six-panel cover fitted to a phone is six thumbnails). The
+    picture at the end opens it too.
   - **Twelve pictures a story**, not the five a character keeps: one is the
     picture at the end and the rest are the pictures in the story.
   - **A passage picture is a page, not a cover.** It never changes
