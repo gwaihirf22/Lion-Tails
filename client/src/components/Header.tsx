@@ -259,14 +259,22 @@ export default function Header() {
       <header className="bg-header text-header-foreground shadow-lg border-b border-header-foreground/20 sticky top-0 z-30">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div ref={logoContainerRef} className="flex min-w-0 items-center space-x-3">
-            <img 
-              src={appIcon} 
-              alt="Lion Tails Logo" 
-              className="h-12 w-12 shrink-0 rounded-full border-2 border-header-foreground/25 object-cover shadow-lg md:h-14 md:w-14"
-            />
-            <h1 className="brand-wordmark text-2xl md:text-3xl text-header-foreground">
-              Lion<span className="brand-accent"> Tails</span>
-            </h1>
+            {/* The brand goes home, as everyone expects it to -- from every
+                page, including on a phone where Home is inside the menu. */}
+            <Link
+              href="/"
+              aria-label="Lion Tails, home"
+              className="flex min-w-0 items-center space-x-3 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-header-foreground/60"
+            >
+              <img
+                src={appIcon}
+                alt=""
+                className="h-12 w-12 shrink-0 rounded-full border-2 border-header-foreground/25 object-cover shadow-lg md:h-14 md:w-14"
+              />
+              <h1 className="brand-wordmark text-2xl md:text-3xl text-header-foreground">
+                Lion<span className="brand-accent"> Tails</span>
+              </h1>
+            </Link>
 
             {/* The affordance that makes navigating away feel safe. The Header
                 is sticky and always mounted, so this is visible from every
