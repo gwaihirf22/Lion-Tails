@@ -249,6 +249,40 @@ is the default for the paid tier, and Astra is not offered to free accounts.
   and the next top-up pays it back; the concurrency limit of 1 bounds it to one
   story.
 
+**A picture costs credits too, from the same bucket.** `PICTURE_CREDITS`
+(`shared/schema.ts`, shared so the guide and Settings quote one table):
+standard 1, detailed 3, finest 6, **no picture 0** — a real choice, so an
+account down to its last credits keeps writing stories. `pictureCreditsFor`
+returns 0 for `hasUnlimitedUse`, like `storyCreditsFor`.
+
+- **Bought, not gated.** Pictures used to be admin/own-key only; the price is
+  what stops them being farmed now, so `canIllustrate` is gone and
+  `GET /api/settings/models` carries a `pictures` block instead.
+- **Charged inside `generateStoryImage`**, before the call, and refunded when
+  nothing was drawn — never when an edit fell back to a generate, which drew
+  one. That is the avatar rule (`chargeAvatarGeneration`), and putting it
+  inside is what keeps `grantedByAllowance`'s contract literally true.
+- **The cover is charged, and a story is never lost over it**: refused, the
+  story is delivered with no picture. `canEnqueueWithinQuota` adds the cover's
+  price so that is rare, and the `credits === 0` early return is gone — a
+  local story is free and its cover is not.
+- **`pictureChoiceFor(userId)` is the one reader** of `user_settings.image_model`
+  / `image_quality`, re-validated at use (decisions §2), returning model, tier,
+  credits and whether anyone is charged.
+- **Free portraits are held at `FREE_PORTRAIT_CEILING`** (`portraitTier`): the
+  eight free ones are paid for by a cap, so "finest" there would be eight of
+  the dearest pictures on the owner.
+
+**Quality is a per-model map, and the names are not equivalent.**
+`qualityFor(model, tier)` spreads `{ quality }` from `ModelSpec.quality`, like
+`inputFidelityFor`. `gpt-image-2` has **no map** and is sent nothing: its
+"high" measured 7,024 output tokens where 2.5's spends 1,756 — the same word,
+four times the money. `max` is in no map (16x standard for a difference nobody
+could see). Before this existed nothing sent a quality at all, so the API
+chose: 439 to 7,024 tokens, $0.013 to $0.21, 27s to 173s, recorded as "auto".
+`tests/pictureQuality.test.ts` greps every `images.edit`/`images.generate` call
+site for `qualityFor`.
+
 **Request shape is per-model and lives in the catalogue, not at the call site.**
 The GPT-5.6 generation rejects `max_tokens` (wants `max_completion_tokens`)
 and rejects any `temperature` at all, including the default sent explicitly.

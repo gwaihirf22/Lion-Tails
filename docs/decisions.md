@@ -1085,6 +1085,45 @@ stayed, by Blake's choice; the copy around it moved.
 
 ---
 
+## 31. A picture is reserved and refunded; a story is charged when it lands
+
+`server/lib/illustration.ts`, `server/lib/modelPolicy.ts`, `shared/schema.ts`
+
+Two charges in one app, and they are deliberately different shapes.
+
+A STORY is charged on success, inside the transaction that writes it: one
+story at a time per free account, minutes of work, and a crash before the end
+should cost nobody anything. A PICTURE is charged first and given back when
+nothing was drawn. Nothing limits how many pictures are in flight -- two tabs
+read the same balance -- so the check has to BE the write, which is the
+chargeAvatarGeneration rule. The charge lives inside generateStoryImage rather
+than at its three call sites, because that is the only arrangement where
+grantedByAllowance's written contract ("the caller must charge FIRST and pass
+the result of having charged") cannot be got wrong by a fourth caller.
+
+A refund is for a picture that does not exist, never for a disappointing one.
+An edit that failed and fell through to a plain generate drew something: it is
+charged once, and the reader is told the references were dropped.
+
+The cover is the same path, so a story whose account cannot pay for a picture
+arrives without one rather than failing. The enqueue check adds the cover's
+price so that is rare; it is not the guard, and it never refuses a story that
+could still be written.
+
+WHY gpt-image-2 HAS NO TIER MAP. Measured 2026-09-16: "high" on gpt-image-2
+spent 7,024 output tokens, and "high" on gpt-image-2.5 spent 1,756 -- the same
+word for four times the money. Mapping the word across would have sold a
+6-credit picture for 3. It is sent no quality at all, keeps the behaviour it
+has always had, and is hidden from the picker as `legacy`.
+
+AND WHY THE GATE BECAME A PRICE. Blake: everyone should be able to make
+things, "but it cost real credits they are given some to start and some every
+month". Entitlement answered a question the app no longer has -- what stops a
+picture being farmed is now what it costs. `canIllustrate` went with it: a
+boolean that is true for everybody is a name that has outlived its fact.
+
+---
+
 ## Recurring failure shape
 
 Most incidents here have had the same form: **a check that reported success

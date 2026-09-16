@@ -15,7 +15,14 @@ export type StorySample = {
   /** Everything the story's own calls cost, retries and extraction included; not its cover. */
   micros: number;
 };
-export type PictureSample = { purpose: string; model: string; size: string; micros: number };
+export type PictureSample = {
+  purpose: string;
+  model: string;
+  size: string;
+  /** The tier it was drawn at, or "auto" for a picture drawn before tiers. */
+  quality: string;
+  micros: number;
+};
 
 export type CostGroup = {
   item: string;
@@ -69,15 +76,26 @@ export function summariseStories(samples: StorySample[]): { items: CostGroup[]; 
   };
 }
 
+/**
+ * SIZE AND QUALITY ARE PART OF WHAT A PICTURE IS.
+ *
+ * They were dropped from the key, which was harmless while every picture was
+ * drawn the same way and became a lie the moment a tier could be chosen: a
+ * 1-credit standard page and a 6-credit finest cover differ by sixteen times
+ * in what they cost, and averaged together they produce a price that is right
+ * for neither. Pictures drawn before tiers existed group under "auto", which
+ * is exactly what they were.
+ */
 export function summarisePictures(samples: PictureSample[]): CostGroup[] {
   const by = new Map<string, number[]>();
   for (const s of samples) {
-    const key = `picture:${s.purpose}:${s.model}`;
+    const key = `picture:${s.purpose}:${s.model}:${s.size}:${s.quality}`;
     by.set(key, [...(by.get(key) ?? []), s.micros]);
   }
   return Array.from(by.keys()).sort().map((k) => {
-    const [, purpose, model] = k.split(":");
-    return group(k, `${purpose.replace("-", " ")}, ${model}`, by.get(k)!);
+    const [, purpose, model, size, quality] = k.split(":");
+    const where = [size, quality].filter(Boolean).join(", ");
+    return group(k, `${purpose.replace("-", " ")}, ${model}${where ? ` (${where})` : ""}`, by.get(k)!);
   });
 }
 

@@ -25,12 +25,33 @@ describe("summarising measured costs", () => {
     ]);
   });
 
-  it("groups pictures by what they were for", () => {
+  it("groups pictures by what they were for, at what size and quality", () => {
     const g = summarisePictures([
-      { purpose: "cover", model: "gpt-image-2", size: "1536x1024", micros: 200_000 },
-      { purpose: "passage-picture", model: "gpt-image-2", size: "1024x1024", micros: 120_000 },
+      { purpose: "cover", model: "gpt-image-2", size: "1536x1024", quality: "auto", micros: 200_000 },
+      { purpose: "passage-picture", model: "gpt-image-2", size: "1024x1024", quality: "auto", micros: 120_000 },
     ]);
-    expect(g.map((x) => x.item)).toEqual(["picture:cover:gpt-image-2", "picture:passage-picture:gpt-image-2"]);
+    expect(g.map((x) => x.item)).toEqual([
+      "picture:cover:gpt-image-2:1536x1024:auto",
+      "picture:passage-picture:gpt-image-2:1024x1024:auto",
+    ]);
+  });
+
+  /**
+   * A 1-credit standard page and a 6-credit finest page differ by a factor of
+   * six in what they cost. Averaged into one group they produce a price that
+   * is right for neither, and the below-cost warning then compares a published
+   * price against a basis nobody was ever charged.
+   */
+  it("never averages two tiers of the same picture together", () => {
+    const g = summarisePictures([
+      { purpose: "passage-picture", model: "gpt-image-2.5-flare", size: "1024x1024", quality: "medium", micros: 28_000 },
+      { purpose: "passage-picture", model: "gpt-image-2.5-flare", size: "1024x1024", quality: "xhigh", micros: 106_000 },
+    ]);
+    expect(g).toHaveLength(2);
+    expect(g.map((x) => x.label)).toEqual([
+      "passage picture, gpt-image-2.5-flare (1024x1024, medium)",
+      "passage picture, gpt-image-2.5-flare (1024x1024, xhigh)",
+    ]);
   });
 });
 

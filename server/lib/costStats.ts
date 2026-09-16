@@ -79,14 +79,21 @@ async function storySamples(): Promise<{ samples: StorySample[]; incomplete: num
 
 async function pictureSamples(): Promise<PictureSample[]> {
   const { rows } = await pool!.query(
-    `SELECT purpose, model, COALESCE(image_size, '') AS size, cost_micros
+    `SELECT purpose, model, COALESCE(image_size, '') AS size,
+            COALESCE(image_quality, 'auto') AS quality, cost_micros
        FROM model_calls
       WHERE purpose IN ('cover', 'passage-picture', 'redraw', 'avatar', 'passage-scene')
         AND outcome = 'succeeded' AND cost_micros IS NOT NULL
         AND created_at > now() - make_interval(days => $1)`,
     [WINDOW_DAYS],
   );
-  return rows.map((r) => ({ purpose: r.purpose, model: r.model, size: r.size, micros: Number(r.cost_micros) }));
+  return rows.map((r) => ({
+    purpose: r.purpose,
+    model: r.model,
+    size: r.size,
+    quality: r.quality,
+    micros: Number(r.cost_micros),
+  }));
 }
 
 export async function publishedPriceList(): Promise<
