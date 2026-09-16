@@ -18,6 +18,25 @@
 /** Says plainly that the character in a real account was invented. */
 export const MEETING_NOTE_HEADING = "**About this story:**";
 
+/**
+ * The note's first sentence, which depends on WHAT the account is.
+ *
+ * It said `${label} really lived` for both kinds of source, and a biblical
+ * event's label is not a person: a real story came back "**About this story:**
+ * Paul's Missionary Journeys really lived", and Noah's Ark would have "lived"
+ * too. The note is the one place a reader is told what is true and what was
+ * invented, so a sentence in it that reads as nonsense costs it the only thing
+ * it has.
+ *
+ * Pure, and here rather than at the call site, so it can be read in a test
+ * without a model call.
+ */
+export function accountIsRealSentence(source: { kind: "biblical-event" | "hero-of-faith"; label: string }): string {
+  return source.kind === "hero-of-faith"
+    ? `${source.label} really lived, and what happens in this story is what the account records.`
+    : `${source.label} is a real account from the Bible, and what happens in this story is what it records.`;
+}
+
 /** Answers to what the reader asked about the account. */
 export const DIGGING_DEEPER_HEADING = "**Digging deeper:**";
 

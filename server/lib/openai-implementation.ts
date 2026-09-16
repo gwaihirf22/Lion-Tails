@@ -53,6 +53,7 @@ import { newGenerationId, recordGeneration } from "./generationRecords";
 import { recordModelCall, type ModelCallContext } from "./modelCalls";
 import type { CallPurpose } from "./costMath";
 import {
+  accountIsRealSentence,
   MEETING_NOTE_HEADING,
   DIGGING_DEEPER_HEADING,
   FURTHER_LEARNING_HEADING,
@@ -1399,8 +1400,7 @@ async function runGeneration(
           ? ` ${who} ${many ? "were" : "was"} added so it could be told as a quest -- ${KEEPER.name}, ${KEEPER.title}, ${DEVICE.name}, the journey and that meeting are all made up.`
           : ` ${who} ${many ? "are" : "is"} invented. Nobody like ${them} was there; everything that happens around ${them} is what the account records.`;
       finalDetails.content +=
-        `\n\n${MEETING_NOTE_HEADING} ${account.label} really lived, and what happens ` +
-        `in this story is what the account records.` +
+        `\n\n${MEETING_NOTE_HEADING} ${accountIsRealSentence(account)}` +
         (who ? invented : "");
     }
 

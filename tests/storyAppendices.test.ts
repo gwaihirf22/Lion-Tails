@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   storyWithoutAppendices,
   splitAppendices,
+  accountIsRealSentence,
   MEETING_NOTE_HEADING,
   DIGGING_DEEPER_HEADING,
   FURTHER_LEARNING_HEADING,
@@ -84,5 +85,23 @@ describe("splitAppendices", () => {
 
   it("is what storyWithoutAppendices is built on", () => {
     expect(storyWithoutAppendices(`${body}\n\n${note}`)).toBe(body);
+  });
+});
+
+/**
+ * "**About this story:** Paul's Missionary Journeys really lived" -- a real
+ * story, 2026-09-16. An event's label is not a person, and this note is the
+ * one place a reader is told what is true.
+ */
+describe("what the note says the account is", () => {
+  it("a person lived; an account is recorded", () => {
+    expect(accountIsRealSentence({ kind: "hero-of-faith", label: "Corrie ten Boom" })).toBe(
+      "Corrie ten Boom really lived, and what happens in this story is what the account records.",
+    );
+    const event = accountIsRealSentence({ kind: "biblical-event", label: "Paul's Missionary Journeys" });
+    expect(event).toBe(
+      "Paul's Missionary Journeys is a real account from the Bible, and what happens in this story is what it records.",
+    );
+    expect(event).not.toContain("really lived");
   });
 });

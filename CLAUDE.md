@@ -523,6 +523,37 @@ Timekeeper's. Whole-word match without a regex: names are user text. Ids never
 reach a STORY prompt; a test holds that — pictures are the exception, below.
 See `docs/decisions.md` §28.
 
+**A NAMESAKE IS NOT THE RELATIVE, and the brief has to say so.** Blake, when
+this was built: *"If I (Paul) am Lucy's dad … the AI might put Paul the apostle
+as her dad in a story about Paul the Apostle."* It then happened — "The Rock,
+the Board, and Malta", 2026-09-16: *"it made the Apostle Paul me (Paul) and
+Lucy the daughter of the Apostle Paul."* Two things were wrong, and both are
+fixed:
+
+- **The namesake sentence never contradicted the family sentence.** The brief
+  says "Paul is Lucy's father." FIRST and then "the reader's Paul is not the
+  Paul of the account" — so nothing stopped a model satisfying both by
+  collapsing who "her father" meant. `namesakeLines()` now denies the relation
+  by name: *"Lucy's father is this Paul and nobody else: the Paul of the
+  account is not, and never becomes anybody's family in this story."* Only for
+  relations `familySentences()` actually asserts (both people in the cast), so
+  a namesake with no family in the story keeps the sentence it always had.
+- **The protection needed a RESOLVED account and silently vanished without
+  one.** `namesakeSourcesOf` read `sourceMaterial`, which exists only for a
+  catalogue event or a hero of faith — so a **typed passage** ("Acts 27 —
+  Paul's shipwreck"), a first-class choice in the form, had no era, no cautions
+  and **no namesake sentence**; nor did a request carrying an event id the
+  catalogue does not know, which is what the Malta story had
+  (`pauls-missionary-journeys`; the real id is `paul`). The brief now carries
+  `sourceNames` — the WORDS that name the setting, from `sourceNamesOf()`,
+  whether or not an account resolved — and both the prose and the picture read
+  it through the one `namesakeSourcesOf`. The unresolved-slug premise line says
+  the words rather than the identifier, which `BiblicalEvent.label`'s own doc
+  comment ("the slug must never reach a prompt") already demanded. Matching for
+  a namesake is looser than `containsWholeWord` on purpose (`mentionsName`:
+  lower case, and a bare possessive) — an extra namesake sentence costs a line
+  of prompt, a missing one cost a child's father.
+
 **Nothing on a character is defaulted.** Every field is optional, and the form
 starts empty except the name. Six defaults — brown hair, brown eyes, blue,
 reading, kind, age 8 — used to reach every story.

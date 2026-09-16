@@ -17,6 +17,7 @@ import {
   namesakeLines,
   petsComingAlong,
   renderBrief,
+  sourceNamesOf,
   FAVOURITE_IS_NOT_A_PET,
   PET_CROSSES_OVER,
 } from "../server/lib/storyBrief";
@@ -226,6 +227,82 @@ describe("namesakes", () => {
     const chapter = renderBrief(brief, "chapter");
     expect(chapter).toContain("Paul is Lucy's father.");
     expect(chapter).toContain("not the Paul of the account");
+  });
+
+  /**
+   * "The Rock, the Board, and Malta", 2026-09-16: the story made the apostle
+   * Paul into Lucy's father. Everything below is what let it.
+   */
+  it("says whose father he is NOT, because the relation is what drifted", () => {
+    const line = namesakeLines([lucy, paul], { account: "Paul's Missionary Journeys" })[0];
+    expect(line).toContain("Lucy's father is this Paul and nobody else");
+    expect(line).toContain("the Paul of the account is not, and never becomes anybody's family");
+    // A namesake with no family in the cast says nothing about a relation.
+    const alone = namesakeLines([paul], { account: "Paul's Missionary Journeys" })[0];
+    expect(alone).toContain("they only share a name.");
+    expect(alone).not.toContain("father");
+  });
+
+  /**
+   * The first fix made the model EXPLAIN itself on the page: "Lucy's father,
+   * Paul-not the apostle Paul-explained carefully, 'These are two different
+   * men.'" The notNarrated rule: told a thing three ways, a model writes it.
+   */
+  it("gives a naming rule instead of asking for an explanation, and forbids the aside", () => {
+    const line = namesakeLines([lucy, paul], { account: "Paul's Missionary Journeys" })[0];
+    expect(line).toContain("Tell them apart by what you call them");
+    expect(line).toContain("as the account itself names them");
+    expect(line).toContain("never remark on the coincidence");
+    expect(line).not.toContain("make it plain which one");
+  });
+
+  it("protects a typed passage too, which has no account to match against", () => {
+    // "Set it somewhere real -> a passage" builds no sourceMaterial: there is
+    // no account, no era and no cautions to attach. That used to take the
+    // namesake sentence with it, one tap away from the failure above.
+    const brief = buildStoryBrief(
+      {
+        ...base,
+        characterRole: "alongside",
+        biblePassage: "Acts 27 -- Paul's shipwreck on the way to Rome",
+        characterIds: [lucy.id, paul.id],
+      } as StoryRequest,
+      [lucy, paul],
+    );
+    expect(brief.sourceMaterial).toBeUndefined();
+    for (const p of ["single", "outline", "chapter", "image"] as const) {
+      expect(renderBrief(brief, p)).toContain("not the Paul of the account");
+    }
+  });
+
+  it("protects a setting the app does not hold, and never prints its id", () => {
+    // The Malta story's own request: an event id the catalogue has never had.
+    const brief = buildStoryBrief(
+      {
+        ...base,
+        characterRole: "alongside",
+        biblicalEvent: "pauls-missionary-journeys",
+        characterIds: [lucy.id, paul.id],
+      } as StoryRequest,
+      [lucy, paul],
+    );
+    const single = renderBrief(brief, "single");
+    expect(single).toContain("not the Paul of the account");
+    // BiblicalEvent.label: "the slug must never reach a prompt".
+    expect(single).not.toContain("pauls-missionary-journeys");
+    expect(single).toContain("pauls missionary journeys");
+  });
+
+  it("reads the words of a setting, id or prose, and ignores a uuid", () => {
+    expect(sourceNamesOf({ biblicalEvent: "pauls-missionary-journeys" } as StoryRequest)).toBe(
+      "pauls missionary journeys",
+    );
+    expect(sourceNamesOf({ biblePassage: "Acts 27" } as StoryRequest)).toBe("Acts 27");
+    expect(sourceNamesOf({ heroOfFaith: "Corrie ten Boom" } as StoryRequest)).toBe("Corrie ten Boom");
+    // A uuid names nobody, and "none" is the form's way of saying no source.
+    expect(sourceNamesOf({ heroOfFaith: "0f8c2a1e-4b77-4a2e-9f3b-77c1d9a8e412" } as StoryRequest)).toBeUndefined();
+    expect(sourceNamesOf({ biblicalEvent: "none" } as StoryRequest)).toBeUndefined();
+    expect(sourceNamesOf({} as StoryRequest)).toBeUndefined();
   });
 });
 
