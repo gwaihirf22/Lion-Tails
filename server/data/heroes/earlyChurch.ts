@@ -81,6 +81,11 @@ export const earlyChurch: RawHero[] = [
       { year: "c. 177", description: "Becomes bishop of Lyons after a persecution kills Bishop Pothinus" },
       { year: "c. 180", description: "Writes Against Heresies" },
       { year: "c. 190", description: "Urges Rome not to break fellowship over the date of Easter" },
+      {
+        year: "c. 180",
+        description: "Argues that the four Gospels are four and no more, against those adding secret ones",
+        dateNote: "Dated with Against Heresies, where the argument appears; no source dates the argument separately.",
+      },
     ],
     tags: ["theologian", "bishop", "gnosticism", "canon", "gaul", "apologist"],
     sources: [
@@ -112,6 +117,7 @@ export const earlyChurch: RawHero[] = [
       { year: "203", description: "Arrested in Carthage with Felicity and others" },
       { year: "203", description: "Writes her prison diary, including four visions" },
       { year: "203", description: "Refuses her father's pleas to renounce Christ" },
+      { year: "203", description: "Is baptised while under guard, and asks only for endurance" },
       { year: "203", description: "Killed in the arena with Felicity" },
     ],
     tags: ["martyr", "woman", "carthage", "diary", "persecution", "north africa"],

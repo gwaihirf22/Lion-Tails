@@ -85,11 +85,14 @@ describe("content completeness", () => {
     expect(heroesWithoutBiography).toEqual([]);
   });
 
-  it("gives every hero key events", () => {
+  it("gives every hero enough key events to choose a story from", () => {
     // Thirteen of the original fifteen had none, so the story prompt got two
-    // sentences and a quote.
+    // sentences and a quote. The floor is no longer "some": these are what the
+    // "what part of their life?" picker offers, and what a range is chosen
+    // from -- a life with three moments in it cannot be read as a stretch.
+    // The median across the shelf is six.
     for (const h of heroesOfFaithData) {
-      expect(h.keyEvents.length, `${h.name} has no key events`).toBeGreaterThan(0);
+      expect(h.keyEvents.length, `${h.name} has ${h.keyEvents.length} key events`).toBeGreaterThanOrEqual(5);
     }
   });
 

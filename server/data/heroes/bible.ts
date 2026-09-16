@@ -1233,4 +1233,396 @@ export const bible: RawHero[] = [
     tags: ["acts", "philippi", "europe", "business", "hospitality", "women", "conversion", "house church"],
     sources: [{ title: "Acts", type: "book", description: "Chapter 16" }],
   },
+  // ---------------------------------------------------------- The Twelve
+  //
+  // Peter and Thomas were already here; these are the rest of the men Jesus
+  // called, and Matthias, who was counted with them afterwards. Four of them
+  // are barely more than a name in a list, and their profiles say so rather
+  // than filling the gap with legend: what Scripture records, what tradition
+  // holds, and which is which.
+  {
+    id: "bible-andrew",
+    name: "Andrew",
+    collection: "biblical",
+    group: "gospels",
+    wikipedia: "Andrew the Apostle",
+    timePeriod: "The Gospels and Acts",
+    birthYear: "c. AD 5",
+    deathYear: "c. AD 60",
+    place: "Bethsaida and Capernaum, in Galilee",
+    description: "The first to follow Jesus, and the one who kept bringing other people to him.",
+    contribution:
+      "Brought his brother Peter to Jesus, and appears again and again in the Gospels doing the same thing for somebody else.",
+    biography:
+      "Andrew was a fisherman at Bethsaida and a disciple of John the Baptist before he was anything else. He was standing with John when John looked at Jesus walking past and said, behold the Lamb of God, and Andrew simply went after him and spent the day with him.\n\nThe first thing he did afterwards was fetch his brother. He found Simon and told him they had found the Messiah, and brought him to Jesus — which is how Peter, who fills more pages of the New Testament than almost anyone, arrives in the story at all. Andrew is introduced in Scripture more than once as Simon Peter's brother, and the note is a fair description of his place: the better-known man is there because of him.\n\nIt happens twice more in John. On the hillside where thousands need feeding it is Andrew who notices a boy with five barley loaves and two small fish, and says so, adding honestly that it is nothing among so many. Later, when some Greeks come to Philip asking to see Jesus, Philip goes to Andrew, and the two of them take the request in together.\n\nHe is not recorded preaching a sermon or writing a letter. What he does is introduce people. Early tradition has him preaching around the Black Sea and dying on a cross at Patras in Achaia.",
+    famousQuote: "We have found the Messiah!",
+    bibleVerse: {
+      text: "He first found his own brother, Simon, and said to him, “We have found the Messiah!”",
+      reference: "John 1:41",
+    },
+    keyEvents: [
+      { reference: "John 1:40", description: "Hears John the Baptist point to Jesus and follows him that day" },
+      { reference: "John 1:41", description: "Finds his brother Simon and brings him to Jesus" },
+      { reference: "Matthew 4:18", description: "Called from the nets with Peter to fish for people" },
+      { reference: "John 6:8", description: "Notices the boy with five loaves and two fish, and says it is not much" },
+      { reference: "John 12:22", description: "Takes the Greeks' request to see Jesus in, with Philip" },
+      { reference: "Mark 13:3", description: "One of four who ask Jesus privately about the end of the temple" },
+      { reference: "Acts 1:13", description: "Named among the apostles waiting in Jerusalem" },
+    ],
+    complications:
+      "His preaching around the Black Sea and his death at Patras come from early tradition rather than from Scripture, and the X-shaped cross he is usually drawn with is a much later detail.",
+    tags: ["apostle", "fisherman", "brother", "gospels", "bringing people", "first", "galilee"],
+    sources: [
+      { title: "The Gospel of John", type: "book", description: "Chapters 1, 6 and 12" },
+      { title: "The Gospel of Mark", type: "book", description: "Chapters 1 and 13" },
+    ],
+  },
+  {
+    id: "bible-james-zebedee",
+    name: "James son of Zebedee",
+    collection: "biblical",
+    group: "gospels",
+    wikipedia: "James, son of Zebedee",
+    timePeriod: "The Gospels and Acts",
+    birthYear: "c. AD 3",
+    deathYear: "c. AD 44",
+    place: "Galilee and Jerusalem",
+    description: "One of the three closest to Jesus, and the first of the Twelve to be killed for it.",
+    contribution:
+      "Saw what almost nobody saw — the transfiguration, and the garden — and was the first apostle to die for the name.",
+    biography:
+      "James and his brother John were mending nets in their father Zebedee's boat when Jesus called them, and they left the boat and their father and went.\n\nJesus gave the pair a nickname: Boanerges, sons of thunder. The Gospels make it easy to see why. When a Samaritan village would not receive Jesus, it was James and John who asked whether they should call down fire on it, and were told off for asking. Later the two of them came with a request to sit at his right and left hand in his glory, which made the other ten furious, and drew the answer that whoever wants to be great must be a servant.\n\nHe was also one of the three taken where the others were not. He was on the mountain when Jesus' face changed and his clothes turned white. He was in the room when a little girl was raised. He was among the three taken deeper into Gethsemane on the last night, and he fell asleep there like the rest.\n\nThe last mention of him is a single sentence in Acts. Herod Agrippa laid hands on some of the church to harm them, and killed James the brother of John with the sword — about a dozen years after the resurrection, the first of the Twelve to be martyred.",
+    famousQuote: "We are able.",
+    bibleVerse: {
+      text: "He killed James, the brother of John, with the sword.",
+      reference: "Acts 12:2",
+    },
+    keyEvents: [
+      { reference: "Matthew 4:21", description: "Called from his father's boat with his brother John" },
+      { reference: "Mark 3:17", description: "Nicknamed by Jesus, with John, the sons of thunder" },
+      { reference: "Mark 5:37", description: "One of three allowed in when Jairus's daughter is raised" },
+      { reference: "Mark 9:2", description: "On the mountain when Jesus is transfigured" },
+      { reference: "Luke 9:54", description: "Asks whether to call fire down on a village, and is rebuked" },
+      { reference: "Mark 10:37", description: "Asks, with John, for the seats at Jesus' right and left" },
+      { reference: "Mark 14:33", description: "Taken further into Gethsemane, and falls asleep" },
+      { reference: "Acts 12:2", description: "Killed with the sword by Herod, the first apostle to die" },
+    ],
+    tags: ["apostle", "fisherman", "brother", "martyr", "gospels", "inner three", "ambition"],
+    sources: [
+      { title: "The Gospel of Mark", type: "book", description: "Chapters 1, 3, 5, 9, 10 and 14" },
+      { title: "Acts", type: "book", description: "Chapter 12" },
+    ],
+  },
+  {
+    id: "bible-john-apostle",
+    name: "John the Apostle",
+    collection: "biblical",
+    group: "gospels",
+    wikipedia: "John the Apostle",
+    timePeriod: "The Gospels, Acts and Revelation",
+    birthYear: "c. AD 6",
+    deathYear: "c. AD 100",
+    place: "Galilee, Jerusalem, Ephesus and Patmos",
+    description:
+      "The disciple Jesus loved, who was given his mother to look after from the cross.",
+    contribution:
+      "Stood at the cross when the others had gone, and left the Gospel, the letters and the Revelation that carry his name.",
+    biography:
+      "John was a fisherman's son and, with his brother James, one of the two Jesus nicknamed sons of thunder. He is in the inner three at every moment the others are shut out of: the raising of Jairus's daughter, the transfiguration, and the deepest part of Gethsemane.\n\nHis own Gospel never gives his name. It calls him the disciple whom Jesus loved, which is either modesty or wonder, or both. That disciple leans back against Jesus at the last supper to ask who the betrayer is. He follows into the courtyard while Peter waits at the gate. He is standing at the cross when almost everyone else has fled, and it is to him that Jesus says, behold your mother — handing the care of Mary to him rather than to her other relatives.\n\nOn the first morning he outruns Peter to the tomb, and stops at the entrance to let him go in first. Afterwards he is Peter's constant companion in Acts: at the temple gate when a lame man is healed, before the council, and up into Samaria.\n\nHe ends far from Galilee. Old tradition places him at Ephesus, and Revelation opens with him on the island of Patmos, exiled for the word of God.",
+    famousQuote: "Behold, your mother!",
+    bibleVerse: {
+      text: "Then he said to the disciple, “Behold, your mother!” From that hour, the disciple took her to his own home.",
+      reference: "John 19:27",
+    },
+    keyEvents: [
+      { reference: "Matthew 4:21", description: "Called from the boat with his brother James" },
+      { reference: "Mark 9:2", description: "One of three on the mountain at the transfiguration" },
+      { reference: "John 13:23", description: "Leans back against Jesus at the last supper to ask who will betray him" },
+      { reference: "John 19:26", description: "Stands at the cross and is given Jesus' mother to care for" },
+      { reference: "John 20:4", description: "Outruns Peter to the empty tomb, and lets him enter first" },
+      { reference: "Acts 3:1", description: "Goes up with Peter to the temple at the hour of prayer" },
+      { reference: "Acts 4:13", description: "Stands with Peter before the council, and is seen to be unschooled and bold" },
+      { reference: "Revelation 1:9", description: "Writes from exile on the island of Patmos" },
+    ],
+    complications:
+      "Whether the apostle wrote all five books traditionally assigned to him — the Gospel, the three letters and Revelation — has been argued since the third century, and careful Christians differ.",
+    tags: ["apostle", "gospels", "revelation", "the cross", "friendship", "patmos", "writing"],
+    sources: [
+      { title: "The Gospel of John", type: "book", description: "Chapters 13, 19, 20 and 21" },
+      { title: "Acts", type: "book", description: "Chapters 3, 4 and 8" },
+    ],
+  },
+  {
+    id: "bible-philip-apostle",
+    name: "Philip the Apostle",
+    collection: "biblical",
+    group: "gospels",
+    wikipedia: "Philip the Apostle",
+    timePeriod: "The Gospels and Acts",
+    birthYear: "c. AD 5",
+    deathYear: "c. AD 80",
+    place: "Bethsaida, in Galilee",
+    description:
+      "Found by Jesus, and forever fetching somebody else — or asking the question everyone was thinking.",
+    contribution:
+      "Brought Nathanael to Jesus with an answer that has outlasted every argument: come and see.",
+    biography:
+      "Philip came from Bethsaida, the same town as Andrew and Peter. Jesus found him — that is how John puts it, the other way round from most of the callings — and said two words: follow me.\n\nHe went straight to Nathanael and announced that they had found the one Moses and the prophets wrote about, Jesus of Nazareth, son of Joseph. Nathanael's reply was a sneer about Nazareth. Philip did not argue the point. He said, come and see, and that settled it.\n\nJohn shows him twice more, both times a little out of his depth and honest about it. On the hillside Jesus asks him where they are to buy bread for the crowd, testing him, and Philip does the arithmetic instead of the faith: two hundred denarii would not buy enough for each of them to have a little. In the last week, some Greeks come to him asking to see Jesus, and rather than deciding alone he goes to find Andrew.\n\nHis last recorded words are at the supper. Lord, show us the Father, and it is enough for us. The answer is one of the great sentences of the Gospel — have I been with you so long, and you do not know me? He is in the upper room after the ascension with the rest.",
+    famousQuote: "Come and see.",
+    bibleVerse: {
+      text: "Nathanael said to him, “Can any good thing come out of Nazareth?” Philip said to him, “Come and see.”",
+      reference: "John 1:46",
+    },
+    keyEvents: [
+      { reference: "John 1:43", description: "Found by Jesus, who tells him to follow" },
+      { reference: "John 1:45", description: "Tells Nathanael they have found the one Moses wrote about" },
+      { reference: "John 1:46", description: "Answers a sneer about Nazareth with 'come and see'" },
+      { reference: "John 6:7", description: "Tested about feeding the crowd, and answers with the arithmetic" },
+      { reference: "John 12:21", description: "Approached by Greeks who want to see Jesus" },
+      { reference: "John 14:8", description: "Asks Jesus to show them the Father" },
+      { reference: "Acts 1:13", description: "Among the apostles in the upper room after the ascension" },
+    ],
+    complications:
+      "He is not the Philip of Acts 6 and 8 who preaches in Samaria and baptises the Ethiopian: that is Philip the Evangelist, one of the seven, and the two were already being confused in the early centuries.",
+    tags: ["apostle", "gospels", "come and see", "questions", "bethsaida", "honesty"],
+    sources: [{ title: "The Gospel of John", type: "book", description: "Chapters 1, 6, 12 and 14" }],
+  },
+  {
+    id: "bible-bartholomew",
+    name: "Bartholomew (Nathanael)",
+    collection: "biblical",
+    group: "gospels",
+    wikipedia: "Bartholomew the Apostle",
+    timePeriod: "The Gospels and Acts",
+    birthYear: "c. AD 5",
+    deathYear: "c. AD 68",
+    place: "Cana, in Galilee",
+    description:
+      "Asked whether anything good could come out of Nazareth, then made one of the first confessions of who Jesus was.",
+    contribution:
+      "Showed that an honest objection, taken to Jesus rather than around him, does not stay an objection long.",
+    biography:
+      "The first thing recorded of Nathanael is a piece of regional scorn. Philip tells him they have found the Messiah, from Nazareth, and Nathanael asks whether any good thing can come out of Nazareth. It is not a spiritual question. It is what a man from Cana thought of the next town along.\n\nHe goes anyway. Jesus sees him coming and says, before they have spoken, behold an Israelite indeed, in whom there is no deceit — which is a strange compliment to pay a man who has just insulted your home town, unless the point is that he says exactly what he thinks. Nathanael asks how Jesus knows him, and is told: before Philip called you, when you were under the fig tree, I saw you.\n\nWhatever happened under that fig tree is not written down, and it undid him. He answers: Rabbi, you are the Son of God, you are the King of Israel. Jesus tells him he will see far greater things than that.\n\nHe appears once more by name, out fishing on the sea of Tiberias after the resurrection. Most of the church has long identified him with the Bartholomew of the other three Gospels' lists, where he is always paired with Philip.",
+    famousQuote: "Rabbi, you are the Son of God! You are King of Israel!",
+    bibleVerse: {
+      text: "Nathanael answered him, “Rabbi, you are the Son of God! You are King of Israel!”",
+      reference: "John 1:49",
+    },
+    keyEvents: [
+      { reference: "John 1:45", description: "Told by Philip that the one Moses wrote of has been found" },
+      { reference: "John 1:46", description: "Asks whether any good thing can come out of Nazareth" },
+      { reference: "John 1:47", description: "Called an Israelite in whom there is no deceit" },
+      { reference: "John 1:48", description: "Told he was seen under the fig tree before Philip called him" },
+      { reference: "John 1:49", description: "Confesses Jesus as the Son of God and King of Israel" },
+      { reference: "Matthew 10:3", description: "Listed among the Twelve, beside Philip, as Bartholomew" },
+      { reference: "John 21:2", description: "Out in the boat on the sea of Tiberias after the resurrection" },
+    ],
+    complications:
+      "That Nathanael and Bartholomew are the same man is an early and widely held identification, not a statement of Scripture: John never uses the name Bartholomew, and the other Gospels never use Nathanael.",
+    tags: ["apostle", "gospels", "honesty", "doubt", "confession", "cana", "fig tree"],
+    sources: [{ title: "The Gospel of John", type: "book", description: "Chapters 1 and 21" }],
+  },
+  {
+    id: "bible-matthew",
+    name: "Matthew",
+    collection: "biblical",
+    group: "gospels",
+    wikipedia: "Matthew the Apostle",
+    timePeriod: "The Gospels and Acts",
+    birthYear: "c. AD 5",
+    deathYear: "c. AD 74",
+    place: "Capernaum, in Galilee",
+    description: "A tax collector who got up from the booth and never went back.",
+    contribution:
+      "Left the most profitable job in Capernaum for a homeless rabbi, and gave the church the Gospel that carries his name.",
+    biography:
+      "Tax collectors in Galilee worked for the occupying power and took their living from the margin. They were counted with sinners as a matter of course, and the pairing is not the Gospels being unkind: it is how everybody spoke.\n\nJesus walked past the booth, saw Matthew sitting at it, and said follow me. He got up and followed. Luke adds the detail that he left everything — a fisherman could go back to his boat, and several of them did, but a man who walked away from a tax franchise had no way back into it.\n\nThe first thing he did was throw a party. He filled his house with tax collectors and other disreputable people and sat Jesus down among them, which brought the complaint that made the point of the whole thing plain: those who are well have no need of a physician, but those who are sick. I came not to call the righteous, but sinners.\n\nAfter that he is a name in the lists and a man in the upper room. Early tradition, going back to Papias in the second century, connects him with the first Gospel, which is the one most interested in showing a Jewish reader how the prophets are answered in Jesus — and the only one to tell his own calling using his tax collector's name.",
+    famousQuote: "I came not to call the righteous, but sinners to repentance.",
+    bibleVerse: {
+      text: "He said to him, “Follow me.” He got up and followed him.",
+      reference: "Matthew 9:9",
+    },
+    keyEvents: [
+      { reference: "Matthew 9:9", description: "Called away from the tax booth with two words" },
+      { reference: "Luke 5:28", description: "Leaves everything behind and follows" },
+      { reference: "Mark 2:15", description: "Fills his house with tax collectors and sinners to meet Jesus" },
+      { reference: "Matthew 9:12", description: "Hears Jesus answer the complaint: the sick need a physician" },
+      { reference: "Matthew 10:3", description: "Listed among the Twelve, still named the tax collector" },
+      { reference: "Acts 1:13", description: "In the upper room with the apostles after the ascension" },
+    ],
+    complications:
+      "Whether the apostle wrote the Gospel of Matthew in the form we have it is debated; the tradition linking him to it is early, and the book itself names no author.",
+    tags: ["apostle", "tax collector", "calling", "gospels", "capernaum", "money", "hospitality"],
+    sources: [
+      { title: "The Gospel of Matthew", type: "book", description: "Chapters 9 and 10" },
+      { title: "The Gospel of Luke", type: "book", description: "Chapter 5" },
+    ],
+  },
+  {
+    id: "bible-james-alphaeus",
+    name: "James son of Alphaeus",
+    collection: "biblical",
+    group: "gospels",
+    wikipedia: "James, son of Alphaeus",
+    timePeriod: "The Gospels and Acts",
+    birthYear: "c. AD 5",
+    deathYear: "c. AD 62",
+    place: "Galilee",
+    description: "One of the Twelve, and almost nothing about him is written down.",
+    contribution:
+      "Followed for three years, was there at the beginning of the church, and left no story of his own — which is its own kind of lesson.",
+    biography:
+      "Four lists of the Twelve survive in the New Testament, and James the son of Alphaeus is in every one of them. That is very nearly all there is.\n\nHe is never quoted. No miracle is worked through him in Scripture, no question of his is recorded, no journey of his is described. He was called with the rest, sent out two by two with the rest, and was in the upper room in Jerusalem after the ascension with the rest. Everything else about him has to be guessed at, and most of what is usually said about him is guesswork.\n\nHe is sometimes identified with James the younger, whose mother Mary stood watching the crucifixion from a distance, which would put his family at the cross. He is sometimes confused with James the brother of Jesus, who led the church in Jerusalem and wrote the letter — a different man, almost certainly, though the confusion is ancient.\n\nThere is something worth noticing in a blank profile. Twelve men were called and the Gospels remember three of them in detail. The other nine did the same walking, heard the same words, and are trusted with the same commission. A follower is not less of one for being unrecorded.",
+    bibleVerse: {
+      text: "James the son of Alphaeus; Simon the Zealot; Judas the son of James;",
+      reference: "Luke 6:15",
+    },
+    keyEvents: [
+      { reference: "Matthew 10:3", description: "Named among the Twelve Jesus sends out" },
+      { reference: "Mark 3:18", description: "Listed among those Jesus appointed to be with him" },
+      { reference: "Luke 6:15", description: "Named in Luke's list of the apostles" },
+      { reference: "Mark 15:40", description: "Possibly the James whose mother watched the crucifixion from a distance" },
+      { reference: "Acts 1:13", description: "In the upper room in Jerusalem after the ascension" },
+    ],
+    complications:
+      "Nearly everything told about him beyond the lists is uncertain. Whether he is James the younger of Mark 15, and whether any of the later martyrdom accounts belong to him rather than to James the brother of Jesus, cannot be settled from the sources.",
+    tags: ["apostle", "gospels", "unknown", "faithfulness", "the twelve", "quiet"],
+    sources: [{ title: "The Gospels and Acts", type: "book", description: "The four lists of the Twelve" }],
+  },
+  {
+    id: "bible-jude-thaddaeus",
+    name: "Jude Thaddaeus",
+    collection: "biblical",
+    group: "gospels",
+    wikipedia: "Jude the Apostle",
+    timePeriod: "The Gospels and Acts",
+    birthYear: "c. AD 5",
+    deathYear: "c. AD 65",
+    place: "Galilee",
+    description:
+      "Asked the one question at the last supper that nobody else thought to ask.",
+    contribution:
+      "Wanted to know why the risen life would be shown to them and not to the whole world — and got an answer about love and obedience rather than spectacle.",
+    biography:
+      "He is called Thaddaeus in Matthew and Mark, and Judas the son of James in Luke and Acts, which is why he usually carries both names. The double name is almost certainly there to keep him clear of the other Judas.\n\nOne sentence of his survives. At the last supper Jesus has just said that he will show himself to those who love him, and this Judas — John is careful to add, not Iscariot — interrupts to ask: Lord, what has happened that you are about to reveal yourself to us, and not to the world?\n\nIt is a fair question and a very human one. They had been expecting a king everyone would see. The answer he receives is not about crowds at all: if anyone loves me, he will keep my word, and my Father will love him, and we will come to him and make our home with him. The revealing would be quiet, and it would happen inside people.\n\nAfter that he is a name in the lists and a man in the upper room. Later tradition sends him to preach in Mesopotamia and Persia, and for centuries he has been the saint people pray to when a situation looks hopeless.",
+    famousQuote: "Lord, what has happened that you are about to reveal yourself to us, and not to the world?",
+    bibleVerse: {
+      text: "Judas (not Iscariot) said to him, “Lord, what has happened that you are about to reveal yourself to us, and not to the world?”",
+      reference: "John 14:22",
+    },
+    keyEvents: [
+      { reference: "Matthew 10:3", description: "Listed among the Twelve as Thaddaeus" },
+      { reference: "Mark 3:18", description: "Named again as Thaddaeus among those appointed" },
+      { reference: "Luke 6:16", description: "Named in Luke's list as Judas the son of James" },
+      { reference: "John 14:22", description: "Asks why Jesus will show himself to them and not to the world" },
+      { reference: "John 14:23", description: "Hears that the Father and the Son will make their home with whoever loves him" },
+      { reference: "Acts 1:13", description: "In the upper room with the apostles after the ascension" },
+    ],
+    complications:
+      "Whether he wrote the letter of Jude is doubtful: that writer calls himself the brother of James and does not claim to be an apostle, and is usually taken to be a brother of Jesus rather than this man.",
+    tags: ["apostle", "gospels", "questions", "last supper", "hopeless causes", "the twelve"],
+    sources: [{ title: "The Gospel of John", type: "book", description: "Chapter 14" }],
+  },
+  {
+    id: "bible-simon-zealot",
+    name: "Simon the Zealot",
+    collection: "biblical",
+    group: "gospels",
+    wikipedia: "Simon the Zealot",
+    timePeriod: "The Gospels and Acts",
+    birthYear: "c. AD 5",
+    deathYear: "c. AD 65",
+    place: "Galilee",
+    description:
+      "Came from the movement that wanted Rome thrown out by force, and spent three years walking beside a tax collector who worked for it.",
+    contribution:
+      "Is the proof, standing in the list, that Jesus called men who would otherwise have been enemies.",
+    biography:
+      "Simon is always given a second word so he is not mistaken for Simon Peter. Luke calls him the Zealot; Matthew and Mark use a Aramaic term meaning the same thing. Whether that means he belonged to the armed party that later led the revolt against Rome, or simply that he was zealous for the law, is argued either way — the organised Zealot movement is better attested a generation after him.\n\nEither reading puts him at one end of a very short bench. Somewhere along it sat Matthew, who had collected Rome's taxes for a living. A man zealous for God's honour and a man in Rome's pay were not natural companions; in most versions of first-century Galilee they were on opposite sides of a knife.\n\nNothing he says is recorded, and nothing he does on his own. He is in all four lists of the Twelve and in the upper room after the ascension. He was sent out with the others to preach and to heal, and he came back with them.\n\nThe interesting thing about him is who he is standing next to. Whatever he had been before, three years with Jesus put him alongside the one man he had most reason to despise, and there is no record of the argument.",
+    bibleVerse: {
+      text: "Simon the Zealot; and Judas the son of James.",
+      reference: "Acts 1:13",
+    },
+    keyEvents: [
+      { reference: "Matthew 10:4", description: "Listed among the Twelve, beside Judas Iscariot" },
+      { reference: "Mark 3:18", description: "Named among those Jesus appointed to be with him" },
+      { reference: "Luke 6:15", description: "Called the Zealot, in the same list as Matthew the tax collector" },
+      { reference: "Luke 9:2", description: "Sent out with the Twelve to proclaim the kingdom and to heal" },
+      { reference: "Acts 1:13", description: "Named in the upper room in Jerusalem after the ascension" },
+    ],
+    complications:
+      "Whether 'the Zealot' names a political party or a temperament cannot be settled: the Zealots as an organised faction are clearly attested only in the decades after his lifetime.",
+    tags: ["apostle", "gospels", "zealot", "enemies", "the twelve", "politics", "reconciliation"],
+    sources: [{ title: "The Gospels and Acts", type: "book", description: "The four lists of the Twelve" }],
+  },
+  {
+    id: "bible-judas-iscariot",
+    name: "Judas Iscariot",
+    collection: "biblical",
+    group: "gospels",
+    wikipedia: "Judas Iscariot",
+    timePeriod: "The Gospels",
+    birthYear: "c. AD 5",
+    deathYear: "c. AD 30",
+    place: "Judea and Jerusalem",
+    description:
+      "One of the Twelve, who kept the money bag and sold his friend for thirty pieces of silver.",
+    contribution:
+      "Stands in the Gospels as the warning nobody expected: three years this close to Jesus, and it was not enough on its own.",
+    biography:
+      "Judas was chosen with the rest. He was sent out with the rest to preach and to heal. He kept the common purse, and John says plainly that he helped himself to it.\n\nThe first crack anyone sees is over money. A woman pours expensive ointment over Jesus' feet, and Judas objects that it could have been sold for a year's wages and given to the poor — a reasonable-sounding complaint from a man who was stealing from the bag. Soon afterwards he goes to the chief priests and asks what they will give him. They weigh out thirty pieces of silver.\n\nAt the last supper Jesus washes the feet of every man in the room, and Judas is in the room. He is handed bread from Jesus' own hand. Then he goes out, and John writes four words about the moment that are hard to read: and it was night.\n\nHe brought the soldiers to the garden and marked the man they wanted with a kiss. When he saw what came of it he was seized with remorse, threw the silver back into the temple and said he had betrayed innocent blood, and went and hanged himself.\n\nThe Gospels do not soften any of it. They also do not let the reader stand far off: at that supper every disciple asked, is it I?",
+    famousQuote: "I have sinned in that I betrayed innocent blood.",
+    bibleVerse: {
+      text: "I have sinned in that I betrayed innocent blood.",
+      reference: "Matthew 27:4",
+    },
+    keyEvents: [
+      { reference: "Matthew 10:4", description: "Chosen as one of the Twelve, and named as the one who would betray him" },
+      { reference: "John 12:6", description: "Keeps the money bag, and takes from it" },
+      { reference: "Matthew 26:15", description: "Asks the chief priests what they will give him, and is paid thirty pieces of silver" },
+      { reference: "John 13:5", description: "Has his feet washed by Jesus at the supper, with the others" },
+      { reference: "John 13:30", description: "Takes the bread from Jesus' hand and goes out into the night" },
+      { reference: "Luke 22:48", description: "Betrays the Son of Man with a kiss in the garden" },
+      { reference: "Matthew 27:5", description: "Throws the silver back into the temple and hangs himself" },
+    ],
+    complications:
+      "Two accounts of his death sit side by side in the New Testament — hanging in Matthew, a fall in the field bought with the money in Acts — and harmonising them has occupied readers since the earliest centuries.",
+    tags: ["apostle", "betrayal", "money", "gospels", "warning", "the twelve", "remorse"],
+    sources: [
+      { title: "The Gospel of John", type: "book", description: "Chapters 12 and 13" },
+      { title: "The Gospel of Matthew", type: "book", description: "Chapters 26 and 27" },
+    ],
+  },
+  {
+    id: "bible-matthias",
+    name: "Matthias",
+    collection: "biblical",
+    group: "early-church",
+    wikipedia: "Saint Matthias",
+    timePeriod: "Acts",
+    birthYear: "c. AD 5",
+    deathYear: "c. AD 80",
+    place: "Jerusalem",
+    description:
+      "Had followed Jesus from the beginning without being one of the Twelve, and was counted with them at the end.",
+    contribution:
+      "Filled the place Judas left, chosen because he had been there the whole time and nobody had noticed.",
+    biography:
+      "After the ascension about a hundred and twenty believers were waiting in Jerusalem, and Peter stood up and said the place left empty by Judas should be filled.\n\nThe qualification he set is the interesting part. It had to be someone who had been with them the whole time the Lord Jesus went in and out among them, from the baptism of John until the day he was taken up — so that he could be a witness of the resurrection. In other words: someone who had seen all of it.\n\nTwo men met that standard. Joseph called Barsabbas, also known as Justus, and Matthias. Which tells you something easy to miss: there were people who had followed Jesus from the Jordan to the ascension without ever appearing in the story. Whole years of walking, and not a line.\n\nThey prayed, asking the Lord who knew every heart to show which one he had chosen, and cast lots. The lot fell on Matthias, and he was numbered with the eleven apostles. A few days later he was in the house when the sound came like a rushing mighty wind and they began to speak in other tongues.\n\nHe is never mentioned again by name in Scripture.",
+    bibleVerse: {
+      text: "They drew lots for them, and the lot fell on Matthias; and he was counted with the eleven apostles.",
+      reference: "Acts 1:26",
+    },
+    keyEvents: [
+      { reference: "Acts 1:15", description: "Waits in Jerusalem with about a hundred and twenty believers" },
+      { reference: "Acts 1:21", description: "Meets Peter's test: he had been with them from John's baptism onward" },
+      { reference: "Acts 1:23", description: "Put forward with Joseph called Barsabbas" },
+      { reference: "Acts 1:26", description: "Chosen by lot and numbered with the eleven apostles" },
+      { reference: "Acts 2:1", description: "In the house with them all on the day of Pentecost" },
+    ],
+    complications:
+      "Nothing certain is known of him afterwards. Later accounts send him to Cappadocia or Ethiopia, and they disagree with each other.",
+    tags: ["apostle", "acts", "chosen", "hidden years", "pentecost", "faithfulness"],
+    sources: [{ title: "Acts", type: "book", description: "Chapters 1 and 2" }],
+  },
 ];
