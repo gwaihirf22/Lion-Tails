@@ -38,6 +38,7 @@ import https from "https";
 import { v4 as uuidv4 } from "uuid";
 import { toFile } from "openai";
 import {
+  FREE_STORIES,
   characterIdsOf,
   characterRoleOf,
   chosenAvatarIsPhoto,
@@ -57,7 +58,13 @@ import {
   namesakesIn,
   resolveHeroOfFaith,
 } from "./storyBrief";
-import { resolveModel, createClient, inputFidelityFor } from "./modelPolicy";
+import {
+  resolveModel,
+  createClient,
+  inputFidelityFor,
+  pictureChoiceFor,
+  qualityFor,
+} from "./modelPolicy";
 import { recordModelCall } from "./modelCalls";
 import type { CallPurpose } from "./costMath";
 
@@ -496,7 +503,19 @@ export type EditFailure = "parameter" | "refused" | "transient";
  * same everything except that it is a different child -- so the only way for
  * anything upstream to know is to be told.
  */
+/**
+ * WHAT HAPPENED TO A PICTURE, and what it cost.
+ *
+ * This was `StoryImageResult | undefined`, which collapsed five different
+ * answers into one: no entitlement, no credits, a refusal, a failure, and a
+ * picture. The route then apologised for that in a comment and told everyone
+ * who got undefined that they needed their own API key -- a sentence that
+ * stopped being true the day pictures were bought with credits.
+ */
 export type StoryImageResult = { url: string; droppedReferences?: EditFailure };
+export type StoryImageOutcome =
+  | { ok: true; url: string; credits: number; droppedReferences?: EditFailure }
+  | { ok: false; reason: "not_enough_credits" | "no_model" | "refused" | "failed" };
 
 /**
  * The two frames this app draws in.
@@ -833,8 +852,18 @@ export function composeIllustrationPrompt(
 /**
  * Generate and store one story illustration.
  *
- * Returns undefined on EVERY failure and never throws: a story is not lost
- * over a missing picture, and the reader falls back to the stock lion.
+ * NEVER THROWS: a story is not lost over a missing picture, and the reader
+ * falls back to the stock lion. It says WHY, though -- see StoryImageOutcome.
+ *
+ * THE CHARGE LIVES HERE, not at the call sites. Credits are spent before the
+ * picture is asked for and given back when nothing was drawn, which is the
+ * avatar rule (routes.ts, chargeAvatarGeneration) and for the same reason:
+ * nothing limits how many pictures are in flight, so a check that is not the
+ * write itself can be beaten by two tabs. Charging inside also keeps
+ * grantedByAllowance honest -- "the caller must charge FIRST and pass the
+ * result of having charged" is literally true when the charge and the pass
+ * are three lines apart -- and means the cover, drawn by a worker with nobody
+ * to ask, is accounted for exactly like a redraw.
  */
 export async function generateStoryImage(
   imagePrompt: string,
@@ -864,7 +893,7 @@ export async function generateStoryImage(
      */
     ledger?: { purpose: CallPurpose; jobId?: string; storyId?: string };
   } = {},
-): Promise<StoryImageResult | undefined> {
+): Promise<StoryImageOutcome> {
   /**
    * Set only when the reference-matched call failed and the picture was drawn
    * from words alone. It travels OUT rather than staying in the log, because
@@ -872,16 +901,51 @@ export async function generateStoryImage(
    * that is -- until you notice the child is somebody else.
    */
   let droppedReferences: EditFailure | undefined;
+  /** What this call actually spent, readable from the catch block. */
+  let charged = 0;
   try {
-    // Illustration is premium-only and has no cheap or local tier, so an
-    // unentitled user simply gets a story without a picture rather than an
-    // error -- and never silently bills the server owner.
-    const resolved = await resolveModel(userId, "image");
+    /**
+     * What this account draws with, at what tier, for how many credits. One
+     * read, so the quality that is sent and the price that is charged cannot
+     * come apart.
+     */
+    const choice = await pictureChoiceFor(userId);
+    if (choice.tier === "none") {
+      console.log("Skipping illustration: this account has pictures turned off.");
+      return { ok: false, reason: "not_enough_credits" };
+    }
+    /**
+     * PAID FOR BEFORE IT IS ASKED FOR. applyStoryTopUp first, so the month's
+     * forgiveness is inside the balance this is compared against -- otherwise
+     * a picture on the 1st is refused against last month's spend.
+     */
+    if (choice.credits > 0) {
+      await storage.applyStoryTopUp(userId).catch(() => undefined);
+      const paid = await storage.chargePictureCredits(userId, choice.credits, FREE_STORIES);
+      if (paid) charged = choice.credits;
+      if (!paid) {
+        console.log(
+          `Skipping illustration: ${choice.credits} credits needed and the account cannot pay.`,
+        );
+        return { ok: false, reason: "not_enough_credits" };
+      }
+    }
+    /** Nothing was drawn, so the credits go back. Never on a picture that exists. */
+    const refund = async () => {
+      if (charged > 0) await storage.refundPictureCredits(userId, charged);
+      charged = 0;
+    };
+    // Illustration is premium-only and has no cheap or local tier. A free
+    // account reaches it by having just paid, which is what grantedByAllowance
+    // says -- the same door the avatar allowance uses.
+    const resolved = await resolveModel(userId, "image", {
+      model: choice.model,
+      grantedByAllowance: !choice.unlimited,
+    });
     if (!resolved) {
-      console.log(
-        "Skipping illustration: image generation requires an admin account or your own OpenAI API key.",
-      );
-      return undefined;
+      console.log("Skipping illustration: no image model is available for this account.");
+      await refund();
+      return { ok: false, reason: "no_model" };
     }
     // Only a call that RETURNED is recorded. A refused or failed edit throws
     // before anything is billed, and the fallback is its own paid call.
@@ -894,7 +958,9 @@ export async function generateStoryImage(
           jobId: opts.ledger?.jobId,
           storyId: opts.ledger?.storyId,
           imageSize: opts.size ?? PAGE_SIZE,
-          imageQuality: "auto",
+          // What was ASKED FOR, not a guess: "auto" only where the model has
+          // no tier map and so was sent no quality at all.
+          imageQuality: qualityFor(resolved.model, choice.tier).quality ?? "auto",
         },
         usage,
         "succeeded",
@@ -956,6 +1022,9 @@ export async function generateStoryImage(
           // feature its first real test: the 400 dropped every reference and
           // the fallback quietly drew a different child.
           ...inputFidelityFor(resolved.model),
+          // The tier this account chose and has paid for. Absent on a model
+          // with no map, which is how gpt-image-2 keeps its old behaviour.
+          ...qualityFor(resolved.model, choice.tier),
           n: 1,
           size: opts.size ?? PAGE_SIZE,
         });
@@ -996,6 +1065,7 @@ export async function generateStoryImage(
           extras.map(({ file: _file, ...rest }) => rest),
           opts,
         ),
+        ...qualityFor(resolved.model, choice.tier),
         n: 1,
         size: opts.size ?? PAGE_SIZE,
       });
@@ -1014,24 +1084,39 @@ export async function generateStoryImage(
     // reader would go on showing the stock lion with nothing logged.
     if (image?.b64_json) {
       await fs.promises.writeFile(filepath, Buffer.from(image.b64_json, "base64"));
-      return { url: `/public/images/stories/${filename}`, droppedReferences };
+      return { ok: true, url: `/public/images/stories/${filename}`, credits: choice.credits, droppedReferences };
     }
     // Kept for any model that does return a URL. Those links expire in about an
     // hour, which is why the file is downloaded rather than stored as a link.
     if (image?.url) {
       await downloadImage(image.url, filepath);
-      return { url: `/public/images/stories/${filename}`, droppedReferences };
+      return { ok: true, url: `/public/images/stories/${filename}`, credits: choice.credits, droppedReferences };
     }
 
     console.error(
       `Image generation returned no image data (model ${resolved.model}). ` +
         "Nothing to save; the story keeps the stock picture.",
     );
-    return undefined;
+    await refund();
+    return { ok: false, reason: "failed" };
   } catch (error) {
     console.error("Error generating story illustration:", error);
-    return undefined;
+    // Nothing was drawn, so nothing is owed -- including when the model
+    // refused, which is a different sentence for the reader but the same
+    // answer to the money question.
+    await refundOutside(userId, charged);
+    return { ok: false, reason: looksLikeRefusal(error) ? "refused" : "failed" };
   }
+}
+
+/**
+ * The refund for the catch block, which is outside the scope that knows what
+ * was charged. `charged` is set the moment the charge succeeds, so a throw
+ * anywhere after it still gives the credits back and a throw before it has
+ * nothing to give.
+ */
+async function refundOutside(userId: number, credits: number): Promise<void> {
+  if (credits > 0) await storage.refundPictureCredits(userId, credits);
 }
 
 function downloadImage(url: string, filepath: string): Promise<void> {

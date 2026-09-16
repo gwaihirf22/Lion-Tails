@@ -1,6 +1,7 @@
 import type { EditLogEntry } from "@shared/editLog";
 import {
   storyAllowance, users, type User, type InsertUser, type Song, type SavedStory, type GeneratedPicture, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory ,
+  type PicturePrefs,
   type ReadingPrefs,
 } from "@shared/schema";
 import { inverseOf, withoutCharacter, withRelation, type Relation } from "@shared/family";
@@ -265,6 +266,31 @@ export interface IStorage {
   /** Stamped the first time it is shown; never cleared. */
   markGuideSeen(userId: number): Promise<string | null>;
   setUserReadingPrefs(userId: number, prefs: Partial<ReadingPrefs>): Promise<Partial<ReadingPrefs>>;
+  /**
+   * Which model draws this account's pictures, and how good a picture it asks
+   * for. Empty means "never chosen"; pictureChoiceFor() owns the defaults, so
+   * this never invents a model name -- the mistake getUserOpenAIModel's
+   * comment records.
+   */
+  getUserPicturePrefs(userId: number): Promise<Partial<PicturePrefs>>;
+  setUserPicturePrefs(userId: number, prefs: Partial<PicturePrefs>): Promise<Partial<PicturePrefs>>;
+  /**
+   * Spend credits on a picture, if this account can afford them.
+   *
+   * The same shape as chargeAvatarGeneration and for the same reason: one
+   * statement whose WHERE clause is the check, because the illustrate route
+   * has no concurrency limit and two tabs read the same balance. False is an
+   * ordinary answer -- the caller is deciding whether to spend money -- and a
+   * database failure answers false, because guessing generously here is an
+   * uncapped bill.
+   *
+   * Credits live in user_usage.count, the column a story already spends. Call
+   * applyStoryTopUp first, so the month's forgiveness is in the number this
+   * compares against.
+   */
+  chargePictureCredits(userId: number, credits: number, ceiling: number): Promise<boolean>;
+  /** Give them back when nothing was drawn. Never below zero. */
+  refundPictureCredits(userId: number, credits: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -282,6 +308,7 @@ export class MemStorage implements IStorage {
   private userOpenAIKeys: Map<number, string>;
   private userOpenAIModels: Map<number, string>;
   private userReadingPrefs: Map<number, Partial<ReadingPrefs>>;
+  private userPicturePrefs: Map<number, Partial<PicturePrefs>> = new Map();
   private guideSeen: Map<number, string>;
   private userCharacters: Map<number, Set<string>>;
   private userStories: Map<number, Set<string>>;
@@ -1138,6 +1165,33 @@ export class MemStorage implements IStorage {
 
   async getUserReadingPrefs(userId: number): Promise<Partial<ReadingPrefs>> {
     return this.userReadingPrefs.get(userId) ?? {};
+  }
+
+  async getUserPicturePrefs(userId: number): Promise<Partial<PicturePrefs>> {
+    return this.userPicturePrefs.get(userId) ?? {};
+  }
+
+  async setUserPicturePrefs(userId: number, prefs: Partial<PicturePrefs>): Promise<Partial<PicturePrefs>> {
+    // Merged, not replaced: a patch naming only the tier must not forget the
+    // model. The setUserReadingPrefs rule.
+    const merged = { ...(this.userPicturePrefs.get(userId) ?? {}), ...prefs };
+    this.userPicturePrefs.set(userId, merged);
+    return merged;
+  }
+
+  async chargePictureCredits(userId: number, credits: number, ceiling: number): Promise<boolean> {
+    if (credits <= 0) return true;
+    const count = this.userStoryGenerationCounts.get(userId) ?? 0;
+    if (count + credits > ceiling) return false;
+    this.userStoryGenerationCounts.set(userId, count + credits);
+    if (!this.userLastResetDates.has(userId)) this.userLastResetDates.set(userId, new Date());
+    return true;
+  }
+
+  async refundPictureCredits(userId: number, credits: number): Promise<void> {
+    if (credits <= 0) return;
+    const count = this.userStoryGenerationCounts.get(userId) ?? 0;
+    this.userStoryGenerationCounts.set(userId, Math.max(0, count - credits));
   }
 
   async getGuideSeenAt(userId: number): Promise<string | null> {

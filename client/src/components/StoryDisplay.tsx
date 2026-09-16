@@ -16,7 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useReadingPrefs } from "@/hooks/use-reading-prefs";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import type { StoryRequest, StoryResponse, StoryPicture } from "@shared/schema";
+import type { StoryRequest, StoryResponse, StoryPicture, StoryUsage } from "@shared/schema";
+import { pictureOffer, type PictureSettings } from "@/lib/pictureSettings";
 import { parseStoryContent, storyToPrintHtml } from "@/lib/storyContent";
 import { AI_NOTE, AI_NOTE_TITLE } from "@shared/aiNote";
 import type { Resource } from "@shared/furtherReading";
@@ -163,12 +164,20 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
   }, [readerBar]);
   const [lightbox, setLightbox] = useState<StoryPicture | null>(null);
 
-  // Whether this account may draw at all. The same policy call the server
-  // enforces with, so a control is never offered for something it will refuse.
-  const { data: modelInfo } = useQuery<{ canIllustrate?: boolean }>({
+  // What a picture costs this account, and which model draws it. Derived by
+  // the server from the same helpers it charges with, so a control is never
+  // offered for something the server will refuse.
+  const { data: modelInfo } = useQuery<{ pictures?: PictureSettings }>({
     queryKey: ["/api/settings/models"],
     enabled: Boolean(storyId) && !builtIn,
   });
+  // The balance, so a button can say "3 credits, and you have 1" rather than
+  // sending a request that will be refused.
+  const { data: usage } = useQuery<StoryUsage>({
+    queryKey: ["/api/story/usage"],
+    enabled: Boolean(storyId) && !builtIn,
+  });
+  const offer = pictureOffer(modelInfo?.pictures, usage?.remaining);
 
   /**
    * Draw the highlighted passage.
@@ -182,7 +191,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
    * plus editing -- the reading surface is unmounted while a parent edits, so
    * there is no text to highlight.
    */
-  const canPicture = Boolean(modelInfo?.canIllustrate && !builtIn && storyId && !editing);
+  const canPicture = Boolean(offer.offered && offer.affordable && !builtIn && storyId && !editing);
 
   const drawPassage = useMutation({
     // Through requestPicture: a picture takes minutes, the proxy gives up at
@@ -349,6 +358,8 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
         onTogglePicture={
           canPicture ? (picker.picking ? picker.cancel : picker.start) : undefined
         }
+        picturePrice={offer.price}
+        pictureNote={offer.reason}
       />
 
       {focus.armed && (

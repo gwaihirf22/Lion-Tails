@@ -10,7 +10,8 @@
  */
 import React, { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { creditsLabel, type StoryUsage } from "@shared/schema";
+import { creditsLabel, type PictureTier, type StoryUsage } from "@shared/schema";
+import type { PictureSettings } from "@/lib/pictureSettings";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import ReadingSettingsCard from "@/components/reader/ReadingSettingsCard";
@@ -95,6 +96,8 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
   const refreshUsage = () => queryClient.invalidateQueries({ queryKey: ["/api/story/usage"] });
   const charged = Boolean(storyStats && !storyStats.unlimited);
   const [models, setModels] = useState<SelectableModel[]>([]);
+  /** What pictures cost this account, and what draws them. See pictureSettings.ts. */
+  const [pictures, setPictures] = useState<PictureSettings | undefined>();
   const [isLoadingModels, setIsLoadingModels] = useState(false);
 
   // Quality caveat for the currently selected model, e.g. the local tier.
@@ -103,6 +106,33 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
   // Which models this user may select depends on whether they hold their own
   // API key, so this is refetched whenever that changes rather than only on
   // mount.
+  /**
+   * Save a picture setting and show what was actually stored.
+   *
+   * The server answers with the resolved choice -- read back through the same
+   * function every picture uses -- so a value it decided not to honour never
+   * sits on screen looking chosen. The balance is refetched with it, because
+   * the price of the next story has just changed.
+   */
+  const savePictures = async (patch: { model?: string; quality?: PictureTier }) => {
+    const before = pictures;
+    setPictures(pictures ? { ...pictures, ...patch, tier: patch.quality ?? pictures.tier } : pictures);
+    try {
+      const response = await apiRequest("POST", "/api/settings/pictures", patch);
+      if (!response.ok) throw new Error("save failed");
+      await loadModels();
+      refreshUsage();
+      toast({ title: "Saved", description: "Your picture settings were updated." });
+    } catch {
+      setPictures(before);
+      toast({
+        title: "Could not save",
+        description: "Your picture settings were not changed.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const loadModels = async () => {
     setIsLoadingModels(true);
     try {
@@ -110,6 +140,7 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
       if (response.ok) {
         const data = await response.json();
         setModels(data.models ?? []);
+        setPictures(data.pictures);
       }
     } catch (error) {
       console.error("Error loading available models:", error);
@@ -341,6 +372,78 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
           <ResetQuestsCard />
         </div>
 
+        {/* PICTURES. Two choices and their price, next to the story model
+            for the same reason: they are the two things that decide what a
+            story costs. Every number here comes from the server. */}
+        <Card className="bg-card rounded-2xl shadow-xl" data-guide="picture-settings">
+          <CardHeader>
+            <CardTitle className="text-xl font-heading">Pictures</CardTitle>
+            <CardDescription>
+              {pictures?.free
+                ? "How good the pictures in your stories are. Yours cost no credits."
+                : "How good the pictures in your stories are, and what each one costs."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="picture-quality">Picture quality</Label>
+              <Select
+                value={pictures?.tier}
+                onValueChange={(v) => savePictures({ quality: v as PictureTier })}
+                disabled={!pictures}
+              >
+                <SelectTrigger id="picture-quality">
+                  <SelectValue placeholder="Loading…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(pictures?.tiers ?? []).map((t) => (
+                    <SelectItem key={t.tier} value={t.tier}>
+                      {t.label}
+                      {t.credits !== null && t.credits > 0 ? ` — ${creditsLabel(t.credits)} a picture` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {pictures && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {pictures.tiers.find((t) => t.tier === pictures.tier)?.description}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="picture-model">Picture model</Label>
+              <Select
+                value={pictures?.model}
+                onValueChange={(v) => savePictures({ model: v })}
+                disabled={!pictures}
+              >
+                <SelectTrigger id="picture-model">
+                  <SelectValue placeholder="Loading…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(pictures?.models ?? []).map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.label}
+                      {m.isDefault ? " — the usual one" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {pictures?.models.find((m) => m.id === pictures.model)?.warning && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {pictures.models.find((m) => m.id === pictures.model)?.warning}
+                </p>
+              )}
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              A story's cover is drawn at this quality, and so is every picture you make from a
+              story afterwards. Turning pictures off keeps writing stories without one.
+            </p>
+          </CardContent>
+        </Card>
+
         {/* Story Generation Stats */}
         <Card className="bg-card rounded-2xl shadow-xl">
           <CardHeader>
@@ -381,6 +484,11 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
                     {storyStats.storyCredits > 0
                       ? `A story on ${storyStats.modelName} costs ${creditsLabel(storyStats.storyCredits)}.`
                       : `A story on ${storyStats.modelName} costs no credits.`}
+                    {storyStats.pictureCredits > 0
+                      ? ` Its cover costs ${creditsLabel(storyStats.pictureCredits)} more, so ${creditsLabel(storyStats.nextStoryCredits)} altogether.`
+                      : storyStats.pictureTier === "none"
+                        ? " Pictures are turned off, so nothing is added for a cover."
+                        : ""}
                   </p>
                 )}
 

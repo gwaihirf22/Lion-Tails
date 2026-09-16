@@ -1,1 +1,1 @@
-ALTER TABLE "user_settings" ADD COLUMN "guide_seen_at" timestamp with time zone;
+ALTER TABLE "user_settings" ADD COLUMN IF NOT EXISTS "guide_seen_at" timestamp with time zone;

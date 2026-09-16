@@ -2,7 +2,7 @@
 import type { EditLogEntry } from "@shared/editLog";
 import { db, pool } from './db';
 import {
-  FREE_STORIES_PER_MONTH, users, verificationTokens, readingPrefsSchema, storyRequestSchema, type ReadingPrefs, type User, type InsertUser, type SavedStory, type GeneratedPicture, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
+  FREE_STORIES_PER_MONTH, users, verificationTokens, readingPrefsSchema, storyRequestSchema, type ReadingPrefs, type PicturePrefs, type User, type InsertUser, type SavedStory, type GeneratedPicture, type StoryResponse, type StoryRequest, type Character, type HeroOfFaith, type HeroStory, type Song } from "@shared/schema";
 import { inverseOf, withRelation, type Relation } from "@shared/family";
 import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
@@ -1743,6 +1743,107 @@ export class DbStorage implements IStorage {
     } catch (error) {
       console.error(`Error getting reading preferences for user ${userId}:`, error);
       return {};
+    }
+  }
+
+  async getUserPicturePrefs(userId: number): Promise<Partial<PicturePrefs>> {
+    if (!isDatabaseAvailable()) return {};
+    try {
+      const { rows } = await pool!.query(
+        `SELECT image_model, image_quality FROM user_settings WHERE user_id = $1`,
+        [userId],
+      );
+      if (!rows.length) return {};
+      const out: Partial<PicturePrefs> = {};
+      if (rows[0].image_model) out.model = rows[0].image_model as string;
+      // Not validated here. A tier this build no longer offers is a question
+      // for pictureChoiceFor, which is where every stored preference is
+      // re-checked against the catalogue at use.
+      if (rows[0].image_quality) out.quality = rows[0].image_quality as PicturePrefs["quality"];
+      return out;
+    } catch (error) {
+      console.error(`Error getting picture preferences for user ${userId}:`, error);
+      return {};
+    }
+  }
+
+  async setUserPicturePrefs(
+    userId: number,
+    prefs: Partial<PicturePrefs>,
+  ): Promise<Partial<PicturePrefs>> {
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in setUserPicturePrefs(${userId}). Not saved.`);
+      return {};
+    }
+    try {
+      // COALESCE on every column, so a patch naming only one of them leaves
+      // the other exactly as it was -- and RETURNING, because a 200 from this
+      // app does not prove a write landed.
+      const { rows } = await pool!.query(
+        `INSERT INTO user_settings (user_id, image_model, image_quality)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_id) DO UPDATE SET
+           image_model = COALESCE($2, user_settings.image_model),
+           image_quality = COALESCE($3, user_settings.image_quality)
+         RETURNING image_model, image_quality`,
+        [userId, prefs.model ?? null, prefs.quality ?? null],
+      );
+      const out: Partial<PicturePrefs> = {};
+      if (rows[0]?.image_model) out.model = rows[0].image_model as string;
+      if (rows[0]?.image_quality) out.quality = rows[0].image_quality as PicturePrefs["quality"];
+      return out;
+    } catch (error) {
+      console.error(`Error saving picture preferences for user ${userId}:`, error);
+      return {};
+    }
+  }
+
+  /**
+   * Spend credits on a picture.
+   *
+   * ONE statement, and the WHERE clause is the check -- chargeAvatarGeneration's
+   * reasoning, which matters more here: nothing limits how many pictures are in
+   * flight at once, so a read-then-write would let two tabs spend the same last
+   * credit twice. The caller runs applyStoryTopUp first, so `count` has already
+   * had this month's forgiveness applied and the comparison is against a true
+   * balance.
+   *
+   * False on a database failure, like the avatar charge: the failure mode of
+   * guessing generously is an uncapped image bill.
+   */
+  async chargePictureCredits(userId: number, credits: number, ceiling: number): Promise<boolean> {
+    if (credits <= 0) return true;
+    if (!isDatabaseAvailable()) {
+      console.warn(`Database unavailable in chargePictureCredits(${userId}). Refusing.`);
+      return false;
+    }
+    try {
+      const { rows } = await pool!.query(
+        `INSERT INTO user_usage (user_id, count, last_reset_date)
+         VALUES ($1, $2, now())
+         ON CONFLICT (user_id) DO UPDATE SET count = user_usage.count + $2
+         WHERE user_usage.count + $2 <= $3::integer
+         RETURNING count`,
+        [userId, credits, ceiling],
+      );
+      return rows.length > 0;
+    } catch (error) {
+      console.error(`Error charging ${credits} picture credits for user ${userId}:`, error);
+      return false;
+    }
+  }
+
+  async refundPictureCredits(userId: number, credits: number): Promise<void> {
+    if (credits <= 0) return;
+    if (!isDatabaseAvailable()) return;
+    try {
+      // GREATEST(...,0): a refund must never hand out credits nobody paid for.
+      await pool!.query(
+        `UPDATE user_usage SET count = GREATEST(count - $2::integer, 0) WHERE user_id = $1`,
+        [userId, credits],
+      );
+    } catch (error) {
+      console.error(`Error refunding ${credits} picture credits for user ${userId}:`, error);
     }
   }
 

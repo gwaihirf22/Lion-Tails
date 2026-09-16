@@ -29,175 +29,181 @@ export const GUIDE_PLATE_IMAGES: Partial<Record<GuidePlateId, GuidePlateImage>> 
     "file": "/public/images/guide/character-family.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:36.098Z"
+    "capturedAt": "2026-09-16T05:21:02.509Z"
   },
   "character-grown": {
     "file": "/public/images/guide/character-grown.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:42.048Z"
+    "capturedAt": "2026-09-16T05:21:11.333Z"
   },
   "character-look": {
     "file": "/public/images/guide/character-look.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:38.122Z"
+    "capturedAt": "2026-09-16T05:21:05.289Z"
   },
   "character-stats": {
     "file": "/public/images/guide/character-stats.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:40.097Z"
+    "capturedAt": "2026-09-16T05:21:07.949Z"
   },
   "character-tabs": {
     "file": "/public/images/guide/character-tabs.webp",
     "width": 644,
     "height": 338,
-    "capturedAt": "2026-09-15T23:42:35.649Z"
+    "capturedAt": "2026-09-16T05:21:02.039Z"
   },
   "characters-list": {
     "file": "/public/images/guide/characters-list.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:34.394Z"
+    "capturedAt": "2026-09-16T05:20:59.618Z"
   },
   "create-top": {
     "file": "/public/images/guide/create-top.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:16.211Z"
+    "capturedAt": "2026-09-16T05:20:35.679Z"
   },
   "historical": {
     "file": "/public/images/guide/historical.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:33.432Z"
+    "capturedAt": "2026-09-16T05:20:57.919Z"
   },
   "library": {
     "file": "/public/images/guide/library.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:43.130Z"
+    "capturedAt": "2026-09-16T05:21:16.003Z"
   },
   "menu": {
     "file": "/public/images/guide/menu.webp",
     "width": 780,
     "height": 1298,
-    "capturedAt": "2026-09-15T23:42:50.869Z"
+    "capturedAt": "2026-09-16T05:21:35.083Z"
   },
   "origin-cast": {
     "file": "/public/images/guide/origin-cast.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:17.484Z"
+    "capturedAt": "2026-09-16T05:20:37.688Z"
   },
   "origin-life": {
     "file": "/public/images/guide/origin-life.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:27.528Z"
+    "capturedAt": "2026-09-16T05:20:50.663Z"
   },
   "origin-prompts": {
     "file": "/public/images/guide/origin-prompts.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:30.237Z"
+    "capturedAt": "2026-09-16T05:20:53.939Z"
   },
   "origin-quick": {
     "file": "/public/images/guide/origin-quick.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:17.937Z"
+    "capturedAt": "2026-09-16T05:20:38.141Z"
   },
   "origin-real": {
     "file": "/public/images/guide/origin-real.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:26.601Z"
+    "capturedAt": "2026-09-16T05:20:49.741Z"
   },
   "origin-series": {
     "file": "/public/images/guide/origin-series.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:23.538Z"
+    "capturedAt": "2026-09-16T05:20:45.847Z"
   },
   "origin-shared": {
     "file": "/public/images/guide/origin-shared.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:19.990Z"
+    "capturedAt": "2026-09-16T05:20:40.712Z"
   },
   "origin-story": {
     "file": "/public/images/guide/origin-story.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:21.851Z"
+    "capturedAt": "2026-09-16T05:20:43.340Z"
   },
   "origin-submit": {
     "file": "/public/images/guide/origin-submit.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:30.696Z"
+    "capturedAt": "2026-09-16T05:20:54.402Z"
   },
   "origin-tail": {
     "file": "/public/images/guide/origin-tail.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:29.779Z"
+    "capturedAt": "2026-09-16T05:20:53.493Z"
   },
   "origin-way-in": {
     "file": "/public/images/guide/origin-way-in.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:27.066Z"
+    "capturedAt": "2026-09-16T05:20:50.203Z"
   },
   "reader-actions": {
     "file": "/public/images/guide/reader-actions.webp",
     "width": 780,
     "height": 64,
-    "capturedAt": "2026-09-15T23:42:44.475Z"
+    "capturedAt": "2026-09-16T05:21:19.826Z"
   },
   "reader-bar": {
     "file": "/public/images/guide/reader-bar.webp",
     "width": 780,
     "height": 168,
-    "capturedAt": "2026-09-15T23:42:44.423Z"
+    "capturedAt": "2026-09-16T05:21:19.780Z"
   },
   "reader-extras": {
     "file": "/public/images/guide/reader-extras.webp",
     "width": 780,
     "height": 1182,
-    "capturedAt": "2026-09-15T23:42:47.255Z"
+    "capturedAt": "2026-09-16T05:21:26.859Z"
   },
   "reader-picking": {
     "file": "/public/images/guide/reader-picking.webp",
     "width": 780,
     "height": 156,
-    "capturedAt": "2026-09-15T23:42:45.975Z"
+    "capturedAt": "2026-09-16T05:21:23.412Z"
   },
   "settings-parent": {
     "file": "/public/images/guide/settings-parent.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:48.528Z"
+    "capturedAt": "2026-09-16T05:21:30.912Z"
+  },
+  "settings-pictures": {
+    "file": "/public/images/guide/settings-pictures.webp",
+    "width": 780,
+    "height": 1688,
+    "capturedAt": "2026-09-16T05:21:30.447Z"
   },
   "settings-quests": {
     "file": "/public/images/guide/settings-quests.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:49.431Z"
+    "capturedAt": "2026-09-16T05:21:31.795Z"
   },
   "settings-resets": {
     "file": "/public/images/guide/settings-resets.webp",
     "width": 780,
     "height": 1688,
-    "capturedAt": "2026-09-15T23:42:48.988Z"
+    "capturedAt": "2026-09-16T05:21:31.357Z"
   },
   "story-top": {
     "file": "/public/images/guide/story-top.webp",
     "width": 780,
     "height": 200,
-    "capturedAt": "2026-09-15T23:42:44.359Z"
+    "capturedAt": "2026-09-16T05:21:19.699Z"
   }
 };
 
@@ -381,6 +387,12 @@ export const GUIDE_BOXES: Partial<Record<GuideShotNodeId, GuideBox>> = {
     "y": 0.2949,
     "w": 0.2388,
     "h": 0.4103
+  },
+  "picture-settings": {
+    "x": 0.1051,
+    "y": 0.2672,
+    "w": 0.7897,
+    "h": 0.4645
   },
   "print-save": {
     "x": 0.5897,

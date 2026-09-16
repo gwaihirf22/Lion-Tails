@@ -9,6 +9,9 @@ import express from "express";
 import type { Express, Request, Response } from "express";
 import { dbConnectionStatus, pool, schemaStatus, schemaProblems } from "./db";
 import { isModelAllowedFor, listSelectableModels, MODEL_CATALOG, DEFAULTS,
+  listSelectablePictureModels,
+  pictureChoiceFor,
+  pictureCreditsFor,
   avatarCapFor,
   defaultChatModelFor,
   hasUnlimitedUse,
@@ -92,7 +95,9 @@ import {
   statsOf,
   virtueLevels,
   avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, type StoryPassage, characterIdsOf, characterRoleOf,
-  type SavedStory, type Character, type StoryUsage, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
+  type SavedStory, type Character, type StoryUsage, creditsLabel,
+  PICTURE_CREDITS, PICTURE_TIERS, PICTURE_TIER_LABELS, picturePrefsSchema, type PictureTier,
+  storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
@@ -1484,11 +1489,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const entitlement = resolved
         ? { isAdmin: resolved.isAdmin, hasOwnKey: resolved.usingOwnKey }
         : null;
+      // And what its COVER costs, at this account's chosen tier. Split here,
+      // once, so the pill, the enqueue refusal and the charge cannot each do
+      // their own arithmetic and disagree about the total.
+      const picture = await pictureChoiceFor(userId);
+      const storyCredits = resolved && entitlement ? storyCreditsFor(resolved.model, entitlement) : 0;
       const usage: StoryUsage = {
         unlimited: entitlement ? hasUnlimitedUse(entitlement) : false,
         model: resolved?.model ?? null,
         modelName: resolved ? modelName(resolved.model) : null,
-        storyCredits: resolved && entitlement ? storyCreditsFor(resolved.model, entitlement) : 0,
+        storyCredits,
+        pictureCredits: picture.credits,
+        pictureTier: picture.tier,
+        nextStoryCredits: storyCredits + picture.credits,
         used: allowance.used,
         remaining: allowance.remaining,
         total: allowance.total,
@@ -1914,18 +1927,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // A picture FOR A PASSAGE is always a new picture: the story may already
       // have one at the end, and this one goes somewhere else entirely.
       const redraw = req.body?.redraw === true || passage.success;
+      /**
+       * CAN THIS ACCOUNT PAY FOR IT? -- which replaced "is this account
+       * allowed to draw at all". The price is the thing that stops a picture
+       * being farmed now, so entitlement is no longer the question; the
+       * answer must still come BEFORE describePassage, which is itself a paid
+       * chat call, and before the picture is drawn.
+       *
+       * Courtesy, not enforcement: generateStoryImage charges, and its
+       * charge is the guard. This is here so the refusal arrives in a second
+       * rather than after the scene has been written.
+       */
       if (redraw) {
-        const ownKey = await storage.getUserOpenAIKey(userId);
-        const allowed = isModelAllowedFor(DEFAULTS.image, "image", {
-          isAdmin: Boolean((req.user as any).isAdmin),
-          hasOwnKey: Boolean(ownKey),
-        });
-        if (!allowed) {
-          return res.status(403).json({
+        const choice = await pictureChoiceFor(userId);
+        if (choice.tier === "none") {
+          return res.status(402).json({
             message:
-              "Drawing a new picture needs an admin account or your own OpenAI API key, which you can add in Settings.",
-            code: "not_entitled",
+              "Pictures are turned off for this account. Choose a picture quality in Settings to draw one.",
+            code: "pictures_off",
           });
+        }
+        if (choice.credits > 0) {
+          const { count, lastResetDate } = await storage.applyStoryTopUp(userId);
+          const allowance = storyAllowance({ count, lastResetDate });
+          if (allowance.remaining < choice.credits) {
+            return res.status(402).json({
+              message:
+                `A ${PICTURE_TIER_LABELS[choice.tier].label.toLowerCase()} picture costs ` +
+                `${creditsLabel(choice.credits)}, and you have ${creditsLabel(allowance.remaining)}. ` +
+                "Choose a cheaper quality in Settings, or wait for next month's credits.",
+              code: "not_enough_credits",
+              credits: choice.credits,
+              remaining: allowance.remaining,
+            });
+          }
         }
       }
       const saved = await storage.getStoryById(req.params.id, userId);
@@ -2033,17 +2068,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
         },
       );
-      const imageUrl = drawn?.url;
-      if (!imageUrl) {
-        // generateStoryImage returns undefined for BOTH "not entitled" and
-        // "the image call failed", and the caller cannot tell them apart --
-        // so this says what to check rather than guessing which it was.
-        return res.status(503).json({
-          message:
-            "Could not create a picture. Illustration needs an admin account or your own OpenAI API key, which you can add in Settings.",
-          code: "no_model_available",
+      if (!drawn.ok) {
+        /**
+         * FOUR ANSWERS, not one. This used to be a single 503 telling
+         * everybody to add an API key, because generateStoryImage returned
+         * undefined for every failure -- so an account that simply had no
+         * credits left was told its account was the wrong kind.
+         */
+        if (drawn.reason === "not_enough_credits") {
+          const choice = await pictureChoiceFor(userId);
+          return res.status(402).json({
+            message:
+              choice.tier === "none"
+                ? "Pictures are turned off for this account. Choose a picture quality in Settings."
+                : `A ${PICTURE_TIER_LABELS[choice.tier].label.toLowerCase()} picture costs ${creditsLabel(choice.credits)}, and there are not that many left. Choose a cheaper quality in Settings, or wait for next month's credits.`,
+            code: "not_enough_credits",
+            credits: choice.credits,
+          });
+        }
+        if (drawn.reason === "refused") {
+          return res.status(422).json({
+            message: "The model would not draw that scene. Try a different passage.",
+            code: "refused",
+          });
+        }
+        if (drawn.reason === "no_model") {
+          return res.status(503).json({
+            message: "No picture model is available at the moment. Please try again later.",
+            code: "no_model_available",
+          });
+        }
+        return res.status(502).json({
+          message: "Could not create a picture. Please try again.",
+          code: "image_failed",
         });
       }
+      const imageUrl = drawn.url;
 
       /**
        * APPENDED, never replacing. The picture that was there stays in the
@@ -2094,7 +2154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
          * supposed to match. It looks like any other picture, so saying
          * nothing means the reader finds out by recognising nobody.
          */
-        ...(drawn?.droppedReferences ? { droppedReferences: drawn.droppedReferences } : {}),
+        ...(drawn.droppedReferences ? { droppedReferences: drawn.droppedReferences } : {}),
       });
     } catch (error) {
       console.error("Error illustrating story:", error);
@@ -2591,16 +2651,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.user as any).id;
       const ownKey = await storage.getUserOpenAIKey(userId);
       const isAdmin = Boolean((req.user as any).isAdmin);
+      /**
+       * EVERYTHING ABOUT PICTURES, derived, never restated.
+       *
+       * This replaces `canIllustrate`, which asked a question the app no
+       * longer has: pictures are not gated any more, they are bought. What a
+       * screen needs to know is which models it may offer, what this account
+       * chose, and what one picture costs it -- and all three come from the
+       * same helpers the server charges with.
+       */
+      const entitled = { isAdmin, hasOwnKey: Boolean(ownKey) };
+      const choice = await pictureChoiceFor(userId);
       res.json({
-        models: listSelectableModels({ isAdmin, hasOwnKey: Boolean(ownKey) }),
+        models: listSelectableModels(entitled),
         hasOwnKey: Boolean(ownKey),
-        // Illustration is premium and has no cheap or local tier. Derived from
-        // the policy rather than re-stated as "admin or own key", so the UI
-        // cannot drift from what the server will actually allow.
-        canIllustrate: isModelAllowedFor(DEFAULTS.image, "image", {
-          isAdmin,
-          hasOwnKey: Boolean(ownKey),
-        }),
+        pictures: {
+          models: listSelectablePictureModels(entitled),
+          model: choice.model,
+          modelName: modelName(choice.model),
+          tier: choice.tier,
+          tiers: PICTURE_TIERS.map((tier) => ({
+            tier,
+            ...PICTURE_TIER_LABELS[tier],
+            // Null, not 0, when nobody is charged: "free for you" and "this
+            // one costs nothing" are different sentences.
+            credits: choice.unlimited ? null : PICTURE_CREDITS[tier],
+          })),
+          credits: choice.credits,
+          free: choice.unlimited,
+        },
         // How many pictures ONE character may keep, for this account. Derived
         // from the same helper the generate route enforces with, for the same
         // reason canIllustrate is derived rather than restated: the UI must not
@@ -2611,6 +2690,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error listing models:", error);
       res.status(500).json({ message: "Failed to list models" });
     }
+  });
+
+  /**
+   * Which model draws this account's pictures, and how good a picture.
+   *
+   * requireAuth in the signature, like the reading preferences -- the
+   * openai-model pair below checks inside the handler, which is the older
+   * shape and not the one to copy.
+   */
+  app.get("/api/settings/pictures", requireAuth, async (req, res) => {
+    const userId = (req.user as any).id;
+    const choice = await pictureChoiceFor(userId);
+    res.json({ model: choice.model, quality: choice.tier, credits: choice.credits, free: choice.unlimited });
+  });
+
+  app.post("/api/settings/pictures", requireAuth, async (req, res) => {
+    const userId = (req.user as any).id;
+    const parsed = picturePrefsSchema.partial().safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return res.status(400).json({ message: fromZodError(parsed.error).message });
+    }
+    /**
+     * Is it an image model AT ALL -- not "may this account use it". With
+     * credits, every offered model is reachable by everyone; what an account
+     * may spend is decided when the picture is drawn, and pictureChoiceFor
+     * re-checks this value there anyway.
+     */
+    if (parsed.data.model && !MODEL_CATALOG[parsed.data.model]?.kinds.includes("image")) {
+      return res.status(400).json({
+        message: "That is not a picture model.",
+        models: listSelectablePictureModels({ isAdmin: true, hasOwnKey: true }).map((m) => m.id),
+      });
+    }
+    await storage.setUserPicturePrefs(userId, parsed.data);
+    // Read back through the same resolver every picture uses, so the screen
+    // shows what will actually happen rather than what was sent.
+    const choice = await pictureChoiceFor(userId);
+    res.json({ model: choice.model, quality: choice.tier, credits: choice.credits, free: choice.unlimited });
   });
 
   // Set user's OpenAI model

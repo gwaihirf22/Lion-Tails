@@ -85,6 +85,13 @@
       "when": 1789514971020,
       "tag": "0011_greedy_red_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789535210228,
+      "tag": "0012_zippy_thena",
+      "breakpoints": true
     }
   ]
 }

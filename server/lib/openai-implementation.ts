@@ -1327,12 +1327,23 @@ async function runGeneration(
         await illustrationPlates(finalDetails.imagePrompt),
         { facesMustShow: true, size: COVER_SIZE, ledger: { purpose: "cover", jobId: ctx.ledger?.jobId } },
       );
-      imageUrl = cover?.url;
-      if (cover?.droppedReferences) {
-        console.error(
-          `[story] the cover for "${finalDetails.title}" was drawn WITHOUT its reference images` +
-            ` (${cover.droppedReferences}); every picture anchored to it will inherit that.`,
-        );
+      if (cover.ok) {
+        imageUrl = cover.url;
+        if (cover.droppedReferences) {
+          console.error(
+            `[story] the cover for "${finalDetails.title}" was drawn WITHOUT its reference images` +
+              ` (${cover.droppedReferences}); every picture anchored to it will inherit that.`,
+          );
+        }
+      } else {
+        /**
+         * A STORY IS NEVER LOST OVER ITS PICTURE, whatever the reason -- no
+         * credits, no model, a refusal. It is delivered without a cover, the
+         * reader shows the stock lion, and the picture can be bought later
+         * from the story's own page. The enqueue check exists so this is rare
+         * rather than routine.
+         */
+        console.log(`[story] no cover for "${finalDetails.title}": ${cover.reason}.`);
       }
     } catch (imageError) {
       console.error("Error generating story image:", imageError);

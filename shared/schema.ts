@@ -309,6 +309,18 @@ export const userSettings = pgTable("user_settings", {
   readerTypeset: text("reader_typeset"),
   readerFontStep: integer("reader_font_step"),
   /**
+   * Which image model draws this account's pictures, and how good a picture it
+   * asks for. Named columns beside the reading preferences, for the same
+   * reasons, and nullable with no default: NULL is "never chosen", so the
+   * catalogue's own default owns the answer and nothing needs backfilling.
+   *
+   * Neither is trusted on the way out. A model that has been retired, or a
+   * tier that is no longer offered, falls back at USE -- pictureChoiceFor() --
+   * the way a stored chat model already does.
+   */
+  imageModel: text("image_model"),
+  imageQuality: text("image_quality"),
+  /**
    * When this account was first shown the how-to-use guide, or NULL for never.
    *
    * ON THE ACCOUNT, not in the browser: Blake asked for once per account, so a
@@ -347,6 +359,62 @@ export const readingPrefsSchema = z.object({
 });
 export type ReadingPrefs = z.infer<typeof readingPrefsSchema>;
 export const READING_PREFS_DEFAULTS: ReadingPrefs = readingPrefsSchema.parse({});
+
+/**
+ * HOW GOOD A PICTURE, AND THEREFORE HOW MUCH IT COSTS.
+ *
+ * Until now nothing sent a quality at all, so the API chose: measured on one
+ * afternoon it spent between 439 and 7,024 output tokens on the same size of
+ * picture -- $0.013 to $0.21 -- and took between 27 and 173 seconds, with
+ * nobody deciding and the ledger recording a hardcoded "auto".
+ *
+ * Four choices, and "none" is one of them: an account whose credits are nearly
+ * gone can still write stories, without a cover it cannot pay for. The tiers
+ * are the app's words, not the API's -- server/lib/modelPolicy.ts maps each to
+ * whatever the chosen model calls it, because the names are NOT equivalent
+ * between models (gpt-image-2's "high" spends four times what 2.5's does).
+ */
+export const PICTURE_TIERS = ["none", "medium", "high", "xhigh"] as const;
+export type PictureTier = (typeof PICTURE_TIERS)[number];
+
+/** Total over PICTURE_TIERS, so a new tier without words is a build error. */
+export const PICTURE_TIER_LABELS: Record<PictureTier, { label: string; description: string }> = {
+  none: { label: "No picture", description: "Stories are written without one. Costs nothing." },
+  medium: { label: "Standard", description: "Good enough for most scenes, and the cheapest that draws." },
+  high: { label: "Detailed", description: "The default. Sharper faces and busier scenes." },
+  xhigh: { label: "Finest", description: "The most detail, and the slowest to draw." },
+};
+
+/**
+ * WHAT A PICTURE COSTS, in the same credits a story costs.
+ *
+ * Blake set these against what they actually cost the owner (about $0.013,
+ * $0.053 and $0.094 a picture against a credit worth roughly two cents), and
+ * "none" is a real choice rather than a refusal: an account down to its last
+ * credits keeps writing stories, without a cover it cannot pay for.
+ *
+ * Per TIER, not per model, because Flare and Sunburst cost the same per tier.
+ * SHARED, because the guide and the settings screen quote these numbers and a
+ * price written twice is a price that will eventually be two prices. Who is
+ * actually charged is a separate question, and stays on the server:
+ * pictureCreditsFor() in server/lib/modelPolicy.ts.
+ */
+export const PICTURE_CREDITS: Record<PictureTier, number> = {
+  none: 0,
+  medium: 1,
+  high: 3,
+  xhigh: 6,
+};
+
+/** What the app draws at when nobody has chosen. */
+export const DEFAULT_PICTURE_TIER: PictureTier = "high";
+
+export const picturePrefsSchema = z.object({
+  /** An image model id from the catalogue. Checked there, never listed here. */
+  model: z.string().min(1).max(64).optional(),
+  quality: z.enum(PICTURE_TIERS).optional(),
+});
+export type PicturePrefs = z.infer<typeof picturePrefsSchema>;
 
 // One row per generation REQUEST, which the client polls. Distinct from
 // generation_records (one row per attempt): a job may be claimed several times
@@ -844,6 +912,12 @@ export type StoryUsage = {
   modelName: string | null;
   /** Credits the next story costs on that model. 0 when unlimited or local. */
   storyCredits: number;
+  /** Credits its cover picture costs, at this account's tier. 0 when unlimited. */
+  pictureCredits: number;
+  /** The tier those credits buy, so the pill can name it. */
+  pictureTier: PictureTier;
+  /** storyCredits + pictureCredits: the number the form prints, computed once. */
+  nextStoryCredits: number;
   /** Credits, not stories: a story costs storyCredits of these. */
   used: number;
   remaining: number;

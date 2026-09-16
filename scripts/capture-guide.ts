@@ -156,12 +156,21 @@ async function main() {
   const mia = characters.find((c) => c.name === "Mia");
   if (!mia) die("No character called Mia in the guide account.");
 
-  // ---- entitlement: "Make a picture" only renders for admin or own key ------
+  // ---- pictures: "Make a picture" is hidden when they are turned off -------
+  // It is no longer an entitlement question -- anyone may draw, at a price --
+  // but a demo account with pictures off would still photograph a reader with
+  // no picture button and ring nothing.
   const models = await (await api("/api/settings/models", { cookie })).json();
-  if (!models?.canIllustrate) {
+  if (models?.pictures?.tier === "none") {
     die(
-      `${GUIDE_USER} cannot illustrate, so the reader would have no "Make a picture" button\n` +
-        "  and its ring would land on nothing. Make it an admin and run again:\n" +
+      `${GUIDE_USER} has pictures turned off, so the reader would have no "Make a picture"\n` +
+        "  button and its ring would land on nothing. Choose a picture quality in Settings.",
+    );
+  }
+  if (!models?.pictures?.free) {
+    die(
+      `${GUIDE_USER} is charged for pictures, so the buttons in these screenshots would\n` +
+        "  carry a price that is true of nobody else. Make it an admin and run again:\n" +
         `  ./scripts/dev-stack.sh admin ${GUIDE_USER}`,
     );
   }

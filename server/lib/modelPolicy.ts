@@ -1,4 +1,11 @@
-import { MAX_AVATARS } from "@shared/schema";
+import {
+  DEFAULT_PICTURE_TIER,
+  MAX_AVATARS,
+  PICTURE_CREDITS,
+  PICTURE_TIERS,
+  type PictureTier,
+  type PicturePrefs,
+} from "@shared/schema";
 import OpenAI from "openai";
 import { StoryGenerationError } from "./storyErrors";
 import { storage } from "../storage";
@@ -97,6 +104,25 @@ type ModelSpec = {
    * storyCreditsFor() asks hasUnlimitedUse() first.
    */
   storyCredits?: number;
+  /**
+   * What this IMAGE model calls each of the app's picture tiers.
+   *
+   * The names are NOT equivalent between models, which is the whole reason
+   * this is a map and not a pass-through: gpt-image-2 answered "high" with
+   * 7,024 output tokens where gpt-image-2.5 answers it with 1,756 -- the same
+   * word, four times the money. A tier missing from the map is not offered on
+   * that model, and a model with no map at all is sent no quality parameter,
+   * which is exactly what every picture did before this existed.
+   *
+   * "max" is deliberately in no map: it costs 16x medium for a picture nobody
+   * could tell apart in testing.
+   */
+  quality?: Partial<Record<PictureTier, string>>;
+  /**
+   * Still callable, still priced, but never offered to anyone new. Rows that
+   * already name it keep working; listSelectablePictureModels() hides it.
+   */
+  legacy?: boolean;
 };
 
 export const MODEL_CATALOG: Record<string, ModelSpec> = {
@@ -185,6 +211,40 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
     // Refuses input_fidelity outright; the reference images still work, and
     // the prompt is what has to carry "match these faces".
     inputFidelity: false,
+    /**
+     * NO QUALITY MAP, ON PURPOSE. Its tiers are not the 2.5 tiers: measured
+     * 2026-09-16, "high" here spent 7,024 output tokens and "high" on 2.5
+     * spent 1,756. Mapping the word across would sell a 6-credit picture for
+     * 3. With no map it is sent no quality at all and behaves exactly as it
+     * did, which is what any story row still naming it needs.
+     */
+    legacy: true,
+  },
+  /**
+   * The picture engine, from 2026-09-16. Same published rates as gpt-image-2
+   * ($8/M image in, $30/M image out), a third of the cost at a fixed tier
+   * because the tier is fixed at all, and about five times faster on a scene
+   * with several reference images. Likeness held in testing; the period
+   * dressing rule had to be sharpened for it (referencePlates.ts).
+   */
+  "gpt-image-2.5-flare": {
+    tier: "premium",
+    provider: "openai",
+    kinds: ["image"],
+    label: "Flare",
+    // Deprecated on the 2.5 models, and we never sent it anyway.
+    inputFidelity: false,
+    quality: { medium: "medium", high: "high", xhigh: "xhigh" },
+  },
+  "gpt-image-2.5-sunburst": {
+    tier: "premium",
+    provider: "openai",
+    kinds: ["image"],
+    label: "Sunburst",
+    warning:
+      "Slower to draw, and holds more closely to the pictures it is given. The same price as Flare.",
+    inputFidelity: false,
+    quality: { medium: "medium", high: "high", xhigh: "xhigh" },
   },
 };
 
@@ -200,7 +260,7 @@ export const MODEL_CATALOG: Record<string, ModelSpec> = {
 export const DEFAULTS: Record<ModelKind, string> = {
   chat: "gpt-5.6-luna",
   vision: "gpt-5.6-luna",
-  image: "gpt-image-2",
+  image: "gpt-image-2.5-flare",
 };
 
 /**
@@ -378,6 +438,49 @@ export function storyCreditsFor(model: string, opts: { isAdmin: boolean; hasOwnK
 }
 
 /**
+ * The most a free account's eight portraits may be drawn at.
+ *
+ * Those are paid for by a cap rather than by credits (MAX_FREE_AVATARS), so
+ * without this a new account could set "Finest" and hand the owner eight
+ * pictures at 6 credits apiece for nothing. Their stories still draw at
+ * whatever they chose; it is only the free portraits that are held here.
+ */
+export const FREE_PORTRAIT_CEILING: PictureTier = "high";
+
+/** Credits ONE picture costs this account. Zero when nobody is charged. */
+export function pictureCreditsFor(
+  tier: PictureTier,
+  opts: { isAdmin: boolean; hasOwnKey: boolean },
+): number {
+  if (hasUnlimitedUse(opts)) return 0;
+  return PICTURE_CREDITS[tier] ?? PICTURE_CREDITS[DEFAULT_PICTURE_TIER];
+}
+
+/**
+ * The quality parameter for an image model, spread into a request.
+ *
+ * The same shape as inputFidelityFor and for the same reason: request shape is
+ * a property of the model. A model with no map -- gpt-image-2 -- is sent
+ * nothing and keeps the behaviour it had before tiers existed.
+ */
+export function qualityFor(model: string, tier: PictureTier): Record<string, string> {
+  const named = MODEL_CATALOG[model]?.quality?.[tier];
+  return named ? { quality: named } : {};
+}
+
+/** Image models a user may choose between, for the settings UI. */
+export function listSelectablePictureModels(opts: { isAdmin: boolean; hasOwnKey: boolean }) {
+  return Object.entries(MODEL_CATALOG)
+    .filter(([, spec]) => spec.kinds.includes("image") && !spec.legacy)
+    .map(([id, spec]) => ({
+      id,
+      label: spec.label,
+      warning: spec.warning,
+      isDefault: id === DEFAULTS.image,
+    }));
+}
+
+/**
  * The output-ceiling parameter for a model, spread into a chat request.
  *
  * One helper rather than eight call sites each remembering which name to use.
@@ -465,7 +568,7 @@ export function paidFor(
 export async function resolveModel(
   userId: number,
   kind: ModelKind = "chat",
-  opts: { grantedByAllowance?: boolean; forStory?: boolean } = {},
+  opts: { grantedByAllowance?: boolean; forStory?: boolean; model?: string } = {},
 ): Promise<ResolvedModel | null> {
   const [user, ownKey] = await Promise.all([
     storage.getUser(userId).catch(() => undefined),
@@ -498,6 +601,13 @@ export async function resolveModel(
   // Luna in Settings keeps Luna; nobody is moved onto a more expensive model
   // they did not ask for.
   let requested = kind === "chat" ? defaultChatModelFor(entitled) : DEFAULTS[kind];
+  /**
+   * A model the CALLER has already chosen -- pictureChoiceFor's answer, which
+   * it read from this account's settings and priced. Still only a request:
+   * it goes through the same gate below as a stored chat model, so asking for
+   * something this account may not run is a downgrade, never a permission.
+   */
+  if (opts.model) requested = opts.model;
   if (kind === "chat") {
     const stored = await storage.getUserOpenAIModel(userId).catch(() => null);
     if (stored) requested = stored;
@@ -574,4 +684,52 @@ export function createClient(resolved: ResolvedModel): OpenAI {
     apiKey: resolved.apiKey,
     ...(resolved.baseURL ? { baseURL: resolved.baseURL } : {}),
   });
+}
+
+/**
+ * WHICH MODEL DRAWS THIS ACCOUNT'S PICTURES, AT WHAT TIER, AND FOR WHAT.
+ *
+ * The one reader of user_settings.image_model / image_quality. Everything a
+ * picture needs to know is decided here and nowhere else -- the model to ask,
+ * the tier to send, the credits to charge -- so the price charged and the
+ * quality requested cannot come apart.
+ *
+ * VALIDATED AT USE, not only when it was set (decisions.md 2). A stored model
+ * that has been retired, or one that is not an image model at all, falls back
+ * to the catalogue default the same way a stored chat model does; a tier that
+ * is no longer offered falls back to DEFAULT_PICTURE_TIER. A setting from a
+ * year ago must never be able to spend money at a price this file no longer
+ * has words for.
+ */
+export async function pictureChoiceFor(userId: number): Promise<{
+  model: string;
+  tier: PictureTier;
+  /** Credits this account is charged for one picture. 0 when unlimited. */
+  credits: number;
+  /** True when nobody is charged: an admin, or an account on its own key. */
+  unlimited: boolean;
+}> {
+  const [user, ownKey, prefs] = await Promise.all([
+    storage.getUser(userId).catch(() => undefined),
+    storage.getUserOpenAIKey(userId).catch(() => null),
+    storage.getUserPicturePrefs(userId).catch(() => ({}) as Partial<PicturePrefs>),
+  ]);
+  const entitled = { isAdmin: Boolean(user?.isAdmin), hasOwnKey: Boolean(ownKey) };
+
+  const storedModel = prefs?.model;
+  const spec = storedModel ? MODEL_CATALOG[storedModel] : undefined;
+  const model = spec?.kinds.includes("image") ? storedModel! : DEFAULTS.image;
+
+  const storedTier = prefs?.quality;
+  const tier: PictureTier =
+    storedTier && (PICTURE_TIERS as readonly string[]).includes(storedTier)
+      ? (storedTier as PictureTier)
+      : DEFAULT_PICTURE_TIER;
+
+  return {
+    model,
+    tier,
+    credits: pictureCreditsFor(tier, entitled),
+    unlimited: hasUnlimitedUse(entitled),
+  };
 }

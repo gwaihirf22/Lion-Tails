@@ -26,9 +26,16 @@ import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { coveringNoun } from "@shared/characterVocab";
-import { characterKind, type Character } from "@shared/schema";
+import { PICTURE_CREDITS, characterKind, type Character, type PictureTier } from "@shared/schema";
 import { toFile } from "openai";
-import { resolveModel, createClient, inputFidelityFor } from "./modelPolicy";
+import {
+  resolveModel,
+  createClient,
+  inputFidelityFor,
+  pictureChoiceFor,
+  qualityFor,
+  FREE_PORTRAIT_CEILING,
+} from "./modelPolicy";
 import { recordModelCall } from "./modelCalls";
 
 /** Where portraits live. See the note above about why it is under `stories`. */
@@ -281,6 +288,23 @@ export type AvatarOutcome =
  * `likeUrl` is a portrait this character already has. Either way it is one
  * `images.edit` call, not a second copy of one.
  */
+/**
+ * What tier a PORTRAIT is drawn at: the account's choice, held at the ceiling
+ * while the owner is the one paying, and never "none".
+ *
+ * Pure, so the rule is tested rather than discovered on a bill.
+ */
+export function portraitTier(chosen: PictureTier, unlimited: boolean): PictureTier {
+  // "none" is a choice about STORY covers, to save credits. Somebody who has
+  // just asked for a portrait has not asked for a character with no face, so
+  // it means the cheapest tier that actually draws.
+  const tier: PictureTier = chosen === "none" ? "medium" : chosen;
+  if (unlimited) return tier;
+  return PICTURE_CREDITS[tier] > PICTURE_CREDITS[FREE_PORTRAIT_CEILING]
+    ? FREE_PORTRAIT_CEILING
+    : tier;
+}
+
 export async function generateAvatar(
   character: Character,
   userId: number,
@@ -313,7 +337,23 @@ export async function generateAvatar(
     : buildAvatarPrompt(character);
   const prompt = opts.note ? `${base} ${opts.note.trim()}` : base;
   try {
+    /**
+     * A PORTRAIT USES THE ACCOUNT'S PICTURE SETTINGS, with one exception.
+     *
+     * The eight free portraits are paid for by a cap rather than by credits
+     * (MAX_FREE_AVATARS), so an account that picked the finest tier would
+     * hand the owner eight of the dearest pictures for nothing. Those eight
+     * are held at FREE_PORTRAIT_CEILING; an admin or an account on its own
+     * key draws at whatever it chose, because it is paying.
+     *
+     * "none" is about STORIES -- a reader turning covers off to save credits
+     * has not asked for a character with no face -- so a portrait asked for
+     * explicitly is drawn at the cheapest tier that draws.
+     */
+    const choice = await pictureChoiceFor(userId);
+    const tier = portraitTier(choice.tier, choice.unlimited);
     const resolved = await resolveModel(userId, "image", {
+      model: choice.model,
       grantedByAllowance: opts.grantedByAllowance,
     });
     if (!resolved) {
@@ -375,12 +415,14 @@ export async function generateAvatar(
           // gpt-image-2 refuses the parameter with a 400, and there is no
           // fallback on this path -- the portrait would simply fail.
           ...inputFidelityFor(resolved.model),
+          ...qualityFor(resolved.model, tier),
           n: 1,
           size: "1024x1024",
         })
       : await client.images.generate({
           model: resolved.model,
           prompt,
+          ...qualityFor(resolved.model, tier),
           n: 1,
           size: "1024x1024",
         });
@@ -390,7 +432,13 @@ export async function generateAvatar(
     // so this is a real guard rather than a cast to satisfy the compiler --
     // the same one generateStoryImage needs, for the same reason.
     void recordModelCall(
-      { userId, resolved, purpose: "avatar", imageSize: "1024x1024", imageQuality: "auto" },
+      {
+        userId,
+        resolved,
+        purpose: "avatar",
+        imageSize: "1024x1024",
+        imageQuality: qualityFor(resolved.model, tier).quality ?? "auto",
+      },
       response.usage,
       "succeeded",
     );

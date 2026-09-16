@@ -248,10 +248,18 @@ export default function GenerateStory() {
                 LIFETIME count, so it read 0 for anyone past ten stories while
                 the server let them run to fifty. */}
             <p className="font-medium">{creditsLabel(generationStats.remaining)} left</p>
-            {generationStats.modelName && generationStats.storyCredits > 0 && (
+            {generationStats.modelName && generationStats.nextStoryCredits > 0 && (
               <p className="text-xs">
-                This story costs {creditsLabel(generationStats.storyCredits)} on{" "}
-                {generationStats.modelName}.
+                {/* THE WHOLE PRICE, split into the two things it buys. The
+                    cover is charged too, and a pill that quoted only the
+                    story would be a number nobody is billed. The split is
+                    computed by the server, so this and the refusal and the
+                    charge cannot disagree. */}
+                This story costs {creditsLabel(generationStats.nextStoryCredits)} on{" "}
+                {generationStats.modelName}
+                {generationStats.pictureCredits > 0
+                  ? `: ${generationStats.storyCredits} story + ${generationStats.pictureCredits} picture.`
+                  : "."}
               </p>
             )}
             <p className="text-xs text-muted-foreground">

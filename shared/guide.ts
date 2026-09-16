@@ -29,6 +29,8 @@
  */
 
 /** Bump to show the welcome again after a substantial rewrite. */
+import { FREE_STORIES, FREE_STORIES_PER_MONTH, PICTURE_CREDITS } from "./schema";
+
 export const GUIDE_VERSION = 1;
 
 export const GUIDE_TABS = [
@@ -114,6 +116,7 @@ export const GUIDE_PLATES = [
   { id: "reader-actions", scene: "reader", frame: "reader-actions" },
   { id: "reader-picking", scene: "reader-picking", frame: "reader-picking" },
   { id: "reader-extras", scene: "reader-extras", frame: "reader-extras" },
+  { id: "settings-pictures", scene: "settings", around: "picture-settings" },
   { id: "settings-parent", scene: "settings", around: "parent-mode" },
   { id: "settings-resets", scene: "settings", around: "start-sheet-again" },
   { id: "settings-quests", scene: "settings", around: "quest-first-visit" },
@@ -178,6 +181,57 @@ export const GUIDE_NODES = [
       "unless you ask it to stay, because a shared tablet left unlocked is Parent Mode for the " +
       "children.",
     shot: { plate: "settings-parent", emphasise: "parent-mode" },
+  },
+  /**
+   * CREDITS, in the guide rather than in a page of their own. Blake asked for
+   * this where the how-to-use information already is, and the numbers are
+   * interpolated from the constants the server charges with -- a price
+   * written in prose is a price that outlives the code.
+   */
+  {
+    id: "credits",
+    tab: "start",
+    parent: "what-it-is",
+    title: "Credits",
+    why:
+      `Writing costs credits. You start with ${FREE_STORIES} and get ${FREE_STORIES_PER_MONTH} back at the ` +
+      "start of each month, up to that same number again -- a top-up, not a refill, so a quiet " +
+      "month does not stockpile. Settings shows what is left and what the next story costs.",
+  },
+  {
+    id: "what-things-cost",
+    tab: "start",
+    parent: "credits",
+    title: "What things cost",
+    why:
+      "A story is 1 credit on the usual model and 3 on the biggest one. A picture is " +
+      `${PICTURE_CREDITS.medium} credit at standard, ${PICTURE_CREDITS.high} at detailed and ` +
+      `${PICTURE_CREDITS.xhigh} at finest -- and every story draws a cover, so that is added to ` +
+      "the price you see before you press. One expensive story can spend a month's credits, which " +
+      "is worth knowing before a child picks the finest of everything.",
+  },
+  {
+    id: "picture-settings",
+    tab: "start",
+    parent: "credits",
+    title: "Pictures",
+    why:
+      "How good the pictures are, and therefore what they cost, in Settings. Turning them off " +
+      "costs nothing at all and still writes the story -- which is the setting to reach for when " +
+      "credits are low. It applies to a story's cover, to any picture you make while reading, and " +
+      "to your characters' portraits.",
+    shot: { plate: "settings-pictures", emphasise: "picture-settings" },
+  },
+  {
+    id: "own-key",
+    tab: "start",
+    parent: "credits",
+    title: "Using your own OpenAI key",
+    why:
+      "Put your own key in Settings and nothing costs credits at all: the stories and pictures go " +
+      "to OpenAI on your account and are billed there. The eight free portraits every account " +
+      "starts with are drawn at detailed quality at most; with your own key they are drawn at " +
+      "whatever you chose.",
   },
 
   // ------------------------------------------------------------ Create a Story

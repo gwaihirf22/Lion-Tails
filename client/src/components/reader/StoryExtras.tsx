@@ -21,7 +21,8 @@ import { ImagePlus, Loader2, Pencil, RefreshCw } from "lucide-react";
 import { DebugPanel } from "@/components/DebugPanel";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { StoryResponse, HeroOfFaith, SavedStory, StoryPicture } from "@shared/schema";
+import type { StoryResponse, HeroOfFaith, SavedStory, StoryPicture, StoryUsage } from "@shared/schema";
+import { pictureOffer, type PictureSettings } from "@/lib/pictureSettings";
 import { MAX_STORY_IMAGES } from "@shared/schema";
 import { withoutPictureRefs } from "@shared/family";
 import { AI_NOTE, AI_NOTE_TITLE, MAKE_IT_YOURS, MAKE_IT_YOURS_TITLE } from "@shared/aiNote";
@@ -126,10 +127,16 @@ export function StoryExtras({
   // Whether this account may illustrate at all. Derived server-side from the
   // same policy call the generation path uses, so the button is never offered
   // for something the server will refuse.
-  const { data: modelInfo } = useQuery<{ canIllustrate?: boolean }>({
+  const { data: modelInfo } = useQuery<{ pictures?: PictureSettings }>({
     queryKey: ["/api/settings/models"],
     enabled: Boolean(storyId),
   });
+  const { data: usage } = useQuery<StoryUsage>({
+    queryKey: ["/api/story/usage"],
+    enabled: Boolean(storyId),
+  });
+  // What a picture costs here, whether it can be afforded, and why not.
+  const offer = pictureOffer(modelInfo?.pictures, usage?.remaining);
 
   // The picture the story was saved with, or the one we just made for it.
   const [imageUrl, setImageUrl] = useState<string | undefined>(story.imageUrl);
@@ -383,7 +390,7 @@ export function StoryExtras({
           {/* Quiet, and under the picture: a redraw spends a generation, so it
               is not a thing to fall over. Shown on the same condition the
               server enforces. */}
-          {modelInfo?.canIllustrate && !builtIn && storyId && (
+          {offer.offered && !builtIn && storyId && (
             <div className="mt-2 text-center">
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -392,11 +399,13 @@ export function StoryExtras({
                     size="sm"
                     // Full is full: the server answers 409 rather than dropping
                     // the oldest, so the button says so before it is pressed.
-                    disabled={illustrate.isPending || gallery.length >= MAX_STORY_IMAGES}
+                    // Full is full, and short is short: both say so on the
+                    // button rather than in a refusal after the press.
+                    disabled={illustrate.isPending || gallery.length >= MAX_STORY_IMAGES || !offer.affordable}
                     title={
                       gallery.length >= MAX_STORY_IMAGES
                         ? `This story keeps ${MAX_STORY_IMAGES} pictures. Delete one to draw another.`
-                        : undefined
+                        : offer.reason
                     }
                     style={{ color: "var(--reader-muted)" }}
                   >
@@ -506,7 +515,7 @@ export function StoryExtras({
                 This is the standard Lion Tails picture — this story does not have
                 one of its own.
               </p>
-              {modelInfo?.canIllustrate && !builtIn ? (
+              {offer.offered && !builtIn ? (
                 <div className="mt-4 flex justify-center">
                   <Button
                     size="sm"

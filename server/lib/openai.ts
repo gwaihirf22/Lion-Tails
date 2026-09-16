@@ -1,6 +1,22 @@
-import { creditsLabel, FREE_STORIES_PER_MONTH, storyAllowance, type StoryRequest } from "@shared/schema";
+import {
+  creditsLabel,
+  FREE_STORIES_PER_MONTH,
+  PICTURE_CREDITS,
+  PICTURE_TIERS,
+  PICTURE_TIER_LABELS,
+  storyAllowance,
+  type PictureTier,
+  type StoryRequest,
+} from "@shared/schema";
 import { storage } from "../storage";
-import { DEFAULTS, MODEL_CATALOG, modelName, resolveModel, storyCreditsFor } from "./modelPolicy";
+import {
+  DEFAULTS,
+  MODEL_CATALOG,
+  modelName,
+  pictureChoiceFor,
+  resolveModel,
+  storyCreditsFor,
+} from "./modelPolicy";
 import { StoryGenerationError } from "./storyErrors";
 
 /**
@@ -17,17 +33,44 @@ export function notEnoughCreditsMessage(
   model: string,
   credits: number,
   allowance: { remaining: number; nextTopUp: Date },
+  /**
+   * The cover's share of that price, and the tier it buys. A story and its
+   * picture are charged together, so a refusal that named only the story
+   * would be quoting a number nobody was asked for -- and would hide the one
+   * choice that always fixes it: turn the picture off.
+   */
+  picture: { credits: number; tier: PictureTier } = { credits: 0, tier: "none" },
 ): string {
   // Local time, as startOfMonthAfter builds it: formatted in UTC, midnight on
   // the 1st is still the 30th anywhere west of Greenwich.
   const when = allowance.nextTopUp.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
   const topUp = `or wait for ${FREE_STORIES_PER_MONTH} more on ${when}`;
 
+  // The price, said as the two things it is, so "3 credits" is not a number
+  // out of nowhere on an account that never chose a picture quality.
+  const split =
+    picture.credits > 0
+      ? ` (${creditsLabel(credits - picture.credits)} for the story and ` +
+        `${creditsLabel(picture.credits)} for its picture)`
+      : "";
+
+  // A cheaper picture is offered before a cheaper model: it is the choice
+  // that costs the reader least -- the story is still the story.
+  const cheaperTier = cheaperPictureTier(picture, credits, allowance.remaining);
+  if (cheaperTier) {
+    const label = PICTURE_TIER_LABELS[cheaperTier].label.toLowerCase();
+    return (
+      `This story costs ${creditsLabel(credits)}${split} and you have ` +
+      `${creditsLabel(allowance.remaining)}. Choose ${label} pictures in Settings ` +
+      `(${creditsLabel(PICTURE_CREDITS[cheaperTier])} a picture), add your own OpenAI key, ${topUp}.`
+    );
+  }
+
   const cheaper = DEFAULTS.chat;
   const cheaperCost = MODEL_CATALOG[cheaper]?.storyCredits ?? 1;
-  if (model !== cheaper && allowance.remaining >= cheaperCost) {
+  if (model !== cheaper && allowance.remaining >= cheaperCost + picture.credits) {
     return (
-      `A story on ${modelName(model)} costs ${creditsLabel(credits)} and you have ` +
+      `A story on ${modelName(model)} costs ${creditsLabel(credits)}${split} and you have ` +
       `${creditsLabel(allowance.remaining)}. Switch to ${modelName(cheaper)} in Settings ` +
       `(${creditsLabel(cheaperCost)} a story), add your own OpenAI key, ${topUp}.`
     );
@@ -36,6 +79,29 @@ export function notEnoughCreditsMessage(
     `You have used all your credits. Choose a local model in Settings, ` +
     `add your own OpenAI key, ${topUp}.`
   );
+}
+
+/**
+ * The best picture tier this account could actually afford this story at, or
+ * undefined when changing the picture does not help.
+ *
+ * Offers only a remedy that works (decisions.md 16): a tier is suggested only
+ * when the story plus that tier fits inside what is left, and "no picture" is
+ * a real answer -- it is what keeps an account with two credits writing.
+ */
+function cheaperPictureTier(
+  picture: { credits: number; tier: PictureTier },
+  total: number,
+  remaining: number,
+): PictureTier | undefined {
+  if (picture.credits === 0) return undefined;
+  const story = total - picture.credits;
+  const cheaper = PICTURE_TIERS.filter(
+    (t) => PICTURE_CREDITS[t] < picture.credits && story + PICTURE_CREDITS[t] <= remaining,
+  );
+  // The dearest one that fits: a reader asked for the best picture they could
+  // have, and dropping them straight to none when medium fits is not help.
+  return cheaper.length ? cheaper[cheaper.length - 1] : undefined;
 }
 
 /**
@@ -87,7 +153,15 @@ export async function canEnqueueWithinQuota(
     isAdmin: resolved.isAdmin,
     hasOwnKey: resolved.usingOwnKey,
   });
-  if (credits === 0) return { ok: true };
+  /**
+   * AND ITS COVER. The picture is charged too, so the check has to include
+   * it -- and the "credits === 0, nothing to check" early return that used to
+   * sit here is now wrong twice over: a local story costs no credits and its
+   * cover costs three.
+   */
+  const picture = await pictureChoiceFor(userId);
+  const needed = credits + picture.credits;
+  if (needed === 0) return { ok: true };
 
   /**
    * ENOUGH FOR THIS STORY, not "any left". A flat price of 1 made those the
@@ -97,8 +171,11 @@ export async function canEnqueueWithinQuota(
    * then has to clamp away -- a free Terra story on the owner.
    */
   const allowance = await freeAllowanceFor(userId);
-  if (allowance.remaining < credits) {
-    return { ok: false, message: notEnoughCreditsMessage(resolved.model, credits, allowance) };
+  if (allowance.remaining < needed) {
+    return {
+      ok: false,
+      message: notEnoughCreditsMessage(resolved.model, needed, allowance, picture),
+    };
   }
   return { ok: true };
 }

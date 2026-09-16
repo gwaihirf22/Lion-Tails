@@ -23,6 +23,8 @@ export function ReaderBar({
   focusArmed,
   onToggleFocus,
   picking,
+  picturePrice,
+  pictureNote,
   onTogglePicture,
   barRef,
 }: {
@@ -30,6 +32,10 @@ export function ReaderBar({
   onToggleFocus: () => void;
   /** Mid-choice: the button says Cancel and reads as pressed. */
   picking?: boolean;
+  /** " — 3 credits", or nothing when this account is not charged. */
+  picturePrice?: string;
+  /** What the button's tooltip says, when there is something to explain. */
+  pictureNote?: string;
   /**
    * Start or stop choosing a passage. ABSENT means no control at all -- a
    * story that cannot be illustrated, one the app ships with, the
@@ -144,11 +150,13 @@ export function ReaderBar({
           className="h-8 gap-1 px-2 text-xs"
           aria-pressed={Boolean(picking)}
           onClick={onTogglePicture}
-          title="Highlight a part of the story and draw a picture of it"
+          // The price is part of the offer. A button that spends credits
+          // without saying so is the thing the Settings card exists to stop.
+          title={pictureNote ?? "Highlight a part of the story and draw a picture of it"}
           data-guide="make-a-picture"
         >
           <ImagePlus className="h-3.5 w-3.5" aria-hidden="true" />
-          {picking ? "Cancel" : "Make a picture"}
+          {picking ? "Cancel" : `Make a picture${picturePrice ?? ""}`}
         </Button>
       )}
 
