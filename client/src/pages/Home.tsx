@@ -120,7 +120,7 @@ export default function Home() {
               <div className="w-16 h-16 rounded-full bg-warning-surface flex items-center justify-center mx-auto mb-4">
                 <CalendarDays className="h-8 w-8 text-warning" />
               </div>
-              <h3 className="text-xl font-heading font-bold mb-2">Heroes of Faith</h3>
+              <h3 className="text-xl font-heading font-bold mb-2">Heroes of the Faith</h3>
               <p className="mb-4">People from Scripture and from church history, each with a written profile you can read without the AI &mdash; every date and passage checked against real sources.</p>
               <Button 
                 className="bg-warning hover:bg-warning/90 text-warning-foreground border-none shadow-md"

@@ -125,7 +125,7 @@ export default function PromptEditor({ storyRequest, onPromptsChanged, className
       // so this preview showed "Animal Friend: none".
       const noAnimal = ["", "none", "n/a"].includes((storyRequest.animal ?? "").trim().toLowerCase());
       if (!noAnimal && storyRequest.useAnimal) prompt += `Animal Friend: ${storyRequest.animal}\n`;
-      if (storyRequest.heroOfFaith) prompt += `Hero of Faith: ${storyRequest.heroOfFaith}\n`;
+      if (storyRequest.heroOfFaith) prompt += `Hero of the Faith: ${storyRequest.heroOfFaith}\n`;
       // Through characterRoleOf, so this preview says the same thing the brief
       // will. Read off the raw flag it showed "Time Travel: Yes" for a request
       // whose explicit mode said otherwise -- the exact contradiction the one

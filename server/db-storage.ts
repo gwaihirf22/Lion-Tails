@@ -1183,7 +1183,7 @@ export class DbStorage implements IStorage {
         WHERE story_id = $2 AND user_id = $3
       `, [JSON.stringify(heroId), storyId, userId]);
       
-      // Add the "hero of faith" tag if it isn't already present.
+      // Add the "hero of the faith" tag if it isn't already present.
       //
       // This statement was broken three ways before: jsonb_append is not a
       // PostgreSQL function (array append is the || operator); it referenced
@@ -1205,9 +1205,9 @@ export class DbStorage implements IStorage {
           ),
           '{searchMetadata,tags}',
           CASE
-            WHEN COALESCE(story_data->'searchMetadata'->'tags', '[]'::jsonb) ? 'hero of faith'
+            WHEN COALESCE(story_data->'searchMetadata'->'tags', '[]'::jsonb) ? 'hero of the faith'
             THEN COALESCE(story_data->'searchMetadata'->'tags', '[]'::jsonb)
-            ELSE COALESCE(story_data->'searchMetadata'->'tags', '[]'::jsonb) || '["hero of faith"]'::jsonb
+            ELSE COALESCE(story_data->'searchMetadata'->'tags', '[]'::jsonb) || '["hero of the faith"]'::jsonb
           END,
           true
         )
@@ -1948,7 +1948,7 @@ export class DbStorage implements IStorage {
     }
   }
 
-  // Heroes of Faith methods
+  // Heroes of the Faith methods
   async getAllHeroesOfFaith(): Promise<HeroOfFaith[]> {
     if (!isDatabaseAvailable()) {
       console.warn("Database unavailable in getAllHeroesOfFaith. Using fallback empty result.");
@@ -1992,7 +1992,7 @@ export class DbStorage implements IStorage {
         }
       });
     } catch (error) {
-      console.error("Error fetching heroes of faith:", error);
+      console.error("Error fetching heroes of the faith:", error);
       // Return empty array instead of throwing to prevent app crashes
       return [];
     }
@@ -2038,7 +2038,7 @@ export class DbStorage implements IStorage {
         };
       }
     } catch (error) {
-      console.error(`Error fetching hero of faith by ID ${id}:`, error);
+      console.error(`Error fetching hero of the faith by ID ${id}:`, error);
       return undefined;
     }
   }
@@ -2112,8 +2112,8 @@ export class DbStorage implements IStorage {
       
       return hero;
     } catch (error) {
-      console.error("Error creating hero of faith:", error);
-      throw new Error("Failed to create hero of faith. Please try again later.");
+      console.error("Error creating hero of the faith:", error);
+      throw new Error("Failed to create hero of the faith. Please try again later.");
     }
   }
 
@@ -2127,7 +2127,7 @@ export class DbStorage implements IStorage {
       // Get current hero
       const hero = await this.getHeroOfFaithById(id);
       if (!hero) {
-        console.warn(`Hero of faith not found: ${id}`);
+        console.warn(`Hero of the faith not found: ${id}`);
         return undefined;
       }
       
@@ -2143,7 +2143,7 @@ export class DbStorage implements IStorage {
       
       return updatedHero;
     } catch (error) {
-      console.error(`Error updating hero of faith with ID ${id}:`, error);
+      console.error(`Error updating hero of the faith with ID ${id}:`, error);
       return undefined;
     }
   }
@@ -2162,7 +2162,7 @@ export class DbStorage implements IStorage {
       
       return (result.rowCount || 0) > 0;
     } catch (error) {
-      console.error(`Error deleting hero of faith with ID ${id}:`, error);
+      console.error(`Error deleting hero of the faith with ID ${id}:`, error);
       return false;
     }
   }

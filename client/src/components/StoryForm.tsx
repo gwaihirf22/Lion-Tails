@@ -258,7 +258,7 @@ export default function StoryForm({
 }: StoryFormProps) {
   const { toast } = useToast();
   /**
-   * Is a hero of faith being brought into this story at all?
+   * Is a hero of the faith being brought into this story at all?
    *
    * Local rather than a form field because it is not a fact about the story --
    * it is the question that reveals the two that are. What it gates writes
@@ -329,7 +329,7 @@ export default function StoryForm({
   });
   const usingLocalModel = modelSetting?.tier === "local";
 
-  // Check localStorage for a pre-selected hero of faith
+  // Check localStorage for a pre-selected hero of the faith
   /**
    * A hero handed over from the Heroes page.
    *
@@ -352,7 +352,7 @@ export default function StoryForm({
       biblicalEvent: "", // No default biblical event
       heroOfFaith: selectedHeroFromStorage || "", // Use hero from localStorage if available
       // Both tabs default to "regular". The historical tab is distinguished by
-      // the fields it shows -- Biblical Event, Hero of Faith, Bible Passage,
+      // the fields it shows -- Biblical Event, Hero of the Faith, Bible Passage,
       // Learning Focus -- not by a story type that told the model to be
       // faithful to a text nobody supplied.
       storyType: "regular" as const,
@@ -1328,7 +1328,7 @@ export default function StoryForm({
             )}
 
 
-            {/* WHICH PART of that life. A Hero of Faith is a whole life, and
+            {/* WHICH PART of that life. A Hero of the Faith is a whole life, and
                 asked for "a story about Corrie ten Boom" a model returns a
                 summary of all of it. One episode told properly is a better
                 story and teaches more.

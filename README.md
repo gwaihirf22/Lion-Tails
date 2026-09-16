@@ -60,7 +60,7 @@ npm run db:migrate        # applies migrations to create the tables
 | `npm test` | Unit tests (vitest, no network — see [Tests](#tests)) |
 | `npm run test:watch` | The same, in watch mode |
 | `npm run lint` | ESLint — React Rules of Hooks only, deliberately narrow |
-| `npx tsx scripts/verify-heroes.ts [name]` | Check the Heroes of Faith against Wikipedia, Wikidata and bible-api.com. **Needs network**, so it is run by hand, not in CI |
+| `npx tsx scripts/verify-heroes.ts [name]` | Check the Heroes of the Faith against Wikipedia, Wikidata and bible-api.com. **Needs network**, so it is run by hand, not in CI |
 | `./scripts/dev-stack.sh up` | The whole dev stack: database, migrations, app, seeded account. See [The dev server](#the-dev-server) |
 
 ### Why there are two server entrypoints
@@ -262,7 +262,7 @@ inherited character asks first.
 
 ## Aiming a historical story
 
-A Hero of Faith is a whole life, and asked for "a story about Corrie ten Boom" a
+A Hero of the Faith is a whole life, and asked for "a story about Corrie ten Boom" a
 model returns a summary of all of it. Picking a hero reveals a **focus** select
 built from that hero's own `keyEvents` — which every hero already carries and
 `/api/heroes` already returns, so it costs no model call and no new content.
@@ -292,7 +292,7 @@ chapter as a short anchor. What the model is *not* told — the arc, the
 forgotten story, who the Lion is — is in `docs/quests-of-the-timekeeper.md`,
 for people. A model told the ending says so in chapter two.
 
-## Heroes of Faith
+## Heroes of the Faith
 
 Eighty hand-written profiles in `server/data/heroes/`, split into **two
 collections** that the page shows as two tabs:

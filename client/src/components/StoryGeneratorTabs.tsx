@@ -102,7 +102,7 @@ export default function StoryGeneratorTabs({
               formType="original"
               showChildFields={true}
               showAnimalToggle={true}
-              showHeroOfFaith={true} // A hero of faith can appear here too, through a mode
+              showHeroOfFaith={true} // A hero of the faith can appear here too, through a mode
             />
           </div>
         </TabsContent>

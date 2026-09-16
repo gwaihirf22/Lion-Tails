@@ -283,7 +283,7 @@ describe("the look of the book", () => {
    * The people a story invented have nothing else.
    *
    * illustrationCast attaches a portrait for anyone with a character sheet.
-   * A hero of faith has none -- hero.imageUrl is on the schema and empty for
+   * A hero of the faith has none -- hero.imageUrl is on the schema and empty for
    * all eighty of them -- and neither does a shopkeeper the model made up, so
    * without this they are drawn fresh, and differently, on every page.
    */

@@ -26,7 +26,7 @@ export async function seedReferenceData(): Promise<void> {
 
   if (!ready) {
     log(
-      "Skipping reference data seeding: no database. Heroes of Faith will be served from memory for this process only.",
+      "Skipping reference data seeding: no database. Heroes of the Faith will be served from memory for this process only.",
       "seed",
     );
     return;
@@ -40,7 +40,7 @@ export async function seedReferenceData(): Promise<void> {
     // slug now, so it is safe to run on every boot and it actually delivers
     // changes.
     const before = await storage.getAllHeroesOfFaith();
-    log(`Syncing ${heroesOfFaithData.length} Heroes of Faith (${before.length} present)...`, "seed");
+    log(`Syncing ${heroesOfFaithData.length} Heroes of the Faith (${before.length} present)...`, "seed");
 
     let created = 0;
     for (const hero of heroesOfFaithData) {
@@ -85,12 +85,12 @@ export async function seedReferenceData(): Promise<void> {
     if (after.length === 0) {
       console.error(
         `SEEDING FAILED: created ${created} heroes but the table is still empty. ` +
-          "Heroes of Faith will not persist.",
+          "Heroes of the Faith will not persist.",
       );
     } else {
-      log(`Seeded Heroes of Faith: ${after.length} rows`, "seed");
+      log(`Seeded Heroes of the Faith: ${after.length} rows`, "seed");
     }
   } catch (error) {
-    console.error("Error seeding Heroes of Faith data:", error);
+    console.error("Error seeding Heroes of the Faith data:", error);
   }
 }

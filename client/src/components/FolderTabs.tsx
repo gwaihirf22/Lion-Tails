@@ -44,7 +44,7 @@ import { cn } from "@/lib/utils";
  * interpolated; see ci.yml on the colour picker that did nothing for months,
  * and tests/theme.test.ts, which reads every such literal in client/src.
  *
- * Heroes of Faith keeps its own four-icon strip: four tabs that each have an
+ * Heroes of the Faith keeps its own four-icon strip: four tabs that each have an
  * icon fit one row at any width, and it never had this problem. Anything
  * with more tabs than that, or with text-only tabs, uses this.
  */

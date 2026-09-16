@@ -186,7 +186,7 @@ export default function HeroesOfFaith() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="ml-2">Loading Heroes of Faith...</span>
+        <span className="ml-2">Loading Heroes of the Faith...</span>
       </div>
     );
   }
@@ -194,7 +194,7 @@ export default function HeroesOfFaith() {
   if (error) {
     return (
       <div className="p-4 text-center">
-        <p className="text-destructive">Failed to load Heroes of Faith. Please try again.</p>
+        <p className="text-destructive">Failed to load Heroes of the Faith. Please try again.</p>
         <Button 
           variant="outline" 
           className="mt-4"
@@ -209,7 +209,7 @@ export default function HeroesOfFaith() {
   return (
     <div className="container mx-auto p-4">
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold mb-2">Heroes of Faith</h1>
+        <h1 className="text-3xl font-bold mb-2">Heroes of the Faith</h1>
         <p className="text-muted-foreground max-w-3xl mx-auto">
           Explore the lives and legacies of remarkable Christians throughout history who demonstrated 
           extraordinary faith and made significant contributions to Christianity and society.
@@ -250,7 +250,7 @@ export default function HeroesOfFaith() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name, place, era, or anything in their story"
             className="pl-9"
-            aria-label="Search Heroes of Faith"
+            aria-label="Search Heroes of the Faith"
           />
         </div>
         <div className="flex flex-wrap justify-center gap-2">

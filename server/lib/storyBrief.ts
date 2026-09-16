@@ -632,13 +632,13 @@ const isPlaceholderName = (v: string | undefined): boolean =>
   typeof v === "string" && PLACEHOLDER_NAMES.has(v.trim().toLowerCase());
 
 /**
- * Resolve the hero of faith a request refers to.
+ * Resolve the hero of the faith a request refers to.
  *
  * Tolerant of id OR name on purpose. The form's SelectItem value is hero.id
  * (a uuid), while routes.ts looked the hero up by `h.name === request.heroOfFaith`
  * -- a comparison that can never be true, which is why hero_id is NULL on
  * essentially every saved story. The brief was worse: it emitted the raw uuid
- * into the prompt as "Feature this hero of faith: 7f3a9c12-...".
+ * into the prompt as "Feature this hero of the faith: 7f3a9c12-...".
  *
  * Matching both shapes fixes it without a data migration and without depending
  * on which end gets corrected first.
@@ -654,7 +654,7 @@ export async function resolveHeroOfFaith(
       (h) => h.id.toLowerCase() === wanted || h.name.toLowerCase() === wanted,
     );
   } catch (error) {
-    console.error("Could not load hero of faith for story generation:", error);
+    console.error("Could not load hero of the faith for story generation:", error);
     return undefined;
   }
 }
@@ -1324,7 +1324,7 @@ export type StoryBrief = {
    * The WORDS that name what this story is set in, when they are all there is.
    *
    * A source only becomes `sourceMaterial` when the app holds the account
-   * itself -- a catalogue event, or a hero of faith. A typed passage ("Acts 27
+   * itself -- a catalogue event, or a hero of the faith. A typed passage ("Acts 27
    * -- Paul's shipwreck") is a first-class choice in the form and has no
    * account to attach, and an event id the catalogue does not know has none
    * either. Both used to leave `sourceMaterial` undefined, and with it went the
@@ -1477,7 +1477,7 @@ export function buildStoryBrief(
       cautions: event.cautions,
     };
   } else if (hero) {
-    // A hero of faith is a real person, so the same rule applies: supply the
+    // A hero of the faith is a real person, so the same rule applies: supply the
     // biography rather than the name. heroesOfFaith.ts has carried timePeriod,
     // contribution, keyEvents and a verse for every one of the fifteen heroes
     // all along, and the prompt received none of it.
@@ -1646,7 +1646,7 @@ export function buildStoryBrief(
     premise.push(`Draw on this biblical event: ${request.biblicalEvent.replace(/[-_]+/g, " ").trim()}.`);
   }
   if (!hero && isSet(request.heroOfFaith) && !/^[0-9a-f-]{16,}$/i.test(request.heroOfFaith)) {
-    premise.push(`Feature this hero of faith: ${request.heroOfFaith}.`);
+    premise.push(`Feature this hero of the faith: ${request.heroOfFaith}.`);
   }
   if (isSet(request.biblePassage)) premise.push(`Draw on this passage: ${request.biblePassage}.`);
   let participationAnchor: string | undefined;
@@ -2666,7 +2666,7 @@ function audienceLine(request: StoryRequest): string {
  */
 function storytellerPersona(request: StoryRequest): string {
   const retelling = isSet(request.biblicalEvent) || isSet(request.biblePassage);
-  // A hero of faith is a real person, so the same "do not invent" discipline
+  // A hero of the faith is a real person, so the same "do not invent" discipline
   // applies -- but they are not Scripture, and a persona that says so would be
   // wrong about Corrie ten Boom.
   const trueStory = !retelling && isSet(request.heroOfFaith);

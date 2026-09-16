@@ -95,7 +95,7 @@ the seeder must not assume otherwise.
 `server/lib/storyBrief.ts`
 
 `storyRequestSchema` declares 22 fields and the form collects them. The
-generator destructured **four**. A chosen character, hero of faith, biblical
+generator destructured **four**. A chosen character, hero of the faith, biblical
 event, animal companion, learning focus and custom instructions were all
 collected, validated, stored on the request — and discarded before any prompt
 was built.
