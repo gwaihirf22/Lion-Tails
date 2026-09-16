@@ -20,6 +20,7 @@ import { z } from "zod";
 import { v4 as uuidv4 } from 'uuid';
 import { CHARACTER_CATEGORIES } from "./characterVocab";
 import { MAX_PETS, MAX_RELATIONS, petSchema, relationSchema, withoutPictureRefs } from "./family";
+import { MAX_PICTURE_NOTE_CHARS } from "./pictureNote";
 
 // Enhanced user table with email verification
 export const users = pgTable("users", {
@@ -862,6 +863,32 @@ export function creditsLabel(n: number): string {
   return `${n} ${n === 1 ? "credit" : "credits"}`;
 }
 
+/**
+ * The published price list, as `GET /api/pricing` answers it.
+ *
+ * `creditsLabel`'s reasoning applied to money: one type, so a renamed field
+ * breaks the build rather than rendering "about undefined".
+ */
+export type PriceList = {
+  items: Array<{ item: string; priceCents: number }>;
+  /**
+   * What ONE picture costs, scene description included -- a picture is two
+   * paid calls and so two published rows, and which two depends on the
+   * account's models, so this is summed on the server. Null when nothing is
+   * published yet, and then the app says what it costs in words instead of
+   * inventing a number.
+   */
+  pictureCents: number | null;
+};
+
+/**
+ * "14¢", "$1.20". Under a dollar reads as cents: "$0.14" in a sentence about
+ * a bedtime story looks like a bill, and is harder to read at a glance.
+ */
+export function priceLabel(cents: number): string {
+  return cents < 100 ? `${cents}¢` : `$${(cents / 100).toFixed(2)}`;
+}
+
 /** Where everyone starts, and the ceiling a top-up can never carry them past. */
 export const FREE_STORIES = 50;
 /** Added at the start of each calendar month, up to FREE_STORIES. */
@@ -1049,6 +1076,15 @@ export const storyPassageSchema = z.object({
 });
 
 export type StoryPassage = z.infer<typeof storyPassageSchema>;
+
+/**
+ * What the reader asks for in the picture, on the same request.
+ *
+ * Refused over the limit rather than truncated, because half an instruction is
+ * a different instruction. Where it goes, and why it goes to two models, is in
+ * shared/pictureNote.ts.
+ */
+export const pictureNoteSchema = z.string().trim().max(MAX_PICTURE_NOTE_CHARS);
 
 /**
  * Named skills one character may keep.

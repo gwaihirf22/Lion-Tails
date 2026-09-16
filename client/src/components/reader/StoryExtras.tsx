@@ -18,6 +18,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { ImagePlus, Loader2, Pencil, RefreshCw } from "lucide-react";
+import PictureDialog from "@/components/reader/PictureDialog";
 import { DebugPanel } from "@/components/DebugPanel";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -147,11 +148,20 @@ export function StoryExtras({
    * replaces the file the story has -- the server deletes the old one only
    * after the new one is attached -- so it asks first.
    */
+  /**
+   * Which spend the dialog is asking about, or null.
+   *
+   * Both buttons here spend the same money on the same route, and neither used
+   * to ask -- the redraw had a yes/no box with no price on it, and the first
+   * picture had nothing at all. See PictureDialog.
+   */
+  const [asking, setAsking] = useState<"first" | "redraw" | null>(null);
+
   const illustrate = useMutation({
     // Through requestPicture, for the reason in pictureRequest.ts: a slow
     // picture is not a failed one, and a second press pays for a second.
-    mutationFn: async (redraw: boolean = false) =>
-      requestPicture(storyId!, { redraw }, {
+    mutationFn: async ({ redraw, note }: { redraw: boolean; note: string }) =>
+      requestPicture(storyId!, { redraw, ...(note ? { note } : {}) }, {
         onStillDrawing: () =>
           toast({
             title: "Still drawing…",
@@ -166,6 +176,7 @@ export function StoryExtras({
       }
       queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+      setAsking(null);
       toast({ title: "Picture added", description: "It is saved with the story." });
     },
     onError: (error) => {
@@ -385,52 +396,32 @@ export function StoryExtras({
               server enforces. */}
           {modelInfo?.canIllustrate && !builtIn && storyId && (
             <div className="mt-2 text-center">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    // Full is full: the server answers 409 rather than dropping
-                    // the oldest, so the button says so before it is pressed.
-                    disabled={illustrate.isPending || gallery.length >= MAX_STORY_IMAGES}
-                    title={
-                      gallery.length >= MAX_STORY_IMAGES
-                        ? `This story keeps ${MAX_STORY_IMAGES} pictures. Delete one to draw another.`
-                        : undefined
-                    }
-                    style={{ color: "var(--reader-muted)" }}
-                  >
-                    {illustrate.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Painting…
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        Draw it again
-                      </>
-                    )}
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Draw a new picture?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This makes another picture for &ldquo;{story.title}&rdquo;. The one
-                      here now is kept — you can switch back to it, and it is deleted only
-                      if you say so. A story keeps up to {MAX_STORY_IMAGES}. The story
-                      itself is not changed.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Keep this one</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => illustrate.mutate(true)}>
-                      Draw it again
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <Button
+                variant="ghost"
+                size="sm"
+                // Full is full: the server answers 409 rather than dropping
+                // the oldest, so the button says so before it is pressed.
+                disabled={illustrate.isPending || gallery.length >= MAX_STORY_IMAGES}
+                title={
+                  gallery.length >= MAX_STORY_IMAGES
+                    ? `This story keeps ${MAX_STORY_IMAGES} pictures. Delete one to draw another.`
+                    : undefined
+                }
+                style={{ color: "var(--reader-muted)" }}
+                onClick={() => setAsking("redraw")}
+              >
+                {illustrate.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Painting…
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Draw it again
+                  </>
+                )}
+              </Button>
             </div>
           )}
         </div>
@@ -510,7 +501,7 @@ export function StoryExtras({
                 <div className="mt-4 flex justify-center">
                   <Button
                     size="sm"
-                    onClick={() => illustrate.mutate(false)}
+                    onClick={() => setAsking("first")}
                     disabled={illustrate.isPending || !storyId}
                   >
                     {illustrate.isPending ? (
@@ -625,6 +616,20 @@ export function StoryExtras({
           </AccordionItem>
         )}
       </Accordion>
+
+      {/* One box for both spends here. Mounted last, outside the accordion,
+          so closing a section cannot unmount a dialog mid-request. */}
+      {asking && (
+        <PictureDialog
+          open
+          onOpenChange={(open) => !open && !illustrate.isPending && setAsking(null)}
+          mode={asking}
+          storyTitle={story.title}
+          galleryCount={gallery.length}
+          pending={illustrate.isPending}
+          onConfirm={(note) => illustrate.mutate({ redraw: asking === "redraw", note })}
+        />
+      )}
     </div>
   );
 }

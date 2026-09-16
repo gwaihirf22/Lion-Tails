@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWarnings, MIN_SAMPLES, suggestPrices, summarisePictures, summariseStories } from "../server/lib/costReport";
+import { buildWarnings, MIN_SAMPLES, pictureListPrice, suggestPrices, summarisePictures, summariseStories } from "../server/lib/costReport";
 
 const story = (length: string, model: string, micros: number, quest = false, digging = false) => ({ length, model, micros, quest, digging });
 
@@ -80,5 +80,45 @@ describe("what the admin is warned about", () => {
     });
     expect(w.map((x) => x.code)).toEqual(["charged-differently", "bill-drift"]);
     expect(w.every((x) => x.level === "action")).toBe(true);
+  });
+});
+
+/**
+ * What the reader is told a picture costs, before they spend it.
+ *
+ * A picture is TWO paid calls and so two published rows -- the image, and the
+ * sentence describing the moment -- and each row needs its own five samples
+ * before it is priced at all. Summed here, on the server, because the key
+ * format lives in this file and which models those rows name depends on the
+ * account.
+ */
+describe("the price of one picture", () => {
+  const items = [
+    { item: "story:short:gpt-5.6-luna", priceCents: 9 },
+    { item: "picture:passage-picture:gpt-image-2", priceCents: 12 },
+    { item: "picture:passage-scene:gpt-5.6-luna", priceCents: 2 },
+    { item: "picture:redraw:gpt-image-2", priceCents: 13 },
+  ];
+  const models = { imageModel: "gpt-image-2", imagePurposes: ["passage-picture", "redraw", "cover"], sceneModel: "gpt-5.6-luna" };
+
+  it("adds the image to the sentence that describes the moment", () => {
+    expect(pictureListPrice(items, models)).toBe(14);
+  });
+
+  it("takes the first kind of picture that has a price", () => {
+    const withoutPassage = items.filter((i) => i.item !== "picture:passage-picture:gpt-image-2");
+    expect(pictureListPrice(withoutPassage, models)).toBe(15);
+  });
+
+  it("is the image alone when the scene call is not priced yet", () => {
+    expect(pictureListPrice(items, { ...models, sceneModel: "gpt-oss:20b" })).toBe(12);
+    expect(pictureListPrice(items, { ...models, sceneModel: undefined })).toBe(12);
+  });
+
+  it("is null when no picture is published, rather than free", () => {
+    expect(pictureListPrice([], models)).toBeNull();
+    expect(pictureListPrice(items, { ...models, imageModel: "gpt-image-3" })).toBeNull();
+    // A story's price is not a picture's price.
+    expect(pictureListPrice([items[0]], models)).toBeNull();
   });
 });

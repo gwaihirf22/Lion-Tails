@@ -58,6 +58,7 @@ export const GUIDE_SCENES = [
   "library",
   "reader",
   "reader-picking",
+  "reader-picture-dialog",
   "reader-extras",
   "settings",
   "mobile-menu",
@@ -113,6 +114,7 @@ export const GUIDE_PLATES = [
   { id: "reader-bar", scene: "reader", frame: "reader-bar" },
   { id: "reader-actions", scene: "reader", frame: "reader-actions" },
   { id: "reader-picking", scene: "reader-picking", frame: "reader-picking" },
+  { id: "picture-dialog", scene: "reader-picture-dialog", frame: "picture-dialog" },
   { id: "reader-extras", scene: "reader-extras", frame: "reader-extras" },
   { id: "settings-parent", scene: "settings", around: "parent-mode" },
   { id: "settings-resets", scene: "settings", around: "start-sheet-again" },
@@ -689,9 +691,30 @@ export const GUIDE_NODES = [
     parent: "make-a-picture",
     title: "Choosing the moment",
     why:
-      "Highlight the sentence you want drawn and press Draw this. The picture lands in the story " +
-      "beside that passage, and the text wraps around it.",
+      "Highlight the sentence you want drawn and press Draw this. Nothing is drawn yet — it asks " +
+      "first. The picture lands in the story beside that passage, and the text wraps around it.",
     shot: { plate: "reader-picking", emphasise: "picking" },
+  },
+  {
+    id: "picture-note",
+    tab: "reading",
+    parent: "picking",
+    title: "Anything that must be in the picture?",
+    why:
+      "The picture is drawn from the story, so it already knows who is in this part and where it " +
+      "happens. This is for what it would not think of: the rain, the red umbrella, the time of " +
+      "day. Leave it empty and the story alone decides.",
+    shot: { plate: "picture-dialog", emphasise: "picture-note" },
+  },
+  {
+    id: "picture-cost",
+    tab: "reading",
+    parent: "picking",
+    title: "What it costs before you press it",
+    why:
+      "Every picture is a real payment and a few minutes of waiting, so the box says so, and how " +
+      "many of the twelve this story has used. Nothing is spent until you press the button in it.",
+    shot: { plate: "picture-dialog", emphasise: "picture-cost" },
   },
   {
     id: "gallery",

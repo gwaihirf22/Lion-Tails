@@ -5,7 +5,7 @@ import {
   normaliseQuote,
   anchorBlock,
 } from "../client/src/lib/storyContent";
-import { buildPassageScenePrompt } from "../server/lib/passageScene";
+import { buildPassageScenePrompt, passageScenePromptParts } from "../server/lib/passageScene";
 import { composeIllustrationPrompt } from "../server/lib/illustration";
 import { COVER_SHOWS_PEOPLE, COVER_MONTAGE } from "../server/lib/openai-implementation";
 import { COVER_SIZE, PAGE_SIZE } from "../server/lib/illustration";
@@ -157,6 +157,45 @@ describe("the scene prompt for a passage", () => {
     const long = "word ".repeat(2000);
     const p = buildPassageScenePrompt({ title: "T", passage: long });
     expect(p.length).toBeLessThan(MAX_PASSAGE_CHARS + 800);
+  });
+
+  /**
+   * What the reader asked for, from the dialog that asks before spending.
+   *
+   * The cache is the property worth a test: `prefix` is every picture of this
+   * story, sent at an explicit breakpoint, and one per-request sentence in it
+   * makes the second picture re-read the whole story at full price.
+   */
+  describe("and what the reader asked for", () => {
+    const story = ["Mia found the umbrella.", "", passage, "", "They walked home."].join("\n");
+
+    it("changes nothing at all when nobody asked for anything", () => {
+      const without = passageScenePromptParts({ title: "T", passage, story });
+      const empty = passageScenePromptParts({ title: "T", passage, story, note: "   " });
+      expect(empty).toEqual(without);
+      expect(buildPassageScenePrompt({ title: "T", passage, note: "" })).toBe(
+        buildPassageScenePrompt({ title: "T", passage }),
+      );
+    });
+
+    it("goes after the story, never into the cached part of the prompt", () => {
+      const { prefix, rest } = passageScenePromptParts({
+        title: "T",
+        passage,
+        story,
+        note: "show it raining hard",
+      });
+      expect(rest).toContain("show it raining hard");
+      expect(prefix).not.toContain("show it raining hard");
+      // And the prefix is still the prefix: byte for byte what it is without.
+      expect(prefix).toBe(passageScenePromptParts({ title: "T", passage, story }).prefix);
+    });
+
+    it("reaches a local model too, which gets the passage-only prompt", () => {
+      const p = buildPassageScenePrompt({ title: "T", passage, note: "show it raining hard" });
+      expect(p).toContain("=== WHAT THE READER ASKED FOR ===");
+      expect(p).toContain("show it raining hard");
+    });
   });
 });
 

@@ -151,6 +151,12 @@ export const GUIDE_PLATE_IMAGES: Partial<Record<GuidePlateId, GuidePlateImage>> 
     "height": 1688,
     "capturedAt": "2026-09-15T23:42:27.066Z"
   },
+  "picture-dialog": {
+    "file": "/public/images/guide/picture-dialog.webp",
+    "width": 780,
+    "height": 1036,
+    "capturedAt": "2026-09-16T05:15:05.695Z"
+  },
   "reader-actions": {
     "file": "/public/images/guide/reader-actions.webp",
     "width": 780,
@@ -381,6 +387,18 @@ export const GUIDE_BOXES: Partial<Record<GuideShotNodeId, GuideBox>> = {
     "y": 0.2949,
     "w": 0.2388,
     "h": 0.4103
+  },
+  "picture-cost": {
+    "x": 0.0436,
+    "y": 0.7046,
+    "w": 0.9128,
+    "h": 0.0618
+  },
+  "picture-note": {
+    "x": 0.0436,
+    "y": 0.3919,
+    "w": 0.9128,
+    "h": 0.1737
   },
   "print-save": {
     "x": 0.5897,

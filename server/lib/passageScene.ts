@@ -46,6 +46,7 @@ import { temperatureFor, tokenLimitFor } from "./modelPolicy";
 import { MAX_PASSAGE_CHARS } from "@shared/schema";
 import { PICTURE_ID_REMINDER } from "@shared/family";
 import { renderLookBook, type LookBook } from "@shared/lookBook";
+import { renderPictureNoteSection } from "@shared/pictureNote";
 
 const SYSTEM =
   "You are a helpful assistant. Given one moment from a story, you write a single short description for an illustrator.";
@@ -109,6 +110,12 @@ export type PassageSceneOptions = {
   /** The prompt the story's cover was drawn from. */
   coverPrompt?: string;
   lookBook?: LookBook;
+  /**
+   * What the reader asked for in this picture. NEVER in `prefix`: it is the one
+   * thing that changes from picture to picture within a story, and the prefix
+   * is the cached part every picture of it shares.
+   */
+  note?: string;
 };
 
 /**
@@ -138,12 +145,16 @@ export function passageScenePromptParts(opts: PassageSceneOptions): { prefix: st
   const brief = opts.brief?.trim();
   const passage = opts.passage.trim().slice(0, MAX_PASSAGE_CHARS);
   const story = opts.story?.trim();
+  // Empty without one, and every entry here is filtered out when empty, so a
+  // picture asked for with no note renders the prompt it always did.
+  const asked = renderPictureNoteSection(opts.note);
   if (!story) {
     const rest = [
       `This is one moment from a story called "${opts.title}".`,
       "---",
       passage,
       "---",
+      asked,
       // The instruction the whole feature turns on. Without it the model writes
       // a prompt for the story, because that is what it has been asked for
       // everywhere else, and every picture in the book comes out the same.
@@ -204,6 +215,7 @@ export function passageScenePromptParts(opts: PassageSceneOptions): { prefix: st
     "=== THE MOMENT TO DRAW ===",
     before ? `It comes straight after: "…${before}"` : "",
     `---\n${passage}\n---`,
+    asked,
     "Describe a picture of THIS MOMENT and nothing else: what is happening here,\n" +
       "who is in it, and where. Not a summary of the story, not a later moment,\n" +
       "not a cover. One scene, as an illustrator would need it.",

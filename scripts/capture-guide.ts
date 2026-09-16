@@ -335,6 +335,15 @@ async function main() {
       });
       await page.waitForTimeout(400);
     },
+    // The box that asks before spending: the price, and anything that must be
+    // in the picture. Built on the picking scene, because that is how a reader
+    // reaches it -- highlight, then Draw this.
+    "reader-picture-dialog": async () => {
+      await SCENES["reader-picking"]();
+      await tapMarker("picking");
+      await marker("picture-dialog").waitFor({ state: "visible", timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
     "reader-extras": async () => {
       await go(`/story?id=${demoId}`);
       await marker("extras").scrollIntoViewIfNeeded();
@@ -439,13 +448,33 @@ async function main() {
 /** Merged, so `--only` re-takes some plates without dropping the rest. */
 function writeManifest(images: Record<string, PlateImage>, boxes: Record<string, Box>) {
   const existing = fs.existsSync(MANIFEST) ? fs.readFileSync(MANIFEST, "utf8") : "";
+  /**
+   * What is already in the manifest, read back as JSON.
+   *
+   * IT IS ALREADY JSON: this function writes it with JSON.stringify, keys and
+   * all, so it is parsed as-is and nothing is "repaired" on the way in. The
+   * repair that used to be here quoted every `word:` it could see -- including
+   * the `23:` inside a capturedAt timestamp -- so the parse threw, the catch
+   * returned {}, and one `--only picture-dialog` run silently dropped all 29
+   * of the other plates from the manifest. A merge that cannot read what it is
+   * merging into must STOP, not write half a file.
+   */
   const keep = (name: string): Record<string, unknown> => {
     const match = existing.match(new RegExp(`export const ${name}[^=]*= (\\{[\\s\\S]*?\\n\\};)`));
-    if (!match) return {};
-    try {
-      return JSON.parse(match[1].replace(/;$/, "").replace(/(\w+):/g, '"$1":').replace(/,(\s*[}\]])/g, "$1"));
-    } catch {
+    if (!match) {
+      if (existing.includes(`export const ${name}`)) {
+        die(`Could not find the end of ${name} in ${MANIFEST}. Refusing to overwrite it.`);
+      }
       return {};
+    }
+    try {
+      return JSON.parse(match[1].replace(/;$/, ""));
+    } catch (error) {
+      die(
+        `Could not read the existing ${name} in ${MANIFEST} (${
+          error instanceof Error ? error.message : String(error)
+        }). Refusing to write a manifest that would drop what is already there.`,
+      );
     }
   };
   const mergedImages = { ...keep("GUIDE_PLATE_IMAGES"), ...images };

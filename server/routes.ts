@@ -91,8 +91,9 @@ import {
   startingQuestsAgain,
   statsOf,
   virtueLevels,
-  avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, type StoryPassage, characterIdsOf, characterRoleOf,
+  avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, type StoryPassage, pictureNoteSchema, type PriceList, characterIdsOf, characterRoleOf,
   type SavedStory, type Character, type StoryUsage, storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
+import { withPictureNote } from "@shared/pictureNote";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
@@ -125,6 +126,7 @@ import { setupAuth } from "./auth";
 import { registerSongRoutes } from "./songs";
 import { requireAdmin } from "./lib/requireAuth";
 import { costsReport, publishSuggestedPrices, publishedPriceList, writeMarginPct } from "./lib/costStats";
+import { pictureListPrice } from "./lib/costReport";
 import { decideProposal, runBillCheck, runPriceCheck } from "./lib/priceWatch";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1436,9 +1438,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * no costs, no margin, no samples -- what things cost the owner is not what
    * a family needs to see.
    */
-  app.get("/api/pricing", requireAuth, async (_req, res) => {
+  app.get("/api/pricing", requireAuth, async (req, res) => {
     const list = await publishedPriceList().catch(() => undefined);
-    res.json({ items: (list?.items ?? []).map((i) => ({ item: i.item, priceCents: i.priceCents })) });
+    const items = (list?.items ?? []).map((i) => ({ item: i.item, priceCents: i.priceCents }));
+    /**
+     * WHAT ONE PICTURE COSTS, summed here rather than in the browser.
+     *
+     * A picture is the image call plus the sentence that describes the moment,
+     * which is a second paid call on the account's own chat model -- so the
+     * two rows to add up are a server fact, and the key format belongs to
+     * costReport.ts. The reader's dialog shows this before spending it.
+     */
+    const sceneModel = await resolveModel((req.user as any).id, "chat")
+      .then((resolved) => resolved?.model)
+      .catch(() => undefined);
+    const answer: PriceList = {
+      items,
+      pictureCents: pictureListPrice(items, {
+        imageModel: DEFAULTS.image,
+        imagePurposes: ["passage-picture", "redraw", "cover"],
+        sceneModel,
+      }),
+    };
+    res.json(answer);
   });
 
   // In-flight jobs plus anything finished in the last hour. That window is how
@@ -1822,6 +1844,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     saved: SavedStory,
     passage: StoryPassage,
     userId: number,
+    /**
+     * What the reader asked for in this picture. It goes to the scene writer
+     * so the moment is composed around it, and the route appends it to the
+     * image prompt as well -- see shared/pictureNote.ts for why both.
+     */
+    note?: string,
   ): Promise<string | undefined> {
     try {
       const resolved = await resolveModel(userId, "chat");
@@ -1856,6 +1884,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               lookBook: lookBookOf(saved.lookBook),
             }
           : {}),
+        note,
         ledger: { userId, storyId: saved.id, resolved, purpose: "passage-scene" },
         cacheKey: `passage-scene:${saved.id}`,
       });
@@ -1910,6 +1939,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const passage = storyPassageSchema.safeParse(req.body?.passage);
       if (req.body?.passage !== undefined && !passage.success) {
         return res.status(400).json({ message: fromZodError(passage.error).message });
+      }
+      /**
+       * What the reader asked for in this picture, from the dialog that asks
+       * before spending. Refused over the limit rather than truncated, because
+       * half an instruction is a different instruction.
+       */
+      const note = pictureNoteSchema.safeParse(req.body?.note ?? "");
+      if (!note.success) {
+        return res.status(400).json({ message: fromZodError(note.error).message });
       }
       // A picture FOR A PASSAGE is always a new picture: the story may already
       // have one at the end, and this one goes somewhere else entirely.
@@ -1968,7 +2006,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         `An illustration for a story titled "${saved.story.title}"`;
 
       if (passage.success && passage.data) {
-        const scene = await describePassage(saved, passage.data, userId);
+        const scene = await describePassage(saved, passage.data, userId, note.data);
         // A failed sentence is not worth failing the picture over: the passage
         // itself draws a worse picture, and draws one.
         prompt = scene ?? passage.data.text;
@@ -2021,10 +2059,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // What the people in it look like, read live off their sheets -- the
       // point of the whole feature, and the reason a story illustrated today
       // matches a portrait drawn after the story was written.
+      //
+      // READ FROM THE PROMPT WITHOUT THE READER'S NOTE, deliberately. Both of
+      // these attach things by finding names in the prompt, so "Barnabas is
+      // not in this one" or "no dog this time" would attach exactly what it
+      // asks to leave out -- the Tyndale mistake with different furniture.
+      const cast = await illustrationCast(saved.request, userId, prompt);
+      /**
+       * The note goes on the END of the prompt, never the start:
+       * isPresentDayScene reads the opening to decide whether a traveller
+       * keeps their own clothes. Appended by the server because a model asked
+       * to carry a sentence through writes its own words instead -- the look
+       * book's history, and how generateAvatar handles its note.
+       */
+      prompt = withPictureNote(prompt, note.data);
       const drawn = await generateStoryImage(
         prompt,
         userId,
-        await illustrationCast(saved.request, userId, prompt),
+        cast,
         extras,
         {
           ledger: {

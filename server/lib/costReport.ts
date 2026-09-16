@@ -69,10 +69,19 @@ export function summariseStories(samples: StorySample[]): { items: CostGroup[]; 
   };
 }
 
+/**
+ * A picture's price-list key. One definition: the reader's dialog needs the
+ * price of a picture, and a second spelling of this format somewhere else is
+ * how a price silently reads as "not published yet" for ever.
+ */
+export function pictureItemKey(purpose: string, model: string): string {
+  return `picture:${purpose}:${model}`;
+}
+
 export function summarisePictures(samples: PictureSample[]): CostGroup[] {
   const by = new Map<string, number[]>();
   for (const s of samples) {
-    const key = `picture:${s.purpose}:${s.model}`;
+    const key = pictureItemKey(s.purpose, s.model);
     by.set(key, [...(by.get(key) ?? []), s.micros]);
   }
   return Array.from(by.keys()).sort().map((k) => {
@@ -94,6 +103,42 @@ export function suggestPrices(groups: CostGroup[], marginPct: number): Suggestio
       basisMicros: g.p75Micros!,
       samples: g.n,
     }));
+}
+
+/**
+ * What one picture costs on the published list, cents, or null.
+ *
+ * A PICTURE IS TWO PAID CALLS: the image itself, and the sentence describing
+ * the moment, which is its own row on the list (`picture:passage-scene:…`).
+ * Summed here rather than in the browser, because which models those rows name
+ * depends on the account, and the key format belongs to this file.
+ *
+ * Null when the IMAGE row is not published -- that is the price of a picture,
+ * and without it there is no number worth showing. A missing scene row adds
+ * nothing rather than refusing: the total is already given to the reader as
+ * "about".
+ */
+export function pictureListPrice(
+  items: ReadonlyArray<{ item: string; priceCents: number }>,
+  models: {
+    imageModel: string;
+    /**
+     * In preference order. Every kind of picture is its own row and each needs
+     * its own five samples, so a reader asking what "a picture" costs is
+     * answered by the first kind that has a price -- they are the same model
+     * drawing the same size, and the answer is given as "about".
+     */
+    imagePurposes: readonly string[];
+    sceneModel?: string;
+  },
+): number | null {
+  const priceOf = (key: string) => items.find((i) => i.item === key)?.priceCents;
+  const image = models.imagePurposes
+    .map((purpose) => priceOf(pictureItemKey(purpose, models.imageModel)))
+    .find((cents) => cents !== undefined);
+  if (image === undefined) return null;
+  const scene = models.sceneModel ? priceOf(pictureItemKey("passage-scene", models.sceneModel)) : undefined;
+  return image + (scene ?? 0);
 }
 
 export type Warning = { level: "action" | "watch"; code: string; message: string };

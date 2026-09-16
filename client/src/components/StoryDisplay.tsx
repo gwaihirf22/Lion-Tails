@@ -24,8 +24,9 @@ import ReaderBar from "@/components/reader/ReaderBar";
 import ReadingSurface from "@/components/reader/ReadingSurface";
 import StoryExtras from "@/components/reader/StoryExtras";
 import { useFocusMode } from "@/components/reader/useFocusMode";
-import { usePassagePicker } from "@/components/reader/usePassagePicker";
+import { usePassagePicker, type PickedPassage } from "@/components/reader/usePassagePicker";
 import PictureLightbox from "@/components/reader/PictureLightbox";
+import PictureDialog from "@/components/reader/PictureDialog";
 
 interface StoryDisplayProps {
   story: StoryResponse;
@@ -184,11 +185,20 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
    */
   const canPicture = Boolean(modelInfo?.canIllustrate && !builtIn && storyId && !editing);
 
+  /**
+   * The passage the dialog is asking about, frozen when it opened.
+   *
+   * A SNAPSHOT, not picker.passage: the picker is still listening to
+   * selectionchange while the box is open, and nothing may swap what is about
+   * to be drawn out from under the quote the reader is looking at.
+   */
+  const [confirming, setConfirming] = useState<PickedPassage | null>(null);
+
   const drawPassage = useMutation({
     // Through requestPicture: a picture takes minutes, the proxy gives up at
     // 100 seconds, and the server finishes anyway -- see pictureRequest.ts.
-    mutationFn: async (passage: { text: string; blockIndex: number }) =>
-      requestPicture(storyId!, { passage }, {
+    mutationFn: async ({ passage, note }: { passage: PickedPassage; note: string }) =>
+      requestPicture(storyId!, { passage, ...(note ? { note } : {}) }, {
         onStillDrawing: () =>
           toast({
             title: "Still drawing…",
@@ -199,6 +209,7 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
       onPictures?.(data.images ?? []);
       queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
+      setConfirming(null);
       picker.cancel();
       toast({ title: "Picture added", description: "It is in the story, and in the gallery." });
     },
@@ -440,7 +451,9 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
                 size="sm"
                 className="h-8 gap-1 px-3 text-xs"
                 disabled={!picker.passage || drawPassage.isPending}
-                onClick={() => picker.passage && drawPassage.mutate(picker.passage)}
+                // It ASKS FIRST now: the dialog says what a picture costs and
+                // takes anything that must be in it. The spend is its button.
+                onClick={() => picker.passage && setConfirming(picker.passage)}
                 data-guide="picking"
               >
                 {drawPassage.isPending ? (
@@ -465,6 +478,23 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
             </div>
           </div>
         </div>
+      )}
+
+      {/* ASKED BEFORE ANYTHING IS SPENT. Cancelling leaves the picker armed,
+          so a re-highlight does not mean starting from the toolbar again --
+          only a finished picture calls picker.cancel(), which clears the
+          selection. */}
+      {confirming && (
+        <PictureDialog
+          open
+          onOpenChange={(open) => !open && !drawPassage.isPending && setConfirming(null)}
+          mode="passage"
+          quote={confirming.text}
+          storyTitle={story.title}
+          galleryCount={images?.length ?? 0}
+          pending={drawPassage.isPending}
+          onConfirm={(note) => drawPassage.mutate({ passage: confirming, note })}
+        />
       )}
 
       {storyId && !shared && (
