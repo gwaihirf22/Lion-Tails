@@ -67,6 +67,12 @@ export const GUIDE_PLATE_IMAGES: Partial<Record<GuidePlateId, GuidePlateImage>> 
     "height": 1688,
     "capturedAt": "2026-09-16T05:20:35.679Z"
   },
+  "guide-search": {
+    "file": "/public/images/guide/guide-search.webp",
+    "width": 780,
+    "height": 1688,
+    "capturedAt": "2026-09-16T07:57:59.344Z"
+  },
   "historical": {
     "file": "/public/images/guide/historical.webp",
     "width": 780,
@@ -327,6 +333,12 @@ export const GUIDE_BOXES: Partial<Record<GuideShotNodeId, GuideBox>> = {
     "y": 0.4819,
     "w": 0.8256,
     "h": 0.2986
+  },
+  "guide-search": {
+    "x": 0.0436,
+    "y": 0.1668,
+    "w": 0.9128,
+    "h": 0.0427
   },
   "historical": {
     "x": 0.5051,

@@ -29,6 +29,13 @@ type GuideState = {
   tab: GuideTabId;
   setTab: (tab: GuideTabId) => void;
   node?: GuideNodeId;
+  /**
+   * Bumped every time a node is ASKED FOR, and that is the whole point: the
+   * same search, run twice, has to open and scroll to the item twice. `node`
+   * alone cannot say "again" -- it is the same value, so nothing downstream
+   * would notice.
+   */
+  jump: number;
 };
 
 const GuideContext = createContext<GuideState | null>(null);
@@ -49,6 +56,7 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<GuideTabId>("start");
   const [node, setNode] = useState<GuideNodeId | undefined>(undefined);
+  const [jump, setJump] = useState(0);
 
   const seen = useQuery<{ seenAt: string | null }>({
     queryKey: ["/api/settings/guide"],
@@ -66,6 +74,7 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
     (nextTab?: GuideTabId, nextNode?: GuideNodeId) => {
       if (nextTab) setTab(nextTab);
       setNode(nextNode);
+      if (nextNode) setJump((n) => n + 1);
       setOpen(true);
       // Opening it is having seen it, on the account and in this browser.
       writeGuideSeen(user?.id, GUIDE_VERSION);
@@ -93,8 +102,8 @@ export function GuideProvider({ children }: { children: React.ReactNode }) {
   }, [authLoading, user, location, seen.isLoading, seen.data?.seenAt, openGuide]);
 
   const value = useMemo(
-    () => ({ open, openGuide, closeGuide, tab, setTab, node }),
-    [open, openGuide, closeGuide, tab, node],
+    () => ({ open, openGuide, closeGuide, tab, setTab, node, jump }),
+    [open, openGuide, closeGuide, tab, node, jump],
   );
 
   return (

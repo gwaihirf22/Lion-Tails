@@ -64,6 +64,9 @@ export const GUIDE_SCENES = [
   "reader-extras",
   "settings",
   "mobile-menu",
+  // The only scene with the guide's OWN dialog open: it has a search box now,
+  // and the guide explains its own controls like any other.
+  "guide-open",
 ] as const;
 
 export type GuideSceneId = (typeof GUIDE_SCENES)[number];
@@ -122,6 +125,10 @@ export const GUIDE_PLATES = [
   { id: "settings-parent", scene: "settings", around: "parent-mode" },
   { id: "settings-resets", scene: "settings", around: "start-sheet-again" },
   { id: "settings-quests", scene: "settings", around: "quest-first-visit" },
+  // `around`, not `frame`: a strip of the input alone would be a plate the ring
+  // covers entirely, which GuideShot deliberately draws no ring for. The
+  // viewport shows the box with the tabs under it, which is where it lives.
+  { id: "guide-search", scene: "guide-open", around: "guide-search" },
 ] as const satisfies readonly GuidePlate[];
 
 export type GuidePlateId = (typeof GUIDE_PLATES)[number]["id"];
@@ -161,6 +168,17 @@ export const GUIDE_NODES = [
       "This guide. It sits in the top left of the pages it covers, so you can open it beside the " +
       "thing you are looking at rather than trying to remember what it said.",
     shot: { plate: "create-top", emphasise: "how-to-use" },
+  },
+  {
+    id: "guide-search",
+    tab: "start",
+    parent: "how-to-use",
+    title: "Find it by name",
+    why:
+      "Type what you are after — pictures, series, credits, print — and this takes you straight to " +
+      "the part that explains it, on whichever tab it lives. It answers with places to look rather " +
+      "than answers of its own, so what you read is always the guide itself.",
+    shot: { plate: "guide-search", emphasise: "guide-search" },
   },
   {
     id: "where-things-are",
@@ -865,6 +883,89 @@ export const GUIDE_NODES = [
 
 export type GuideNode = (typeof GUIDE_NODES)[number];
 export type GuideNodeId = GuideNode["id"];
+
+/**
+ * What people TYPE, where it is not what the guide says.
+ *
+ * Blake: search "should basically just bring the user to the right location for
+ * a feature that they are looking for" -- and a parent looking for the print
+ * button types "pdf", which appears nowhere in the guide's prose. So a handful
+ * of words per item, searched ahead of the prose (see shared/guideSearch.ts).
+ *
+ * ONE BLOCK, NOT A FIELD ON EACH NODE, for two reasons: the keys are
+ * `GuideNodeId`, so a typo or a deleted node is a COMPILE error rather than a
+ * word that quietly finds nothing; and the whole vocabulary is readable at
+ * once, which is the only way to notice that two items claim the same word.
+ * Sharing one is allowed and often right -- "cost" belongs to the credits item
+ * and to the picture box -- and a test holds that every word here still finds
+ * the item it belongs to.
+ *
+ * Lower case, no punctuation, and a phrase is fine ("dark mode"): the matcher
+ * lowercases the query and matches whole words.
+ */
+export const GUIDE_KEYWORDS: Partial<Record<GuideNodeId, readonly string[]>> = {
+  // ---- Start here -------------------------------------------------------
+  "how-to-use": ["help", "guide", "instructions", "how do i"],
+  "where-things-are": ["menu", "navigation", "pages", "where is"],
+  "parent-mode": ["password", "lock", "locked", "pin", "grown ups only"],
+  credits: ["cost", "money", "price", "free", "allowance", "run out", "how many"],
+  "what-things-cost": ["cost", "money", "price", "spend", "per story"],
+  "picture-settings": ["quality", "model", "cheaper", "turn off pictures", "detailed", "finest"],
+  "own-key": ["api key", "openai", "own key", "unlimited"],
+  // ---- Create a Story ---------------------------------------------------
+  cast: ["who is in it", "add a character", "choose people", "more than one"],
+  "shared-story": ["ensemble", "no lead", "share the story", "together"],
+  "quick-character": ["one off", "temporary", "without saving", "just once"],
+  "what-should-happen": ["idea", "plot", "what happens", "prompt"],
+  virtue: ["moral", "lesson", "values", "teach"],
+  "story-type": ["poem", "poetry", "moral story", "kind of story"],
+  series: ["sequel", "next story", "universe", "same world", "carry on"],
+  cliffhanger: ["to be continued", "unfinished", "ends mid"],
+  "somewhere-real": ["bible", "history", "real place", "true story", "scripture"],
+  source: ["hero of faith", "passage", "event", "verse", "who it is about"],
+  "the-way-in": ["how they get there", "join the story"],
+  quest: ["time travel", "lantern", "timekeeper", "barnabas", "shop", "travel back"],
+  "quest-first-visit": ["reset quests", "first time again", "forget the quests"],
+  alongside: ["was there", "already there", "no time travel", "belongs to that time"],
+  "reading-level": ["age", "younger", "older", "hard words", "vocabulary"],
+  "story-length": ["longer", "shorter", "chapters", "word count", "how long"],
+  "prompt-editor": ["prompts", "advanced", "behind the scenes"],
+  "write-it": ["generate", "make the story", "start writing"],
+  historical: ["retelling", "no characters", "the real thing", "just the account"],
+  "digging-deeper": ["questions", "answers", "facts", "explain"],
+  // ---- Characters -------------------------------------------------------
+  "character-card": ["badge", "alert", "waiting", "card"],
+  family: ["mum", "mom", "dad", "brother", "sister", "parents", "relations", "cousin"],
+  pets: ["dog", "cat", "pet", "animal"],
+  appearance: ["looks", "hair", "eyes", "how they look", "description"],
+  "draw-a-picture": ["avatar", "portrait", "face", "picture of them"],
+  "photo-to-drawing": ["photo", "camera", "cartoon", "upload", "real picture"],
+  "photo-as-it-is": ["photo", "upload", "keep the photo", "real picture"],
+  stats: ["skills", "strength", "numbers", "points", "abilities"],
+  virtues: ["courage", "receipts", "what they have done"],
+  "grown-ups": ["must be true", "notes", "private", "only i can see"],
+  "start-sheet-again": ["reset", "clear", "start over", "wipe"],
+  // ---- Reading ----------------------------------------------------------
+  library: ["my stories", "find a story", "folders", "saved stories", "old stories"],
+  "story-card": ["thumbnail", "open a story", "delete a story"],
+  "text-size": ["bigger", "smaller", "font size", "zoom", "too small"],
+  palette: ["dark mode", "night", "sepia", "theme", "colours", "background", "bright"],
+  font: ["typeface", "letters", "dyslexia", "easier to read"],
+  classic: ["drop cap", "indent", "storybook", "fancy"],
+  focus: ["full screen", "distraction", "hide everything"],
+  "make-a-picture": ["illustration", "image", "art", "draw a scene"],
+  picking: ["highlight", "select text", "which part", "choose the moment"],
+  "picture-note": ["instructions", "must include", "ask for something", "extra detail"],
+  "picture-cost": ["cost", "price", "money", "credits", "how much"],
+  gallery: ["delete a picture", "choose a picture", "more than one picture"],
+  favourite: ["keep", "star", "expires", "save forever", "delete"],
+  share: ["link", "send", "show someone", "grandma", "public"],
+  "print-save": ["pdf", "paper", "download", "export", "printer", "bedtime copy"],
+  "edit-story": ["change the words", "fix", "rewrite", "typo", "mistake"],
+  extras: ["verse", "questions", "further reading", "after"],
+  "continue-story": ["next", "sequel", "more of this", "carry on"],
+  "add-to-universe": ["universe", "same world", "collection"],
+};
 /** The ids that carry a screenshot -- what the generated manifest must cover. */
 export type GuideShotNodeId = Extract<GuideNode, { shot: unknown }>["id"];
 
