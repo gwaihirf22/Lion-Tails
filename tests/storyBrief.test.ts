@@ -659,6 +659,123 @@ describe("resolveStoryFocus settles surprise on the server", () => {
   });
 });
 
+/**
+ * A STRETCH OF A LIFE: the thing between one episode and the whole of it.
+ *
+ * The ends arrive as descriptions -- the select never had an index to give --
+ * so they are located in the profile here, and everything between them is
+ * frozen into `covers`. A profile edited afterwards must not change what an
+ * old request meant.
+ */
+describe("resolveStoryFocus settles a stretch of a life", () => {
+  const hero = {
+    id: "h1", name: "H", description: "d", contribution: "c", timePeriod: "t",
+    group: "modern", collection: "historical",
+    keyEvents: [
+      { year: "1937", description: "First" },
+      { year: "1942", description: "Second" },
+      { year: "1944", description: "Third" },
+      { year: "1947", description: "Fourth" },
+    ],
+    tags: [], sources: [], createdAt: new Date(),
+  } as never;
+
+  const range = (text: string, toText: string) =>
+    ({ ...base, storyFocus: { mode: "range" as const, text, toText } }) as StoryRequest;
+
+  it("covers both ends and everything between them", () => {
+    const req = range("Second", "Fourth");
+    resolveStoryFocus(req, hero);
+    expect(req.storyFocus?.mode).toBe("range");
+    expect(req.storyFocus?.covers).toEqual(["Second", "Third", "Fourth"]);
+    expect(req.storyFocus?.text).toBe("Second");
+    expect(req.storyFocus?.toText).toBe("Fourth");
+    // The references travel with the ends, for the prompt to name them.
+    expect(req.storyFocus?.reference).toBe("1942");
+    expect(req.storyFocus?.toReference).toBe("1947");
+  });
+
+  it("puts the ends back in order when they arrive backwards", () => {
+    // The reader has said which two moments they mean. Which one they clicked
+    // first is not information worth refusing them over.
+    const req = range("Fourth", "Second");
+    resolveStoryFocus(req, hero);
+    expect(req.storyFocus?.covers).toEqual(["Second", "Third", "Fourth"]);
+    expect(req.storyFocus?.text).toBe("Second");
+  });
+
+  it("reads one moment named twice as that one episode", () => {
+    const req = range("Third", "Third");
+    resolveStoryFocus(req, hero);
+    expect(req.storyFocus?.mode).toBe("chosen");
+    expect(req.storyFocus?.text).toBe("Third");
+    expect(req.storyFocus?.covers).toBeUndefined();
+  });
+
+  it("falls back to the whole life when an end no longer exists", () => {
+    // A profile reworded since the request was made.
+    const req = range("Second", "A moment nobody wrote");
+    resolveStoryFocus(req, hero);
+    expect(req.storyFocus).toEqual({ mode: "whole", text: "" });
+  });
+
+  it("falls back to the whole life with only one end, or no hero", () => {
+    const half = { ...base, storyFocus: { mode: "range" as const, text: "Second" } } as StoryRequest;
+    resolveStoryFocus(half, hero);
+    expect(half.storyFocus).toEqual({ mode: "whole", text: "" });
+
+    const orphan = range("Second", "Third");
+    resolveStoryFocus(orphan, undefined);
+    expect(orphan.storyFocus).toEqual({ mode: "whole", text: "" });
+  });
+});
+
+describe("a stretch of a life reaches the prompt as the moments it covers", () => {
+  const hero = {
+    id: "h1", name: "Corrie ten Boom", description: "d", contribution: "c",
+    timePeriod: "1892-1983", group: "modern", collection: "historical",
+    keyEvents: [
+      { year: "1942", description: "Hid the first family" },
+      { year: "1944", description: "Arrested" },
+      { year: "1945", description: "Released by a clerical error" },
+    ],
+    tags: [], sources: [], createdAt: new Date(),
+  } as never;
+
+  const briefFor = (focus: unknown) =>
+    renderBrief(
+      buildStoryBrief(
+        { ...base, heroOfFaith: "Corrie ten Boom", storyFocus: focus } as StoryRequest,
+        [],
+        undefined,
+        hero,
+      ),
+      "single",
+    );
+
+  it("names both ends and lists what lies between", () => {
+    const req = { ...base, heroOfFaith: "Corrie ten Boom",
+      storyFocus: { mode: "range" as const, text: "Hid the first family", toText: "Released by a clerical error" } } as StoryRequest;
+    resolveStoryFocus(req, hero);
+    const out = briefFor(req.storyFocus);
+    expect(out).toContain("covers a stretch of Corrie ten Boom");
+    expect(out).toContain("from Hid the first family (1942) to Released by a clerical error (1945)");
+    expect(out).toContain("Hid the first family; Arrested; Released by a clerical error");
+    expect(out).toMatch(/do not go past either end/i);
+  });
+
+  it("is not also told to cover ONE episode", () => {
+    // Two scope instructions at once is the bug the whole-life test guards
+    // against; a range must not reintroduce it.
+    const out = briefFor({
+      mode: "range", text: "Hid the first family", toText: "Arrested",
+      covers: ["Hid the first family", "Arrested"],
+    });
+    expect(out).not.toContain("covers ONE episode");
+    expect(out).not.toContain("more than one moment of");
+  });
+});
+
 describe("a retelling needs no protagonist", () => {
   const parse = (over: Record<string, unknown>) =>
     storyRequestSchema.safeParse({ storyLength: "medium", ...over });
