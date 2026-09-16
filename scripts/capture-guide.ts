@@ -366,6 +366,21 @@ async function main() {
       await page.getByRole("button", { name: /Open menu/ }).click();
       await page.waitForTimeout(300);
     },
+    /**
+     * The guide photographing itself, for its own search box.
+     *
+     * The only scene that wants the dialog OPEN, and `go()` closes it every
+     * time (it opens itself for an account that has not seen it, which would
+     * otherwise photograph a dialog nobody asked for). So: land, let go()
+     * close whatever was open, then open it deliberately from the button the
+     * guide already explains.
+     */
+    "guide-open": async () => {
+      await go("/generate-story");
+      await tapMarker("how-to-use");
+      await marker("guide-search").waitFor({ state: "visible", timeout: 15_000 });
+      await page.waitForTimeout(400);
+    },
   };
 
   const wanted: GuidePlate[] = (only ? GUIDE_PLATES.filter((p) => only.includes(p.id)) : GUIDE_PLATES).map(

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { guideTree, NEEDS_LABEL, type GuideNodeId, type GuideTabId, type GuideTreeNode } from "@shared/guide";
@@ -26,13 +26,44 @@ const STEP_PX = 14;
 export default function GuideTree({
   tab,
   openNode,
+  jump = 0,
 }: {
   tab: GuideTabId;
   /** Opened when the guide is asked for a particular thing. */
   openNode?: GuideNodeId;
+  /** Bumped when it is asked for again; see use-guide.tsx. */
+  jump?: number;
 }) {
   const [selected, setSelected] = useState<string | undefined>(openNode);
+  const rows = useRef(new Map<string, HTMLLIElement>());
   const roots = guideTree(tab);
+
+  /**
+   * ASKED FOR FROM OUTSIDE: open it, and bring it into view.
+   *
+   * `useState(openNode)` seeds this on mount, which covered the only caller
+   * there used to be -- the button, which opens a tab and nothing more. Search
+   * asks for an item while the dialog is already open, and often on the tab it
+   * is already showing, where nothing remounts. Hence the effect, and hence
+   * `jump`: searching for the same item twice must scroll twice.
+   */
+  useEffect(() => {
+    if (!openNode) return;
+    setSelected(openNode);
+    const row = rows.current.get(openNode);
+    if (!row) return;
+    /**
+     * NOT scrollIntoView. The dialog is the scroll container and its
+     * `overflow-y-auto` makes the x axis `auto` as well, so scrollIntoView
+     * drags the whole card sideways -- the thing CharacterForm's picker
+     * documents at length. Move scrollTop by the difference between the two
+     * rects and leave scrollLeft alone.
+     */
+    const scroller = row.closest<HTMLElement>("[data-guide-scroll]");
+    if (!scroller) return;
+    const gap = row.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    scroller.scrollTop += gap - 16;
+  }, [openNode, jump]);
 
   const branch = (entries: GuideTreeNode[], depth: number) => (
     <ul
@@ -42,7 +73,18 @@ export default function GuideTree({
       {entries.map((entry) => {
         const open = selected === entry.node.id;
         return (
-          <li key={entry.node.id} className={cn("relative pl-2", depth > 0 && "before:absolute before:left-0 before:top-4 before:w-2 before:border-t before:border-border")}>
+          <li
+            key={entry.node.id}
+            // Kept so a search can scroll to this row. A callback ref rather
+            // than an id: the dialog is portalled and two trees could in
+            // principle be mounted, and a stale document id would scroll the
+            // wrong one.
+            ref={(el) => {
+              if (el) rows.current.set(entry.node.id, el);
+              else rows.current.delete(entry.node.id);
+            }}
+            className={cn("relative pl-2", depth > 0 && "before:absolute before:left-0 before:top-4 before:w-2 before:border-t before:border-border")}
+          >
             <button
               type="button"
               aria-expanded={open}

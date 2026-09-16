@@ -1496,6 +1496,34 @@ mirrored in localStorage only to stop it flashing open before that answers).
 - **`shared/guide.ts` is the one table**: tabs, scenes, plates, nodes, and how
   to photograph each. The dialog and `scripts/capture-guide.ts` read the same
   list, so a node cannot point at a screenshot nobody took.
+- **Search takes you to an item; it never answers.** Blake: it *"should
+  basically just bring the user to the right location for a feature that they
+  are looking for."* `searchGuide()` (`shared/guideSearch.ts`, pure) ranks in
+  tiers — title, then `GUIDE_KEYWORDS`, then the prose — and the words of a
+  query are an AND, so "picture cost" is one item rather than everything about
+  pictures. **No regex is built from the query**; it is index arithmetic on a
+  lowercased haystack, as `containsWholeWord` and `lookBook`'s `mentions` are.
+  Only word STARTS match (a substring tier let "rint" find Print and Save), and
+  a trailing "s" is stemmed so a plural works either way round.
+  - **`GUIDE_KEYWORDS` is what people TYPE**, keyed by `GuideNodeId` so a typo
+    or a deleted node is a compile error: `pdf` → Print and Save, `dark mode` →
+    Colours, `sequel` → Part of a series, `time travel` → the quest. A test
+    holds that every word still finds the item it was added for, and another
+    that every item is reachable by its own title.
+  - **Picking a result must open AND scroll**, and neither was free.
+    `GuideTree` seeded its open item from `openNode` once, with no effect, so
+    asking for an item while the dialog was already on that tab did nothing;
+    `use-guide`'s `jump` counter is what makes the same search twice land
+    twice. The scroll sets `scrollTop` against `[data-guide-scroll]`'s own
+    rect rather than calling `scrollIntoView`, which drags the card sideways
+    (CharacterForm's picker documents that at length).
+  - **Escape belongs to the dialog.** Radix hears it on the document in the
+    CAPTURE phase, so nothing in the input can stop it — measured, a search
+    for something the guide does not have closed the whole guide. The query
+    lives in `GuideDialog` and `onEscapeKeyDown` clears it instead.
+  - `onOpenAutoFocus` is prevented for the same reason as PictureDialog: the
+    box is the first tabbable thing, the guide opens itself once per account,
+    and a phone keyboard over the guide is not a welcome.
 - **Scene → plate → node.** A SCENE is a state worth getting into (one builder
   each in the script, a total Record so a missing one will not compile); a
   PLATE is one photograph taken in it; a NODE is one thing explained. Several
@@ -1546,7 +1574,7 @@ mirrored in localStorage only to stop it flashing open before that answers).
   which is how three plates came to be split.
 - Images live in `public/images/guide/` -- **not** under
   `public/images/stories`, which the `story_images` volume mounts over. About
-  1.4MB of webp for 29 plates; a test holds 120KB a plate and 1.6MB the
+  1.5MB of webp for 32 plates; a test holds 120KB a plate and 1.6MB the
   directory.
 
 ## Tab strips
