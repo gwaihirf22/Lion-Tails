@@ -989,13 +989,60 @@ export type NamesakeSources = { account?: string; keeper?: string };
  * who is a namesake.
  */
 export function namesakeSourcesOf(
-  brief: Pick<StoryBrief, "sourceMaterial" | "world">,
+  brief: Pick<StoryBrief, "sourceMaterial" | "world" | "sourceNames">,
 ): NamesakeSources {
   const sm = brief.sourceMaterial;
+  // `sourceNames` is what a typed passage or an unknown event id leaves behind.
+  // Both are settings with no account attached, and a namesake in one of them
+  // is the same collision as a namesake in a catalogue event -- see the field.
+  const named = [sm?.label, sm?.account, ...(sm?.cautions ?? []), brief.sourceNames]
+    .filter(Boolean)
+    .join("\n");
   return {
-    account: sm ? [sm.label, sm.account, ...sm.cautions].join("\n") : undefined,
+    account: named || undefined,
     keeper: brief.world ? KEEPER.name : undefined,
   };
+}
+
+/**
+ * The words that name a request's setting, for telling people apart.
+ *
+ * Pure, and deliberately not clever: the point is that a name in any of these
+ * is a name the story may collide with. An id is turned into its words -- the
+ * slug itself must never reach a prompt (biblicalEvents.ts says so), and
+ * "pauls-missionary-journeys" is only a namesake of "Paul" once the hyphens
+ * are gone.
+ */
+export function sourceNamesOf(request: StoryRequest): string | undefined {
+  const words = (value: string) => value.replace(/[-_]+/g, " ").trim();
+  const parts = [
+    isSet(request.biblicalEvent) && request.biblicalEvent.toLowerCase() !== "none"
+      ? words(request.biblicalEvent)
+      : "",
+    isSet(request.biblePassage) ? request.biblePassage.trim() : "",
+    // A hero that RESOLVED arrives as sourceMaterial; this is the leftover
+    // string, and a uuid says nothing about anybody's name.
+    isSet(request.heroOfFaith) && !/^[0-9a-f-]{16,}$/i.test(request.heroOfFaith)
+      ? words(request.heroOfFaith)
+      : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join("\n") : undefined;
+}
+
+/**
+ * Whether a name is named here, however it is written.
+ *
+ * `containsWholeWord` stays exact -- illustration.ts decides whether to attach
+ * somebody's FACE with it, and a loose match there draws the wrong person. This
+ * is the looser question, and the two mistakes are not equal: an extra namesake
+ * sentence costs one line of prompt, a missing one made the apostle Paul into
+ * a seven-year-old's father. So lower case ("pauls missionary journeys" names
+ * Paul) and a bare possessive ("Pauls shipwreck") both count.
+ */
+function mentionsName(text: string, name: string): boolean {
+  const t = text.toLowerCase();
+  const n = name.toLowerCase();
+  return containsWholeWord(t, n) || containsWholeWord(t, `${n}s`);
 }
 
 /** The cast members whose first name is also someone in the account, with where. */
@@ -1007,8 +1054,8 @@ export function namesakesIn(
   for (const c of characters) {
     const first = c.name.trim().split(/\s+/)[0] ?? "";
     if (first.length < 3) continue;
-    const inAccount = !!sources.account && containsWholeWord(sources.account, first);
-    const isKeeper = !!sources.keeper && containsWholeWord(sources.keeper, first);
+    const inAccount = !!sources.account && mentionsName(sources.account, first);
+    const isKeeper = !!sources.keeper && mentionsName(sources.keeper, first);
     if (inAccount || isKeeper) out.push({ character: c, first, inAccount, isKeeper });
   }
   return out;
@@ -1020,9 +1067,57 @@ export function namesakeLines(characters: Character[], sources: NamesakeSources)
     const whose = inAccount && isKeeper
       ? `the ${first} of the account, or ${sources.keeper}`
       : inAccount ? `the ${first} of the account` : sources.keeper;
+    /**
+     * WHOSE FATHER -- the half that actually failed.
+     *
+     * The brief states the relation flatly and first ("Paul is Lucy's
+     * father."), and the sentence above only said the reader's Paul is not the
+     * figure. Nothing said the FIGURE is not the father, so a model with both
+     * lines in front of it satisfied them by collapsing who "her father" meant:
+     * "Lucy stood beside her father on the ship. Paul's hands were held by a
+     * chain, because he was a prisoner." Blake: it "made the Apostle Paul me
+     * (Paul) and Lucy the daughter of the Apostle Paul."
+     *
+     * A relation is only said when BOTH people are in the cast, which is
+     * familySentences' rule, so this denies exactly the relations the brief
+     * asserts. Pictures bind this with a picture ID; prose has words, and ids
+     * never go into a prompt that writes what a child reads.
+     */
+    const roles = new Set<string>();
+    for (const other of characters) {
+      if (other.id === c.id) continue;
+      for (const r of other.relations ?? []) {
+        if (r.relativeId !== c.id || !isRelation(r.relation)) continue;
+        roles.add(`${other.name}'s ${relationLabel(r.relation, sexForWords(c), "prompt")}`);
+      }
+    }
+    const family = roles.size
+      ? ` ${nameList([...roles])} is this ${c.name} and nobody else: ${whose} is not, ` +
+        `and never becomes anybody's family in this story.`
+      : "";
     out.push(
       `${c.name} in this story is one of the reader's own characters, and is not ${whose}: ` +
-        `they only share a name. Wherever both could be meant, make it plain which one.`,
+        `they only share a name.${family} ` +
+        /**
+         * KEEP THEM APART BY WHAT THEY ARE CALLED, AND NEVER SAY WHY.
+         *
+         * "Wherever both could be meant, make it plain which one" is an
+         * instruction with no mechanism, and a model given it plus the
+         * relation above does the only thing it can: it explains itself on the
+         * page. Measured on a real generation -- "Her father, Paul-not Saul of
+         * Tarsus, the man later called Paul-told her what had happened",
+         * "Lucy's father, Paul-not the apostle Paul-explained carefully,
+         * 'These are two different men. I am your father'", and then a third
+         * person appeared, "Paul's father answered". This is the notNarrated
+         * rule: told a thing three ways, the model writes it.
+         *
+         * So: a naming convention, which the picture side has had all along
+         * ("Queen Esther", not "Esther"), and an explicit ban on remarking on
+         * the coincidence.
+         */
+        `Tell them apart by what you call them -- ${whose} as the account itself names them, and ` +
+        `${c.name} by name alone -- and never remark on the coincidence: nobody in the story ` +
+        `points out that two people share a name, and no aside explains it to the reader.`,
     );
   }
   return out;
@@ -1225,6 +1320,28 @@ export type StoryBrief = {
     keyVerse?: { reference: string; text: string; translation?: string };
     cautions: string[];
   };
+  /**
+   * The WORDS that name what this story is set in, when they are all there is.
+   *
+   * A source only becomes `sourceMaterial` when the app holds the account
+   * itself -- a catalogue event, or a hero of faith. A typed passage ("Acts 27
+   * -- Paul's shipwreck") is a first-class choice in the form and has no
+   * account to attach, and an event id the catalogue does not know has none
+   * either. Both used to leave `sourceMaterial` undefined, and with it went the
+   * only thing that stopped a cast member being merged with the figure of the
+   * same name: `namesakeSourcesOf` had nothing to match against.
+   *
+   * That is exactly how "The Rock, the Board, and Malta" made the apostle Paul
+   * into Lucy's father (2026-09-16): a request carrying an event id the app has
+   * never had, so no account, no era, no cautions and no namesake sentence.
+   * Blake, when this feature was built: *"If I (Paul) am Lucy's dad … the AI
+   * might put Paul the apostle as her dad in a story about Paul the Apostle."*
+   *
+   * So the names are carried whether or not the account resolved. This field is
+   * for TELLING PEOPLE APART, never for the model to be faithful to -- an
+   * account it can be faithful to is `sourceMaterial`.
+   */
+  sourceNames?: string;
 };
 
 /**
@@ -1517,8 +1634,16 @@ export function buildStoryBrief(
   // The unresolved slug/uuid lines that used to live here are gone: the event
   // and the hero now arrive as sourceMaterial, with the account attached.
   if (!event && isSet(request.biblicalEvent)) {
-    // An unrecognised slug. Say the words rather than the identifier.
-    premise.push(`Draw on this biblical event: ${request.biblicalEvent}.`);
+    /**
+     * An id the catalogue does not know -- so there is no account, no era and
+     * no cautions, and this line is all the model gets about the setting.
+     *
+     * SAY THE WORDS, NEVER THE IDENTIFIER. `BiblicalEvent.label`'s own doc
+     * comment is "the slug must never reach a prompt", and this line was
+     * printing it: "Draw on this biblical event: pauls-missionary-journeys."
+     * A model reading that has been handed a filename, not a subject.
+     */
+    premise.push(`Draw on this biblical event: ${request.biblicalEvent.replace(/[-_]+/g, " ").trim()}.`);
   }
   if (!hero && isSet(request.heroOfFaith) && !/^[0-9a-f-]{16,}$/i.test(request.heroOfFaith)) {
     premise.push(`Feature this hero of faith: ${request.heroOfFaith}.`);
@@ -1747,7 +1872,10 @@ export function buildStoryBrief(
    */
   const family = anonymous ? [] : familySentences(characters);
   const pets = anonymous || !animalsAllowed ? [] : petsComingAlong(characters);
-  const nameSources = namesakeSourcesOf({ sourceMaterial, world });
+  // The words that name the setting, whether or not the app holds its account:
+  // a typed passage and an unknown event id have names in them too.
+  const sourceNames = sourceNamesOf(request);
+  const nameSources = namesakeSourcesOf({ sourceMaterial, world, sourceNames });
   const namesakes = anonymous ? [] : namesakeLines(characters, nameSources);
 
   /**
@@ -1774,6 +1902,10 @@ export function buildStoryBrief(
     ...(family.length ? { family } : {}),
     ...(pets.length ? { pets } : {}),
     ...(namesakes.length ? { namesakes } : {}),
+    // Carried so the PICTURE asks the same question the prose did: both read it
+    // through namesakeSourcesOf, and a brief frozen at enqueue is what a
+    // redrawn picture is rebuilt from months later.
+    ...(sourceNames ? { sourceNames } : {}),
     soloRetelling: anonymous,
     ensemble,
     cliffhanger: request.cliffhanger === true,
