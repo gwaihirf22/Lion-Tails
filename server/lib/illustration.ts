@@ -1160,7 +1160,7 @@ function storyImagePath(url: string): string | undefined {
 /**
  * A story's own picture, as a reference for the next one.
  *
- * This is what keeps the people a story invented -- a hero of faith, a
+ * This is what keeps the people a story invented -- a hero of the faith, a
  * shopkeeper, anyone with no character sheet and so no portrait -- looking
  * like themselves across a book. They have nothing else: hero.imageUrl is on
  * the schema and empty for all eighty of them, and a fresh description draws

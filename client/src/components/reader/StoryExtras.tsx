@@ -112,7 +112,7 @@ export function StoryExtras({
       return await response.json();
     },
     onSuccess: () => {
-      toast({ title: "Story associated", description: "Linked to that Hero of Faith." });
+      toast({ title: "Story associated", description: "Linked to that Hero of the Faith." });
       queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/stories"] });
     },
@@ -569,7 +569,7 @@ export function StoryExtras({
 
         {storyId && !builtIn && (
           <AccordionItem value="hero" style={{ borderColor: "var(--reader-border)" }}>
-            <AccordionTrigger className="text-base">Link to a Hero of Faith</AccordionTrigger>
+            <AccordionTrigger className="text-base">Link to a Hero of the Faith</AccordionTrigger>
             <AccordionContent>
               <Label className="mb-2 block text-sm" style={{ color: "var(--reader-muted)" }}>
                 Group this story with a hero so it shows up on their page.
@@ -580,7 +580,7 @@ export function StoryExtras({
                 disabled={associate.isPending}
               >
                 <SelectTrigger className="max-w-sm">
-                  <SelectValue placeholder="Choose a Hero of Faith" />
+                  <SelectValue placeholder="Choose a Hero of the Faith" />
                 </SelectTrigger>
                 <SelectContent>
                   {heroes.map((h) => (

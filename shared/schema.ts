@@ -2127,7 +2127,7 @@ export const storyRequestSchema = z.object({
   /**
    * Which part of a life or an account this story covers.
    *
-   * A Hero of Faith is a whole life, and asked for "a story about Corrie ten
+   * A Hero of the Faith is a whole life, and asked for "a story about Corrie ten
    * Boom" a model gives you a summary of all of it -- born here, did this,
    * died there. One episode, told properly, is a better story and teaches
    * more, so the user picks a moment or asks to be surprised by one.
@@ -2172,7 +2172,7 @@ export const storyRequestSchema = z.object({
   cliffhanger: z.boolean().default(false),
   /**
    * What the chosen character is DOING in a retelling. The explicit choice,
-   * and the ONLY way a hero of faith and a user's character are brought
+   * and the ONLY way a hero of the faith and a user's character are brought
    * together. See characterRoleOf for what the three values mean.
    *
    * ONE field with three values, not two flags, because the two ways in are
@@ -2537,7 +2537,7 @@ export const savedStorySchema = z.object({
   seenAt: z.string().nullable().optional(),
 
   // Search and relationship metadata
-  heroId: z.string().optional(), // ID of the Hero of Faith if story is related to one
+  heroId: z.string().optional(), // ID of the Hero of the Faith if story is related to one
   searchMetadata: z.object({
     keywords: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
@@ -2636,7 +2636,7 @@ export const songSchema = z.object({
 
 export type Song = z.infer<typeof songSchema>;
 
-// Schema for Heroes of Faith
+// Schema for Heroes of the Faith
 /**
  * Two separate lists, not one.
  *

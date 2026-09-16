@@ -178,7 +178,7 @@ export interface IStorage {
   searchStoriesByTags(tags: string[], userId?: number): Promise<SavedStory[]>;
   getStoriesByHeroId(heroId: string, userId?: number): Promise<SavedStory[]>;
 
-  // Heroes of Faith related methods
+  // Heroes of the Faith related methods
   getAllHeroesOfFaith(): Promise<HeroOfFaith[]>;
   getHeroOfFaithById(id: string): Promise<HeroOfFaith | undefined>;
   createHeroOfFaith(hero: Omit<HeroOfFaith, "id" | "createdAt">): Promise<HeroOfFaith>;
@@ -662,11 +662,11 @@ export class MemStorage implements IStorage {
       biblicalReferences.push(request.biblicalEvent);
     }
 
-    // Add specific Hero of Faith if present
+    // Add specific Hero of the Faith if present
     if (request.heroOfFaith && request.heroOfFaith !== "None") {
       characters.push(request.heroOfFaith);
       keywords.push(request.heroOfFaith);
-      tags.push("hero of faith");
+      tags.push("hero of the faith");
     }
 
     // Add Bible verse reference
@@ -695,7 +695,7 @@ export class MemStorage implements IStorage {
       createdAt: now.toISOString(),
       isFavorite: false,
       expiresAt: expiryDate.toISOString(),
-      heroId, // Link to Hero of Faith if provided
+      heroId, // Link to Hero of the Faith if provided
       // Written explicitly, as DbStorage does: the PRESENCE of this key is
       // what says the row is one the unseen bubble knows about.
       seenAt: null,
@@ -900,9 +900,9 @@ export class MemStorage implements IStorage {
         if (!updatedStory.searchMetadata.characters.includes(hero.name)) {
           updatedStory.searchMetadata.characters.push(hero.name);
         }
-        // Add "hero of faith" tag if not already there
-        if (!updatedStory.searchMetadata.tags.includes("hero of faith")) {
-          updatedStory.searchMetadata.tags.push("hero of faith");
+        // Add "hero of the faith" tag if not already there
+        if (!updatedStory.searchMetadata.tags.includes("hero of the faith")) {
+          updatedStory.searchMetadata.tags.push("hero of the faith");
         }
       }
     }
@@ -1217,7 +1217,7 @@ export class MemStorage implements IStorage {
     return merged;
   }
 
-  // Heroes of Faith methods
+  // Heroes of the Faith methods
   async getAllHeroesOfFaith(): Promise<HeroOfFaith[]> {
     return Array.from(this.heroesOfFaith.values()).sort((a, b) => {
       // Sort by name alphabetically

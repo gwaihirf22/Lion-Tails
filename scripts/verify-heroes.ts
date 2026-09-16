@@ -1,5 +1,5 @@
 /**
- * Check every Hero of Faith against Wikipedia and Wikidata.
+ * Check every Hero of the Faith against Wikipedia and Wikidata.
  *
  * These profiles are written from knowledge, and knowledge is exactly the
  * thing this project has repeatedly caught being confidently wrong -- a Noah

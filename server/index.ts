@@ -119,7 +119,7 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   app.use("/public", express.static(path.join(process.cwd(), "public")));
 
   // Seed reference data before we start listening, so the app never serves a
-  // half-populated Heroes of Faith list. Resolves quickly when there is no
+  // half-populated Heroes of the Faith list. Resolves quickly when there is no
   // database -- databaseReady resolves false rather than hanging.
   await seedReferenceData();
 

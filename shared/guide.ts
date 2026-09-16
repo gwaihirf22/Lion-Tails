@@ -922,7 +922,7 @@ export const GUIDE_KEYWORDS: Partial<Record<GuideNodeId, readonly string[]>> = {
   series: ["sequel", "next story", "universe", "same world", "carry on"],
   cliffhanger: ["to be continued", "unfinished", "ends mid"],
   "somewhere-real": ["bible", "history", "real place", "true story", "scripture"],
-  source: ["hero of faith", "passage", "event", "verse", "who it is about"],
+  source: ["hero of the faith", "passage", "event", "verse", "who it is about"],
   "the-way-in": ["how they get there", "join the story"],
   quest: ["time travel", "lantern", "timekeeper", "barnabas", "shop", "travel back"],
   "quest-first-visit": ["reset quests", "first time again", "forget the quests"],

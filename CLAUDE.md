@@ -12,7 +12,7 @@ known-but-unfixed items — check it before reporting something as a new find.
 ## Project Overview
 
 Lion Tails generates personalised Christian bedtime stories for children, with a
-song/chord library, "Heroes of Faith" content, character management and image
+song/chord library, "Heroes of the Faith" content, character management and image
 analysis. It is an Express 4 + TypeScript (ESM) server that also serves a React
 18 / Vite SPA — one process, one port.
 
@@ -540,7 +540,7 @@ fixed:
   a namesake with no family in the story keeps the sentence it always had.
 - **The protection needed a RESOLVED account and silently vanished without
   one.** `namesakeSourcesOf` read `sourceMaterial`, which exists only for a
-  catalogue event or a hero of faith — so a **typed passage** ("Acts 27 —
+  catalogue event or a hero of the faith — so a **typed passage** ("Acts 27 —
   Paul's shipwreck"), a first-class choice in the form, had no era, no cautions
   and **no namesake sentence**; nor did a request carrying an event id the
   catalogue does not know, which is what the Malta story had
@@ -1035,7 +1035,7 @@ different child, and the only sign was one line in the log.
   both.
 - **The chosen picture is the look of the book.** It is attached as a
   reference to every picture drawn from a passage, so the people a story
-  invented -- a hero of faith, a shopkeeper, anyone with no character sheet --
+  invented -- a hero of the faith, a shopkeeper, anyone with no character sheet --
   are the same person on every page. `hero.imageUrl` is on the schema and
   **empty for all eighty heroes**, so there is nothing else they could be
   matched against. Verified: Corrie ten Boom came out the same woman across a
@@ -1132,7 +1132,7 @@ picker that did nothing for months.
 CI hardcoded-colour gate and would have been the brightest thing on the page in
 Night.
 
-## Heroes of Faith data
+## Heroes of the Faith data
 
 Eighty hand-written profiles in `server/data/heroes/`, one file per era, two
 collections (`historical` 41, `biblical` 39). `index.ts` assembles them and
@@ -1591,7 +1591,7 @@ Two, and the second is the template for any new one.
   anyone who did not already know the app, the other four did not exist.
   The join is drawn once, under the last row, so on the grid only a tab on
   that row touches the panel; that trade was chosen over hiding tabs.
-- **Heroes of Faith** keeps its own four-icon grid (`grid-cols-4`, an icon
+- **Heroes of the Faith** keeps its own four-icon grid (`grid-cols-4`, an icon
   each, labels from `sm` up). Four tabs that each have an icon fit one row
   at any width. It is not the template: it only works when every tab has an
   obvious icon and there are few enough to share a row on a phone.

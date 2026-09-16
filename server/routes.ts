@@ -1568,7 +1568,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user ID from authenticated user
       const userId = (req.user as any).id;
       
-      // Check if the story is about a Hero of Faith and get the ID
+      // Check if the story is about a Hero of the Faith and get the ID
       let heroId: string | undefined = undefined;
       
       // The form's select value is hero.id, so matching on name alone never
@@ -1581,7 +1581,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // IStorage but DbStorage does not accept it, so on Postgres it is
         // silently dropped. The request is the path that actually persists.
         request.heroId = resolvedHero.id;
-        console.log(`Found Hero of Faith ID ${heroId} for ${resolvedHero.name}`);
+        console.log(`Found Hero of the Faith ID ${heroId} for ${resolvedHero.name}`);
       }
       
       // Save the story with associated hero if applicable
@@ -1593,7 +1593,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         savedStory.isFavorite = true;
       }
       
-      // If this is a Hero of Faith story, also save it to the hero stories collection
+      // If this is a Hero of the Faith story, also save it to the hero stories collection
       if (heroId && story.bibleVerse) {
         try {
           // Create a hero story entry
@@ -1734,7 +1734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Get stories for a specific Hero of Faith
+  // Get stories for a specific Hero of the Faith
   app.get("/api/heroes/:heroId/stories", async (req, res) => {
     try {
       const heroId = req.params.heroId;
@@ -1801,7 +1801,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // API endpoint to associate a story with a hero of faith
+  // API endpoint to associate a story with a hero of the faith
   /**
    * How many stories are waiting to be read.
    *
@@ -2063,7 +2063,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       /**
        * The story's chosen picture, as the look of the book.
        *
-       * It covers everyone the cast does not: a hero of faith has no portrait
+       * It covers everyone the cast does not: a hero of the faith has no portrait
        * to attach (hero.imageUrl is on the schema and empty for all eighty of
        * them), and an invented shopkeeper has no character sheet, so without
        * this they are drawn fresh -- and differently -- on every page.
@@ -2903,13 +2903,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // API routes for Heroes of Faith
+  // API routes for Heroes of the Faith
   
-  // Heroes of Faith seeding lives in server/seed.ts and runs after the database
+  // Heroes of the Faith seeding lives in server/seed.ts and runs after the database
   // is ready. It used to be a fire-and-forget IIFE here, which raced database
   // initialisation and silently seeded into memory.
   
-  // Get all heroes of faith
+  // Get all heroes of the faith
   /**
    * The biblical events the source picker offers.
    *
@@ -2926,26 +2926,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const heroes = await storage.getAllHeroesOfFaith();
       res.json(heroes);
     } catch (error) {
-      console.error("Error fetching heroes of faith:", error);
-      res.status(500).json({ message: "Failed to fetch heroes of faith" });
+      console.error("Error fetching heroes of the faith:", error);
+      res.status(500).json({ message: "Failed to fetch heroes of the faith" });
     }
   });
   
-  // Get a specific hero of faith
+  // Get a specific hero of the faith
   app.get("/api/heroes/:id", async (req, res) => {
     try {
       const hero = await storage.getHeroOfFaithById(req.params.id);
       if (!hero) {
-        return res.status(404).json({ message: "Hero of faith not found" });
+        return res.status(404).json({ message: "Hero of the faith not found" });
       }
       res.json(hero);
     } catch (error) {
-      console.error("Error fetching hero of faith:", error);
-      res.status(500).json({ message: "Failed to fetch hero of faith" });
+      console.error("Error fetching hero of the faith:", error);
+      res.status(500).json({ message: "Failed to fetch hero of the faith" });
     }
   });
   
-  // Create a new hero of faith
+  // Create a new hero of the faith
   app.post("/api/heroes", requireAdmin, async (req, res) => {
     try {
       // The id and createdAt fields will be added by the storage method
@@ -2958,18 +2958,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hero = await storage.createHeroOfFaith(validatedData);
       res.status(201).json(hero);
     } catch (error) {
-      console.error("Error creating hero of faith:", error);
+      console.error("Error creating hero of the faith:", error);
       
       if (error instanceof ZodError) {
         const validationError = fromZodError(error);
         return res.status(400).json({ message: validationError.message });
       }
       
-      res.status(500).json({ message: "Failed to create hero of faith" });
+      res.status(500).json({ message: "Failed to create hero of the faith" });
     }
   });
   
-  // Update a hero of faith
+  // Update a hero of the faith
   app.put("/api/heroes/:id", requireAdmin, async (req, res) => {
     try {
       const { id: bodyId, createdAt, ...updates } = req.body;
@@ -2977,35 +2977,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hero = await storage.updateHeroOfFaith(req.params.id, updates);
       
       if (!hero) {
-        return res.status(404).json({ message: "Hero of faith not found" });
+        return res.status(404).json({ message: "Hero of the faith not found" });
       }
       
       res.json(hero);
     } catch (error) {
-      console.error("Error updating hero of faith:", error);
+      console.error("Error updating hero of the faith:", error);
       
       if (error instanceof ZodError) {
         const validationError = fromZodError(error);
         return res.status(400).json({ message: validationError.message });
       }
       
-      res.status(500).json({ message: "Failed to update hero of faith" });
+      res.status(500).json({ message: "Failed to update hero of the faith" });
     }
   });
   
-  // Delete a hero of faith
+  // Delete a hero of the faith
   app.delete("/api/heroes/:id", requireAdmin, async (req, res) => {
     try {
       const success = await storage.deleteHeroOfFaith(req.params.id);
       
       if (!success) {
-        return res.status(404).json({ message: "Hero of faith not found" });
+        return res.status(404).json({ message: "Hero of the faith not found" });
       }
       
       res.json({ success: true });
     } catch (error) {
-      console.error("Error deleting hero of faith:", error);
-      res.status(500).json({ message: "Failed to delete hero of faith" });
+      console.error("Error deleting hero of the faith:", error);
+      res.status(500).json({ message: "Failed to delete hero of the faith" });
     }
   });
 

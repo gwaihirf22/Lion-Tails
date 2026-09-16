@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { groupLabel, type HeroOfFaith } from "@shared/schema";
 
 /**
- * Choose a Hero of Faith, by searching rather than scrolling.
+ * Choose a Hero of the Faith, by searching rather than scrolling.
  *
  * The form used a plain <Select>. That was tolerable at fifteen heroes; at
  * forty-one it is a long alphabetical list where finding Tyndale means
@@ -102,7 +102,7 @@ export function HeroPicker({
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by name, era, or what they did"
               className="h-9 pl-8"
-              aria-label="Search Heroes of Faith"
+              aria-label="Search Heroes of the Faith"
             />
           </div>
         </div>
@@ -118,7 +118,7 @@ export function HeroPicker({
               className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-muted"
             >
               <X className="h-4 w-4 shrink-0 opacity-60" />
-              No hero of faith
+              No hero of the faith
             </button>
           )}
 

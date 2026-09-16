@@ -297,7 +297,7 @@ function nextTokenBudget(current: number, promptTokens?: number): number | null 
  *
  * A STORY'S CHOSEN PICTURE IS ALSO THE LOOK OF ITS BOOK: it is attached to
  * every later picture drawn from a passage, so that the people the story
- * invented -- a hero of faith, a shopkeeper, anyone with no character sheet
+ * invented -- a hero of the faith, a shopkeeper, anyone with no character sheet
  * and therefore no portrait -- are the same person on every page. A picture of
  * an empty river anchors nobody.
  *

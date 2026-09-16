@@ -35,7 +35,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 /**
  * Administrators only.
  *
- * Used for writes to shared reference data -- Heroes of Faith, songs, and the
+ * Used for writes to shared reference data -- Heroes of the Faith, songs, and the
  * hero-story curation routes. These are seeded content, not user content: the
  * client only ever reads them, and the user-facing paths that legitimately
  * create hero_stories rows (POST /api/story/save and

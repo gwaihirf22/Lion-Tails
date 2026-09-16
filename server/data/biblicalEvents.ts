@@ -51,7 +51,7 @@ export type BiblicalEvent = {
    *
    * `passage` is chapter-and-verse and tells a picture nothing -- "a scene from
    * Joseph in Egypt (Genesis 37; 39-45; 50)" is an instruction to draw a
-   * reference, not a place. A hero of faith has carried `timePeriod` and
+   * reference, not a place. A hero of the faith has carried `timePeriod` and
    * `place` all along; a biblical event had nowhere to say it, so the
    * illustrator was never told what century it was and drew whatever it liked.
    *
