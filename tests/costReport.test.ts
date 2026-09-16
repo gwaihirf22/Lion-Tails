@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWarnings, MIN_SAMPLES, suggestPrices, summarisePictures, summariseStories } from "../server/lib/costReport";
+import { buildWarnings, MIN_SAMPLES, pictureListPrice, suggestPrices, summarisePictures, summariseStories } from "../server/lib/costReport";
 
 const story = (length: string, model: string, micros: number, quest = false, digging = false) => ({ length, model, micros, quest, digging });
 
@@ -101,5 +101,63 @@ describe("what the admin is warned about", () => {
     });
     expect(w.map((x) => x.code)).toEqual(["charged-differently", "bill-drift"]);
     expect(w.every((x) => x.level === "action")).toBe(true);
+  });
+});
+
+/**
+ * What the reader is told a picture costs, before they spend it.
+ *
+ * A picture is TWO paid calls and so two published rows -- the image, and the
+ * sentence describing the moment -- and each row needs its own five samples
+ * before it is priced at all. Summed here, on the server, because the key
+ * format lives in this file and which models those rows name depends on the
+ * account.
+ */
+describe("the price of one picture", () => {
+  const items = [
+    { item: "story:short:gpt-5.6-luna", priceCents: 9 },
+    { item: "picture:passage-picture:gpt-image-2.5:1024x1024:medium", priceCents: 12 },
+    // A scene description is a text call: no size, and no tier was sent.
+    { item: "picture:passage-scene:gpt-5.6-luna::auto", priceCents: 2 },
+    { item: "picture:redraw:gpt-image-2.5:1024x1024:medium", priceCents: 13 },
+    // The same model at a dearer tier, which must not answer for this one.
+    { item: "picture:passage-picture:gpt-image-2.5:1024x1024:high", priceCents: 40 },
+  ];
+  const drawing = {
+    imageModel: "gpt-image-2.5",
+    size: "1024x1024",
+    quality: "medium",
+    imagePurposes: ["passage-picture", "redraw", "cover"],
+    sceneModel: "gpt-5.6-luna",
+  };
+
+  it("adds the image to the sentence that describes the moment", () => {
+    expect(pictureListPrice(items, drawing)).toBe(14);
+  });
+
+  it("takes the first kind of picture that has a price", () => {
+    const withoutPassage = items.filter(
+      (i) => i.item !== "picture:passage-picture:gpt-image-2.5:1024x1024:medium",
+    );
+    expect(pictureListPrice(withoutPassage, drawing)).toBe(15);
+  });
+
+  it("is the image alone when the scene call is not priced yet", () => {
+    expect(pictureListPrice(items, { ...drawing, sceneModel: "gpt-oss:20b" })).toBe(12);
+    expect(pictureListPrice(items, { ...drawing, sceneModel: undefined })).toBe(12);
+  });
+
+  it("never answers with another tier's price", () => {
+    // Standard and finest differ by sixteen times: a price for the wrong tier
+    // is worse than no price, which is why this is keyed on the whole drawing.
+    expect(pictureListPrice(items, { ...drawing, quality: "low" })).toBeNull();
+    expect(pictureListPrice(items, { ...drawing, size: "1536x1024" })).toBeNull();
+  });
+
+  it("is null when no picture is published, rather than free", () => {
+    expect(pictureListPrice([], drawing)).toBeNull();
+    expect(pictureListPrice(items, { ...drawing, imageModel: "gpt-image-3" })).toBeNull();
+    // A story's price is not a picture's price.
+    expect(pictureListPrice([items[0]], drawing)).toBeNull();
   });
 });

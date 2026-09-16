@@ -378,6 +378,14 @@ these numbers. `/admin/costs` is the page.
   server -- a client-supplied list could be set to zero. A published price
   below today's measured p75 is a warning. `GET /api/pricing` returns prices
   only, no costs.
+- **The published list is what the reader is told a picture costs.**
+  `/api/pricing` also answers `pictureCents` (typed as `PriceList` in
+  `shared/schema.ts`), the image row plus the scene-writing row summed on the
+  server, and `PictureDialog` shows it before anything is spent. **Until a
+  price is approved and published, that is null and the dialog says so in
+  words** -- so approving prices on `/admin/costs` is what turns "costs real
+  money" into "about 14¢" everywhere at once. Nothing charges yet; this is
+  telling a parent what they are spending on somebody's key.
 
 ## Environment
 
@@ -954,6 +962,46 @@ different child, and the only sign was one line in the log.
     text -- now the normal state -- had no strip and no way to delete one.
   - **The control lives in `ReaderBar`**, not the action row: choosing a
     passage means scrolling to it, and the bar is the one that comes with you.
+- **EVERY PICTURE ASKS FIRST** (`client/src/components/reader/PictureDialog.tsx`).
+  Blake: *"it should pop up a dialogue box with information on pricing and ask
+  them if there are any additional or imperatives that should be included in
+  the picture."* One component for all three spends on this route -- a passage,
+  a story's first picture, and a redraw -- because all three are minutes of
+  waiting and real money, and two of them used to go on ONE tap with no price
+  anywhere. A `Dialog`, not an `AlertDialog`: it holds a text field, the rule
+  the avatar dialog states.
+  - **It says what a picture costs, in the unit the account actually pays in.**
+    Charged credits (the normal case): the tier's price and the balance beside
+    it, out of the same `pictures` block the button's own price comes from.
+    Charged none -- an admin, or an own key -- and the honest number is the
+    money one, from the published list: `GET /api/pricing` sums the image row
+    and the scene-writing row (`pictureListPrice`, `pictureItemKey`) because a
+    picture is two paid calls, keyed on the model, size and tier the ledger
+    WILL record, so it matches a published row by construction or matches
+    nothing. **Null until prices are published on `/admin/costs`**, and then it
+    reads a real number with no code change; with no price it says what is true
+    in words rather than inventing one.
+  - **`onOpenAutoFocus` is prevented.** Radix focuses the first tabbable thing,
+    which is the note field, and on a phone the keyboard then covers the price
+    line and both buttons. The card takes focus instead.
+  - **The passage is snapshotted when the box opens.** `usePassagePicker` is
+    still listening to `selectionchange`, and nothing may swap what is about to
+    be drawn out from under the quote on screen. Cancel leaves the picker
+    armed; only a finished picture clears the selection.
+- **The note reaches both models that decide what is drawn**
+  (`shared/pictureNote.ts`, 300 characters, refused over it).
+  `renderPictureNoteSection` goes to the scene writer in `rest` -- **never
+  `prefix`**, which is the cached part every picture of a story shares -- and
+  `withPictureNote` **appends** it to the image prompt server-side, because a
+  model asked to carry a sentence through writes its own words instead (the
+  look book's whole history). Appended, never prepended: `isPresentDayScene`
+  reads the opening. **`illustrationCast` and `illustrationPlates` are resolved
+  from the prompt WITHOUT it** -- they attach faces and furniture by finding
+  names, so "Barnabas is not in this one" would attach exactly what it asks to
+  leave out. With no note the prompt is byte-for-byte what it was, and a test
+  holds that. Verified on a real generation: asked for "the rock resting in her
+  open palm, and a stormy grey sky", the scene said both and the picture showed
+  both.
 - **The chosen picture is the look of the book.** It is attached as a
   reference to every picture drawn from a passage, so the people a story
   invented -- a hero of faith, a shopkeeper, anyone with no character sheet --
@@ -1128,6 +1176,8 @@ seven call sites are fine centred.
   and --accent were each mapped one way and used the other, and both produced
   text that was invisible in some palettes and fine in the one being looked at.
   See docs/decisions.md 22.
+- A change to the app is a change to the guide. See The guide ("How to use") —
+  the words go stale silently, and no test can see it.
 - Prefer fixing a duplicated pattern over fixing its instances. This repo has
   repeatedly produced bugs from parallel definitions: four schema sources, six
   model lists, four prompt sites, 29 inline auth checks.
@@ -1400,6 +1450,18 @@ left** of Create a Story, Characters, My Stories and the reader, and from
 Settings; it opens itself **once per account** (`user_settings.guide_seen_at`,
 mirrored in localStorage only to stop it flashing open before that answers).
 
+- **THE GUIDE IS PART OF A CHANGE, NOT A FOLLOW-UP.** Anything that adds,
+  moves, renames or removes a control -- or changes what one does -- updates
+  `shared/guide.ts` in the SAME change: a new node with its `why`, a rewritten
+  `why` where the words went stale, a node deleted where the feature went, and
+  a re-capture of the plates it appears on. Blake, 2026-09-16, adding the
+  picture dialog: *"we are always checking to update the How to use with new
+  possible info or remove old info as the app evolves."* A guide that
+  confidently describes a button that no longer does that is worse than no
+  guide, and **nothing automated can catch prose that has gone out of date** --
+  the marker test only catches a control that moved or vanished. The first case
+  was `picking`, whose words said Draw this drew the picture; it now asks
+  first.
 - **`shared/guide.ts` is the one table**: tabs, scenes, plates, nodes, and how
   to photograph each. The dialog and `scripts/capture-guide.ts` read the same
   list, so a node cannot point at a screenshot nobody took.
@@ -1436,6 +1498,11 @@ mirrored in localStorage only to stop it flashing open before that answers).
   ./scripts/dev-stack.sh up && ./scripts/dev-stack.sh admin guide-demo
   npx tsx scripts/capture-guide.ts [--base http://127.0.0.1:5250] [--only reader-bar]
   ```
+
+  The `--only` merge reads the existing manifest back as the JSON it is; it
+  used to "repair" it first, which quoted the `23:` inside a timestamp, threw,
+  and silently dropped the other 29 plates. A merge that cannot read what it is
+  merging into now stops.
 
   It uses its **own account** (`guide-demo`) holding only the four demo people
   from `scripts/demoPeople.ts`, and **aborts if anyone else is in it**: these

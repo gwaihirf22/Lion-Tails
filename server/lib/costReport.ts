@@ -77,19 +77,28 @@ export function summariseStories(samples: StorySample[]): { items: CostGroup[]; 
 }
 
 /**
- * SIZE AND QUALITY ARE PART OF WHAT A PICTURE IS.
+ * A picture's price-list key.
  *
- * They were dropped from the key, which was harmless while every picture was
- * drawn the same way and became a lie the moment a tier could be chosen: a
- * 1-credit standard page and a 6-credit finest cover differ by sixteen times
- * in what they cost, and averaged together they produce a price that is right
- * for neither. Pictures drawn before tiers existed group under "auto", which
- * is exactly what they were.
+ * SIZE AND QUALITY ARE PART OF WHAT A PICTURE IS. They were dropped from the
+ * key, which was harmless while every picture was drawn the same way and
+ * became a lie the moment a tier could be chosen: a 1-credit standard page and
+ * a 6-credit finest cover differ by sixteen times in what they cost, and
+ * averaged together they produce a price that is right for neither. Pictures
+ * drawn before tiers existed group under "auto", which is exactly what they
+ * were.
+ *
+ * One definition, because the reader is told the price of a picture before
+ * spending it (`pictureListPrice`) and a second spelling of this format would
+ * read as "not published yet" for ever.
  */
+export function pictureItemKey(purpose: string, model: string, size: string, quality: string): string {
+  return `picture:${purpose}:${model}:${size}:${quality}`;
+}
+
 export function summarisePictures(samples: PictureSample[]): CostGroup[] {
   const by = new Map<string, number[]>();
   for (const s of samples) {
-    const key = `picture:${s.purpose}:${s.model}:${s.size}:${s.quality}`;
+    const key = pictureItemKey(s.purpose, s.model, s.size, s.quality);
     by.set(key, [...(by.get(key) ?? []), s.micros]);
   }
   return Array.from(by.keys()).sort().map((k) => {
@@ -112,6 +121,50 @@ export function suggestPrices(groups: CostGroup[], marginPct: number): Suggestio
       basisMicros: g.p75Micros!,
       samples: g.n,
     }));
+}
+
+/**
+ * What one picture costs on the published list, cents, or null.
+ *
+ * A PICTURE IS TWO PAID CALLS: the image itself, and the sentence describing
+ * the moment, which is its own row on the list (`picture:passage-scene:…`).
+ * Summed here rather than in the browser, because which models those rows name
+ * depends on the account, and the key format belongs to this file.
+ *
+ * Null when the IMAGE row is not published -- that is the price of a picture,
+ * and without it there is no number worth showing. A missing scene row adds
+ * nothing rather than refusing: the total is already given to the reader as
+ * "about".
+ */
+export function pictureListPrice(
+  items: ReadonlyArray<{ item: string; priceCents: number }>,
+  drawing: {
+    imageModel: string;
+    /** As the ledger will record them, so the key matches by construction. */
+    size: string;
+    quality: string;
+    /**
+     * In preference order. Every kind of picture is its own row and each needs
+     * its own five samples, so a reader asking what "a picture" costs is
+     * answered by the first kind that has a price at this model, size and
+     * tier -- the same drawing, for a different purpose, and the answer is
+     * given as "about".
+     */
+    imagePurposes: readonly string[];
+    sceneModel?: string;
+  },
+): number | null {
+  const priceOf = (key: string) => items.find((i) => i.item === key)?.priceCents;
+  const image = drawing.imagePurposes
+    .map((purpose) => priceOf(pictureItemKey(purpose, drawing.imageModel, drawing.size, drawing.quality)))
+    .find((cents) => cents !== undefined);
+  if (image === undefined) return null;
+  // A scene description is a TEXT call: no size, and no tier to send, which is
+  // the empty size and "auto" quality that costStats reads out of the ledger.
+  const scene = drawing.sceneModel
+    ? priceOf(pictureItemKey("passage-scene", drawing.sceneModel, "", "auto"))
+    : undefined;
+  return image + (scene ?? 0);
 }
 
 export type Warning = { level: "action" | "watch"; code: string; message: string };

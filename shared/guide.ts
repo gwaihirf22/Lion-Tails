@@ -60,6 +60,7 @@ export const GUIDE_SCENES = [
   "library",
   "reader",
   "reader-picking",
+  "reader-picture-dialog",
   "reader-extras",
   "settings",
   "mobile-menu",
@@ -115,6 +116,7 @@ export const GUIDE_PLATES = [
   { id: "reader-bar", scene: "reader", frame: "reader-bar" },
   { id: "reader-actions", scene: "reader", frame: "reader-actions" },
   { id: "reader-picking", scene: "reader-picking", frame: "reader-picking" },
+  { id: "picture-dialog", scene: "reader-picture-dialog", frame: "picture-dialog" },
   { id: "reader-extras", scene: "reader-extras", frame: "reader-extras" },
   { id: "settings-pictures", scene: "settings", around: "picture-settings" },
   { id: "settings-parent", scene: "settings", around: "parent-mode" },
@@ -732,9 +734,9 @@ export const GUIDE_NODES = [
     parent: "reader-bar",
     title: "Make a picture",
     why:
-      "Draws any moment of the story you choose, using your characters' own faces. A picture takes " +
-      "a few minutes and costs real money, so it is behind your own API key or an admin account.",
-    needs: "own-key",
+      "Draws any moment of the story you choose, using your characters' own faces. It takes a few " +
+      "minutes and costs credits, so the price is written on the button — and the box that opens " +
+      "says it again before anything is spent.",
     shot: { plate: "reader-bar", emphasise: "make-a-picture" },
   },
   {
@@ -743,9 +745,31 @@ export const GUIDE_NODES = [
     parent: "make-a-picture",
     title: "Choosing the moment",
     why:
-      "Highlight the sentence you want drawn and press Draw this. The picture lands in the story " +
-      "beside that passage, and the text wraps around it.",
+      "Highlight the sentence you want drawn and press Draw this. Nothing is drawn yet — it asks " +
+      "first. The picture lands in the story beside that passage, and the text wraps around it.",
     shot: { plate: "reader-picking", emphasise: "picking" },
+  },
+  {
+    id: "picture-note",
+    tab: "reading",
+    parent: "picking",
+    title: "Anything that must be in the picture?",
+    why:
+      "The picture is drawn from the story, so it already knows who is in this part and where it " +
+      "happens. This is for what it would not think of: the rain, the red umbrella, the time of " +
+      "day. Leave it empty and the story alone decides.",
+    shot: { plate: "picture-dialog", emphasise: "picture-note" },
+  },
+  {
+    id: "picture-cost",
+    tab: "reading",
+    parent: "picking",
+    title: "What it costs before you press it",
+    why:
+      "The box says what this picture costs — credits for most accounts, or the money it takes on " +
+      "your own key — what you have left, and how many of the twelve this story has used. Nothing " +
+      "is spent until you press the button inside it, so Cancel costs nothing at all.",
+    shot: { plate: "picture-dialog", emphasise: "picture-cost" },
   },
   {
     id: "gallery",
