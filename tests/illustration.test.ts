@@ -740,7 +740,9 @@ describe("a scene from the past dresses the people in it, not the animals", () =
     expect(now).not.toContain("In a scene set in the past, dress");
     expect(now).toContain("This scene is in the present day: the person in reference image 1 wear");
     // The cover may show them in Susa; that must not carry the clothes over.
-    expect(now).toContain("not necessarily the same clothes");
+    // It cuts the other way too: a cover drawn before the period rule shows a
+    // modern cap. The dress lines decide what is worn here, never the cover.
+    expect(now).toContain("never the clothes it shows");
     // Only an opening says it. A mention in passing does not.
     expect(isPresentDayScene("  in the present day, a shop")).toBe(true);
     expect(isPresentDayScene("In Susa, far from the present day, Paul watches.")).toBe(false);
@@ -761,6 +763,38 @@ describe("a scene from the past dresses the people in it, not the animals", () =
   it("a story set now takes clothes from the portrait exactly as it always did", () => {
     expect(composeIllustrationPrompt(SCENE, [paulRef])).toContain(
       "Take each person's face, hair, colouring and clothing from their own reference image",
+    );
+  });
+
+  /**
+   * NAMING WHAT HAS TO GO. "Nothing from another century" was abstract enough
+   * to lose to a photograph: gpt-image-2.5-flare drew Blake's Paul in his
+   * modern baseball cap in every panel of a Malta cover (2026-09-16), while
+   * gpt-image-2 obeyed the same sentence. The enumeration is what a model that
+   * weights its references heavily can act on.
+   */
+  it("names the modern things that must go, in both dressing rules", () => {
+    const modern = "no cap or hat of a later age, no glasses, no printed words or logos, no zips";
+    expect(composeIllustrationPrompt(SCENE, [{ ...paulRef, dressed: "always" }])).toContain(modern);
+    expect(composeIllustrationPrompt(SCENE, [{ ...paulRef, dressed: "farSide" }])).toContain(modern);
+    // And the portrait's clothes are named as something NOT to take.
+    expect(composeIllustrationPrompt(SCENE, [{ ...paulRef, dressed: "always" }])).toContain(
+      "not what that person is wearing in it",
+    );
+  });
+
+  it("dresses somebody who has no portrait, and the generate fallback with them", () => {
+    const described = member({ name: "Ellie", look: "Ellie, a girl of nine.", dressed: "always" });
+    const prompt = composeIllustrationPrompt(SCENE, [described]);
+    expect(prompt).toContain("Also in the picture: Ellie");
+    expect(prompt).toContain("Dress everyone named there the way people of that age were dressed");
+    // A scene that is now leaves them in their own clothes, as it always did.
+    expect(composeIllustrationPrompt("In the present day, a shop.", [described])).not.toContain(
+      "Dress everyone named there",
+    );
+    // And nobody period-dressed means no sentence at all.
+    expect(composeIllustrationPrompt(SCENE, [member({ name: "Ellie", look: "Ellie." })])).not.toContain(
+      "Dress everyone named there",
     );
   });
 });

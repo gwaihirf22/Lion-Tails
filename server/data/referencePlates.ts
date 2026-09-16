@@ -74,7 +74,8 @@ export const CROSSING_OVER_DRESS =
  */
 export const ALONGSIDE_DRESS =
   "Everyone from the reader's own characters belongs to this time and place, and is dressed the way" +
-  " people of that age were dressed there -- nothing from another century.";
+  " people of that age were dressed there -- nothing from another century: no cap or hat of a later" +
+  " age, no glasses, no printed words or logos, no zips, no modern shoes and no watch.";
 
 /**
  * An animal in a scene from the past: itself, and nothing modern on it. A dog in

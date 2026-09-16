@@ -537,7 +537,9 @@ function referenceLine(n: number, e: IllustrationReference, periodDressed = fals
         " linework and the way it is lit. Anyone in this picture who also appears in it must look the" +
         // A cover drawn before a period rule existed can show a character in
         // modern clothes; "look the same" would carry them into this scene.
-        (periodDressed ? " same here as they do there — the same face and hair, but not necessarily the same clothes." : " same here as they do there.") +
+        (periodDressed
+          ? " same here as they do there — the same face and hair, but never the clothes it shows."
+          : " same here as they do there.") +
         " Take nothing else from it — not its scene, its framing or its moment."
       );
     case "background":
@@ -604,13 +606,18 @@ function dressLines(matched: IllustrationMember[]): string[] {
   if (always.length) {
     out.push(
       `The clothes in ${list(always)} are not theirs here: dress ${always.length === 1 ? "that person" : "each of them"}` +
-        " the way people of that age were dressed in this scene's time and place, with nothing from another century.",
+        " the way people of that age were dressed in this scene's time and place." +
+        ` Nothing worn in ${always.length === 1 ? "that reference image" : "those reference images"} carries over —` +
+        " no cap or hat of a later age, no glasses, no printed words or logos, no zips, no modern shoes" +
+        " and no watch — even where the reference image shows one.",
     );
   }
   if (farSide.length) {
     out.push(
       `In a scene set in the past, dress the ${farSide.length === 1 ? "person" : "people"} in ${list(farSide)} the way people of` +
-        " that age were dressed there; only in a present-day scene are the clothes in the reference image worn.",
+        " that age were dressed there — no cap or hat of a later age, no glasses, no printed words or logos," +
+        " no zips, no modern shoes and no watch, even where the reference image shows one;" +
+        " only in a present-day scene are the clothes in the reference image worn.",
     );
   }
   if (animals.length) {
@@ -735,7 +742,8 @@ export function composeIllustrationPrompt(
     parts.push(
       periodDressed
         ? "Take each person's face, hair and colouring from their own reference image and nothing else" +
-            " from it — not its background, its framing, its lighting, or anything it happens to be holding."
+            " from it — not what that person is wearing in it, not its background, its framing, its" +
+            " lighting, or anything it happens to be holding."
         : "Take each person's face, hair, colouring and clothing from their own reference image and nothing else" +
             " from it — not its background, its framing, its lighting, or anything it happens to be holding.",
     );
@@ -800,6 +808,23 @@ export function composeIllustrationPrompt(
 
   if (described.length > 0) {
     parts.push(`Also in the picture: ${described.map(lookFor).join(" ")}`);
+    /**
+     * A DESCRIBED PERSON IS DRESSED TOO.
+     *
+     * Every dressing rule above is written against a reference image, so a
+     * member with no portrait heard none of them -- and neither did anyone on
+     * the images.generate fallback, where the references are stripped and the
+     * whole cast arrives here. That path drew the era's scene in whatever the
+     * words happened to suggest.
+     */
+    const period = described.some((m) => m.dressed && !m.notAPerson) && !isPresentDayScene(scenePrompt);
+    if (period) {
+      parts.push(
+        "Dress everyone named there the way people of that age were dressed in this scene's time and" +
+          " place, with nothing from another century — no cap or hat of a later age, no glasses, no" +
+          " printed words or logos, no zips, no modern shoes and no watch.",
+      );
+    }
   }
 
   return parts.join(" ").replace(/\s+/g, " ").trim();
