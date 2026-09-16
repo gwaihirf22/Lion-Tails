@@ -402,6 +402,9 @@ describe("a reference that is a photograph", () => {
  * of real detail -- ample for a building, and deliberately not where faces go.
  */
 describe("the Timekeeper world sheet", () => {
+  /** A story actually in that world: the sheet is for quests, not for words. */
+  const QUEST = { request: req({ characterRole: "travels" }) };
+
   it("says where every panel is, built from the panel list", () => {
     // A montage nobody can navigate is a collage the model guesses at. The
     // layout is GENERATED from the panels so the two cannot drift apart.
@@ -448,23 +451,44 @@ describe("the Timekeeper world sheet", () => {
   it("comes only when the scene calls for something on it", () => {
     // The Tyndale rule, applied to furniture: a shop front attached to a scene
     // in a granary is a shop front the model may decide to draw.
-    expect(platesForScene({ scene: "Mr Barnabas behind the counter of his shop" })).toHaveLength(1);
-    expect(platesForScene({ scene: "Ella holds the lantern up to the dark" })).toHaveLength(1);
-    expect(platesForScene({ scene: "Joseph counting grain in a granary" })).toHaveLength(0);
+    expect(platesForScene({ scene: "Mr Barnabas behind the counter of his shop", timekeeper: true })).toHaveLength(1);
+    expect(platesForScene({ scene: "Ella holds the lantern up to the dark", timekeeper: true })).toHaveLength(1);
+    expect(platesForScene({ scene: "Joseph counting grain in a granary", timekeeper: true })).toHaveLength(0);
+  });
+
+  /**
+   * THE WORDS ARE NOT ENOUGH, and this is the bug that proved it.
+   *
+   * A true retelling of Corrie ten Boom -- whose family hid people above a
+   * watch SHOP, and who read to the women of Ravensbruck by a LANTERN -- came
+   * back with Barnabas & Co, Gatherer of Things Lost to Time, painted across
+   * the first panel of its cover (Blake, 2026-09-16). Every word the gate
+   * looks for was in the scene, and none of them meant the Timekeeper.
+   */
+  it("never comes to a story that is not in the Timekeeper's world", () => {
+    const hersNotHis = [
+      "The family hides people above the watch shop in Haarlem",
+      "She reads to the women by the light of a lantern in the barracks",
+      "Mr Barnabas behind the counter of his shop",
+    ];
+    for (const scene of hersNotHis) {
+      expect(platesForScene({ scene }), scene).toHaveLength(0);
+      expect(platesForScene({ scene, timekeeper: false }), scene).toHaveLength(0);
+    }
   });
 
   it("does not come for the ordinary word 'stone'", () => {
     // "stone" is a common English word; a stone wall must not drag the sheet
     // in. It earns its place next to the lantern, which is what makes it THE
     // stone.
-    expect(platesForScene({ scene: "A boy climbs a stone wall in the sun" })).toHaveLength(0);
+    expect(platesForScene({ scene: "A boy climbs a stone wall in the sun", timekeeper: true })).toHaveLength(0);
   });
 
   it("does not come for the bare word 'sign'", () => {
     // Another ordinary word. A scene that means Barnabas's sign nearly always
     // names the shop in the same breath, and that already matches.
-    expect(platesForScene({ scene: "A sign at the crossroads pointed east" })).toHaveLength(0);
-    expect(platesForScene({ scene: "The sign above the shop door swung" })).toHaveLength(1);
+    expect(platesForScene({ scene: "A sign at the crossroads pointed east", timekeeper: true })).toHaveLength(0);
+    expect(platesForScene({ scene: "The sign above the shop door swung", timekeeper: true })).toHaveLength(1);
   });
 
   it("is not shipped inside the volume that shadows it", () => {
@@ -503,7 +527,7 @@ describe("the Timekeeper world sheet", () => {
   });
 
   it("is attached, as the format it is, when the scene calls for it", async () => {
-    const plates = await illustrationPlates("Mr Barnabas behind the counter of his shop");
+    const plates = await illustrationPlates("Mr Barnabas behind the counter of his shop", QUEST);
     expect(plates).toHaveLength(1);
     expect(plates[0].file?.filename).toBe(WORLD_SHEET_FILE);
     // mimeFor follows the extension, and the API is told what it is handed:
@@ -514,7 +538,7 @@ describe("the Timekeeper world sheet", () => {
 
   it("is numbered after the cast, so attaching it renumbers nobody", async () => {
     const cast = [member({ reference: file() })];
-    const plates = await illustrationPlates("Mr Barnabas in his shop");
+    const plates = await illustrationPlates("Mr Barnabas in his shop", QUEST);
     const prompt = composeIllustrationPrompt(SCENE, cast, plates);
     expect(prompt).not.toBe(composeIllustrationPrompt(SCENE, cast));
     // One matched person is reference 1; the sheet is reference 2, and it
@@ -525,7 +549,7 @@ describe("the Timekeeper world sheet", () => {
   it("falls back to words when the file cannot be read", async () => {
     const spy = vi.spyOn(fs.promises, "readFile").mockRejectedValueOnce(new Error("ENOENT"));
     try {
-      const plates = await illustrationPlates("Mr Barnabas behind the counter of his shop");
+      const plates = await illustrationPlates("Mr Barnabas behind the counter of his shop", QUEST);
       expect(plates).toHaveLength(1);
       expect(plates[0].file).toBeUndefined();
       // The words still carry the layout, so a future reader of the prompt
@@ -547,7 +571,7 @@ describe("the Timekeeper world sheet", () => {
     const spy = vi.spyOn(fs.promises, "readFile").mockRejectedValueOnce(new Error("ENOENT"));
     try {
       const cast = [member({ reference: file() })];
-      const plates = await illustrationPlates("Mr Barnabas in his shop");
+      const plates = await illustrationPlates("Mr Barnabas in his shop", QUEST);
       expect(composeIllustrationPrompt(SCENE, cast, plates)).toBe(
         composeIllustrationPrompt(SCENE, cast),
       );

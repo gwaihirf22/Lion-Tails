@@ -1325,7 +1325,7 @@ async function runGeneration(
         // The cover is what every later picture in this story is anchored to,
         // so the world's furniture has to be right HERE first -- an error on
         // the cover is inherited by every page that follows it.
-        await illustrationPlates(finalDetails.imagePrompt),
+        await illustrationPlates(finalDetails.imagePrompt, { request }),
         { facesMustShow: true, size: COVER_SIZE, ledger: { purpose: "cover", jobId: ctx.ledger?.jobId } },
       );
       if (cover.ok) {

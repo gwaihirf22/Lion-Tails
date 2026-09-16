@@ -90,6 +90,18 @@ export const ANIMALS_AS_THEY_ARE =
 export type PlateContext = {
   /** The image prompt for THIS picture -- not the story, not the brief. */
   scene: string;
+  /**
+   * Is this story in the Timekeeper's world at all?
+   *
+   * THE WORDS ARE NOT ENOUGH. The sheet used to be attached on the scene text
+   * alone, and "shop" and "lantern" are ordinary English: a retelling of
+   * Corrie ten Boom, whose family hid people above a WATCH SHOP and who read
+   * by a LANTERN in Ravensbruck, matched both -- so the cover of a true story
+   * about the Holocaust opened on Barnabas & Co, Gatherer of Things Lost to
+   * Time (Blake, 2026-09-16). The Timekeeper's face has always been gated on
+   * the story being a quest (illustrationCast); his furniture was not.
+   */
+  timekeeper?: boolean;
 };
 
 export type ReferencePlate = {
@@ -210,7 +222,9 @@ export const TIMEKEEPER_WORLD_SHEET: ReferencePlate = {
   role: "background",
   name: "the world of the Timekeeper",
   look: worldSheetLook(),
-  when: ({ scene }) => WORLD_SHEET_PATTERN.test(scene),
+  // Both halves, and the order matters for what it says: this world first,
+  // then whether the scene calls for anything in it.
+  when: ({ scene, timekeeper }) => timekeeper === true && WORLD_SHEET_PATTERN.test(scene),
 };
 
 /** Every plate there is. One, for now. */

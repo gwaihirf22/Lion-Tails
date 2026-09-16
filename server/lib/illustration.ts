@@ -51,6 +51,7 @@ import { storage } from "../storage";
 import { describeCharacter, looksLikeRefusal, readAvatarFile } from "./avatar";
 import { categoryOf } from "@shared/characterVocab";
 import { PICTURE_REF_PATTERN, pictureRefs } from "@shared/family";
+import { isTimekeeperStory } from "@shared/quests";
 import {
   buildStoryBrief,
   containsWholeWord,
@@ -457,9 +458,21 @@ const STYLE = "Render in a beautiful biblical storybook illustration style with 
  * API refuses is worse than no reference -- it is a 400 that costs the whole
  * picture its likeness.
  */
-export async function illustrationPlates(scenePrompt: string): Promise<IllustrationReference[]> {
+export async function illustrationPlates(
+  scenePrompt: string,
+  /**
+   * The story this picture belongs to. A plate may need to know more than the
+   * scene's words -- the world sheet does, because "shop" and "lantern" are
+   * ordinary English and belong to other people's lives too.
+   */
+  story: { builtIn?: boolean; request?: StoryRequest } = {},
+): Promise<IllustrationReference[]> {
   const out: IllustrationReference[] = [];
-  for (const plate of platesForScene({ scene: scenePrompt })) {
+  const context = {
+    scene: scenePrompt,
+    timekeeper: isTimekeeperStory({ builtIn: story.builtIn, request: story.request }),
+  };
+  for (const plate of platesForScene(context)) {
     const type = mimeFor(plate.file);
     if (!type) {
       console.error(`[illustration] ${plate.file} is not a format the images API takes.`);
