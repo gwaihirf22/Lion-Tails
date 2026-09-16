@@ -2098,10 +2098,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ] as IllustrationReference[])
           : []),
         // The world's own furniture -- the shop, its sign, the lantern lit and
-        // dark, the stone -- but only when the scene actually calls for it.
-        // Attaching a shop front to a scene in a granary is the Tyndale
-        // mistake with different furniture.
-        ...(await illustrationPlates(prompt)),
+        // dark -- but only for a story that is IN that world, and only when the
+        // scene calls for something on the sheet. Attaching a shop front to a
+        // scene in a granary is the Tyndale mistake with different furniture;
+        // attaching it to a true story about a watch shop in Haarlem is worse.
+        ...(await illustrationPlates(prompt, { request: saved.request })),
       ];
 
       // What the people in it look like, read live off their sheets -- the
