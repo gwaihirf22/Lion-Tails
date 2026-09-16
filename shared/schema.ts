@@ -2130,7 +2130,10 @@ export const storyRequestSchema = z.object({
    * A Hero of Faith is a whole life, and asked for "a story about Corrie ten
    * Boom" a model gives you a summary of all of it -- born here, did this,
    * died there. One episode, told properly, is a better story and teaches
-   * more, so the user picks a moment or asks to be surprised by one.
+   * more, so the user picks a moment, asks to be surprised by one, or names a
+   * STRETCH -- from one moment of that life to another, with what lies between
+   * them. A whole life is a summary and one episode is sometimes too small: a
+   * conversion, a journey and what it cost is three chapters, not one.
    *
    * ONE field, not a mode plus a text: "surprise" is a request that the SERVER
    * chooses, and the choice it makes is written into `text` at enqueue. So the
@@ -2141,11 +2144,29 @@ export const storyRequestSchema = z.object({
    */
   storyFocus: z
     .object({
-      mode: z.enum(["whole", "chosen", "surprise"]).default("whole"),
-      /** The moment, verbatim. Empty for "whole"; filled by the server for "surprise". */
+      mode: z.enum(["whole", "chosen", "surprise", "range"]).default("whole"),
+      /**
+       * The moment, verbatim. Empty for "whole"; filled by the server for
+       * "surprise"; the NEAR END of a "range".
+       */
       text: z.string().default(""),
       /** Chapter and verse, where the moment came from a key event that had one. */
       reference: z.string().optional(),
+      /** The far end of a "range", verbatim. Absent in every other mode. */
+      toText: z.string().optional(),
+      /** Chapter and verse for that far end, where it had one. */
+      toReference: z.string().optional(),
+      /**
+       * Every moment the range covers, ends included, in the order the hero's
+       * own key events are written.
+       *
+       * WRITTEN BY THE SERVER at enqueue, exactly as "surprise" writes its pick
+       * into `text` and for the same reason: the frozen request has to record
+       * what was actually used. A profile edited afterwards -- an event
+       * reworded, one inserted between the ends -- must not silently change
+       * what an old request meant.
+       */
+      covers: z.array(z.string()).optional(),
     })
     .optional(),
   /**

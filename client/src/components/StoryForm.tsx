@@ -1350,14 +1350,30 @@ export default function StoryForm({
                         value={
                           field.value?.mode === "surprise"
                             ? "__surprise__"
-                            : field.value?.mode === "chosen"
-                              ? field.value.text
-                              : "__whole__"
+                            : field.value?.mode === "range"
+                              ? "__range__"
+                              : field.value?.mode === "chosen"
+                                ? field.value.text
+                                : "__whole__"
                         }
                         onValueChange={(v) => {
                           if (v === "__whole__") field.onChange({ mode: "whole", text: "" });
                           else if (v === "__surprise__") field.onChange({ mode: "surprise", text: "" });
-                          else {
+                          else if (v === "__range__") {
+                            // Opens with the first and last moments, which is
+                            // the widest stretch and a sensible thing to see
+                            // before narrowing it. The server settles what
+                            // lies between at enqueue.
+                            const first = selectedHeroEvents[0];
+                            const last = selectedHeroEvents[selectedHeroEvents.length - 1];
+                            field.onChange({
+                              mode: "range",
+                              text: first?.description ?? "",
+                              reference: first?.reference || first?.year || undefined,
+                              toText: last?.description ?? "",
+                              toReference: last?.reference || last?.year || undefined,
+                            });
+                          } else {
                             const e = selectedHeroEvents.find((k) => k.description === v);
                             field.onChange({
                               mode: "chosen",
@@ -1375,6 +1391,11 @@ export default function StoryForm({
                           <SelectItem value="__surprise__">
                             Surprise me — pick a moment for me
                           </SelectItem>
+                          {selectedHeroEvents.length > 1 && (
+                            <SelectItem value="__range__">
+                              A stretch of their life — from one moment to another
+                            </SelectItem>
+                          )}
                           {selectedHeroEvents.map((e, i) => (
                             <SelectItem key={i} value={e.description}>
                               {e.year || e.reference ? `${e.year || e.reference} — ` : ""}
@@ -1384,9 +1405,72 @@ export default function StoryForm({
                         </SelectContent>
                       </Select>
                     </FormControl>
+                    {/* THE TWO ENDS, only once a stretch is asked for. Both
+                        lists are the hero's own events in their own order, so
+                        "from" and "to" name the same things the single picker
+                        does; naming them backwards is fixed on the server
+                        rather than refused here. */}
+                    {field.value?.mode === "range" && (
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <div>
+                          <FormLabel className="text-xs">From</FormLabel>
+                          <Select
+                            value={field.value.text}
+                            onValueChange={(v) => {
+                              const e = selectedHeroEvents.find((k) => k.description === v);
+                              field.onChange({
+                                ...field.value,
+                                text: v,
+                                reference: e?.reference || e?.year || undefined,
+                              });
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="The first moment" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {selectedHeroEvents.map((e, i) => (
+                                <SelectItem key={i} value={e.description}>
+                                  {e.year || e.reference ? `${e.year || e.reference} — ` : ""}
+                                  {e.description}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <FormLabel className="text-xs">To</FormLabel>
+                          <Select
+                            value={field.value.toText ?? ""}
+                            onValueChange={(v) => {
+                              const e = selectedHeroEvents.find((k) => k.description === v);
+                              field.onChange({
+                                ...field.value,
+                                toText: v,
+                                toReference: e?.reference || e?.year || undefined,
+                              });
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="The last moment" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {selectedHeroEvents.map((e, i) => (
+                                <SelectItem key={i} value={e.description}>
+                                  {e.year || e.reference ? `${e.year || e.reference} — ` : ""}
+                                  {e.description}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
                     <FormDescription>
                       One episode, told properly, beats a summary of a whole
                       life. "Surprise me" picks one when the story is written.
+                      A stretch covers everything between the two moments you
+                      choose, so give it a longer story to fit in.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

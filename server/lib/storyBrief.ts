@@ -137,9 +137,13 @@ export async function resolveStoryCharacters(
  */
 export function resolveStoryFocus(request: StoryRequest, hero?: HeroOfFaith): void {
   const focus = request.storyFocus;
-  if (!focus || focus.mode !== "surprise") return;
+  if (!focus || (focus.mode !== "surprise" && focus.mode !== "range")) return;
 
   const events = (hero?.keyEvents ?? []).filter((e) => e.description);
+  if (focus.mode === "range") {
+    resolveStoryRange(request, focus, events);
+    return;
+  }
   if (events.length === 0) {
     // Nothing to choose from -- a hero with no key events, or no hero at all.
     // Downgrade to the whole life rather than emit an empty scope instruction
@@ -153,6 +157,61 @@ export function resolveStoryFocus(request: StoryRequest, hero?: HeroOfFaith): vo
     mode: "surprise",
     text: pick.description,
     reference: pick.reference || pick.year || undefined,
+  };
+}
+
+/**
+ * Settle a stretch of a life into the moments it actually covers.
+ *
+ * The two ends arrive as descriptions, because that is what the select had to
+ * offer -- the client never sees an index, and an index would be the wrong
+ * thing to freeze anyway: it means something different the moment an event is
+ * inserted. They are located here, put back in the profile's own order if they
+ * arrived reversed, and everything between them is written into `covers`.
+ *
+ * Every failure downgrades to the whole life rather than emitting a scope
+ * instruction covering nothing, which is resolveStoryFocus's rule for a
+ * surprise with no events: an end that no longer exists, a hero with none, or
+ * a request that named only one side.
+ */
+function resolveStoryRange(
+  request: StoryRequest,
+  focus: NonNullable<StoryRequest["storyFocus"]>,
+  events: Array<{ description: string; reference?: string; year?: string }>,
+): void {
+  const whole = () => {
+    request.storyFocus = { mode: "whole", text: "" };
+  };
+  if (events.length === 0 || !isSet(focus.text) || !isSet(focus.toText)) return whole();
+
+  let from = events.findIndex((e) => e.description === focus.text);
+  let to = events.findIndex((e) => e.description === focus.toText);
+  if (from < 0 || to < 0) return whole();
+  // Named backwards. Honoured rather than refused: the reader has said which
+  // two moments they mean, and the order they said them in is not the point.
+  if (from > to) [from, to] = [to, from];
+
+  const covered = events.slice(from, to + 1);
+  // One moment, said twice. That is the episode we already have words for, and
+  // "from X to X" would read as a stretch with nothing in it.
+  if (covered.length === 1) {
+    request.storyFocus = {
+      mode: "chosen",
+      text: covered[0].description,
+      reference: covered[0].reference || covered[0].year || undefined,
+    };
+    return;
+  }
+
+  const near = covered[0];
+  const far = covered[covered.length - 1];
+  request.storyFocus = {
+    mode: "range",
+    text: near.description,
+    reference: near.reference || near.year || undefined,
+    toText: far.description,
+    toReference: far.reference || far.year || undefined,
+    covers: covered.map((e) => e.description),
   };
 }
 
@@ -1722,7 +1781,8 @@ export function buildStoryBrief(
    * QUEST ONLY: world is set for "travels" and nothing else, and on an
    * ordinary retelling a whole life has no way across to move through it.
    */
-  const wholeLifeQuest = world && (!focus || focus.mode === "whole" || !isSet(focus.text));
+  const wholeLifeQuest =
+    world && (!focus || focus.mode === "whole" || (!isSet(focus.text) && focus.mode !== "range"));
   if (wholeLifeQuest && sourceMaterial?.kind === "hero-of-faith") {
     premise.push(
       `This story covers more than one moment of ${sourceMaterial.label}'s ` +
@@ -1732,7 +1792,30 @@ export function buildStoryBrief(
         "carries the traveller across, and the gap is felt rather than explained.",
     );
   }
-  if (focus && focus.mode !== "whole" && isSet(focus.text)) {
+  /**
+   * A STRETCH OF A LIFE: the moments between two ends, in the order they
+   * happened, and nothing outside them.
+   *
+   * Between the two instructions that already exist -- a whole life, which
+   * lets the model choose what to show, and one episode, which allows nothing
+   * else. Here the choosing is already done: `covers` was settled at enqueue
+   * (resolveStoryRange), so this lists exactly what the reader asked for
+   * rather than describing a span the model has to interpret.
+   */
+  if (focus?.mode === "range" && focus.covers && focus.covers.length > 1) {
+    const ends = `from ${focus.text}${focus.reference ? ` (${focus.reference})` : ""} to ` +
+      `${focus.toText}${focus.toReference ? ` (${focus.toReference})` : ""}`;
+    premise.push(
+      `This story covers a stretch of ${sourceMaterial?.label ?? "that life"}: ${ends}.`,
+    );
+    premise.push(`It passes through these, in this order: ${focus.covers.join("; ")}.`);
+    premise.push(
+      "Play each of those as a real scene -- somewhere, with someone, something " +
+        "happening -- and carry the story from one to the next. Do not summarise " +
+        "the rest of that life around them, do not go past either end, and do not " +
+        "open with a birth or close with a death.",
+    );
+  } else if (focus && focus.mode !== "whole" && isSet(focus.text)) {
     premise.push(
       `This story covers ONE episode${focus.reference ? ` (${focus.reference})` : ""}: ${focus.text}`,
     );
