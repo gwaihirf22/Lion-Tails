@@ -26,6 +26,9 @@ export type AccountRow = {
   email: string;
   isAdmin: boolean;
   isVerified: boolean;
+  /** Locked out since, or null. Nothing of theirs is deleted while it is set. */
+  bannedAt: string | null;
+  bannedReason: string | null;
   createdAt: string;
   lastLoginAt: string | null;
   signupIp: string | null;
@@ -81,6 +84,7 @@ export async function accountList(windowDays = 30): Promise<AccountList> {
         GROUP BY user_id
      )
      SELECT u.id, u.username, u.email, u.is_admin, u.is_verified,
+            u.banned_at, u.banned_reason,
             u.created_at, u.last_login_at, u.signup_ip,
             COALESCE(uu.count, 0)::int AS credits_used,
             uu.last_reset_date,
@@ -114,6 +118,8 @@ export async function accountList(windowDays = 30): Promise<AccountList> {
         email: String(r.email),
         isAdmin: Boolean(r.is_admin),
         isVerified: Boolean(r.is_verified),
+        bannedAt: r.banned_at ? new Date(r.banned_at as string).toISOString() : null,
+        bannedReason: (r.banned_reason as string | null) ?? null,
         createdAt: new Date(r.created_at as string).toISOString(),
         lastLoginAt: r.last_login_at ? new Date(r.last_login_at as string).toISOString() : null,
         signupIp: (r.signup_ip as string | null) ?? null,

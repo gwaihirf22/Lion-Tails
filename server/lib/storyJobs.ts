@@ -224,6 +224,27 @@ export async function cancelStoryJob(jobId: string, userId: number): Promise<boo
 }
 
 /**
+ * Stop everything this account has in flight.
+ *
+ * The same statement as cancelStoryJob with the user as the only key, and the
+ * same cooperative rule: a RUNNING job stops at its next step boundary, so a
+ * chapter already being written is still paid for. Nothing new can start --
+ * their session is dead and sign-in is refused -- so this is the whole of it.
+ */
+export async function cancelAllStoryJobsFor(userId: number): Promise<number> {
+  if (!pool) return 0;
+  const { rowCount } = await pool.query(
+    `UPDATE story_jobs
+        SET cancel_requested = true, updated_at = now(),
+            status = CASE WHEN status = 'queued' THEN 'cancelled' ELSE status END,
+            finished_at = CASE WHEN status = 'queued' THEN now() ELSE finished_at END
+      WHERE user_id = $1 AND status IN ('queued','running')`,
+    [userId],
+  );
+  return rowCount ?? 0;
+}
+
+/**
  * How many generations this user has already used against the free quota.
  *
  * Counts in-flight jobs as well as consumed quota. Quota is charged at success

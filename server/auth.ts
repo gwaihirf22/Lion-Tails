@@ -7,7 +7,9 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { insertUserSchema, publicUser, User as SelectUser } from "@shared/schema";
+import { ACCOUNT_SUSPENDED_CODE, ACCOUNT_SUSPENDED_MESSAGE, isBanned } from "@shared/accountStatus";
 import { requiredSecret } from "./config";
+import { denyBannedAccounts } from "./lib/requireAuth";
 
 // Registration is unauthenticated, so its body is attacker-controlled.
 //
@@ -71,6 +73,7 @@ export function setupAuth(app: Express) {
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
+  app.use(denyBannedAccounts);
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
@@ -78,9 +81,20 @@ export function setupAuth(app: Express) {
         const user = await storage.getUserByUsername(username);
         if (!user || !(await comparePasswords(password, user.password))) {
           return done(null, false);
-        } else {
-          return done(null, user);
         }
+        /**
+         * THE PASSWORD IS CHECKED FIRST, on purpose.
+         *
+         * Refusing a banned account before checking its password would turn
+         * this form into an oracle: type any username, and a different answer
+         * for "suspended" than for "wrong password" tells a stranger which
+         * accounts exist. Only somebody who already knows the password learns
+         * that the account is suspended.
+         */
+        if (isBanned(user)) {
+          return done(null, false, { message: ACCOUNT_SUSPENDED_CODE });
+        }
+        return done(null, user);
       } catch (err) {
         return done(err);
       }
@@ -109,14 +123,40 @@ export function setupAuth(app: Express) {
    * this signs people out rather than 500ing in both cases. Signed out and
    * able to sign in again is the better failure.
    */
-  passport.deserializeUser(async (id: number, done) => {
+  /**
+   * Three arguments, not two, so a refusal can leave a note.
+   *
+   * Passport hands the request to a deserializer of arity 3, which is the only
+   * way to tell the difference downstream between "signed out" and "locked
+   * out" -- both leave req.user undefined. The note is what lets the next
+   * middleware answer 403 with a sentence instead of a silent 401.
+   */
+  const deserialize = async (
+    req: Express.Request,
+    id: number,
+    done: (err: unknown, user?: SelectUser | false) => void,
+  ) => {
     try {
       const user = await storage.getUser(id);
+      if (user && isBanned(user)) {
+        (req as { accountSuspended?: boolean }).accountSuspended = true;
+        // false, not the user: passport then clears session.passport.user
+        // itself, so the ban takes hold on this request AND the session stops
+        // carrying a login. No hunt through the session table, which has no
+        // user id to hunt by.
+        return done(null, false);
+      }
       done(null, user ?? false);
     } catch (err) {
       done(err);
     }
-  });
+  };
+  /**
+   * Registered through a cast because @types/passport declares only the
+   * two-argument form. The three-argument one is real: authenticator.js reads
+   * the function's arity and passes the request when it is 3.
+   */
+  passport.deserializeUser(deserialize as unknown as (id: unknown, done: (err: unknown, user?: unknown) => void) => void);
 
   // Authentication endpoints
   app.post("/api/auth/register", async (req, res, next) => {
@@ -166,6 +206,9 @@ export function setupAuth(app: Express) {
   app.post("/api/auth/login", (req, res, next) => {
     passport.authenticate("local", (err: Error | null, user: SelectUser | false, info: any) => {
       if (err) return next(err);
+      if (!user && info?.message === ACCOUNT_SUSPENDED_CODE) {
+        return res.status(403).json({ error: ACCOUNT_SUSPENDED_MESSAGE, code: ACCOUNT_SUSPENDED_CODE });
+      }
       if (!user) return res.status(401).json({ error: "Invalid username or password" });
       
       req.login(user, (err) => {

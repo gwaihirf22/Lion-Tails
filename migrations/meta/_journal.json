@@ -99,6 +99,13 @@
       "when": 1789621724111,
       "tag": "0013_mature_alex_wilder",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789624860950,
+      "tag": "0014_right_blindfold",
+      "breakpoints": true
     }
   ]
 }

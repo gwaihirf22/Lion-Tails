@@ -23,6 +23,7 @@
  */
 import { parentModeActive, type ParentModeSession } from "@shared/parentMode";
 import type { NextFunction, Request, Response } from "express";
+import { ACCOUNT_SUSPENDED_CODE, ACCOUNT_SUSPENDED_MESSAGE } from "@shared/accountStatus";
 
 /** Any logged-in user. */
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -30,6 +31,33 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(401).json({ message: "Authentication required" });
   }
   next();
+}
+
+/**
+ * THE ONE GUARD THAT IS app.use(), and the reason it has to be.
+ *
+ * Everything else in this file goes in a route's signature, so a missing guard
+ * is visible where the routes are listed. This one cannot: a ban has to reach
+ * the twenty-nine routes that check `if (!req.user)` inline rather than taking
+ * a guard, and adding it to each of them by hand is the arrangement this file
+ * exists to avoid.
+ *
+ * It is safe as a global precisely because it acts on almost nothing. It fires
+ * only when deserializeUser has just refused a session for a banned row and
+ * left its note on the request. An anonymous visitor, a signed-in reader and
+ * /api/health all fall straight through -- the last of which CI asserts
+ * answers 200 with no cookie.
+ *
+ * It answers only under /api. A page request falls through so the app still
+ * loads and shows the sign-in screen, rather than a bare 403 in the browser.
+ */
+export function denyBannedAccounts(req: Request, res: Response, next: NextFunction) {
+  if (!(req as { accountSuspended?: boolean }).accountSuspended) return next();
+  if (!req.path.startsWith("/api/")) return next();
+  return res.status(403).json({
+    message: ACCOUNT_SUSPENDED_MESSAGE,
+    code: ACCOUNT_SUSPENDED_CODE,
+  });
 }
 
 /**

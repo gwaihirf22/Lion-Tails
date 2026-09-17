@@ -57,6 +57,8 @@ import {
 import { sceneFromPassage } from "./lib/passageScene";
 import { questLengthAllowed, QUEST_SHORTEST_LENGTH } from "@shared/quests";
 import { accountDetail, accountList } from "./lib/accountStats";
+import { cancelAllStoryJobsFor } from "./lib/storyJobs";
+import { mayChangeAccount } from "@shared/accountStatus";
 import { storyTypeFitsRole, STORY_TYPE_ROLE_MESSAGE } from "@shared/storyTypes";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
@@ -99,7 +101,7 @@ import {
   virtueLevels,
   avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, type StoryPassage,
   pictureNoteSchema, type PriceList, characterIdsOf, characterRoleOf,
-  type SavedStory, type Character, type StoryUsage, creditsLabel,
+  type SavedStory, type Character, type StoryUsage, creditsLabel, publicUser,
   PICTURE_CREDITS, PICTURE_TIERS, PICTURE_TIER_LABELS, picturePrefsSchema, type PictureTier,
   storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { withPictureNote } from "@shared/pictureNote";
@@ -1431,6 +1433,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error reading an account:", error);
       res.status(500).json({ message: "Could not read that account" });
+    }
+  });
+
+  /**
+   * LOCK AN ACCOUNT OUT, OR LET IT BACK IN.
+   *
+   * A ban is four things at once and they are all here so none can be
+   * forgotten: the column, which the sign-in check and deserializeUser both
+   * read; the jobs already in flight; and -- by the column alone -- their
+   * share links, which getSharedStory joins the owner for.
+   *
+   * Nothing is deleted. That is what makes this the safe thing to do to an
+   * account you are unsure about, and unban is clearing the same column.
+   */
+  app.post("/api/admin/accounts/:id/ban", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ message: "Not an account id" });
+      const target = await storage.getUser(id);
+      if (!target) return res.status(404).json({ message: "No such account" });
+
+      const allowed = mayChangeAccount(Number((req.user as { id: number }).id), target, await storage.countAdmins());
+      if (!allowed.ok) return res.status(409).json({ message: allowed.reason });
+
+      const reason = typeof req.body?.reason === "string" ? req.body.reason.slice(0, 500) : undefined;
+      const updated = await storage.setBanned(id, true, reason);
+      if (!updated) return res.status(503).json({ message: "Could not reach the database" });
+
+      // Anything already running stops at its next step boundary. A chapter
+      // being written right now is still paid for -- the worker cannot recall
+      // a call already made -- and the page says so before the button is
+      // pressed.
+      const stopped = await cancelAllStoryJobsFor(id);
+      res.json({ account: publicUser(updated), bannedAt: updated.bannedAt, jobsStopped: stopped });
+    } catch (error) {
+      console.error("Error banning an account:", error);
+      res.status(500).json({ message: "Could not ban that account" });
+    }
+  });
+
+  app.post("/api/admin/accounts/:id/unban", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ message: "Not an account id" });
+      const updated = await storage.setBanned(id, false);
+      if (!updated) return res.status(404).json({ message: "No such account" });
+      // Their stories, characters and share links are all where they were.
+      // Cancelled jobs are NOT resurrected; the page says so.
+      res.json({ account: publicUser(updated) });
+    } catch (error) {
+      console.error("Error unbanning an account:", error);
+      res.status(500).json({ message: "Could not unban that account" });
     }
   });
 
