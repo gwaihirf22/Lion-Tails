@@ -56,6 +56,7 @@ import {
 } from "./lib/illustration";
 import { sceneFromPassage } from "./lib/passageScene";
 import { questLengthAllowed, QUEST_SHORTEST_LENGTH } from "@shared/quests";
+import { accountDetail, accountList } from "./lib/accountStats";
 import { storyTypeFitsRole, STORY_TYPE_ROLE_MESSAGE } from "@shared/storyTypes";
 import { canEnqueueWithinQuota } from "./lib/openai";
 import { requireAuth, requireParentMode } from "./lib/requireAuth";
@@ -1397,6 +1398,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * is approved or dismissed, and a price list is published from what was
    * measured. See server/lib/priceWatch.ts and costStats.ts.
    */
+  /**
+   * WHO HAS AN ACCOUNT, and what it has cost.
+   *
+   * requireAdmin in the SIGNATURE, like every other admin route here. The
+   * window is clamped rather than trusted, as the stats route's is: it reaches
+   * make_interval.
+   *
+   * Counts and money only. accountStats.ts carries generationStats.ts's rule
+   * verbatim -- no story title, no character name, no prompt ever leaves this
+   * endpoint. An owner needs to know what an account spent; he does not need
+   * to read what somebody's child asked for.
+   */
+  app.get("/api/admin/accounts", requireAdmin, async (req, res) => {
+    try {
+      const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+      res.json(await accountList(days));
+    } catch (error) {
+      console.error("Error listing accounts:", error);
+      res.status(500).json({ message: "Could not list accounts" });
+    }
+  });
+
+  app.get("/api/admin/accounts/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ message: "Not an account id" });
+      const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
+      const detail = await accountDetail(id, days);
+      if (!detail.account) return res.status(404).json({ message: "No such account" });
+      res.json(detail);
+    } catch (error) {
+      console.error("Error reading an account:", error);
+      res.status(500).json({ message: "Could not read that account" });
+    }
+  });
+
   app.get("/api/admin/costs", requireAdmin, async (_req, res) => {
     try {
       res.json(await costsReport());

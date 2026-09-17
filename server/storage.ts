@@ -40,6 +40,10 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  /** Stamp the moment of a sign-in. Best-effort; never fails the sign-in. */
+  recordLogin(userId: number): Promise<void>;
+  /** Keep where a sign-up came from, so a burst from one place is answerable. */
+  recordSignup(userId: number, ip: string | undefined): Promise<void>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, updates: Partial<User>): Promise<User | undefined>;
 
@@ -372,7 +376,9 @@ export class MemStorage implements IStorage {
       lastName: insertUser.lastName || null,
       verificationToken: insertUser.verificationToken || null,
       resetPasswordToken: null,
-      resetPasswordExpires: null
+      resetPasswordExpires: null,
+      lastLoginAt: null,
+      signupIp: null,
     };
 
     this.users.set(id, user);
@@ -1165,6 +1171,16 @@ export class MemStorage implements IStorage {
 
   async getUserReadingPrefs(userId: number): Promise<Partial<ReadingPrefs>> {
     return this.userReadingPrefs.get(userId) ?? {};
+  }
+
+  async recordLogin(userId: number): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) this.users.set(userId, { ...user, lastLoginAt: new Date() });
+  }
+
+  async recordSignup(userId: number, ip: string | undefined): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) this.users.set(userId, { ...user, signupIp: ip ?? null });
   }
 
   async getUserPicturePrefs(userId: number): Promise<Partial<PicturePrefs>> {

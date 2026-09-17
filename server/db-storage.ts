@@ -155,6 +155,35 @@ export class DbStorage implements IStorage {
     }
   }
 
+  /**
+   * Both of these are best-effort and deliberately swallow their errors: a
+   * sign-in must not fail because a bookkeeping column could not be written.
+   * Raw SQL rather than updateUser(), which has no isDatabaseAvailable guard
+   * and would throw here.
+   */
+  async recordLogin(userId: number): Promise<void> {
+    if (!isDatabaseAvailable()) return;
+    try {
+      await pool!.query("UPDATE users SET last_login_at = now() WHERE id = $1", [userId]);
+    } catch (error) {
+      console.error(`Error stamping last_login_at for user ${userId}:`, error);
+    }
+  }
+
+  async recordSignup(userId: number, ip: string | undefined): Promise<void> {
+    if (!isDatabaseAvailable() || !ip) return;
+    try {
+      // Only the first one. A later write would record whoever last touched
+      // the row, which is not what "where this account came from" means.
+      await pool!.query(
+        "UPDATE users SET signup_ip = COALESCE(signup_ip, $2) WHERE id = $1",
+        [userId, ip],
+      );
+    } catch (error) {
+      console.error(`Error recording signup ip for user ${userId}:`, error);
+    }
+  }
+
   async getUserByUsername(username: string): Promise<User | undefined> {
     if (!isDatabaseAvailable()) {
       console.warn(`Database unavailable in getUserByUsername(${username}). Using fallback empty result.`);
