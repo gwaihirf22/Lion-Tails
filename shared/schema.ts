@@ -56,6 +56,21 @@ export const users = pgTable("users", {
    */
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   signupIp: text("signup_ip"),
+  /**
+   * LOCKED OUT, AND WHEN.
+   *
+   * A nullable timestamp rather than a boolean beside a timestamp: "when"
+   * already answers "whether", and two columns for one fact is how they come
+   * to disagree. `banned_at IS NOT NULL` is the whole predicate, and
+   * isBanned() in shared/accountStatus.ts is the only place that reads it.
+   *
+   * Nothing of theirs is deleted. A ban is reversible by clearing this, and
+   * every story, character and universe is exactly where it was -- which is
+   * what makes it the safe thing to do to an account you are unsure about.
+   */
+  bannedAt: timestamp("banned_at", { withTimezone: true }),
+  /** Why, for the admin page. Never shown to the person banned. */
+  bannedReason: text("banned_reason"),
 });
 
 // Verification tokens

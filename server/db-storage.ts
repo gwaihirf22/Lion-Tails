@@ -184,6 +184,40 @@ export class DbStorage implements IStorage {
     }
   }
 
+  /**
+   * Lock out, or let back in. One statement, and the row comes back so the
+   * caller reports what is actually stored rather than what it asked for.
+   */
+  async setBanned(userId: number, banned: boolean, reason?: string): Promise<User | undefined> {
+    if (!isDatabaseAvailable()) return undefined;
+    const { rowCount } = await pool!.query(
+      `UPDATE users
+          SET banned_at = CASE WHEN $2::boolean THEN now() ELSE NULL END,
+              banned_reason = CASE WHEN $2::boolean THEN $3::text ELSE NULL END,
+              updated_at = now()
+        WHERE id = $1`,
+      [userId, banned, reason ?? null],
+    );
+    if (!rowCount) return undefined;
+    /**
+     * Read back through getUser rather than RETURNING *.
+     *
+     * A raw pg row is snake_case, and User is camelCase -- so RETURNING * gave
+     * a shape that type-checks (its keys are not in User, and excess keys are
+     * allowed through a cast) and is wrong at runtime: publicUser() picked
+     * `bannedAt` off a row that only had `banned_at`, and the route answered
+     * with an account missing almost every field. One extra read, and the
+     * caller gets the same mapped shape every other method returns.
+     */
+    return this.getUser(userId);
+  }
+
+  async countAdmins(): Promise<number> {
+    if (!isDatabaseAvailable()) return 0;
+    const { rows } = await pool!.query("SELECT COUNT(*)::int AS n FROM users WHERE is_admin = true");
+    return Number(rows[0]?.n ?? 0);
+  }
+
   async getUserByUsername(username: string): Promise<User | undefined> {
     if (!isDatabaseAvailable()) {
       console.warn(`Database unavailable in getUserByUsername(${username}). Using fallback empty result.`);
@@ -984,8 +1018,13 @@ export class DbStorage implements IStorage {
   async getSharedStory(token: string): Promise<SavedStory | undefined> {
     if (!isDatabaseAvailable()) return undefined;
     const { rows } = await pool!.query(
+      // The owner's standing is part of visibility. A share link is the one
+      // read with no session behind it, so a banned account's links have to go
+      // dark HERE or not at all -- and the route answers 404 for every reason,
+      // so a stranger holding the link sees exactly what a lapsed story shows.
       `SELECT s.* FROM story_shares sh
          JOIN user_stories s ON s.story_id = sh.story_id
+         JOIN users u ON u.id = s.user_id AND u.banned_at IS NULL
         WHERE sh.token = $1
           AND (s.is_favorite = true OR s.expires_at IS NULL OR s.expires_at > NOW())`,
       [token],

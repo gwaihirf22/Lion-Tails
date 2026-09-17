@@ -26,6 +26,8 @@ type Account = {
   email: string;
   isAdmin: boolean;
   isVerified: boolean;
+  bannedAt: string | null;
+  bannedReason: string | null;
   createdAt: string;
   lastLoginAt: string | null;
   signupIp: string | null;
@@ -70,6 +72,35 @@ export default function AdminAccounts() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [reload, setReload] = useState(0);
+
+  /**
+   * Ban or unban, then reload from the server rather than patching the row
+   * here: what a ban did -- how many jobs it stopped -- is the server's answer,
+   * and a list that guesses is a list that can be wrong on screen.
+   */
+  const setBanned = async (account: Account, banned: boolean) => {
+    if (banned) {
+      const reason = window.prompt(
+        `Ban ${account.username}?\n\nThey are signed out at once and cannot sign in. Their stories, characters and credits are kept, and unbanning gives them all back. Any story being written right now stops at its next chapter -- that chapter is still paid for, and cancelled stories do not come back.\n\nWhy (for your own records, optional):`,
+        "",
+      );
+      if (reason === null) return;
+      setBusy(account.id);
+      const res = await apiRequestAllowingErrors("POST", `/api/admin/accounts/${account.id}/ban`, { reason });
+      const body = await res.json().catch(() => ({}));
+      setBusy(null);
+      if (!res.ok) return setError(body.message || "Could not ban that account");
+    } else {
+      setBusy(account.id);
+      const res = await apiRequestAllowingErrors("POST", `/api/admin/accounts/${account.id}/unban`);
+      const body = await res.json().catch(() => ({}));
+      setBusy(null);
+      if (!res.ok) return setError(body.message || "Could not unban that account");
+    }
+    setReload((n) => n + 1);
+  };
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth");
@@ -97,7 +128,7 @@ export default function AdminAccounts() {
     return () => {
       cancelled = true;
     };
-  }, [days]);
+  }, [days, reload]);
 
   useEffect(() => {
     if (openId === null) {
@@ -174,6 +205,7 @@ export default function AdminAccounts() {
                 <th className="text-right">Stories</th>
                 <th className="text-right">Pictures</th>
                 <th className="text-right">Cost</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -189,6 +221,11 @@ export default function AdminAccounts() {
                       {a.isAdmin && (
                         <span className="ml-2 rounded bg-secondary/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
                           admin
+                        </span>
+                      )}
+                      {a.bannedAt && (
+                        <span className="ml-2 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-destructive">
+                          banned
                         </span>
                       )}
                     </div>
@@ -207,6 +244,22 @@ export default function AdminAccounts() {
                   </td>
                   <td className="text-right">{a.pictures}</td>
                   <td className="text-right">{money(a.spentMicros)}</td>
+                  <td className="text-right">
+                    {/* stopPropagation: the row opens the detail, and a click
+                        that both bans somebody and opens their page is a click
+                        nobody meant to make. */}
+                    <Button
+                      size="sm"
+                      variant={a.bannedAt ? "outline" : "ghost"}
+                      disabled={busy === a.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void setBanned(a, !a.bannedAt);
+                      }}
+                    >
+                      {busy === a.id ? "…" : a.bannedAt ? "Unban" : "Ban"}
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>

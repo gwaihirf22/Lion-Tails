@@ -42,6 +42,10 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   /** Stamp the moment of a sign-in. Best-effort; never fails the sign-in. */
   recordLogin(userId: number): Promise<void>;
+  /** Lock an account out, or let it back in. Nothing of theirs is deleted. */
+  setBanned(userId: number, banned: boolean, reason?: string): Promise<User | undefined>;
+  /** How many admins there are, for the rule that the last one may not go. */
+  countAdmins(): Promise<number>;
   /** Keep where a sign-up came from, so a burst from one place is answerable. */
   recordSignup(userId: number, ip: string | undefined): Promise<void>;
   createUser(user: InsertUser): Promise<User>;
@@ -379,6 +383,8 @@ export class MemStorage implements IStorage {
       resetPasswordExpires: null,
       lastLoginAt: null,
       signupIp: null,
+      bannedAt: null,
+      bannedReason: null,
     };
 
     this.users.set(id, user);
@@ -1176,6 +1182,22 @@ export class MemStorage implements IStorage {
   async recordLogin(userId: number): Promise<void> {
     const user = this.users.get(userId);
     if (user) this.users.set(userId, { ...user, lastLoginAt: new Date() });
+  }
+
+  async setBanned(userId: number, banned: boolean, reason?: string): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    const next = {
+      ...user,
+      bannedAt: banned ? new Date() : null,
+      bannedReason: banned ? (reason ?? null) : null,
+    };
+    this.users.set(userId, next);
+    return next;
+  }
+
+  async countAdmins(): Promise<number> {
+    return [...this.users.values()].filter((u) => u.isAdmin).length;
   }
 
   async recordSignup(userId: number, ip: string | undefined): Promise<void> {
