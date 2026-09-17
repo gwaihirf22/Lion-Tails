@@ -11,6 +11,7 @@ import UniversePage from "@/pages/Universe";
 import Settings from "@/pages/Settings";
 import AdminStats from "@/pages/AdminStats";
 import AdminCosts from "@/pages/AdminCosts";
+import AdminAccounts from "@/pages/AdminAccounts";
 import Characters from "@/pages/Characters";
 import HeroesOfFaith from "@/pages/HeroesOfFaith";
 import ImageAnalysis from "@/pages/ImageAnalysis";
@@ -49,6 +50,7 @@ function Router() {
           matters is requireAdmin on the endpoint, not route visibility. */}
       <ProtectedRoute path="/admin/stats" component={AdminStats} />
       <ProtectedRoute path="/admin/costs" component={AdminCosts} />
+      <ProtectedRoute path="/admin/accounts" component={AdminAccounts} />
       <ProtectedRoute path="/characters" component={Characters} />
       <Route path="/heroes-of-faith" component={HeroesOfFaith} />
       <Route path="/image-analysis" component={ImageAnalysis} />

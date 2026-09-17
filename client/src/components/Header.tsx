@@ -186,7 +186,11 @@ export default function Header() {
     // /api/admin/generation-stats is what actually protects the data, and the
     // page renders the server 403 for anyone who navigates here directly.
     ...(user?.isAdmin
-      ? [{ href: "/admin/stats", text: "Stats" }, { href: "/admin/costs", text: "Costs" }]
+      ? [
+          { href: "/admin/stats", text: "Stats" },
+          { href: "/admin/costs", text: "Costs" },
+          { href: "/admin/accounts", text: "Accounts" },
+        ]
       : []),
   ];
 

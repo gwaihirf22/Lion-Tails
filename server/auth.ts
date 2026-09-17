@@ -6,7 +6,7 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { insertUserSchema, User as SelectUser } from "@shared/schema";
+import { insertUserSchema, publicUser, User as SelectUser } from "@shared/schema";
 import { requiredSecret } from "./config";
 
 // Registration is unauthenticated, so its body is attacker-controlled.
@@ -146,11 +146,17 @@ export function setupAuth(app: Express) {
         password: await hashPassword(credentials.password),
       });
 
+      /**
+       * WHERE THIS ONE CAME FROM. The only address this app keeps, and it is
+       * kept so that six accounts appearing from one place in one hour is a
+       * question somebody can ask. Best-effort: a sign-up must not fail
+       * because a column could not be written.
+       */
+      void storage.recordSignup(user.id, req.ip).catch(() => undefined);
+
       req.login(user, (err) => {
         if (err) return next(err);
-        // Don't send password in response
-        const { password, ...userWithoutPassword } = user;
-        res.status(201).json(userWithoutPassword);
+        res.status(201).json(publicUser(user));
       });
     } catch (error) {
       next(error);
@@ -164,9 +170,12 @@ export function setupAuth(app: Express) {
       
       req.login(user, (err) => {
         if (err) return next(err);
-        // Don't send password in response
-        const { password, ...userWithoutPassword } = user;
-        res.status(200).json(userWithoutPassword);
+        // Stamped here, once per sign-in, and NOT in deserializeUser -- that
+        // runs on every request, so stamping there would turn reading a story
+        // into a write. "Last activity" is a different question and the
+        // accounts page answers it from story_jobs.
+        void storage.recordLogin(user.id).catch(() => undefined);
+        res.status(200).json(publicUser(user));
       });
     })(req, res, next);
   });
@@ -182,9 +191,10 @@ export function setupAuth(app: Express) {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Authentication required" });
     }
-    // Don't send password in response
-    const { password, ...userWithoutPassword } = req.user as SelectUser;
-    res.json(userWithoutPassword);
+    // PICKED, not stripped: this used to remove the password and publish
+    // everything else, which included the password RESET TOKEN -- a
+    // credential -- and would publish every column added later.
+    res.json(publicUser(req.user as SelectUser));
   });
 
   // Email verification endpoint

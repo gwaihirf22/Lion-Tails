@@ -37,6 +37,25 @@ export const users = pgTable("users", {
   resetPasswordExpires: timestamp("reset_password_expires", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  /**
+   * WHO IS STILL USING THIS, AND WHERE THEY CAME FROM.
+   *
+   * Both nullable with no backfill: NULL means "from before this was
+   * recorded", which is the honest answer for the accounts that already exist
+   * and is why neither needs a data migration.
+   *
+   * lastLoginAt is written ONCE per sign-in, in the req.login callback -- not
+   * in deserializeUser, which runs on every request and would turn a page view
+   * into a write. "Last activity" is a different question and is answered by
+   * the newest story_jobs row, which is already indexed by user.
+   *
+   * signupIp is the only address this app has ever kept. It exists so several
+   * accounts appearing from one place in one hour is a question somebody can
+   * ask; app.set("trust proxy", 1) is what makes req.ip the client rather than
+   * the proxy, and that setting must be right before anything is judged by it.
+   */
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  signupIp: text("signup_ip"),
 });
 
 // Verification tokens
@@ -713,6 +732,9 @@ export const modelCalls = pgTable(
   },
   (table) => ({
     createdIdx: index("idx_model_calls_created_at").on(table.createdAt),
+    // Per-account spend reads "this user, over this window", so the index is
+    // the pair. The created_at index above still serves the all-users scans.
+    userCreatedIdx: index("idx_model_calls_user_created").on(table.userId, table.createdAt),
     jobIdx: index("idx_model_calls_job_id").on(table.jobId),
     storyIdx: index("idx_model_calls_story_id").on(table.storyId),
   }),
@@ -841,6 +863,34 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+/**
+ * The user, as anybody outside the server may see it.
+ *
+ * PICKED, never omitted. The three routes that return a user each did their
+ * own `const { password, ...rest } = user`, which is a list of what to hide --
+ * so every column added since has been published by default, including the
+ * password RESET TOKEN, which is a credential. A pick inverts that: a new
+ * column is private until somebody names it here.
+ */
+export type PublicUser = Pick<
+  User,
+  "id" | "username" | "email" | "firstName" | "lastName" | "isAdmin" | "isVerified" | "createdAt" | "lastLoginAt"
+>;
+
+export function publicUser(user: User): PublicUser {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    isAdmin: user.isAdmin,
+    isVerified: user.isVerified,
+    createdAt: user.createdAt,
+    lastLoginAt: user.lastLoginAt,
+  };
+}
 export type RegisterUser = z.infer<typeof registerUserSchema>;
 export type LoginUser = z.infer<typeof loginUserSchema>;
 export type VerifyEmail = z.infer<typeof verifyEmailSchema>;
