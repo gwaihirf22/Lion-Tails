@@ -12,6 +12,15 @@ import { z } from "zod";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Loader2 } from "lucide-react";
 import lantern from "@/assets/lantern.webp";
+import { useQuery } from "@tanstack/react-query";
+import TurnstileGate from "@/components/TurnstileGate";
+import {
+  answersChallenge,
+  CHALLENGE_HINT,
+  CHALLENGE_QUESTION,
+  CHALLENGE_WRONG,
+  CREDENTIAL_RULES,
+} from "@shared/challenge";
 
 // Extend the schemas from shared/schema.ts
 const loginSchema = z.object({
@@ -19,14 +28,23 @@ const loginSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
+/**
+ * THE RULES COME FROM shared/challenge.ts, and the answer is no longer checked
+ * here alone.
+ *
+ * What was here before: the challenge answer was compared in the browser and
+ * then DELETED from the payload, so the server never saw it, and the only
+ * password/email rules in the app were these — the API accepted a
+ * one-character password. Both halves are fixed: the same rules run on the
+ * server, and the answer and the Turnstile token are sent to be checked there.
+ */
 const registerSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters"),
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  confirmPassword: z.string().min(6, "Password must be at least 6 characters"),
-  challenge: z.string().refine(value => value.toLowerCase() === "jesus", {
-    message: "Please answer the challenge question correctly"
-  }),
+  ...CREDENTIAL_RULES,
+  confirmPassword: z.string(),
+  challenge: z.string().refine(answersChallenge, { message: CHALLENGE_WRONG }),
+  // Filled by the widget, required before the button works. Empty is the
+  // widget saying "no usable token" — including after one expires.
+  turnstileToken: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],
@@ -61,8 +79,26 @@ export default function AuthPage() {
       password: "",
       confirmPassword: "",
       challenge: "",
+      turnstileToken: "",
     },
   });
+
+  /**
+   * Whether this server demands a challenge, and the public site key.
+   *
+   * Asked rather than built in, so the same image serves production and a dev
+   * box with Cloudflare's test keys — and so a key can be rotated without
+   * shipping a client. `required` false is a development server with no secret
+   * configured: the widget is not drawn and the server does not ask for a
+   * token, which is what keeps dev-seed and the screenshot script working.
+   */
+  const { data: challenge, isLoading: challengeLoading } = useQuery<{
+    required: boolean;
+    siteKey: string | null;
+    question: string;
+    hint: string;
+  }>({ queryKey: ["/api/auth/challenge"], staleTime: Infinity });
+  const needsWidget = Boolean(challenge?.required && challenge.siteKey);
 
   // Handle form submissions
   const onLoginSubmit = (values: LoginFormValues) => {
@@ -70,8 +106,10 @@ export default function AuthPage() {
   };
 
   const onRegisterSubmit = (values: RegisterFormValues) => {
-    // Remove fields that shouldn't be sent to the API
-    const { confirmPassword, challenge, ...registerData } = values;
+    // confirmPassword is the only field the API has no use for. The challenge
+    // answer and the token GO — deleting them here is precisely what made the
+    // old challenge decoration, and the server checks both.
+    const { confirmPassword, ...registerData } = values;
     registerMutation.mutate(registerData);
   };
 
@@ -211,7 +249,7 @@ export default function AuthPage() {
                         <FormItem>
                           <FormLabel>Challenge Question</FormLabel>
                           <FormDescription className="text-sm">
-                            Who is the Son of God? (hint: 5 letters)
+                            {challenge?.question ?? CHALLENGE_QUESTION} ({challenge?.hint ?? CHALLENGE_HINT})
                           </FormDescription>
                           <FormControl>
                             <Input placeholder="Enter your answer" {...field} />
@@ -220,11 +258,43 @@ export default function AuthPage() {
                         </FormItem>
                       )}
                     />
-                    
-                    <Button 
-                      type="submit" 
-                      className="w-full" 
-                      disabled={registerMutation.isPending}
+
+                    {/* The real check. Drawn only where the server demands one,
+                        so a dev box with no secret behaves as it always did. */}
+                    {needsWidget && challenge?.siteKey && (
+                      <FormField
+                        control={registerForm.control}
+                        name="turnstileToken"
+                        render={() => (
+                          <FormItem>
+                            <FormControl>
+                              <TurnstileGate
+                                siteKey={challenge.siteKey!}
+                                action="register"
+                                onToken={(token) =>
+                                  registerForm.setValue("turnstileToken", token, {
+                                    shouldValidate: true,
+                                  })
+                                }
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      // Waits for the token as well as the request: pressing
+                      // it without one would only earn a refusal from the
+                      // server, which reads as the form being broken.
+                      disabled={
+                        registerMutation.isPending ||
+                        challengeLoading ||
+                        (needsWidget && !registerForm.watch("turnstileToken"))
+                      }
                     >
                       {registerMutation.isPending ? (
                         <>

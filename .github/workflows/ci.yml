@@ -519,6 +519,8 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
+          TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
           EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
@@ -544,6 +546,11 @@ jobs:
             printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
             printf 'SESSION_SECRET=%s\n'    "$SESSION_SECRET"
             printf 'OPENAI_API_KEY=%s\n'    "$OPENAI_API_KEY"
+            # The signup challenge. An EMPTY site key means no widget is drawn;
+            # an empty secret in production means sign-ups are refused, which is
+            # deliberate -- see server/lib/turnstile.ts.
+            printf 'TURNSTILE_SITE_KEY=%s\n' "$TURNSTILE_SITE_KEY"
+            printf 'TURNSTILE_SECRET=%s\n'   "$TURNSTILE_SECRET"
             printf 'EMAIL_HOST=%s\n'        "$EMAIL_HOST"
             printf 'EMAIL_USER=%s\n'        "$EMAIL_USER"
             printf 'EMAIL_PASSWORD=%s\n'    "$EMAIL_PASSWORD"

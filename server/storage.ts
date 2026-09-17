@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import session from 'express-session';
 import createMemoryStore from 'memorystore';
 import { newShareToken } from './lib/sharing';
+import { newSecretToken } from './lib/tokens';
 
 const MemoryStore = createMemoryStore(session);
 
@@ -429,8 +430,9 @@ export class MemStorage implements IStorage {
   }
 
   async createVerificationToken(userId: number, tokenType: 'email' | 'password'): Promise<string> {
-    // Generate a random token
-    const token = Array.from(Array(32), () => Math.floor(Math.random() * 36).toString(36)).join('');
+    // A credential, so it comes from the operating system's CSPRNG. See
+    // server/lib/tokens.ts for what Math.random() was doing here and why.
+    const token = newSecretToken();
 
     // Set expiry to 24 hours from now
     const expiresAt = new Date();
