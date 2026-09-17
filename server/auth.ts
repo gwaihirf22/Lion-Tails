@@ -1,13 +1,29 @@
 import { PARENT_MODE_WINDOW_MS, parentModeActive, type ParentModeSession } from "@shared/parentMode";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
+import { Express, type Request, type Response } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { insertUserSchema, User as SelectUser } from "@shared/schema";
 import { requiredSecret } from "./config";
+import {
+  answersChallenge,
+  CHALLENGE_FIELD,
+  CHALLENGE_HINT,
+  CHALLENGE_QUESTION,
+  CHALLENGE_WRONG,
+  CREDENTIAL_RULES,
+  TURNSTILE_FIELD,
+} from "@shared/challenge";
+import {
+  challengeMisconfigured,
+  challengeRequired,
+  refusalFor,
+  turnstileSiteKey,
+  verifyTurnstile,
+} from "./lib/turnstile";
 
 // Registration is unauthenticated, so its body is attacker-controlled.
 //
@@ -22,11 +38,19 @@ import { requiredSecret } from "./config";
 // Omitting the three privilege fields here is the fix. Zod strips unknown keys
 // by default, so anything else a client invents is dropped too. createUser has
 // exactly one caller -- this handler -- so nothing legitimate loses a field.
-export const registerBodySchema = insertUserSchema.omit({
-  isAdmin: true,
-  isVerified: true,
-  verificationToken: true,
-});
+// The rules come from shared/challenge.ts, which is the ONE definition of what
+// a username, an email and a password have to be. Until this, drizzle-zod's
+// `z.string()` was all the API asked for -- so `email: "a"` and a
+// one-character password were accepted here while the browser enforced three
+// rules it alone knew about. `.extend()` and not a rewrite: the omit()s above
+// are the privilege-escalation fix and tests/registerBody.test.ts holds them.
+export const registerBodySchema = insertUserSchema
+  .omit({
+    isAdmin: true,
+    isVerified: true,
+    verificationToken: true,
+  })
+  .extend(CREDENTIAL_RULES);
 
 declare global {
   namespace Express {
@@ -118,9 +142,84 @@ export function setupAuth(app: Express) {
     }
   });
 
+  /**
+   * Whether this request has proved a person is behind it.
+   *
+   * READ OFF THE RAW BODY, and consumed here. `registerBodySchema` strips
+   * unknown keys -- which is the privilege-escalation fix, not an accident --
+   * and the handler spreads `...credentials` into drizzle's `.values()`, which
+   * copies whichever keys the object carries rather than the table's columns.
+   * A token that survived into the parsed object would try to become a column.
+   *
+   * Returns false having ALREADY answered, so a caller cannot forget to.
+   */
+  async function personChecked(
+    req: Request,
+    res: Response,
+    opts: { askTheQuestion: boolean },
+  ): Promise<boolean> {
+    if (!challengeRequired()) return true;
+
+    // On in production with nothing to check against: our fault, and said as
+    // such. A 503 also stops this reading as "wrong answer, try again".
+    if (challengeMisconfigured()) {
+      console.error("[challenge] no Turnstile secret in production -- refusing to take sign-ups.");
+      res.status(503).json({
+        error: "We cannot take new sign-ups just now. Please try again later.",
+      });
+      return false;
+    }
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+
+    if (opts.askTheQuestion) {
+      const answer = body[CHALLENGE_FIELD];
+      if (!answersChallenge(typeof answer === "string" ? answer : undefined)) {
+        res.status(400).json({
+          error: CHALLENGE_WRONG,
+          // Same shape as a zod failure, so the form can put it under the
+          // field it belongs to rather than in a toast.
+          details: { [CHALLENGE_FIELD]: [CHALLENGE_WRONG] },
+        });
+        return false;
+      }
+    }
+
+    const token = body[TURNSTILE_FIELD];
+    const result = await verifyTurnstile(typeof token === "string" ? token : undefined, req.ip);
+    if (!result.ok) {
+      console.warn(`[challenge] refused (${result.codes.join(", ") || "no codes"})`);
+      // Ours or theirs: unreachable and no-secret are ours, and a 503 says so.
+      const ours = result.codes.includes("unreachable") || result.codes.includes("no-secret");
+      res.status(ours ? 503 : 400).json({ error: refusalFor(result) });
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * What the signup form needs to know before it draws itself: whether a
+   * challenge is demanded here, and the public site key for the widget.
+   *
+   * A route rather than a build-time constant so the same image runs in
+   * production and on a dev box with Cloudflare's test keys, and so rotating a
+   * key needs no client deploy. The site key is public by design -- it is in
+   * the page for anyone to read.
+   */
+  app.get("/api/auth/challenge", (_req, res) => {
+    res.json({
+      required: challengeRequired(),
+      siteKey: turnstileSiteKey() ?? null,
+      question: CHALLENGE_QUESTION,
+      hint: CHALLENGE_HINT,
+    });
+  });
+
   // Authentication endpoints
   app.post("/api/auth/register", async (req, res, next) => {
     try {
+      if (!(await personChecked(req, res, { askTheQuestion: true }))) return;
+
       const parsed = registerBodySchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({
@@ -221,6 +320,11 @@ export function setupAuth(app: Express) {
   // Password reset request endpoint
   app.post("/api/auth/reset-password-request", async (req, res, next) => {
     try {
+      // Challenged, but not asked the question: this form is for somebody who
+      // already has an account, and one unthrottled POST here writes a row
+      // into verification_tokens for any address anybody cares to name.
+      if (!(await personChecked(req, res, { askTheQuestion: false }))) return;
+
       const { email } = req.body;
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
@@ -255,6 +359,13 @@ export function setupAuth(app: Express) {
       const { token, password } = req.body;
       if (!token || !password) {
         return res.status(400).json({ error: "Token and password are required" });
+      }
+      // The same rule registration enforces. This path had NO rule at all, so
+      // a reset could set a one-character password on an existing account --
+      // a way round the only password rule the app has.
+      const strong = CREDENTIAL_RULES.password.safeParse(password);
+      if (!strong.success) {
+        return res.status(400).json({ error: strong.error.issues[0]?.message ?? "Password is too short" });
       }
 
       const tokenData = await storage.getVerificationToken(token);

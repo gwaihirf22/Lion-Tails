@@ -62,6 +62,13 @@ services:
       - COSTS_ADMIN_KEY_FILE=/run/secrets/openai-admin-key
       # Scopes the bill check to the Lion's Tail project (not a secret).
       - COSTS_PROJECT_ID=proj_uQjN5Xv24HRqdr0AqaV9E0zp
+      # The signup challenge (Cloudflare Turnstile). The SITE key is public and
+      # is served to the browser; the SECRET is what the server checks with.
+      # TURNSTILE_SECRET_FILE is the other accepted form, like
+      # COSTS_ADMIN_KEY_FILE above -- whichever is set, the env wins.
+      # In production, NO SECRET MEANS NO SIGN-UPS: see server/lib/turnstile.ts.
+      - TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY}
+      - TURNSTILE_SECRET=${TURNSTILE_SECRET}
       - EMAIL_HOST=${EMAIL_HOST}
       - EMAIL_PORT=587
       - EMAIL_SECURE=false

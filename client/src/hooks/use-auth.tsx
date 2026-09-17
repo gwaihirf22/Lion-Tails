@@ -14,10 +14,21 @@ type AuthContextType = {
   error: Error | null;
   loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
+  registerMutation: UseMutationResult<SelectUser, Error, RegisterData>;
 };
 
 type LoginData = Pick<InsertUser, "username" | "password">;
+
+/**
+ * What registration sends: the account, plus the two things the server checks
+ * before it makes one (shared/challenge.ts). They are NOT columns -- the
+ * register handler reads them off the raw body and the schema strips them --
+ * so they are named here rather than smuggled through InsertUser.
+ */
+type RegisterData = InsertUser & {
+  challenge: string;
+  turnstileToken: string;
+};
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -61,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const registerMutation = useMutation({
-    mutationFn: async (credentials: InsertUser) => {
+    mutationFn: async (credentials: RegisterData) => {
       try {
         const res = await apiRequest("POST", "/api/auth/register", credentials);
         // Clone the response before reading it to avoid "body already read" errors

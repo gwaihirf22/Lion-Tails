@@ -11,8 +11,8 @@
  * and never reused -- stopping a share and sharing again mints a new one, so a
  * link that was stopped stays stopped.
  */
-import { randomBytes } from "crypto";
+import { newSecretToken } from "./tokens";
 
 export function newShareToken(): string {
-  return randomBytes(16).toString("base64url");
+  return newSecretToken(16);
 }

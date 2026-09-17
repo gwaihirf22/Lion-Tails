@@ -161,6 +161,64 @@ signature**, not via `app.use()`, so a missing guard is visible where the routes
 are listed together. Writes to shared reference data (heroes, hero-stories,
 songs) are admin-only; user content requires a session.
 
+### Signing up is challenged, and the challenge is checked HERE
+
+Blake: *"We need to update the captcha to something more than what I did with
+Replit"* — *"It is just a question asking who the son of God is. Not a true
+captcha."* It was less than that. The form asked the question, compared the
+answer to `"jesus"` in the browser, and then **deleted the field before
+sending** (`const { confirmPassword, challenge, ...registerData } = values`).
+The server had never heard of it, so `curl` with three fields minted accounts —
+and a new account carries 50 story credits and 8 portraits on the owner's key,
+about **$1.40 a signup** and ~$0.20 a month after.
+
+- **Cloudflare Turnstile, verified server-side** (`server/lib/turnstile.ts`),
+  on `POST /api/auth/register` and `POST /api/auth/reset-password-request`.
+  No library: `fetch` against siteverify, like `priceWatch.ts`. `req.ip` goes
+  with it as `remoteip` — SWAG restores the real address and `trust proxy` is
+  on. `TURNSTILE_SECRET` or `TURNSTILE_SECRET_FILE`, read on every use, one
+  reader function: `adminKey()`'s convention exactly.
+- **FAIL CLOSED, and on in production whatever the config says.**
+  `challengeRequired()` is true when a secret exists **or**
+  `NODE_ENV=production`, so a live box whose secret went missing refuses
+  sign-ups (503, "we cannot take new sign-ups just now") rather than quietly
+  returning to the hole. **Consequence: set `TURNSTILE_SITE_KEY` and
+  `TURNSTILE_SECRET` in production before deploying this, or nobody can
+  register.**
+- **Off on a dev box with no secret**, which is load-bearing:
+  `scripts/dev-seed.ts` and `scripts/capture-guide.ts` register over this API
+  with no browser in sight. `GET /api/auth/challenge` tells the form whether to
+  draw a widget and hands it the public site key — a route rather than a
+  build-time constant, so one image serves production and a dev box on
+  Cloudflare's test keys, and a key can be rotated without shipping a client.
+- **The token and the answer are read off the RAW body and consumed there.**
+  `registerBodySchema` strips unknown keys (that is the privilege fix) and the
+  handler spreads `...credentials` into drizzle's `.values()`, which copies
+  whatever keys it is handed — a token that reached the parsed object would try
+  to become a column. A test asserts both fields are stripped.
+- **The question stays, and now counts.** `shared/challenge.ts` holds it, its
+  answer and one normaliser, read by the form AND the route so they cannot
+  drift apart again. It is a fixed answer in a public bundle: a second cheap
+  filter, never the defence.
+- **The API validates credentials at all now.** `registerBodySchema` inherited
+  `z.string()` from drizzle-zod, so `email: "a"` and a one-character password
+  were accepted; the rules existed only in the browser, and the strict versions
+  sat unused in `shared/schema.ts`. `CREDENTIAL_RULES` (3/8 characters, a real
+  email) is the one definition, extended onto the schema — never replacing the
+  `omit()`s — and `POST /api/auth/reset-password`, which had no rule at all,
+  meets the same minimum.
+- **Reset tokens come from the CSPRNG** (`server/lib/tokens.ts`).
+  `createVerificationToken` built them from `Math.random()` in both storages —
+  xorshift128+, whose state is recoverable from a handful of outputs, minting a
+  password-reset credential. Harmless only because no token is ever delivered;
+  account takeover the day a mailer exists.
+- **Not in this piece, deliberately:** rate limiting (there is still none
+  anywhere, and no route emits 429 but the credit refusal), and the login
+  challenge after repeated failures. Registration still answers "Username
+  already exists" and "Email already in use" distinctly, which is an
+  enumeration oracle and a decision — telling a parent which field clashed is
+  worth more here.
+
 Admin status is `users.is_admin`. Never key authorisation off a username —
 nothing reserves usernames, so a string comparison grants the privilege to
 anyone who registers that name.
