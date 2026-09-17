@@ -14,13 +14,7 @@ import { Loader2 } from "lucide-react";
 import lantern from "@/assets/lantern.webp";
 import { useQuery } from "@tanstack/react-query";
 import TurnstileGate from "@/components/TurnstileGate";
-import {
-  answersChallenge,
-  CHALLENGE_HINT,
-  CHALLENGE_QUESTION,
-  CHALLENGE_WRONG,
-  CREDENTIAL_RULES,
-} from "@shared/challenge";
+import { CREDENTIAL_RULES } from "@shared/challenge";
 
 // Extend the schemas from shared/schema.ts
 const loginSchema = z.object({
@@ -29,19 +23,18 @@ const loginSchema = z.object({
 });
 
 /**
- * THE RULES COME FROM shared/challenge.ts, and the answer is no longer checked
- * here alone.
+ * THE RULES COME FROM shared/challenge.ts, and the server enforces the same
+ * ones.
  *
- * What was here before: the challenge answer was compared in the browser and
- * then DELETED from the payload, so the server never saw it, and the only
- * password/email rules in the app were these — the API accepted a
- * one-character password. Both halves are fixed: the same rules run on the
- * server, and the answer and the Turnstile token are sent to be checked there.
+ * This form used to be the only place any of them existed — the API accepted
+ * `email: "a"` and a one-character password — and it also asked "Who is the Son
+ * of God?", compared the answer here, and deleted the field before sending. The
+ * question has gone (Blake's call, once Turnstile was live and verified); the
+ * token is what proves a person, and the server checks it.
  */
 const registerSchema = z.object({
   ...CREDENTIAL_RULES,
   confirmPassword: z.string(),
-  challenge: z.string().refine(answersChallenge, { message: CHALLENGE_WRONG }),
   // Filled by the widget, required before the button works. Empty is the
   // widget saying "no usable token" — including after one expires.
   turnstileToken: z.string(),
@@ -78,13 +71,12 @@ export default function AuthPage() {
       email: "",
       password: "",
       confirmPassword: "",
-      challenge: "",
       turnstileToken: "",
     },
   });
 
   /**
-   * Whether this server demands a challenge, and the public site key.
+   * Whether this server demands a Turnstile check, and the public site key.
    *
    * Asked rather than built in, so the same image serves production and a dev
    * box with Cloudflare's test keys — and so a key can be rotated without
@@ -95,8 +87,6 @@ export default function AuthPage() {
   const { data: challenge, isLoading: challengeLoading } = useQuery<{
     required: boolean;
     siteKey: string | null;
-    question: string;
-    hint: string;
   }>({ queryKey: ["/api/auth/challenge"], staleTime: Infinity });
   const needsWidget = Boolean(challenge?.required && challenge.siteKey);
 
@@ -106,9 +96,9 @@ export default function AuthPage() {
   };
 
   const onRegisterSubmit = (values: RegisterFormValues) => {
-    // confirmPassword is the only field the API has no use for. The challenge
-    // answer and the token GO — deleting them here is precisely what made the
-    // old challenge decoration, and the server checks both.
+    // confirmPassword is the only field the API has no use for. The TOKEN GOES
+    // -- deleting it here is precisely what made the old question decoration,
+    // and the server checks it against Cloudflare.
     const { confirmPassword, ...registerData } = values;
     registerMutation.mutate(registerData);
   };
@@ -241,24 +231,6 @@ export default function AuthPage() {
                       )}
                     />
                     
-                    {/* Challenge Question */}
-                    <FormField
-                      control={registerForm.control}
-                      name="challenge"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Challenge Question</FormLabel>
-                          <FormDescription className="text-sm">
-                            {challenge?.question ?? CHALLENGE_QUESTION} ({challenge?.hint ?? CHALLENGE_HINT})
-                          </FormDescription>
-                          <FormControl>
-                            <Input placeholder="Enter your answer" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
                     {/* The real check. Drawn only where the server demands one,
                         so a dev box with no secret behaves as it always did. */}
                     {needsWidget && challenge?.siteKey && (

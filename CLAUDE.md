@@ -196,10 +196,15 @@ about **$1.40 a signup** and ~$0.20 a month after.
   handler spreads `...credentials` into drizzle's `.values()`, which copies
   whatever keys it is handed — a token that reached the parsed object would try
   to become a column. A test asserts both fields are stripped.
-- **The question stays, and now counts.** `shared/challenge.ts` holds it, its
-  answer and one normaliser, read by the form AND the route so they cannot
-  drift apart again. It is a fixed answer in a public bundle: a second cheap
-  filter, never the defence.
+- **THE QUESTION IS GONE.** "Who is the Son of God? (hint: 5 letters)" had two
+  lives: decoration (checked in the browser, deleted before sending), and then
+  a second server-checked filter kept mostly because Blake wrote it. He asked
+  for it once Turnstile was live and verified in production, which retires that
+  reason — a fixed answer in a public bundle stops nothing determined, and it
+  is one more thing to fumble on a form whose real gate is invisible. Nothing
+  depended on it: the Turnstile check fails closed, so the question was never
+  the last line. `shared/challenge.ts` keeps the history and now holds only the
+  token's field name and `CREDENTIAL_RULES`.
 - **The API validates credentials at all now.** `registerBodySchema` inherited
   `z.string()` from drizzle-zod, so `email: "a"` and a one-character password
   were accepted; the rules existed only in the browser, and the strict versions

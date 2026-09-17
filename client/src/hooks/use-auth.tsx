@@ -20,13 +20,12 @@ type AuthContextType = {
 type LoginData = Pick<InsertUser, "username" | "password">;
 
 /**
- * What registration sends: the account, plus the two things the server checks
- * before it makes one (shared/challenge.ts). They are NOT columns -- the
- * register handler reads them off the raw body and the schema strips them --
- * so they are named here rather than smuggled through InsertUser.
+ * What registration sends: the account, plus the Turnstile token the server
+ * checks before it makes one (shared/challenge.ts). The token is NOT a column
+ * -- the register handler reads it off the raw body and the schema strips it --
+ * so it is named here rather than smuggled through InsertUser.
  */
 type RegisterData = InsertUser & {
-  challenge: string;
   turnstileToken: string;
 };
 

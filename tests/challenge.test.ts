@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { answersChallenge, CREDENTIAL_RULES, normaliseAnswer } from "@shared/challenge";
+import { CREDENTIAL_RULES } from "@shared/challenge";
 import { registerBodySchema } from "../server/auth";
 import {
   challengeMisconfigured,
@@ -11,28 +11,9 @@ import {
 /**
  * The signup gate. What makes these worth having: the thing they replace was
  * checked in the browser and thrown away before the request, so there was
- * nothing on the server to test at all.
+ * nothing on the server to test at all -- and the question that briefly stood
+ * beside it is gone too (shared/challenge.ts records why).
  */
-describe("the challenge question", () => {
-  it("accepts the answer however it is typed", () => {
-    for (const answer of ["jesus", "Jesus", "JESUS", "  Jesus  ", "je sus".replace(" ", "")]) {
-      expect(answersChallenge(answer), answer).toBe(true);
-    }
-  });
-
-  it("refuses everything else, including a true answer it never meant", () => {
-    for (const answer of ["", "   ", "christ", "Jesus Christ", "god", "5"]) {
-      expect(answersChallenge(answer), answer).toBe(false);
-    }
-    expect(answersChallenge(undefined)).toBe(false);
-  });
-
-  it("normalises the way both sides do, so they cannot disagree", () => {
-    expect(normaliseAnswer("  JeSuS ")).toBe("jesus");
-    expect(normaliseAnswer("a   b")).toBe("a b");
-  });
-});
-
 describe("what the API demands of a registration", () => {
   const ok = {
     username: "blake",
@@ -67,16 +48,14 @@ describe("what the API demands of a registration", () => {
     expect("verificationToken" in parsed).toBe(false);
   });
 
-  it("strips the challenge fields too, so neither can reach a column", () => {
-    // They are read off the RAW body and consumed there. If either survived
-    // into the parsed object, `...credentials` would carry it into drizzle's
-    // .values(), which copies whatever keys it is given.
+  it("strips the token too, so it cannot reach a column", () => {
+    // It is read off the RAW body and consumed there. If it survived into the
+    // parsed object, `...credentials` would carry it into drizzle's .values(),
+    // which copies whatever keys it is given.
     const parsed = registerBodySchema.parse({
       ...ok,
-      challenge: "jesus",
       turnstileToken: "0.abc",
     } as Record<string, unknown>);
-    expect("challenge" in parsed).toBe(false);
     expect("turnstileToken" in parsed).toBe(false);
   });
 

@@ -1,72 +1,48 @@
 /**
  * Proving a person is at the keyboard, before an account is made.
  *
- * WHAT WAS HERE BEFORE. The signup form asked "Who is the Son of God?",
- * compared the answer to "jesus" IN THE BROWSER, and then deleted the field
- * before sending the request -- `const { confirmPassword, challenge,
- * ...registerData } = values`. The server had never heard of it. Blake, on
- * being asked: *"It is just a question asking who the son of God is. Not a
- * true captcha."* It was less than that: an attacker did not have to answer
- * it, read it, or know it existed.
+ * ONE GATE, AND IT IS THE REAL ONE: a Cloudflare Turnstile token, checked by
+ * the server against Cloudflare (server/lib/turnstile.ts). A new account is
+ * signed in immediately and carries 50 story credits and 8 portraits on the
+ * owner's OpenAI key -- about $1.40 a signup -- so this is the difference
+ * between a form and a tap.
  *
- * WHY IT MATTERS MORE THAN SPAM. A new account is signed in immediately and
- * carries two free pools on the owner's OpenAI key -- 50 story credits and 8
- * portraits -- about $1.40 a signup and ~$0.20 a month after that. Registration
- * was one unthrottled POST with three fields.
+ * THERE USED TO BE A QUESTION HERE: "Who is the Son of God? (hint: 5
+ * letters)". Two lives, both worth remembering.
  *
- * SO THERE ARE TWO GATES NOW, and only one of them is real:
- *  - Turnstile, checked against Cloudflare by the server (server/lib/turnstile.ts);
- *  - this question, checked by the server as well. It is a fixed answer in a
- *    public bundle, so it stops nothing determined -- it is kept because Blake
- *    wrote it, it suits the app, and it costs a lazy script one more field.
- *    Do not mistake it for the defence.
+ * First it was decoration. The form compared the answer to "jesus" IN THE
+ * BROWSER and then deleted the field before sending, so the server had never
+ * heard of it: `curl` with three fields minted accounts. Blake: *"It is just a
+ * question asking who the son of God is. Not a true captcha."*
  *
- * Everything here is pure and shared, so the form and the route cannot drift
- * apart -- which is exactly how the old one came to be checked in one place
- * and not the other.
+ * Then, when Turnstile went in, the question was kept and checked on the
+ * server too -- a second cheap filter, kept mostly because Blake wrote it. He
+ * asked for it to go once Turnstile was live and verified, which retires that
+ * reason: a fixed answer in a public bundle stops nothing determined, and it
+ * is one more thing for a grandparent to fumble on a form whose real gate is
+ * invisible. Nothing depended on it -- the Turnstile check fails closed, so the
+ * question was never the last line.
+ *
+ * So: no question, and no answer to keep in step between the form and the
+ * route. What is left is pure and shared, which is the property that stopped
+ * the old one being checked in one place and not the other.
  */
 import { z } from "zod";
 
-export const CHALLENGE_QUESTION = "Who is the Son of God?";
-export const CHALLENGE_HINT = "hint: 5 letters";
-
 /**
- * What counts as right.
- *
- * "Christ" is a true answer to the question and is NOT accepted, because the
- * hint says five letters and the form has always meant one word. Said out loud
- * here so the next person does not read the narrow list as an oversight.
+ * The field carrying the token. Named here because the client sets it and the
+ * server reads it off the RAW body -- see the register handler for why it must
+ * never reach the parsed object.
  */
-const ANSWERS = ["jesus"];
-
-/** Lower case, trimmed, and inner runs of space collapsed. */
-export function normaliseAnswer(answer: string): string {
-  return answer.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-export function answersChallenge(answer: string | undefined): boolean {
-  if (typeof answer !== "string") return false;
-  return ANSWERS.includes(normaliseAnswer(answer));
-}
-
-/** What a wrong answer is told, in both places that can refuse it. */
-export const CHALLENGE_WRONG = "That is not the answer we were looking for.";
-
-/**
- * The fields carrying the two gates. Named here because the client sets them
- * and the server reads them off the RAW body -- see the register handler for
- * why they must never reach the parsed object.
- */
-export const CHALLENGE_FIELD = "challenge";
 export const TURNSTILE_FIELD = "turnstileToken";
 
 /**
  * The rules for a username, an email and a password -- ONE definition.
  *
  * They lived in the browser only. `registerBodySchema` inherited
- * `z.string()` from drizzle-zod for all three, so the API accepted
- * `email: "a"` and a one-character password; the strict versions sat in
- * `registerUserSchema`, which nothing imported. Both now read these.
+ * `z.string()` from drizzle-zod, so the API accepted `email: "a"` and a
+ * one-character password; the strict versions sat in `registerUserSchema`,
+ * which nothing imported. Both now read these.
  */
 export const CREDENTIAL_RULES = {
   username: z.string().min(3, "Username must be at least 3 characters"),

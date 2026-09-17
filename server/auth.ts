@@ -10,15 +10,7 @@ import { insertUserSchema, publicUser, User as SelectUser } from "@shared/schema
 import { ACCOUNT_SUSPENDED_CODE, ACCOUNT_SUSPENDED_MESSAGE, isBanned } from "@shared/accountStatus";
 import { requiredSecret } from "./config";
 import { denyBannedAccounts } from "./lib/requireAuth";
-import {
-  answersChallenge,
-  CHALLENGE_FIELD,
-  CHALLENGE_HINT,
-  CHALLENGE_QUESTION,
-  CHALLENGE_WRONG,
-  CREDENTIAL_RULES,
-  TURNSTILE_FIELD,
-} from "@shared/challenge";
+import { CREDENTIAL_RULES, TURNSTILE_FIELD } from "@shared/challenge";
 import {
   challengeMisconfigured,
   challengeRequired,
@@ -203,11 +195,7 @@ export function setupAuth(app: Express) {
    *
    * Returns false having ALREADY answered, so a caller cannot forget to.
    */
-  async function personChecked(
-    req: Request,
-    res: Response,
-    opts: { askTheQuestion: boolean },
-  ): Promise<boolean> {
+  async function personChecked(req: Request, res: Response): Promise<boolean> {
     if (!challengeRequired()) return true;
 
     // On in production with nothing to check against: our fault, and said as
@@ -221,20 +209,6 @@ export function setupAuth(app: Express) {
     }
 
     const body = (req.body ?? {}) as Record<string, unknown>;
-
-    if (opts.askTheQuestion) {
-      const answer = body[CHALLENGE_FIELD];
-      if (!answersChallenge(typeof answer === "string" ? answer : undefined)) {
-        res.status(400).json({
-          error: CHALLENGE_WRONG,
-          // Same shape as a zod failure, so the form can put it under the
-          // field it belongs to rather than in a toast.
-          details: { [CHALLENGE_FIELD]: [CHALLENGE_WRONG] },
-        });
-        return false;
-      }
-    }
-
     const token = body[TURNSTILE_FIELD];
     const result = await verifyTurnstile(typeof token === "string" ? token : undefined, req.ip);
     if (!result.ok) {
@@ -260,15 +234,13 @@ export function setupAuth(app: Express) {
     res.json({
       required: challengeRequired(),
       siteKey: turnstileSiteKey() ?? null,
-      question: CHALLENGE_QUESTION,
-      hint: CHALLENGE_HINT,
     });
   });
 
   // Authentication endpoints
   app.post("/api/auth/register", async (req, res, next) => {
     try {
-      if (!(await personChecked(req, res, { askTheQuestion: true }))) return;
+      if (!(await personChecked(req, res))) return;
 
       const parsed = registerBodySchema.safeParse(req.body);
       if (!parsed.success) {
@@ -386,7 +358,7 @@ export function setupAuth(app: Express) {
       // Challenged, but not asked the question: this form is for somebody who
       // already has an account, and one unthrottled POST here writes a row
       // into verification_tokens for any address anybody cares to name.
-      if (!(await personChecked(req, res, { askTheQuestion: false }))) return;
+      if (!(await personChecked(req, res))) return;
 
       const { email } = req.body;
       if (!email) {
