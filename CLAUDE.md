@@ -244,9 +244,26 @@ about **$1.40 a signup** and ~$0.20 a month after.
   are still weak** — they expire in 24 hours and nothing can deliver them, so
   they were left to age out rather than purged; read the claim as "made from
   here on", not "every row".
-- **Not in this piece, deliberately:** rate limiting (there is still none
-  anywhere, and no route emits 429 but the credit refusal), and the login
-  challenge after repeated failures. Registration still answers "Username
+- **Rate limiting is `server/lib/rateLimit.ts`**, written rather than
+  installed: on one container express-rate-limit's store is the same in-memory
+  map, and a decision inside a dependency cannot be unit tested. `hit()` is a
+  pure fixed-window rule; `limiter()` wraps it with `peek` (ask without
+  counting) and `forget` (a correct answer clears the slate). Four guards:
+  login 20 an address / 8 a username per 15 minutes, register and
+  reset-password 5 an address an hour, stories 30 and pictures 40 an hour per
+  ACCOUNT. All 429 with `Retry-After`.
+  - **Login counts failures, and only the ADDRESS is checked before the
+    password.** Refusing on the username first means anyone who knows a name
+    can lock its owner out by getting it wrong eight times — measured on dev,
+    it refused the real password for fifteen minutes. The username allowance
+    is spent only after a wrong answer.
+  - **These are a ceiling behind the credits, not instead of them.** Credits
+    limit a family; these catch a loop, which matters most for the admin and
+    own-key accounts credits never touch.
+  - **It forgets on restart**, deliberately: a deploy is minutes, the windows
+    are minutes, and surviving one would cost a table and a cleanup job.
+- **Not in this piece, deliberately:** the login challenge after repeated
+  failures. Registration still answers "Username
   already exists" and "Email already in use" distinctly, which is an
   enumeration oracle and a decision — telling a parent which field clashed is
   worth more here.
