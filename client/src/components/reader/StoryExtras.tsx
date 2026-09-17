@@ -175,6 +175,11 @@ export function StoryExtras({
             description: "Pictures can take a few minutes. It will appear here when it is ready. Please don't press again.",
           }),
       }),
+    onMutate: () =>
+      toast({
+        title: "Drawing your picture",
+        description: "It takes a few minutes. Keep reading — it will appear here when it is ready.",
+      }),
     onSuccess: (data) => {
       if (data.imageUrl) setImageUrl(data.imageUrl);
       if (data.images) {
@@ -633,12 +638,15 @@ export function StoryExtras({
       {asking && (
         <PictureDialog
           open
-          onOpenChange={(open) => !open && !illustrate.isPending && setAsking(null)}
+          onOpenChange={(open) => !open && setAsking(null)}
           mode={asking}
           storyTitle={story.title}
           galleryCount={gallery.length}
-          pending={illustrate.isPending}
-          onConfirm={(note) => illustrate.mutate({ redraw: asking === "redraw", note })}
+          onConfirm={(note) => {
+            const redraw = asking === "redraw";
+            setAsking(null);
+            illustrate.mutate({ redraw, note });
+          }}
         />
       )}
     </div>

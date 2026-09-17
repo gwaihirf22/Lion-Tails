@@ -214,6 +214,13 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
             description: "Pictures can take a few minutes. It will appear in the story when it is ready. Please don't press again.",
           }),
       }),
+    // The box is already closed by now, so this is the only thing that says
+    // the picture was actually started. Keep reading: it arrives on its own.
+    onMutate: () =>
+      toast({
+        title: "Drawing your picture",
+        description: "It takes a few minutes. Keep reading — it will appear in the story when it is ready.",
+      }),
     onSuccess: (data) => {
       onPictures?.(data.images ?? []);
       queryClient.invalidateQueries({ queryKey: [`/api/stories/${storyId}`] });
@@ -498,13 +505,19 @@ export default function StoryDisplay({ story, storyId, storyType, builtIn, editL
       {confirming && (
         <PictureDialog
           open
-          onOpenChange={(open) => !open && !drawPassage.isPending && setConfirming(null)}
+          onOpenChange={(open) => !open && setConfirming(null)}
           mode="passage"
           quote={confirming.text}
           storyTitle={story.title}
           galleryCount={images?.length ?? 0}
-          pending={drawPassage.isPending}
-          onConfirm={(note) => drawPassage.mutate({ passage: confirming, note })}
+          onConfirm={(note) => {
+            // Closed FIRST, and the passage taken with it: the picker is
+            // still listening, and the request must carry what was on screen
+            // when the reader pressed the button.
+            const passage = confirming;
+            setConfirming(null);
+            drawPassage.mutate({ passage, note });
+          }}
         />
       )}
 

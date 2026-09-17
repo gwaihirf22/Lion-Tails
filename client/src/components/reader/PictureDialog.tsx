@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ImagePlus, Loader2 } from "lucide-react";
+import { ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -55,7 +55,7 @@ export default function PictureDialog({
   quote,
   storyTitle,
   galleryCount,
-  pending,
+
   onConfirm,
 }: {
   open: boolean;
@@ -71,7 +71,7 @@ export default function PictureDialog({
   storyTitle: string;
   /** How many pictures the story already has, against MAX_STORY_IMAGES. */
   galleryCount: number;
-  pending: boolean;
+
   onConfirm: (note: string) => void;
 }) {
   const [note, setNote] = useState("");
@@ -204,21 +204,18 @@ export default function PictureDialog({
         </p>
 
         <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" onClick={() => onConfirm(note.trim())} disabled={pending}>
-            {pending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                Painting…
-              </>
-            ) : (
-              <>
-                <ImagePlus className="mr-2 h-4 w-4" aria-hidden="true" />
-                {confirmLabel}
-              </>
-            )}
+          {/* ANSWERED, THEN GONE. It used to sit here spinning "Painting…"
+              over the story for the minutes the picture took, which is a
+              modal box in front of the one thing the reader came for. The
+              caller closes it the moment this is pressed; the picture goes on
+              drawing, the buttons underneath say so, and the story can be
+              read while it does. */}
+          <Button type="button" onClick={() => onConfirm(note.trim())}>
+            <ImagePlus className="mr-2 h-4 w-4" aria-hidden="true" />
+            {confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
