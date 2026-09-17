@@ -255,6 +255,53 @@ Admin status is `users.is_admin`. Never key authorisation off a username —
 nothing reserves usernames, so a string comparison grants the privilege to
 anyone who registers that name.
 
+## Running the accounts
+
+`/admin/accounts` is the page: who has an account, what it has cost, and the
+buttons that add, promote, ban and unban. `server/lib/accountStats.ts` feeds it,
+and it inherits `generationStats.ts`'s boundary verbatim — **counts and money,
+never content**. No query there selects a story title, a character name or a
+prompt. A column that wants one is a decision to read what somebody's child
+asked for, over Blake's shoulder.
+
+**The watch is `server/lib/abuseWatch.ts`**, four signals Blake named: money
+(one account's owner-paid spend in a day), volume (stories and pictures in an
+hour), refusals (a model declining, in a day) and sign-ups (accounts from one
+address in a day). It rides on `GET /api/admin/accounts` and cannot take the
+list down with it — a failure answers `watch: null` and the accounts still
+render.
+
+- **It reports and never acts.** Nothing bans, cancels, deletes or throttles on
+  a threshold. A threshold is a guess about behaviour, "suspicious" is not
+  permission, and the ban button is three inches away on the same page.
+- **The judgement is pure and the queries are not**, split in that one file so
+  every boundary is driven from both sides in `tests/abuseWatch.test.ts`. A
+  limit that fires one too early should be found there, not by an email
+  accusing a friend of Blake's of farming credits.
+- **Refusals needed a table; the other three did not.** Money is `model_calls`,
+  volume is `story_jobs`, sign-ups are `users.signup_ip`. A refusal was turned
+  into a sentence for the user and then lost, so `account_events` (migration
+  0016) records it from the three places that know — `avatar.ts`,
+  `illustration.ts` and the story worker, all gated on `looksLikeRefusal()`.
+  **There is no content column and that is the decision, not an omission**: a
+  count is enough to decide to look at an account. `recordRefusal` is
+  fire-and-forget and cannot throw — it is called from catch blocks already on
+  their way to telling a parent something went wrong.
+- **Admins are counted for money and nothing else excuses them.** An admin is
+  uncharged and unlimited, so an admin is the only account that CAN run up an
+  unbounded bill; leaving them out would blind it to the most expensive case.
+- **A banned account is left out of every signal about a person** — they are
+  locked out already, and repeating yesterday's numbers hourly is how a
+  warnings list becomes one nobody reads.
+- **Thresholds live in `app_settings.abuse_thresholds`**, tunable without a
+  deploy, with `DEFAULT_THRESHOLDS` as the floor. `thresholdsFrom()` is total:
+  a negative, a zero, a string or a NaN falls back, because a bad row reaching
+  a comparison turns the watcher silently off — the failure mode where a check
+  cannot fail.
+- `Warning` is `shared/warnings.ts`, one type for both admin screens. It was
+  declared in `costReport.ts` and hand-copied into the client; a third copy was
+  the moment to stop.
+
 ## The free story allowance
 
 **The unit is credits, not stories** (see "Model selection"): a Luna story is

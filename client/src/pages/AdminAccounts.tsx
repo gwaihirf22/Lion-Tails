@@ -17,7 +17,7 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, Eye, Loader2 } from "lucide-react";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -43,7 +43,20 @@ type Account = {
   lastActivityAt: string | null;
 };
 
-type AccountList = { windowDays: number; accounts: Account[] };
+/**
+ * A finding from the abuse watch. `accountId` is what makes the sentence
+ * clickable: every finding about a person opens that person.
+ */
+type Finding = { level: "action" | "watch"; code: string; message: string; accountId?: number };
+
+/** Null when the watch itself failed. The list is still worth showing. */
+type Watch = {
+  findings: Finding[];
+  accountsChecked: number;
+  thresholds: Record<string, number>;
+} | null;
+
+type AccountList = { windowDays: number; accounts: Account[]; watch: Watch };
 
 type Detail = {
   account?: Account;
@@ -213,6 +226,54 @@ export default function AdminAccounts() {
           ))}
         </div>
       </div>
+
+      {/* THE WATCH, FIRST. It is the reason to open this page when nothing
+          is wrong -- an account list is a reference, a finding is news. It
+          REPORTS AND NEVER ACTS: every sentence ends at a person deciding,
+          and the buttons that do anything are in the table below. */}
+      <Card className="bg-card">
+        <CardHeader>
+          <CardTitle className="text-lg">Anything to look at</CardTitle>
+          <CardDescription>
+            {list.watch
+              ? `Money and refusals over the last day, stories and pictures over the last hour, across ${list.watch.accountsChecked} ${list.watch.accountsChecked === 1 ? "account" : "accounts"}. Banned accounts are left out.`
+              : "The watch could not run just now. The accounts below are unaffected."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {list.watch?.findings.length === 0 && (
+            <p className="text-sm text-muted-foreground">Nobody is over a limit.</p>
+          )}
+          {list.watch?.findings.map((f, i) => (
+            <div
+              key={`${f.code}-${i}`}
+              className={
+                f.level === "action"
+                  ? "flex gap-2 rounded-md border border-warning bg-warning-surface p-3 text-sm text-warning"
+                  : "flex gap-2 rounded-md border p-3 text-sm text-muted-foreground"
+              }
+            >
+              {f.level === "action" ? (
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              ) : (
+                <Eye className="h-4 w-4 shrink-0 mt-0.5" />
+              )}
+              <span>
+                {f.message}
+                {f.accountId !== undefined && (
+                  <button
+                    type="button"
+                    className="ml-2 underline underline-offset-2"
+                    onClick={() => setOpenId(f.accountId!)}
+                  >
+                    Open the account
+                  </button>
+                )}
+              </span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       {/* THE PASSPHRASE, ONCE. There is no email to send it in and nothing
           stores it in the clear, so this card is the only time anybody sees

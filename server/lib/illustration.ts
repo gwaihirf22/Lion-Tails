@@ -49,6 +49,7 @@ import { KEEPER, KEEPER_FACE_FILE } from "../data/lionTails";
 import { platesForScene } from "../data/referencePlates";
 import { storage } from "../storage";
 import { describeCharacter, looksLikeRefusal, readAvatarFile } from "./avatar";
+import { recordRefusal } from "./accountEvents";
 import { categoryOf } from "@shared/characterVocab";
 import { PICTURE_REF_PATTERN, pictureRefs } from "@shared/family";
 import { isTimekeeperStory } from "@shared/quests";
@@ -1118,7 +1119,10 @@ export async function generateStoryImage(
     // refused, which is a different sentence for the reader but the same
     // answer to the money question.
     await refundOutside(userId, charged);
-    return { ok: false, reason: looksLikeRefusal(error) ? "refused" : "failed" };
+    const refused = looksLikeRefusal(error);
+    // See avatar.ts: the refusal is noted, the prompt never is.
+    if (refused) recordRefusal(userId, "picture");
+    return { ok: false, reason: refused ? "refused" : "failed" };
   }
 }
 

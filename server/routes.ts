@@ -57,6 +57,7 @@ import {
 import { sceneFromPassage } from "./lib/passageScene";
 import { questLengthAllowed, QUEST_SHORTEST_LENGTH } from "@shared/quests";
 import { accountDetail, accountList } from "./lib/accountStats";
+import { abuseReport } from "./lib/abuseWatch";
 import { cancelAllStoryJobsFor } from "./lib/storyJobs";
 import { randomInt } from "crypto";
 import { makePassphrase } from "@shared/passphrase";
@@ -1418,7 +1419,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/accounts", requireAdmin, async (req, res) => {
     try {
       const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
-      res.json(await accountList(days));
+      /**
+       * The watch rides along with the list, and cannot take it down with it.
+       *
+       * One fetch, because the findings are about the accounts on the same
+       * screen -- but its four windowed aggregates are the slowest thing here
+       * and the newest, so a failure answers `watch: null` and the page still
+       * shows who has an account. The alternative, a second endpoint, is a
+       * second thing to forget to call.
+       */
+      const [list, watch] = await Promise.all([
+        accountList(days),
+        abuseReport().catch((error) => {
+          console.error("Error running the abuse watch:", error);
+          return null;
+        }),
+      ]);
+      res.json({ ...list, watch });
     } catch (error) {
       console.error("Error listing accounts:", error);
       res.status(500).json({ message: "Could not list accounts" });

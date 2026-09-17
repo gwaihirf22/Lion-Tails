@@ -106,6 +106,13 @@
       "when": 1789624860950,
       "tag": "0014_right_blindfold",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1789668933306,
+      "tag": "0016_panoramic_kabuki",
+      "breakpoints": true
     }
   ]
 }

@@ -38,6 +38,8 @@ import {
   summaryUserPrompt,
 } from "./universeSummary";
 import { newGenerationId, recordGeneration } from "./generationRecords";
+import { looksLikeRefusal } from "./avatar";
+import { recordRefusal } from "./accountEvents";
 import { characterIdsOf } from "@shared/schema";
 import type { ResolvedModel } from "./modelPolicy";
 import { storage } from "../storage";
@@ -893,6 +895,11 @@ async function runJob(job: JobRow): Promise<void> {
     const code = error instanceof StoryGenerationError ? error.code : "generation_failed";
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[worker] job ${job.job_id} failed (${code}):`, message);
+    // A story the model REFUSED to write is not the same fact as a story that
+    // failed, and failure_code cannot tell them apart -- both are
+    // generation_failed, which is why the abuse signal needs its own note.
+    // Recorded once per attempt, like every other line in this catch.
+    if (looksLikeRefusal(error)) recordRefusal(job.user_id, "story");
     // Retry the failures that a different draw could fix, and only those.
     //
     // story_too_short belongs here: these models vary enormously run to run --
