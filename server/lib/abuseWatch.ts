@@ -93,7 +93,18 @@ export type AbuseInput = {
  * what lets a later alert remember it has already said this about this account
  * rather than repeating it every hour.
  */
-export type AbuseFinding = Warning & { accountId?: number };
+export type AbuseFinding = Warning & {
+  accountId?: number;
+  /**
+   * The same finding about the same subject, across runs.
+   *
+   * `code` alone is a category and the message carries a count that moves, so
+   * neither can answer "have I already said this". The key is what lets an
+   * alert be sent once rather than every hour, and it is deliberately NOT the
+   * message: one more picture must not read as news.
+   */
+  key: string;
+};
 
 const dollars = (micros: number) => `$${(micros / 1_000_000).toFixed(2)}`;
 const centsToDollars = (cents: number) => `$${(cents / 100).toFixed(2)}`;
@@ -116,6 +127,7 @@ export function spendFindings(accounts: AbuseAccount[], t: AbuseThresholds): Abu
       level: "action" as const,
       code: "abuse-spend",
       accountId: a.id,
+      key: `abuse-spend:${a.id}`,
       message:
         `${a.username} has cost ${dollars(a.spentMicrosDay)} in the last day ` +
         `(over ${centsToDollars(t.spendCentsPerDay)})` +
@@ -139,6 +151,7 @@ export function volumeFindings(accounts: AbuseAccount[], t: AbuseThresholds): Ab
         level: "watch",
         code: "abuse-stories",
         accountId: a.id,
+        key: `abuse-stories:${a.id}`,
         message: `${a.username} started ${plural(a.storiesHour, "story", "stories")} in the last hour (over ${t.storiesPerHour}).`,
       });
     }
@@ -149,6 +162,7 @@ export function volumeFindings(accounts: AbuseAccount[], t: AbuseThresholds): Ab
         level: "watch",
         code: "abuse-pictures",
         accountId: a.id,
+        key: `abuse-pictures:${a.id}`,
         message: `${a.username} drew ${plural(a.picturesHour, "picture")} in the last hour (over ${t.picturesPerHour}).`,
       });
     }
@@ -175,6 +189,7 @@ export function refusalFindings(accounts: AbuseAccount[], t: AbuseThresholds): A
       level: "action" as const,
       code: "abuse-refusals",
       accountId: a.id,
+      key: `abuse-refusals:${a.id}`,
       message:
         `${a.username} was refused ${plural(a.refusalsDay, "time")} in the last day ` +
         `(over ${t.refusalsPerDay}). Look at the account before deciding anything.`,
@@ -196,6 +211,7 @@ export function signupFindings(addresses: AbuseAddress[], t: AbuseThresholds): A
     .map((a) => ({
       level: "watch" as const,
       code: "abuse-signups",
+      key: `abuse-signups:${a.address}`,
       message:
         `${plural(a.accounts, "account")} were created from ${a.address} in the last day ` +
         `(over ${t.signupsPerAddressPerDay}): ${a.usernames.join(", ")}.`,

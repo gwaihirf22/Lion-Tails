@@ -302,6 +302,44 @@ render.
   declared in `costReport.ts` and hand-copied into the client; a third copy was
   the moment to stop.
 
+**The alerts are Telegram**, because Blake already reads it for Sonarr and the
+server, and this app has no mailer at all — `EMAIL_*` is read by nothing.
+`server/lib/telegram.ts` is one `fetch` against one documented URL, no library,
+and `server/lib/abuseAlerts.ts` decides what is worth sending.
+
+- **Nothing is alert-only.** Both the page and the message come from the same
+  `abuseReport()`, so a finding he never saw because a send failed is still on
+  the page when he looks.
+- **The dedupe is the part that goes wrong quietly.** `toAnnounce()` is pure
+  and takes `now`: a finding is sent once a day per subject (`AbuseFinding.key`,
+  not the message — one more picture is not news), **an escalation from watch to
+  action is always sent**, and a de-escalation is not. Get this wrong in the
+  loud direction and the channel gets muted, which is worse than no alerting
+  because he then believes he is covered.
+- **The memory is written only after a successful send**, or a failed one would
+  swallow the finding for a day.
+- **The loop is `startPriceWatch`'s shape** — self-scheduling `setTimeout`,
+  gated on `databaseReady`, delayed first run, re-armed in `finally`,
+  `unref`'d, and it never throws into the scheduler. Hourly: an account spends
+  money in an afternoon. It starts whether or not Telegram is configured, so a
+  forgotten variable is a log line rather than a watcher nobody knows is absent.
+- **The token is read on every use** (`TELEGRAM_BOT_TOKEN`, or
+  `TELEGRAM_BOT_TOKEN_FILE`), `adminKey()`'s convention, so rotation needs no
+  restart. It is a credential — anyone holding it can send and read as the bot
+  — and `scrubToken()` takes it out of any text before it is logged or stored.
+  **That regex had no leading `\b` for a reason**: the token appears as
+  `.../bot123456789:AAH…`, and a word boundary there matches nothing, which
+  made the scrub a check that could not fail until a test caught it.
+- Messages are **plain text, no parse mode**: they carry usernames people chose,
+  and Markdown would either 400 or render as markup.
+- **"Send a test message" on `/admin/accounts`** is not a nicety. A token in a
+  file on a host is wrong for weeks with nothing to say so.
+- Getting it to production is three edits in lockstep: the GitHub secrets into
+  the deploy step's `env`, a `printf` into the remote `.env` heredoc
+  (`ci.yml`), and **a hand edit of `/mnt/user/appdata/lion-tails/docker-compose.yml`
+  on the host** — CI deliberately does not overwrite it, so the reference copy
+  in this repo being right is not enough.
+
 ## The free story allowance
 
 **The unit is credits, not stories** (see "Model selection"): a Luna story is

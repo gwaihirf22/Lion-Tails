@@ -521,6 +521,8 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
           TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
@@ -551,6 +553,10 @@ jobs:
             # deliberate -- see server/lib/turnstile.ts.
             printf 'TURNSTILE_SITE_KEY=%s\n' "$TURNSTILE_SITE_KEY"
             printf 'TURNSTILE_SECRET=%s\n'   "$TURNSTILE_SECRET"
+            # Account alerts. Both blank is "off", and the app says so on
+            # /admin/accounts rather than pretending it is watching.
+            printf 'TELEGRAM_BOT_TOKEN=%s\n'  "$TELEGRAM_BOT_TOKEN"
+            printf 'TELEGRAM_CHAT_ID=%s\n'    "$TELEGRAM_CHAT_ID"
             printf 'EMAIL_HOST=%s\n'        "$EMAIL_HOST"
             printf 'EMAIL_USER=%s\n'        "$EMAIL_USER"
             printf 'EMAIL_PASSWORD=%s\n'    "$EMAIL_PASSWORD"

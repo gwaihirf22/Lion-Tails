@@ -56,7 +56,7 @@ type Watch = {
   thresholds: Record<string, number>;
 } | null;
 
-type AccountList = { windowDays: number; accounts: Account[]; watch: Watch };
+type AccountList = { windowDays: number; accounts: Account[]; watch: Watch; telegram: boolean };
 
 type Detail = {
   account?: Account;
@@ -73,6 +73,13 @@ const money = (micros: number | null) => {
   const usd = micros / 1_000_000;
   return usd >= 1 ? `$${usd.toFixed(2)}` : `${(usd * 100).toFixed(2)}¢`;
 };
+
+/**
+ * `busy` holds the id of the account being worked on. These two are the
+ * actions that belong to no account: -1 is creating one, -2 is the Telegram
+ * test. Named, because a bare -2 in a disabled prop is unreadable.
+ */
+const TESTING = -2;
 
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "never";
@@ -92,6 +99,20 @@ export default function AdminAccounts() {
   const [draft, setDraft] = useState({ username: "", email: "", firstName: "" });
   /** Shown once, then gone -- it is not stored anywhere it can be read back. */
   const [minted, setMinted] = useState<{ username: string; passphrase: string } | null>(null);
+  /** Telegram's own answer to the test, in words, beside the button. */
+  const [tested, setTested] = useState<string | null>(null);
+
+  const sendTest = async () => {
+    setTested(null);
+    setBusy(TESTING);
+    const res = await apiRequestAllowingErrors("POST", "/api/admin/alerts/test");
+    const body = await res.json().catch(() => ({}));
+    setBusy(null);
+    // Reported here rather than in the page-wide error card: a failed test is
+    // news about the test, and blanking the accounts list over it would be a
+    // worse answer than the one it is giving.
+    setTested(res.ok ? "Sent — check Telegram." : body.message || "It did not go.");
+  };
 
   const setAdmin = async (account: Account, isAdmin: boolean) => {
     if (!isAdmin && !window.confirm(`Take admin away from ${account.username}? They will start paying credits like everyone else.`)) return;
@@ -272,6 +293,22 @@ export default function AdminAccounts() {
               </span>
             </div>
           ))}
+          {/* THE ALERTING HALF, PROVEN FROM HERE. A token in a file on a host
+              is the kind of setting that is wrong for weeks: nothing says so
+              until the one night it was supposed to say something. */}
+          <div className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
+            {list.telegram ? (
+              <>
+                <span>These go to Telegram too, once a day for the same account.</span>
+                <Button size="sm" variant="outline" disabled={busy === TESTING} onClick={sendTest}>
+                  {busy === TESTING ? "Sending…" : "Send a test message"}
+                </Button>
+                {tested && <span>{tested}</span>}
+              </>
+            ) : (
+              <span>Telegram is not set up, so these are only on this page.</span>
+            )}
+          </div>
         </CardContent>
       </Card>
 
