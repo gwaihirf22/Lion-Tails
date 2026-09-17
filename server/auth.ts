@@ -10,6 +10,7 @@ import { insertUserSchema, publicUser, User as SelectUser } from "@shared/schema
 import { ACCOUNT_SUSPENDED_CODE, ACCOUNT_SUSPENDED_MESSAGE, isBanned } from "@shared/accountStatus";
 import { requiredSecret } from "./config";
 import { denyBannedAccounts } from "./lib/requireAuth";
+import { limiter } from "./lib/rateLimit";
 import { CREDENTIAL_RULES, TURNSTILE_FIELD } from "@shared/challenge";
 import {
   challengeMisconfigured,
@@ -80,6 +81,38 @@ async function comparePasswords(supplied: string, stored: string) {
   const hashedBuf = Buffer.from(hashed, "hex");
   const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
   return timingSafeEqual(hashedBuf, suppliedBuf);
+}
+
+/**
+ * WHAT A SCRIPT MAY DO TO THE FRONT DOOR.
+ *
+ * Turnstile guards the sign-up FORM; these guard the endpoints, which a script
+ * reaches without loading a form at all. Before them, login accepted unlimited
+ * password guesses and register accepted unlimited accounts -- each one
+ * carrying fifty story credits and eight portraits on the owner's key.
+ *
+ * LOGIN COUNTS FAILURES, NOT ATTEMPTS. A family signing in correctly all
+ * afternoon must never be told to come back in fifteen minutes; only somebody
+ * who keeps getting it wrong is. Keyed by username AND by address, because
+ * either alone is half a guard: one address trying a thousand usernames, or a
+ * thousand addresses trying one.
+ *
+ * The numbers are deliberately loose. This is not the limit on what a family
+ * can do -- the story credits are that -- it is the ceiling a script hits.
+ */
+const loginByAddress = limiter({ limit: 20, windowMs: 15 * 60_000 });
+const loginByName = limiter({ limit: 8, windowMs: 15 * 60_000 });
+const registerByAddress = limiter({ limit: 5, windowMs: 60 * 60_000 });
+const resetByAddress = limiter({ limit: 5, windowMs: 60 * 60_000 });
+
+/** One shape for every refusal, so the client has one thing to recognise. */
+function tooMany(res: import("express").Response, seconds: number) {
+  res.set("Retry-After", String(seconds));
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return res.status(429).json({
+    code: "too_many_requests",
+    error: `Too many tries. Please wait about ${minutes} minute${minutes === 1 ? "" : "s"} and try again.`,
+  });
 }
 
 export function setupAuth(app: Express) {
@@ -240,6 +273,8 @@ export function setupAuth(app: Express) {
   // Authentication endpoints
   app.post("/api/auth/register", async (req, res, next) => {
     try {
+      const burst = registerByAddress.check(req.ip ?? "unknown");
+      if (!burst.allowed) return tooMany(res, burst.retryAfterSeconds);
       if (!(await personChecked(req, res))) return;
 
       const parsed = registerBodySchema.safeParse(req.body);
@@ -285,13 +320,43 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/auth/login", (req, res, next) => {
+    const address = req.ip ?? "unknown";
+    const name = String(req.body?.username ?? "").trim().toLowerCase().slice(0, 64);
+    /**
+     * ONLY THE ADDRESS IS REFUSED BEFORE THE PASSWORD IS CHECKED.
+     *
+     * The username counter is never consulted here, and that is deliberate:
+     * refusing on it would mean anybody who knows a username can lock its
+     * owner out by getting it wrong eight times -- the real password would
+     * then be answered with "too many tries" for a quarter of an hour. I
+     * wrote it that way first and the dev box proved it, refusing Blake's
+     * own correct password after eight wrong guesses at his name.
+     *
+     * So the username allowance is spent only AFTER a wrong answer, below. A
+     * guesser still gets throttled at the same count; somebody typing the
+     * right password always gets in. The cost is a scrypt check per attempt
+     * on a known username, and the address ceiling is what bounds that.
+     */
+    const byAddressFirst = loginByAddress.peek(address);
+    if (!byAddressFirst.allowed) return tooMany(res, byAddressFirst.retryAfterSeconds);
     passport.authenticate("local", (err: Error | null, user: SelectUser | false, info: any) => {
       if (err) return next(err);
       if (!user && info?.message === ACCOUNT_SUSPENDED_CODE) {
         return res.status(403).json({ error: ACCOUNT_SUSPENDED_MESSAGE, code: ACCOUNT_SUSPENDED_CODE });
       }
-      if (!user) return res.status(401).json({ error: "Invalid username or password" });
+      if (!user) {
+        // Only a wrong answer spends the allowance.
+        const byAddress = loginByAddress.check(address);
+        const byName = name ? loginByName.check(name) : { allowed: true, retryAfterSeconds: 0 };
+        if (!byAddress.allowed) return tooMany(res, byAddress.retryAfterSeconds);
+        if (!byName.allowed) return tooMany(res, byName.retryAfterSeconds);
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
       
+      // Getting it right clears the slate, so a forgotten password followed by
+      // the right one does not leave somebody one mistake from a lockout.
+      loginByName.forget(name);
+      loginByAddress.forget(address);
       req.login(user, (err) => {
         if (err) return next(err);
         // Stamped here, once per sign-in, and NOT in deserializeUser -- that
@@ -355,6 +420,8 @@ export function setupAuth(app: Express) {
   // Password reset request endpoint
   app.post("/api/auth/reset-password-request", async (req, res, next) => {
     try {
+      const burst = resetByAddress.check(req.ip ?? "unknown");
+      if (!burst.allowed) return tooMany(res, burst.retryAfterSeconds);
       // Challenged, but not asked the question: this form is for somebody who
       // already has an account, and one unthrottled POST here writes a row
       // into verification_tokens for any address anybody cares to name.
