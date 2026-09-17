@@ -88,10 +88,31 @@ export function setupAuth(app: Express) {
   );
 
   passport.serializeUser((user, done) => done(null, user.id));
+  /**
+   * NO USER MEANS SIGNED OUT, NOT BROKEN.
+   *
+   * `done(null, undefined)` is not "there is no such user" to passport: an
+   * undefined result means "this deserializer passes, try the next one", and
+   * with one registered it falls off the end of the stack into
+   * `new Error("Failed to deserialize user out of session")`
+   * (passport/lib/authenticator.js). That reaches the error handler as a 500 --
+   * so a session whose row has gone answers 500 to EVERY request, for a week,
+   * until the cookie lapses. There is no way out of it from inside the app.
+   *
+   * `false` is the value that means it: passport clears
+   * `req.session.passport.user` (lib/strategies/session.js) and the request
+   * carries on as anonymous. Which is also the mechanism a ban needs -- refuse
+   * here and a live session ends on its owner's next click, with no hunt
+   * through the session table, which has no user id to hunt by.
+   *
+   * getUser returns undefined for a deleted row AND for a database outage, so
+   * this signs people out rather than 500ing in both cases. Signed out and
+   * able to sign in again is the better failure.
+   */
   passport.deserializeUser(async (id: number, done) => {
     try {
       const user = await storage.getUser(id);
-      done(null, user);
+      done(null, user ?? false);
     } catch (err) {
       done(err);
     }
