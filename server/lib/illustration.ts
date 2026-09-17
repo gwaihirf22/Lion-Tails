@@ -1190,13 +1190,15 @@ export async function readStoryImageFile(url: string): Promise<PictureFile | und
 }
 
 /** Remove a picture's file. Used only by the delete route, which asks first. */
-export async function deleteStoryImage(url: string): Promise<void> {
+export async function deleteStoryImage(url: string): Promise<boolean> {
   try {
     const file = storyImagePath(url);
-    if (!file) return;
+    if (!file) return false;
     await fs.promises.rm(file, { force: true });
+    return true;
   } catch (error) {
     // An orphaned file is not worth failing a delete over.
     console.error(`[illustration] could not remove the picture ${url}:`, error);
+    return false;
   }
 }

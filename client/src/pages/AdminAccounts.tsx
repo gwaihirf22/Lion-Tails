@@ -90,6 +90,27 @@ export default function AdminAccounts() {
     setReload((n) => n + 1);
   };
 
+  /**
+   * Deleting asks for the name to be typed, because nothing here can be undone
+   * and the row above it is somebody else's family. The dialog says what
+   * survives -- the cost ledger -- since after this there is no way to ask
+   * what the account spent.
+   */
+  const removeAccount = async (account: Account) => {
+    const typed = window.prompt(
+      `Delete ${account.username}? This cannot be undone.\n\nTheir stories, characters, universes, pictures and share links are all deleted. What they cost is kept in the cost record, but can no longer be attributed to them -- so look at their spending first if you want it.\n\nA ban keeps everything and can be lifted; this cannot.\n\nType ${account.username} to confirm:`,
+      "",
+    );
+    if (typed === null) return;
+    setBusy(account.id);
+    const res = await apiRequestAllowingErrors("DELETE", `/api/admin/accounts/${account.id}`, { username: typed });
+    const body = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (!res.ok) return setError(body.message || "Could not delete that account");
+    setOpenId(null);
+    setReload((n) => n + 1);
+  };
+
   const createAccount = async () => {
     setBusy(-1);
     const res = await apiRequestAllowingErrors("POST", "/api/admin/accounts", draft);
@@ -372,6 +393,19 @@ export default function AdminAccounts() {
                       }}
                     >
                       {busy === a.id ? "…" : a.bannedAt ? "Unban" : "Ban"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive"
+                      disabled={busy === a.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void removeAccount(a);
+                      }}
+                      title="Deletes everything of theirs. A ban is the reversible one."
+                    >
+                      Delete
                     </Button>
                   </td>
                 </tr>

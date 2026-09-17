@@ -106,6 +106,13 @@
       "when": 1789624860950,
       "tag": "0014_right_blindfold",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1789665510514,
+      "tag": "0015_thankful_penance",
+      "breakpoints": true
     }
   ]
 }
