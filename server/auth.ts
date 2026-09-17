@@ -43,6 +43,16 @@ declare global {
 
 const scryptAsync = promisify(scrypt);
 
+/**
+ * The one hashing function, lent to the admin create-account route.
+ *
+ * Exported rather than copied: a second scrypt call with its own parameters is
+ * how two password formats come to exist in one table.
+ */
+export async function hashPasswordForAdmin(password: string): Promise<string> {
+  return hashPassword(password);
+}
+
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   const buf = (await scryptAsync(password, salt, 64)) as Buffer;

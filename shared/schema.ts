@@ -888,6 +888,23 @@ export type User = typeof users.$inferSelect;
  * password RESET TOKEN, which is a credential. A pick inverts that: a new
  * column is private until somebody names it here.
  */
+/**
+ * What an admin may say when creating an account for somebody.
+ *
+ * NO PASSWORD FIELD, deliberately: the server mints a passphrase and shows it
+ * once, so an admin cannot set a short one for another person. isAdmin is
+ * absent for the same reason registerBodySchema omits it -- promoting is its
+ * own route, with its own rules about the last admin.
+ */
+export const adminCreateAccountSchema = z.object({
+  username: z.string().trim().min(3).max(32).regex(/^[a-zA-Z0-9_-]+$/, {
+    message: "Letters, numbers, dashes and underscores only.",
+  }),
+  email: z.string().trim().email(),
+  firstName: z.string().trim().max(60).optional(),
+});
+export type AdminCreateAccount = z.infer<typeof adminCreateAccountSchema>;
+
 export type PublicUser = Pick<
   User,
   "id" | "username" | "email" | "firstName" | "lastName" | "isAdmin" | "isVerified" | "createdAt" | "lastLoginAt"
