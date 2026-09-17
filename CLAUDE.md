@@ -211,7 +211,10 @@ about **$1.40 a signup** and ~$0.20 a month after.
   `createVerificationToken` built them from `Math.random()` in both storages —
   xorshift128+, whose state is recoverable from a handful of outputs, minting a
   password-reset credential. Harmless only because no token is ever delivered;
-  account takeover the day a mailer exists.
+  account takeover the day a mailer exists. **Tokens written before that fix
+  are still weak** — they expire in 24 hours and nothing can deliver them, so
+  they were left to age out rather than purged; read the claim as "made from
+  here on", not "every row".
 - **Not in this piece, deliberately:** rate limiting (there is still none
   anywhere, and no route emits 429 but the credit refusal), and the login
   challenge after repeated failures. Registration still answers "Username

@@ -14,6 +14,14 @@
  * 16 bytes from the operating system's CSPRNG is 128 bits, the same strength
  * as a session id, and base64url is 22 characters that need no escaping in a
  * url -- which is where a reset token has to survive.
+ *
+ * THIS DOES NOT REACH ROWS ALREADY WRITTEN. Every token sitting in
+ * `verification_tokens` when this shipped was minted by the old code and is
+ * still guessable. They were left to age out rather than purged: they expire
+ * 24 hours after they were made, nothing in the app can deliver one, and
+ * deleting somebody's rows is Blake's decision rather than a tidy-up. So "the
+ * tokens are crypto-random" is true of tokens made from here on, and of
+ * nothing older.
  */
 import { randomBytes } from "crypto";
 
