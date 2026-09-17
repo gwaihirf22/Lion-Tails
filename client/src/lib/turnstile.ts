@@ -23,10 +23,28 @@ export type TurnstileApi = {
       callback: (token: string) => void;
       "expired-callback"?: () => void;
       "error-callback"?: () => void;
+      /** The challenge ran out of time before the person dealt with it. */
+      "timeout-callback"?: () => void;
+      /** Cloudflare has decided this one needs a checkbox. */
+      "before-interactive-callback"?: () => void;
+      /** The checkbox has been dealt with. */
+      "after-interactive-callback"?: () => void;
+      /** This browser cannot run the challenge at all. */
+      "unsupported-callback"?: () => void;
       theme?: "auto" | "light" | "dark";
       action?: string;
+      /**
+       * WHEN THE CHALLENGE RUNS. `"render"` is Cloudflare's default and runs it
+       * the moment the widget is drawn; `"execute"` waits to be asked. This app
+       * asks at submit time -- TurnstileGate carries the two reasons why.
+       */
+      execution?: "render" | "execute";
+      /** `"interaction-only"` draws nothing unless a checkbox is needed. */
+      appearance?: "always" | "execute" | "interaction-only";
     },
   ) => string;
+  /** Runs the challenge on a widget rendered with `execution: "execute"`. */
+  execute: (container: HTMLElement | string, options?: { action?: string }) => void;
   reset: (widgetId?: string) => void;
   remove: (widgetId?: string) => void;
 };

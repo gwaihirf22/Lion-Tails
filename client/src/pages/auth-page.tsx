@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Loader2 } from "lucide-react";
 import lantern from "@/assets/lantern.webp";
 import { useQuery } from "@tanstack/react-query";
-import TurnstileGate from "@/components/TurnstileGate";
+import TurnstileGate, { type TurnstileHandle } from "@/components/TurnstileGate";
 import { CREDENTIAL_RULES } from "@shared/challenge";
 
 // Extend the schemas from shared/schema.ts
@@ -35,9 +35,6 @@ const loginSchema = z.object({
 const registerSchema = z.object({
   ...CREDENTIAL_RULES,
   confirmPassword: z.string(),
-  // Filled by the widget, required before the button works. Empty is the
-  // widget saying "no usable token" — including after one expires.
-  turnstileToken: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],
@@ -71,9 +68,20 @@ export default function AuthPage() {
       email: "",
       password: "",
       confirmPassword: "",
-      turnstileToken: "",
     },
   });
+
+  /**
+   * The widget, asked for a token at submit time rather than on page load.
+   *
+   * THE TOKEN IS NOT A FORM FIELD any more. It used to be one, filled whenever
+   * Cloudflare got round to it, which meant a token was minted for every visit
+   * to this page and had often expired by the time a parent pressed the button.
+   * See TurnstileGate for the whole argument.
+   */
+  const gate = useRef<TurnstileHandle | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [challengeError, setChallengeError] = useState<string | null>(null);
 
   /**
    * Whether this server demands a Turnstile check, and the public site key.
@@ -95,12 +103,31 @@ export default function AuthPage() {
     loginMutation.mutate(values);
   };
 
-  const onRegisterSubmit = (values: RegisterFormValues) => {
+  const onRegisterSubmit = async (values: RegisterFormValues) => {
     // confirmPassword is the only field the API has no use for. The TOKEN GOES
-    // -- deleting it here is precisely what made the old question decoration,
-    // and the server checks it against Cloudflare.
-    const { confirmPassword, ...registerData } = values;
-    registerMutation.mutate(registerData);
+    // -- deleting it before sending is precisely what made the old question
+    // decoration, and the server checks this one against Cloudflare.
+    const { confirmPassword, ...credentials } = values;
+    setChallengeError(null);
+
+    // No widget is a development server with no secret configured, where the
+    // server does not ask for a token either. Sending an empty one keeps one
+    // shape of request, and the schema strips the field on the way to the row.
+    let turnstileToken = "";
+    if (needsWidget) {
+      setChecking(true);
+      try {
+        turnstileToken = await (gate.current?.execute() ??
+          Promise.reject(new Error("The check is not ready yet. Please try again in a moment.")));
+      } catch (error) {
+        setChallengeError(error instanceof Error ? error.message : String(error));
+        return;
+      } finally {
+        setChecking(false);
+      }
+    }
+
+    registerMutation.mutate({ ...credentials, turnstileToken });
   };
 
   // Redirect if already logged in
@@ -231,47 +258,36 @@ export default function AuthPage() {
                       )}
                     />
                     
-                    {/* The real check. Drawn only where the server demands one,
-                        so a dev box with no secret behaves as it always did. */}
+                    {/* The real check. Mounted only where the server demands
+                        one, so a dev box with no secret behaves as it always
+                        did -- and it draws nothing until Cloudflare asks for a
+                        checkbox, which is why it sits directly above the
+                        button that triggers it. */}
                     {needsWidget && challenge?.siteKey && (
-                      <FormField
-                        control={registerForm.control}
-                        name="turnstileToken"
-                        render={() => (
-                          <FormItem>
-                            <FormControl>
-                              <TurnstileGate
-                                siteKey={challenge.siteKey!}
-                                action="register"
-                                onToken={(token) =>
-                                  registerForm.setValue("turnstileToken", token, {
-                                    shouldValidate: true,
-                                  })
-                                }
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                      <TurnstileGate
+                        ref={gate}
+                        siteKey={challenge.siteKey}
+                        action="register"
                       />
+                    )}
+
+                    {challengeError && (
+                      <p className="m-0 text-sm text-destructive">{challengeError}</p>
                     )}
 
                     <Button
                       type="submit"
                       className="w-full"
-                      // Waits for the token as well as the request: pressing
-                      // it without one would only earn a refusal from the
-                      // server, which reads as the form being broken.
-                      disabled={
-                        registerMutation.isPending ||
-                        challengeLoading ||
-                        (needsWidget && !registerForm.watch("turnstileToken"))
-                      }
+                      // Not gated on holding a token any more -- there is none
+                      // until this button asks for one. It waits for the
+                      // challenge query only, so the form knows whether to run
+                      // a check at all.
+                      disabled={registerMutation.isPending || challengeLoading || checking}
                     >
-                      {registerMutation.isPending ? (
+                      {checking || registerMutation.isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Creating Account...
+                          {checking ? "Checking..." : "Creating Account..."}
                         </>
                       ) : (
                         "Create Account"

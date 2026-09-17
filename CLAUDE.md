@@ -178,6 +178,30 @@ about **$1.40 a signup** and ~$0.20 a month after.
   with it as `remoteip` — SWAG restores the real address and `trust proxy` is
   on. `TURNSTILE_SECRET` or `TURNSTILE_SECRET_FILE`, read on every use, one
   reader function: `adminKey()`'s convention exactly.
+- **THE CHALLENGE RUNS AT SUBMIT, NOT ON PAGE LOAD.** `execution: "execute"`
+  plus `appearance: "interaction-only"`, and `TurnstileGate` exposes one
+  `execute()` through a ref; the token is no longer a form field at all.
+  Two reasons, the second discovered from the dashboard:
+  - **A token is single-use and lasts about five minutes**, which is less than
+    filling a form with a child on your knee. Minted on load, a parent who
+    stops halfway submitted an expired one and was told to tick a box again
+    for no visible reason (`timeout-or-duplicate`).
+  - **Cloudflare warned "siteverify isn't being called".** It was — the
+    production log carries Cloudflare's own `invalid-input-response`, which
+    only a completed siteverify call can produce, and an unreachable
+    Cloudflare answers 503 rather than 400. What the warning measured was the
+    RATIO: a token issued for every visit to `/auth`, and only a *submitted*
+    one ever validated. Minting at submit fixes the ratio and the expiry
+    together.
+  - The cost is that a checkbox, where Cloudflare wants one, now appears
+    AFTER the press: `before-interactive-callback` makes the form say so, and
+    the button reads "Checking...". The silent wait is capped
+    (`SILENT_WAIT_MS`) and **that timer is cancelled once a checkbox is
+    shown** — from then on the wait is a person reading, and the challenge
+    expiring on them has its own callback. Every failure path resolves to a
+    sentence a parent can act on, never a button that sits there.
+  - `execute()` **resets the widget first**: a token is single-use, so a
+    second press after a username clash needs the widget back at its start.
 - **FAIL CLOSED, and on in production whatever the config says.**
   `challengeRequired()` is true when a secret exists **or**
   `NODE_ENV=production`, so a live box whose secret went missing refuses
