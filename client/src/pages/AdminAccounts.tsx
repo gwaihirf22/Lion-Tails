@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -74,6 +75,32 @@ export default function AdminAccounts() {
   const [days, setDays] = useState(30);
   const [busy, setBusy] = useState<number | null>(null);
   const [reload, setReload] = useState(0);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({ username: "", email: "", firstName: "" });
+  /** Shown once, then gone -- it is not stored anywhere it can be read back. */
+  const [minted, setMinted] = useState<{ username: string; passphrase: string } | null>(null);
+
+  const setAdmin = async (account: Account, isAdmin: boolean) => {
+    if (!isAdmin && !window.confirm(`Take admin away from ${account.username}? They will start paying credits like everyone else.`)) return;
+    setBusy(account.id);
+    const res = await apiRequestAllowingErrors("POST", `/api/admin/accounts/${account.id}/admin`, { isAdmin });
+    const body = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (!res.ok) return setError(body.message || "Could not change that account");
+    setReload((n) => n + 1);
+  };
+
+  const createAccount = async () => {
+    setBusy(-1);
+    const res = await apiRequestAllowingErrors("POST", "/api/admin/accounts", draft);
+    const body = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (!res.ok) return setError(body.message || "Could not create that account");
+    setMinted({ username: body.account.username, passphrase: body.passphrase });
+    setDraft({ username: "", email: "", firstName: "" });
+    setAdding(false);
+    setReload((n) => n + 1);
+  };
 
   /**
    * Ban or unban, then reload from the server rather than patching the row
@@ -176,6 +203,9 @@ export default function AdminAccounts() {
       <div className="flex flex-wrap justify-between items-center gap-3">
         <h2 className="text-3xl font-heading font-bold text-secondary">Accounts</h2>
         <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setAdding((v) => !v)}>
+            {adding ? "Cancel" : "Add someone"}
+          </Button>
           {[7, 30, 90].map((d) => (
             <Button key={d} size="sm" variant={d === days ? "default" : "outline"} onClick={() => setDays(d)}>
               {d} days
@@ -183,6 +213,74 @@ export default function AdminAccounts() {
           ))}
         </div>
       </div>
+
+      {/* THE PASSPHRASE, ONCE. There is no email to send it in and nothing
+          stores it in the clear, so this card is the only time anybody sees
+          it -- which the card says, because the next question is always
+          "where did it go". */}
+      {minted && (
+        <Card className="border-warning bg-warning-surface">
+          <CardHeader>
+            <CardTitle className="text-lg">{minted.username} is ready</CardTitle>
+            <CardDescription className="text-warning">
+              Their password is below. This is the only time it is shown — nothing stores it, and
+              it cannot be shown again. Send it to them, and they can change it once they are in.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-3">
+            <code className="rounded bg-background px-3 py-2 text-base">{minted.passphrase}</code>
+            <Button size="sm" variant="outline" onClick={() => void navigator.clipboard?.writeText(minted.passphrase)}>
+              Copy
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setMinted(null)}>
+              Done
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {adding && (
+        <Card className="bg-card">
+          <CardHeader>
+            <CardTitle className="text-lg">Add someone</CardTitle>
+            <CardDescription>
+              They start as an ordinary account with the usual credits. You choose the name and
+              email; the password is made here and shown once.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-end gap-3">
+            <label className="text-sm">
+              <span className="mb-1 block text-muted-foreground">Username</span>
+              <Input
+                value={draft.username}
+                onChange={(e) => setDraft({ ...draft, username: e.target.value })}
+                placeholder="grandma"
+              />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-muted-foreground">Email</span>
+              <Input
+                value={draft.email}
+                onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+                placeholder="them@example.com"
+              />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-muted-foreground">First name (optional)</span>
+              <Input
+                value={draft.firstName}
+                onChange={(e) => setDraft({ ...draft, firstName: e.target.value })}
+              />
+            </label>
+            <Button
+              disabled={busy === -1 || draft.username.trim().length < 3 || !draft.email.includes("@")}
+              onClick={() => void createAccount()}
+            >
+              {busy === -1 ? "Making…" : "Create"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="bg-card">
         <CardHeader>
@@ -248,6 +346,22 @@ export default function AdminAccounts() {
                     {/* stopPropagation: the row opens the detail, and a click
                         that both bans somebody and opens their page is a click
                         nobody meant to make. */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy === a.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void setAdmin(a, !a.isAdmin);
+                      }}
+                      title={
+                        a.isAdmin
+                          ? "An admin is never charged and has no limits."
+                          : "Promoting makes this account free and unlimited."
+                      }
+                    >
+                      {a.isAdmin ? "Demote" : "Promote"}
+                    </Button>
                     <Button
                       size="sm"
                       variant={a.bannedAt ? "outline" : "ghost"}

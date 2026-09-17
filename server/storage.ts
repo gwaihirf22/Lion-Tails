@@ -46,6 +46,8 @@ export interface IStorage {
   setBanned(userId: number, banned: boolean, reason?: string): Promise<User | undefined>;
   /** How many admins there are, for the rule that the last one may not go. */
   countAdmins(): Promise<number>;
+  /** Promote or demote. The only path to is_admin that is not hand-written SQL. */
+  setAdmin(userId: number, isAdmin: boolean): Promise<User | undefined>;
   /** Keep where a sign-up came from, so a burst from one place is answerable. */
   recordSignup(userId: number, ip: string | undefined): Promise<void>;
   createUser(user: InsertUser): Promise<User>;
@@ -1198,6 +1200,14 @@ export class MemStorage implements IStorage {
 
   async countAdmins(): Promise<number> {
     return [...this.users.values()].filter((u) => u.isAdmin).length;
+  }
+
+  async setAdmin(userId: number, isAdmin: boolean): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    const next = { ...user, isAdmin };
+    this.users.set(userId, next);
+    return next;
   }
 
   async recordSignup(userId: number, ip: string | undefined): Promise<void> {

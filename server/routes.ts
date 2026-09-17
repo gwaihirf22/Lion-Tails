@@ -58,6 +58,9 @@ import { sceneFromPassage } from "./lib/passageScene";
 import { questLengthAllowed, QUEST_SHORTEST_LENGTH } from "@shared/quests";
 import { accountDetail, accountList } from "./lib/accountStats";
 import { cancelAllStoryJobsFor } from "./lib/storyJobs";
+import { randomInt } from "crypto";
+import { makePassphrase } from "@shared/passphrase";
+import { hashPasswordForAdmin } from "./auth";
 import { mayChangeAccount } from "@shared/accountStatus";
 import { storyTypeFitsRole, STORY_TYPE_ROLE_MESSAGE } from "@shared/storyTypes";
 import { canEnqueueWithinQuota } from "./lib/openai";
@@ -101,7 +104,7 @@ import {
   virtueLevels,
   avatarsOf, storyImagesOf, MAX_STORY_IMAGES, storyPassageSchema, type StoryPassage,
   pictureNoteSchema, type PriceList, characterIdsOf, characterRoleOf,
-  type SavedStory, type Character, type StoryUsage, creditsLabel, publicUser,
+  type SavedStory, type Character, type StoryUsage, creditsLabel, publicUser, adminCreateAccountSchema,
   PICTURE_CREDITS, PICTURE_TIERS, PICTURE_TIER_LABELS, picturePrefsSchema, type PictureTier,
   storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { withPictureNote } from "@shared/pictureNote";
@@ -1447,6 +1450,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * Nothing is deleted. That is what makes this the safe thing to do to an
    * account you are unsure about, and unban is clearing the same column.
    */
+  /**
+   * MAKE SOMEBODY AN ADMIN, OR STOP THEM BEING ONE.
+   *
+   * Until now is_admin could only be set by hand-written SQL against the
+   * production database, which is a bad place to keep a routine decision --
+   * Blake's plan is to promote chosen friends, and an admin is uncharged and
+   * unlimited, so this is also the only switch that costs real money.
+   *
+   * Demotion goes through the same two rules a ban does (mayChangeAccount):
+   * not yourself, and never the last admin. Promotion needs neither -- making
+   * another admin cannot lock anybody out.
+   */
+  app.post("/api/admin/accounts/:id/admin", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ message: "Not an account id" });
+      if (typeof req.body?.isAdmin !== "boolean") {
+        return res.status(400).json({ message: "Say whether they are an admin: true or false." });
+      }
+      const target = await storage.getUser(id);
+      if (!target) return res.status(404).json({ message: "No such account" });
+
+      if (!req.body.isAdmin) {
+        const allowed = mayChangeAccount(
+          Number((req.user as { id: number }).id),
+          target,
+          await storage.countAdmins(),
+        );
+        if (!allowed.ok) return res.status(409).json({ message: allowed.reason });
+      }
+
+      const updated = await storage.setAdmin(id, req.body.isAdmin);
+      if (!updated) return res.status(503).json({ message: "Could not reach the database" });
+      res.json({ account: publicUser(updated) });
+    } catch (error) {
+      console.error("Error changing an account's admin flag:", error);
+      res.status(500).json({ message: "Could not change that account" });
+    }
+  });
+
+  /**
+   * CREATE AN ACCOUNT FOR SOMEBODY, with no email to send them.
+   *
+   * THE PASSWORD IS NOT A FIELD. It is minted here from crypto.randomBytes,
+   * returned exactly once, and never stored in the clear -- so there is no
+   * path by which an admin sets a short password for somebody else, which is
+   * what would otherwise happen every time. Blake sends it on by whatever he
+   * already uses; the person can change it once they are in.
+   */
+  app.post("/api/admin/accounts", requireAdmin, async (req, res) => {
+    try {
+      const parsed = adminCreateAccountSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return res.status(400).json({ message: fromZodError(parsed.error).message });
+      }
+      const { username, email, firstName } = parsed.data;
+
+      if (await storage.getUserByUsername(username)) {
+        return res.status(409).json({ message: "That username is taken." });
+      }
+      if (await storage.getUserByEmail(email)) {
+        return res.status(409).json({ message: "That email already has an account." });
+      }
+
+      // randomInt, not Math.random: this is a credential, and the reset-token
+      // bug in this codebase was exactly that mistake.
+      const passphrase = makePassphrase((bound) => randomInt(bound));
+      const user = await storage.createUser({
+        username,
+        email,
+        firstName: firstName || null,
+        password: await hashPasswordForAdmin(passphrase),
+      });
+
+      // Shown once. Not stored, not logged, not recoverable -- the page says
+      // so beside it, because the next question is always "where did it go".
+      res.status(201).json({ account: publicUser(user), passphrase });
+    } catch (error) {
+      console.error("Error creating an account:", error);
+      res.status(500).json({ message: "Could not create that account" });
+    }
+  });
+
   app.post("/api/admin/accounts/:id/ban", requireAdmin, async (req, res) => {
     try {
       const id = Number(req.params.id);

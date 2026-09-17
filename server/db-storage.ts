@@ -212,6 +212,20 @@ export class DbStorage implements IStorage {
     return this.getUser(userId);
   }
 
+  /**
+   * Promote or demote, and read back through getUser for the mapped shape --
+   * a raw UPDATE row is snake_case and publicUser() would pick nothing off it.
+   */
+  async setAdmin(userId: number, isAdmin: boolean): Promise<User | undefined> {
+    if (!isDatabaseAvailable()) return undefined;
+    const { rowCount } = await pool!.query(
+      "UPDATE users SET is_admin = $2, updated_at = now() WHERE id = $1",
+      [userId, isAdmin],
+    );
+    if (!rowCount) return undefined;
+    return this.getUser(userId);
+  }
+
   async countAdmins(): Promise<number> {
     if (!isDatabaseAvailable()) return 0;
     const { rows } = await pool!.query("SELECT COUNT(*)::int AS n FROM users WHERE is_admin = true");
