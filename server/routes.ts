@@ -58,6 +58,7 @@ import { sceneFromPassage } from "./lib/passageScene";
 import { questLengthAllowed, QUEST_SHORTEST_LENGTH } from "@shared/quests";
 import { accountDetail, accountList } from "./lib/accountStats";
 import { cancelAllStoryJobsFor } from "./lib/storyJobs";
+import { deleteAccount, typedNameMatches } from "./lib/accountDelete";
 import { randomInt } from "crypto";
 import { makePassphrase } from "@shared/passphrase";
 import { hashPasswordForAdmin } from "./auth";
@@ -1571,6 +1572,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error unbanning an account:", error);
       res.status(500).json({ message: "Could not unban that account" });
+    }
+  });
+
+  /**
+   * DELETE AN ACCOUNT. The end of the line, and not the usual answer.
+   *
+   * A ban is reversible and keeps everything; this keeps nothing except the
+   * ledger. So it asks for the username to be typed back -- the same habit as
+   * deleting anything else that cannot be undone -- and it goes through the
+   * same two rules as a ban, because deleting yourself or the last admin is
+   * the same locked door by another route.
+   */
+  app.delete("/api/admin/accounts/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ message: "Not an account id" });
+      const target = await storage.getUser(id);
+      if (!target) return res.status(404).json({ message: "No such account" });
+
+      const allowed = mayChangeAccount(Number((req.user as { id: number }).id), target, await storage.countAdmins());
+      if (!allowed.ok) return res.status(409).json({ message: allowed.reason });
+
+      if (!typedNameMatches(req.body?.username, target.username)) {
+        return res.status(400).json({
+          message: `Type ${target.username} to confirm. Nothing is deleted until the name matches.`,
+        });
+      }
+
+      const outcome = await deleteAccount(id);
+      if (!outcome.ok) return res.status(500).json({ message: "Could not delete that account" });
+      res.json(outcome);
+    } catch (error) {
+      console.error("Error deleting an account:", error);
+      res.status(500).json({ message: "Could not delete that account" });
     }
   });
 

@@ -76,7 +76,18 @@ export const users = pgTable("users", {
 // Verification tokens
 export const verificationTokens = pgTable("verification_tokens", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  /**
+   * THE ONE USER-SCOPED TABLE THAT HAD NO FOREIGN KEY, until now.
+   *
+   * Every other table hanging off a user says what happens when that user
+   * goes -- cascade for their own things, set null for the ledger. This one
+   * said nothing, so deleting an account left its password-reset tokens
+   * behind, pointing at an id that no longer existed. Harmless while nothing
+   * can deliver a token; not harmless once a delete is a button.
+   */
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   token: text("token").notNull(),
   type: text("type").notNull(), // 'email' or 'password'
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

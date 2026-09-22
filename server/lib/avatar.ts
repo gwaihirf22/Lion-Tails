@@ -460,3 +460,24 @@ export async function generateAvatar(
     return { ok: false, refused };
   }
 }
+
+/**
+ * Remove one portrait file from disk.
+ *
+ * The counterpart of storeAvatarFile, and it exists for one caller: deleting
+ * an account. Best-effort by design -- an orphaned png is untidy, a failed
+ * account deletion is a person still in the database after being told they
+ * are not. Only files inside AVATAR_DIR, and only by basename, so a stored
+ * value that is somehow a path cannot reach out of it.
+ */
+export async function deleteAvatarFile(url: string): Promise<boolean> {
+  try {
+    const name = path.basename(url);
+    if (!name.startsWith("avatar_")) return false;
+    await fs.promises.rm(path.join(AVATAR_DIR, name), { force: true });
+    return true;
+  } catch (error) {
+    console.error(`[avatar] could not remove ${url}:`, error);
+    return false;
+  }
+}
