@@ -7,9 +7,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { SettingsPanel } from "@/components/SettingsPanel";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { Menu, X, LogOut, User, ChevronDown, MoreHorizontal, Loader2, Settings as SettingsIcon } from "lucide-react";
 import appIcon from "@/assets/app-icon.jpg";
+import { fitNavItems } from "@/lib/navFit";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useQuery } from "@tanstack/react-query";
 import { characterAlerts, type Character } from "@shared/schema";
@@ -46,9 +47,11 @@ export default function Header() {
   // model or a text size should not cost you your place -- especially when the
   // thing you are adjusting is how the page you are looking at reads.
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [visibleItems, setVisibleItems] = useState(4); 
-  const navContainerRef = useRef<HTMLUListElement>(null);
-  const logoContainerRef = useRef<HTMLDivElement>(null);
+  const [visibleItems, setVisibleItems] = useState(4);
+  /** The space the nav and the account buttons share. See the fit effect. */
+  const barRightRef = useRef<HTMLDivElement>(null);
+  const accountRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLUListElement>(null);
   const { user, logoutMutation } = useAuth();
 
   /**
@@ -221,35 +224,42 @@ export default function Header() {
     };
   }, [menuOpen, isMobile]);
 
-  useEffect(() => {
+  /**
+   * How many links fit, from what is actually on screen.
+   *
+   * This was window.innerWidth breakpoints, which cannot see the username, the
+   * "story being written" pill, or the container snapping NARROWER as the
+   * window passes 1024 and 1280 -- so at some widths Home sat against the
+   * wordmark. Now: every link is rendered once, invisibly, to learn its width
+   * (see measureRef below), and the count is whatever fits in the space the
+   * brand leaves, after the account buttons. A ResizeObserver on that space and
+   * on the measuring list catches window resizes, the pill appearing, and the
+   * web font arriving after first paint.
+   */
+  useLayoutEffect(() => {
     if (isMobile) return;
+    const right = barRightRef.current;
+    const measure = measureRef.current;
+    if (!right || !measure) return;
 
-    const handleResize = () => {
-      const width = window.innerWidth;
-
-      // Raised across the board because nothing wraps to a second line any
-      // more: an item that used to fold into two stacked words now claims its
-      // full width, so each count needs more room than it did.
-      if (width > 1400) {
-        setVisibleItems(6);
-      } else if (width > 1240) {
-        setVisibleItems(5);
-      } else if (width > 1060) {
-        setVisibleItems(4);
-      } else if (width > 900) {
-        setVisibleItems(3);
-      } else {
-        setVisibleItems(2);
-      }
+    const fit = () => {
+      const kids = Array.from(measure.children) as HTMLElement[];
+      const widths = kids.slice(0, -1).map((k) => k.getBoundingClientRect().width);
+      const more = kids[kids.length - 1]?.getBoundingClientRect().width ?? 0;
+      const gap = parseFloat(getComputedStyle(measure).columnGap) || 0;
+      // mr-4 on the <nav>: the space between the last link and the username.
+      const available =
+        right.clientWidth - (accountRef.current?.offsetWidth ?? 0) - 16;
+      setVisibleItems(fitNavItems(widths, more, gap, available));
     };
 
-    handleResize();
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [isMobile]);
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(right);
+    ro.observe(measure);
+    if (accountRef.current) ro.observe(accountRef.current);
+    return () => ro.disconnect();
+  }, [isMobile, navItems.length, location, user?.username]);
 
   const visibleNavItems = navItems.slice(0, visibleItems);
   const overflowNavItems = navItems.slice(visibleItems);
@@ -263,8 +273,12 @@ export default function Header() {
           contrast was not a fixed quantity at all. --header is opaque and
           per-palette, so it is one number that can be checked. */}
       <header className="bg-header text-header-foreground shadow-lg border-b border-header-foreground/20 sticky top-0 z-30">
-        <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-          <div ref={logoContainerRef} className="flex min-w-0 items-center space-x-3">
+        {/* gap-6 is the least the brand and the first link can ever be apart.
+            shrink-0 on the brand, flex-1 on the right: the nav takes what the
+            brand leaves and fits its links to that, rather than the brand
+            being squeezed until its no-wrap wordmark spills under Home. */}
+        <div className="container mx-auto px-4 py-3 flex justify-between items-center gap-6">
+          <div className="flex shrink-0 items-center space-x-3">
             {/* The brand goes home, as everyone expects it to -- from every
                 page, including on a phone where Home is inside the menu. */}
             <Link
@@ -350,10 +364,29 @@ export default function Header() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center">
-              <nav className="mr-4 min-w-0">
+            <div ref={barRightRef} className="flex min-w-0 flex-1 items-center justify-end">
+              <nav className="relative mr-4 min-w-0">
+                {/* Every link plus "More", rendered once to be measured and
+                    never seen. Same classes as the real ones -- including the
+                    active pill's font-semibold, which is wider. Zero-size and
+                    overflow-hidden so it cannot widen the page. */}
+                <div aria-hidden className="invisible pointer-events-none absolute left-0 top-0 h-0 w-0 overflow-hidden">
+                  <ul ref={measureRef} className="flex w-max flex-nowrap items-center gap-1 text-sm md:text-base">
+                    {navItems.map((item) => (
+                      <li
+                        key={item.href}
+                        className={`inline-flex h-9 items-center whitespace-nowrap rounded-full px-3 font-medium ${location === item.href ? "font-semibold" : ""}`}
+                      >
+                        {item.text}
+                      </li>
+                    ))}
+                    <li className="inline-flex h-9 items-center whitespace-nowrap rounded-full px-3 font-medium">
+                      <span className="mr-1">More</span>
+                      <ChevronDown size={16} />
+                    </li>
+                  </ul>
+                </div>
                 <ul
-                  ref={navContainerRef}
                   /* overflow-x-clip, not overflow-hidden. The list still must
                      not grow sideways -- measuring that is how it decides which
                      items fit -- but a badge on a pill corner has to be allowed
@@ -416,45 +449,47 @@ export default function Header() {
                 </ul>
               </nav>
 
-              {user ? (
-                <div className="flex items-center">
-                  <span className="nav-text mr-2 hidden truncate md:block">
-                    {user.username}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setSettingsOpen(true)}
-                    title="Settings"
-                    aria-label="Settings"
-                    className="h-9 w-9 shrink-0 border-header-foreground/30 bg-transparent text-header-foreground hover:bg-header-foreground/15 hover:text-header-foreground"
-                  >
-                    <SettingsIcon className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => logoutMutation.mutate()}
-                    disabled={logoutMutation.isPending}
-                    title="Log out"
-                    aria-label="Log out"
-                    className="h-9 w-9 shrink-0 border-header-foreground/30 bg-transparent text-header-foreground hover:bg-header-foreground/15 hover:text-header-foreground"
-                  >
-                    <LogOut className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <Link href="/auth">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="border-header-foreground/30 bg-transparent text-header-foreground hover:bg-header-foreground/15 hover:text-header-foreground font-bold shadow-md" 
-                  >
-                    <User className="mr-1 h-4 w-4" />
-                    <span>Login</span>
-                  </Button>
-                </Link>
-              )}
+              <div ref={accountRef} className="flex shrink-0 items-center">
+                {user ? (
+                  <div className="flex items-center">
+                    <span className="nav-text mr-2 hidden truncate md:block">
+                      {user.username}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setSettingsOpen(true)}
+                      title="Settings"
+                      aria-label="Settings"
+                      className="h-9 w-9 shrink-0 border-header-foreground/30 bg-transparent text-header-foreground hover:bg-header-foreground/15 hover:text-header-foreground"
+                    >
+                      <SettingsIcon className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => logoutMutation.mutate()}
+                      disabled={logoutMutation.isPending}
+                      title="Log out"
+                      aria-label="Log out"
+                      className="h-9 w-9 shrink-0 border-header-foreground/30 bg-transparent text-header-foreground hover:bg-header-foreground/15 hover:text-header-foreground"
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Link href="/auth">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="border-header-foreground/30 bg-transparent text-header-foreground hover:bg-header-foreground/15 hover:text-header-foreground font-bold shadow-md" 
+                    >
+                      <User className="mr-1 h-4 w-4" />
+                      <span>Login</span>
+                    </Button>
+                  </Link>
+                )}
+              </div>
             </div>
           )}
         </div>
