@@ -812,6 +812,50 @@ export const appSettings = pgTable("app_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+/**
+ * Things an account did that no other table remembers.
+ *
+ * Three of the four abuse signals read tables that already exist: money is
+ * `model_calls.cost_micros`, volume is `story_jobs`, sign-ups are
+ * `users.signup_ip`. The fourth -- a model REFUSING what somebody asked for --
+ * had no data source at all. `looksLikeRefusal()` turns it into a sentence for
+ * the person on the other end and then the fact is gone, so somebody pushing at
+ * what a children's app will draw left nothing behind but a log line nobody
+ * reads. That is the signal most worth having and the only one that needed a
+ * table.
+ *
+ * THERE IS NO CONTENT COLUMN, and that is the decision, not an omission. The
+ * temptation here is to keep the prompt "so we can see what they asked for" --
+ * which would put a child's words, and the words of whoever is misusing it, in
+ * a table an admin reads over somebody's shoulder. accountStats.ts and
+ * generationStats.ts both hold that line; a count of refusals is enough to
+ * decide whether to look at an account, and looking at an account is a person's
+ * job. Adding a column here is a decision to store what children type.
+ *
+ * CASCADE, unlike the ledger. `model_calls` survives a deleted account with a
+ * null user because it is money and money is history; this is a note about a
+ * person, so it goes when the person does.
+ */
+export const accountEvents = pgTable(
+  "account_events",
+  {
+    id: serial("id").primaryKey(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** An `AccountEventKind` from shared/accountEvents.ts. */
+    kind: text("kind").notNull(),
+    /** Which thing refused, in one word -- never what was asked for. */
+    detail: text("detail"),
+  },
+  (table) => ({
+    // Every read is "this account, over this window", like the ledger's pair.
+    userCreatedIdx: index("idx_account_events_user_created").on(table.userId, table.createdAt),
+    createdIdx: index("idx_account_events_created_at").on(table.createdAt),
+  }),
+);
+
 // Owned and written by connect-pg-simple, never by the ORM. Declared only so
 // migrations create it and verifyOrmSchema() checks it; db-storage.ts sets
 // createTableIfMissing:false accordingly.

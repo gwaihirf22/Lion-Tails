@@ -69,6 +69,15 @@ services:
       # In production, NO SECRET MEANS NO SIGN-UPS: see server/lib/turnstile.ts.
       - TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY}
       - TURNSTILE_SECRET=${TURNSTILE_SECRET}
+      # Account alerts, on the channel Blake already reads. The TOKEN is a
+      # credential -- anyone holding it can send and read as the bot -- and
+      # TELEGRAM_BOT_TOKEN_FILE is the other accepted form, like
+      # COSTS_ADMIN_KEY_FILE. The CHAT ID is not a secret. Both blank is off,
+      # and /admin/accounts says so rather than pretending to be watching.
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      # Only used to put a link in an alert. Not a secret, and optional.
+      - PUBLIC_URL=https://liontails.paul-blake.com
       - EMAIL_HOST=${EMAIL_HOST}
       - EMAIL_PORT=587
       - EMAIL_SECURE=false

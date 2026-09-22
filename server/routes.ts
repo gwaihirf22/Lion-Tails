@@ -57,6 +57,8 @@ import {
 import { sceneFromPassage } from "./lib/passageScene";
 import { questLengthAllowed, QUEST_SHORTEST_LENGTH } from "@shared/quests";
 import { accountDetail, accountList } from "./lib/accountStats";
+import { abuseReport } from "./lib/abuseWatch";
+import { sendTelegram, telegramConfigured } from "./lib/telegram";
 import { cancelAllStoryJobsFor } from "./lib/storyJobs";
 import { deleteAccount, typedNameMatches } from "./lib/accountDelete";
 import { randomInt } from "crypto";
@@ -1419,10 +1421,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/accounts", requireAdmin, async (req, res) => {
     try {
       const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
-      res.json(await accountList(days));
+      /**
+       * The watch rides along with the list, and cannot take it down with it.
+       *
+       * One fetch, because the findings are about the accounts on the same
+       * screen -- but its four windowed aggregates are the slowest thing here
+       * and the newest, so a failure answers `watch: null` and the page still
+       * shows who has an account. The alternative, a second endpoint, is a
+       * second thing to forget to call.
+       */
+      const [list, watch] = await Promise.all([
+        accountList(days),
+        abuseReport().catch((error) => {
+          console.error("Error running the abuse watch:", error);
+          return null;
+        }),
+      ]);
+      // Whether the alerting half is wired, so the page can say so rather
+      // than showing a button that quietly does nothing.
+      res.json({ ...list, watch, telegram: telegramConfigured() });
     } catch (error) {
       console.error("Error listing accounts:", error);
       res.status(500).json({ message: "Could not list accounts" });
+    }
+  });
+
+  /**
+   * Prove the Telegram wiring, from the page, without waiting an hour.
+   *
+   * A token in a file on a host is the kind of setting that is wrong for
+   * weeks: it costs nothing to be missing and nothing tells you until the one
+   * night it was supposed to say something. This is the "did that work" button
+   * -- it sends a real message on the real channel and reports Telegram's own
+   * answer, scrubbed of the token by `sendTelegram` before it ever gets here.
+   */
+  app.post("/api/admin/alerts/test", requireAdmin, async (req, res) => {
+    try {
+      if (!telegramConfigured()) {
+        return res.status(400).json({
+          message: "Telegram is not set up. TELEGRAM_BOT_TOKEN (or _FILE) and TELEGRAM_CHAT_ID are both needed.",
+        });
+      }
+      const who = (req.user as any)?.username ?? "an admin";
+      const result = await sendTelegram(
+        `Lion Tails — test message, sent by ${who}. Account alerts will arrive here.`,
+      );
+      if (!result.ok) return res.status(502).json({ message: `Telegram refused it: ${result.error}` });
+      res.json({ sent: true });
+    } catch (error) {
+      console.error("Error sending a test message:", error);
+      res.status(500).json({ message: "Could not send a test message" });
     }
   });
 

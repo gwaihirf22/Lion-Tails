@@ -167,7 +167,13 @@ export function pictureListPrice(
   return image + (scene ?? 0);
 }
 
-export type Warning = { level: "action" | "watch"; code: string; message: string };
+/**
+ * Re-exported, not redeclared: the type moved to shared/warnings.ts when the
+ * accounts page became a second reader of it. Every existing importer of
+ * `Warning` from here keeps working.
+ */
+import type { Warning } from "@shared/warnings";
+export type { Warning };
 
 /**
  * Everything the admin should hear about, most urgent first.

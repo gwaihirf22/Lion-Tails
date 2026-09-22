@@ -37,6 +37,7 @@ import {
   FREE_PORTRAIT_CEILING,
 } from "./modelPolicy";
 import { recordModelCall } from "./modelCalls";
+import { recordRefusal } from "./accountEvents";
 
 /** Where portraits live. See the note above about why it is under `stories`. */
 export const AVATAR_DIR = path.join(process.cwd(), "public", "images", "stories", "avatars");
@@ -457,6 +458,9 @@ export async function generateAvatar(
       `[avatar] ${refused ? "model refused" : "generation failed"} for character ${character.id}:`,
       error,
     );
+    // A refusal is the one abuse signal no existing table remembers. Only a
+    // refusal: a transient 500 says nothing about who asked.
+    if (refused) recordRefusal(userId, "portrait");
     return { ok: false, refused };
   }
 }

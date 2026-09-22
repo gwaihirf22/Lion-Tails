@@ -113,6 +113,13 @@
       "when": 1789665510514,
       "tag": "0015_thankful_penance",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1789668933306,
+      "tag": "0016_panoramic_kabuki",
+      "breakpoints": true
     }
   ]
 }

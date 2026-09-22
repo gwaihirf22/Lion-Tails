@@ -17,7 +17,7 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, Eye, Loader2 } from "lucide-react";
 import { apiRequestAllowingErrors } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -43,7 +43,20 @@ type Account = {
   lastActivityAt: string | null;
 };
 
-type AccountList = { windowDays: number; accounts: Account[] };
+/**
+ * A finding from the abuse watch. `accountId` is what makes the sentence
+ * clickable: every finding about a person opens that person.
+ */
+type Finding = { level: "action" | "watch"; code: string; message: string; accountId?: number };
+
+/** Null when the watch itself failed. The list is still worth showing. */
+type Watch = {
+  findings: Finding[];
+  accountsChecked: number;
+  thresholds: Record<string, number>;
+} | null;
+
+type AccountList = { windowDays: number; accounts: Account[]; watch: Watch; telegram: boolean };
 
 type Detail = {
   account?: Account;
@@ -60,6 +73,13 @@ const money = (micros: number | null) => {
   const usd = micros / 1_000_000;
   return usd >= 1 ? `$${usd.toFixed(2)}` : `${(usd * 100).toFixed(2)}¢`;
 };
+
+/**
+ * `busy` holds the id of the account being worked on. These two are the
+ * actions that belong to no account: -1 is creating one, -2 is the Telegram
+ * test. Named, because a bare -2 in a disabled prop is unreadable.
+ */
+const TESTING = -2;
 
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "never";
@@ -79,6 +99,20 @@ export default function AdminAccounts() {
   const [draft, setDraft] = useState({ username: "", email: "", firstName: "" });
   /** Shown once, then gone -- it is not stored anywhere it can be read back. */
   const [minted, setMinted] = useState<{ username: string; passphrase: string } | null>(null);
+  /** Telegram's own answer to the test, in words, beside the button. */
+  const [tested, setTested] = useState<string | null>(null);
+
+  const sendTest = async () => {
+    setTested(null);
+    setBusy(TESTING);
+    const res = await apiRequestAllowingErrors("POST", "/api/admin/alerts/test");
+    const body = await res.json().catch(() => ({}));
+    setBusy(null);
+    // Reported here rather than in the page-wide error card: a failed test is
+    // news about the test, and blanking the accounts list over it would be a
+    // worse answer than the one it is giving.
+    setTested(res.ok ? "Sent — check Telegram." : body.message || "It did not go.");
+  };
 
   const setAdmin = async (account: Account, isAdmin: boolean) => {
     if (!isAdmin && !window.confirm(`Take admin away from ${account.username}? They will start paying credits like everyone else.`)) return;
@@ -234,6 +268,70 @@ export default function AdminAccounts() {
           ))}
         </div>
       </div>
+
+      {/* THE WATCH, FIRST. It is the reason to open this page when nothing
+          is wrong -- an account list is a reference, a finding is news. It
+          REPORTS AND NEVER ACTS: every sentence ends at a person deciding,
+          and the buttons that do anything are in the table below. */}
+      <Card className="bg-card">
+        <CardHeader>
+          <CardTitle className="text-lg">Anything to look at</CardTitle>
+          <CardDescription>
+            {list.watch
+              ? `Money and refusals over the last day, stories and pictures over the last hour, across ${list.watch.accountsChecked} ${list.watch.accountsChecked === 1 ? "account" : "accounts"}. Banned accounts are left out.`
+              : "The watch could not run just now. The accounts below are unaffected."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {list.watch?.findings.length === 0 && (
+            <p className="text-sm text-muted-foreground">Nobody is over a limit.</p>
+          )}
+          {list.watch?.findings.map((f, i) => (
+            <div
+              key={`${f.code}-${i}`}
+              className={
+                f.level === "action"
+                  ? "flex gap-2 rounded-md border border-warning bg-warning-surface p-3 text-sm text-warning"
+                  : "flex gap-2 rounded-md border p-3 text-sm text-muted-foreground"
+              }
+            >
+              {f.level === "action" ? (
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              ) : (
+                <Eye className="h-4 w-4 shrink-0 mt-0.5" />
+              )}
+              <span>
+                {f.message}
+                {f.accountId !== undefined && (
+                  <button
+                    type="button"
+                    className="ml-2 underline underline-offset-2"
+                    onClick={() => setOpenId(f.accountId!)}
+                  >
+                    Open the account
+                  </button>
+                )}
+              </span>
+            </div>
+          ))}
+          {/* THE ALERTING HALF, PROVEN FROM HERE. A token in a file on a host
+              is the kind of setting that is wrong for weeks: nothing says so
+              until the one night it was supposed to say something. */}
+          <div className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
+            {list.telegram ? (
+              <>
+                <span>These go to Telegram too, once a day for the same account.</span>
+                <Button size="sm" variant="outline" disabled={busy === TESTING} onClick={sendTest}>
+                  {busy === TESTING ? "Sending…" : "Send a test message"}
+                </Button>
+                {tested && <span>{tested}</span>}
+              </>
+            ) : (
+              <span>Telegram is not set up, so these are only on this page.</span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* THE PASSPHRASE, ONCE. There is no email to send it in and nothing
           stores it in the clear, so this card is the only time anybody sees
