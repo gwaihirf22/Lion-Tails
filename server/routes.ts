@@ -61,6 +61,7 @@ import { abuseReport } from "./lib/abuseWatch";
 import { sendTelegram, telegramConfigured } from "./lib/telegram";
 import { cancelAllStoryJobsFor } from "./lib/storyJobs";
 import { deleteAccount, typedNameMatches } from "./lib/accountDelete";
+import { limiter } from "./lib/rateLimit";
 import { randomInt } from "crypto";
 import { makePassphrase } from "@shared/passphrase";
 import { hashPasswordForAdmin } from "./auth";
@@ -145,6 +146,30 @@ import { requireAdmin } from "./lib/requireAuth";
 import { costsReport, publishSuggestedPrices, publishedPriceList, writeMarginPct } from "./lib/costStats";
 import { pictureListPrice } from "./lib/costReport";
 import { decideProposal, runBillCheck, runPriceCheck } from "./lib/priceWatch";
+
+/**
+ * A CEILING BEHIND THE CREDITS, not instead of them.
+ *
+ * Credits are what limits a family, and they are counted properly: priced per
+ * model, charged when the work lands, refused at enqueue. This is the other
+ * kind of limit -- the one that catches a loop. An admin and an own-key
+ * account pay no credits at all, so without this there is nothing at all
+ * between a stuck script and the bill.
+ *
+ * Generous on purpose: nobody writing stories with their children will meet
+ * it, and anything that does meet it is not reading what it asked for.
+ */
+const generateBurst = limiter({ limit: 30, windowMs: 60 * 60_000 });
+const pictureBurst = limiter({ limit: 40, windowMs: 60 * 60_000 });
+
+function refuseBurst(res: Response, seconds: number) {
+  res.set("Retry-After", String(seconds));
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return res.status(429).json({
+    code: "too_many_requests",
+    message: `That is a lot of stories at once. Please wait about ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+  });
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication with passport and session
@@ -1050,6 +1075,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // what removes that failure, and it also means navigating away no longer
   // abandons the story.
   app.post("/api/story/generate", requireAuth, async (req, res) => {
+    {
+      // Keyed by account, not address: a family behind one router is one
+      // address, and the thing worth stopping is one account in a loop.
+      const burst = generateBurst.check(String((req.user as { id: number }).id));
+      if (!burst.allowed) return refuseBurst(res, burst.retryAfterSeconds);
+    }
     try {
       const validatedData = storyRequestSchema.parse(req.body);
       const userId = (req.user as any).id;
@@ -2219,6 +2250,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * canIllustrate.
    */
   app.post("/api/stories/:id/illustrate", requireAuth, async (req, res) => {
+    {
+      const burst = pictureBurst.check(String((req.user as { id: number }).id));
+      if (!burst.allowed) return refuseBurst(res, burst.retryAfterSeconds);
+    }
     try {
       if (refuseBuiltIn(req, res)) return;
       const userId = (req.user as any).id;
