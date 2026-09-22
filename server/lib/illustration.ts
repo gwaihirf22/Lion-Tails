@@ -49,6 +49,7 @@ import { KEEPER, KEEPER_FACE_FILE } from "../data/lionTails";
 import { platesForScene } from "../data/referencePlates";
 import { storage } from "../storage";
 import { describeCharacter, looksLikeRefusal, readAvatarFile } from "./avatar";
+import { recordRefusal } from "./accountEvents";
 import { categoryOf } from "@shared/characterVocab";
 import { PICTURE_REF_PATTERN, pictureRefs } from "@shared/family";
 import { isTimekeeperStory } from "@shared/quests";
@@ -1118,7 +1119,10 @@ export async function generateStoryImage(
     // refused, which is a different sentence for the reader but the same
     // answer to the money question.
     await refundOutside(userId, charged);
-    return { ok: false, reason: looksLikeRefusal(error) ? "refused" : "failed" };
+    const refused = looksLikeRefusal(error);
+    // See avatar.ts: the refusal is noted, the prompt never is.
+    if (refused) recordRefusal(userId, "picture");
+    return { ok: false, reason: refused ? "refused" : "failed" };
   }
 }
 
@@ -1190,13 +1194,15 @@ export async function readStoryImageFile(url: string): Promise<PictureFile | und
 }
 
 /** Remove a picture's file. Used only by the delete route, which asks first. */
-export async function deleteStoryImage(url: string): Promise<void> {
+export async function deleteStoryImage(url: string): Promise<boolean> {
   try {
     const file = storyImagePath(url);
-    if (!file) return;
+    if (!file) return false;
     await fs.promises.rm(file, { force: true });
+    return true;
   } catch (error) {
     // An orphaned file is not worth failing a delete over.
     console.error(`[illustration] could not remove the picture ${url}:`, error);
+    return false;
   }
 }

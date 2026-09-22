@@ -57,7 +57,11 @@ import {
 import { sceneFromPassage } from "./lib/passageScene";
 import { questLengthAllowed, QUEST_SHORTEST_LENGTH } from "@shared/quests";
 import { accountDetail, accountList } from "./lib/accountStats";
+import { abuseReport } from "./lib/abuseWatch";
+import { sendTelegram, telegramConfigured } from "./lib/telegram";
 import { cancelAllStoryJobsFor } from "./lib/storyJobs";
+import { deleteAccount, typedNameMatches } from "./lib/accountDelete";
+import { limiter } from "./lib/rateLimit";
 import { randomInt } from "crypto";
 import { makePassphrase } from "@shared/passphrase";
 import { hashPasswordForAdmin } from "./auth";
@@ -142,6 +146,30 @@ import { requireAdmin } from "./lib/requireAuth";
 import { costsReport, publishSuggestedPrices, publishedPriceList, writeMarginPct } from "./lib/costStats";
 import { pictureListPrice } from "./lib/costReport";
 import { decideProposal, runBillCheck, runPriceCheck } from "./lib/priceWatch";
+
+/**
+ * A CEILING BEHIND THE CREDITS, not instead of them.
+ *
+ * Credits are what limits a family, and they are counted properly: priced per
+ * model, charged when the work lands, refused at enqueue. This is the other
+ * kind of limit -- the one that catches a loop. An admin and an own-key
+ * account pay no credits at all, so without this there is nothing at all
+ * between a stuck script and the bill.
+ *
+ * Generous on purpose: nobody writing stories with their children will meet
+ * it, and anything that does meet it is not reading what it asked for.
+ */
+const generateBurst = limiter({ limit: 30, windowMs: 60 * 60_000 });
+const pictureBurst = limiter({ limit: 40, windowMs: 60 * 60_000 });
+
+function refuseBurst(res: Response, seconds: number) {
+  res.set("Retry-After", String(seconds));
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return res.status(429).json({
+    code: "too_many_requests",
+    message: `That is a lot of stories at once. Please wait about ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+  });
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication with passport and session
@@ -1047,6 +1075,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // what removes that failure, and it also means navigating away no longer
   // abandons the story.
   app.post("/api/story/generate", requireAuth, async (req, res) => {
+    {
+      // Keyed by account, not address: a family behind one router is one
+      // address, and the thing worth stopping is one account in a loop.
+      const burst = generateBurst.check(String((req.user as { id: number }).id));
+      if (!burst.allowed) return refuseBurst(res, burst.retryAfterSeconds);
+    }
     try {
       const validatedData = storyRequestSchema.parse(req.body);
       const userId = (req.user as any).id;
@@ -1418,10 +1452,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/accounts", requireAdmin, async (req, res) => {
     try {
       const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 365);
-      res.json(await accountList(days));
+      /**
+       * The watch rides along with the list, and cannot take it down with it.
+       *
+       * One fetch, because the findings are about the accounts on the same
+       * screen -- but its four windowed aggregates are the slowest thing here
+       * and the newest, so a failure answers `watch: null` and the page still
+       * shows who has an account. The alternative, a second endpoint, is a
+       * second thing to forget to call.
+       */
+      const [list, watch] = await Promise.all([
+        accountList(days),
+        abuseReport().catch((error) => {
+          console.error("Error running the abuse watch:", error);
+          return null;
+        }),
+      ]);
+      // Whether the alerting half is wired, so the page can say so rather
+      // than showing a button that quietly does nothing.
+      res.json({ ...list, watch, telegram: telegramConfigured() });
     } catch (error) {
       console.error("Error listing accounts:", error);
       res.status(500).json({ message: "Could not list accounts" });
+    }
+  });
+
+  /**
+   * Prove the Telegram wiring, from the page, without waiting an hour.
+   *
+   * A token in a file on a host is the kind of setting that is wrong for
+   * weeks: it costs nothing to be missing and nothing tells you until the one
+   * night it was supposed to say something. This is the "did that work" button
+   * -- it sends a real message on the real channel and reports Telegram's own
+   * answer, scrubbed of the token by `sendTelegram` before it ever gets here.
+   */
+  app.post("/api/admin/alerts/test", requireAdmin, async (req, res) => {
+    try {
+      if (!telegramConfigured()) {
+        return res.status(400).json({
+          message: "Telegram is not set up. TELEGRAM_BOT_TOKEN (or _FILE) and TELEGRAM_CHAT_ID are both needed.",
+        });
+      }
+      const who = (req.user as any)?.username ?? "an admin";
+      const result = await sendTelegram(
+        `Lion Tails — test message, sent by ${who}. Account alerts will arrive here.`,
+      );
+      if (!result.ok) return res.status(502).json({ message: `Telegram refused it: ${result.error}` });
+      res.json({ sent: true });
+    } catch (error) {
+      console.error("Error sending a test message:", error);
+      res.status(500).json({ message: "Could not send a test message" });
     }
   });
 
@@ -1571,6 +1651,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error unbanning an account:", error);
       res.status(500).json({ message: "Could not unban that account" });
+    }
+  });
+
+  /**
+   * DELETE AN ACCOUNT. The end of the line, and not the usual answer.
+   *
+   * A ban is reversible and keeps everything; this keeps nothing except the
+   * ledger. So it asks for the username to be typed back -- the same habit as
+   * deleting anything else that cannot be undone -- and it goes through the
+   * same two rules as a ban, because deleting yourself or the last admin is
+   * the same locked door by another route.
+   */
+  app.delete("/api/admin/accounts/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) return res.status(400).json({ message: "Not an account id" });
+      const target = await storage.getUser(id);
+      if (!target) return res.status(404).json({ message: "No such account" });
+
+      const allowed = mayChangeAccount(Number((req.user as { id: number }).id), target, await storage.countAdmins());
+      if (!allowed.ok) return res.status(409).json({ message: allowed.reason });
+
+      if (!typedNameMatches(req.body?.username, target.username)) {
+        return res.status(400).json({
+          message: `Type ${target.username} to confirm. Nothing is deleted until the name matches.`,
+        });
+      }
+
+      const outcome = await deleteAccount(id);
+      if (!outcome.ok) return res.status(500).json({ message: "Could not delete that account" });
+      res.json(outcome);
+    } catch (error) {
+      console.error("Error deleting an account:", error);
+      res.status(500).json({ message: "Could not delete that account" });
     }
   });
 
@@ -2136,6 +2250,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * canIllustrate.
    */
   app.post("/api/stories/:id/illustrate", requireAuth, async (req, res) => {
+    {
+      const burst = pictureBurst.check(String((req.user as { id: number }).id));
+      if (!burst.allowed) return refuseBurst(res, burst.retryAfterSeconds);
+    }
     try {
       if (refuseBuiltIn(req, res)) return;
       const userId = (req.user as any).id;

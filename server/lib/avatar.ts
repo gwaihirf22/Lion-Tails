@@ -37,6 +37,7 @@ import {
   FREE_PORTRAIT_CEILING,
 } from "./modelPolicy";
 import { recordModelCall } from "./modelCalls";
+import { recordRefusal } from "./accountEvents";
 
 /** Where portraits live. See the note above about why it is under `stories`. */
 export const AVATAR_DIR = path.join(process.cwd(), "public", "images", "stories", "avatars");
@@ -457,6 +458,30 @@ export async function generateAvatar(
       `[avatar] ${refused ? "model refused" : "generation failed"} for character ${character.id}:`,
       error,
     );
+    // A refusal is the one abuse signal no existing table remembers. Only a
+    // refusal: a transient 500 says nothing about who asked.
+    if (refused) recordRefusal(userId, "portrait");
     return { ok: false, refused };
+  }
+}
+
+/**
+ * Remove one portrait file from disk.
+ *
+ * The counterpart of storeAvatarFile, and it exists for one caller: deleting
+ * an account. Best-effort by design -- an orphaned png is untidy, a failed
+ * account deletion is a person still in the database after being told they
+ * are not. Only files inside AVATAR_DIR, and only by basename, so a stored
+ * value that is somehow a path cannot reach out of it.
+ */
+export async function deleteAvatarFile(url: string): Promise<boolean> {
+  try {
+    const name = path.basename(url);
+    if (!name.startsWith("avatar_")) return false;
+    await fs.promises.rm(path.join(AVATAR_DIR, name), { force: true });
+    return true;
+  } catch (error) {
+    console.error(`[avatar] could not remove ${url}:`, error);
+    return false;
   }
 }
