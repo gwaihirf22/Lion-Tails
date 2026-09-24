@@ -1592,6 +1592,31 @@ of the above: the defect was in the wrapper around the brief, which no fixture
 could see. `buildChapterPrompt()` is pure for that reason. Regenerate with
 `UPDATE_GOLDEN=1 npm test -- chapterPrompt` and read the diff.
 
+**A lead's companions cross too.** The "where the world's rules say 'the
+traveller' they mean all of them" line existed only for a story with no main
+character, and the canon says "the traveller", singular, throughout — so a
+quest with a lead and three companions had nothing saying the companions go.
+Three models (Luna, Terra, Astra, 2026-09-24, Esther/Elijah/Lucy/Ellie to the
+ark) planned the same story: Esther alone on the far side for the whole
+account, the others left at the picnic blanket, Lucy mentioned 0, 1 and 4
+times. Blake: "evening out characters." Three things now, none of them a
+change to the canon:
+
+- The premise carries a companions line for any `travels` cast of two or more
+  (kept in the lead's shape: it is still Esther's story, and the others are IN
+  it), golden case "a quest with companions".
+- `questShape()` tells the PLAN, by name, that everyone crosses in part 1 and
+  is on the far side in every part until the way home, each doing something
+  that matters — and that "no more than three in a scene" is met by moving
+  between them, never by leaving someone home. The plan is where casting is
+  decided; the chapter writer uses a companion "only where this chapter's
+  instruction calls for them", so a plan that never calls for Lucy is a story
+  without her.
+- `outlineLeavesOut()` (pure, tested) checks the plan: a cast name absent from
+  every far-side part fails `generateOutline`'s validate, recorded as an
+  `outlineCastCoverage` step, and the outline is retried — the right count of
+  parts that leave a child at home is still the wrong plan.
+
 **Nobody is written out of a story.** At four or more characters the brief caps
 a scene at three of them — and the outline read that as licence to delete
 people, instructing its own last chapter with "Elijah is waiting nearby, while

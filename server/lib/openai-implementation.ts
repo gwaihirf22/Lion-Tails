@@ -368,13 +368,64 @@ export const questShape = (brief: StoryBrief, parts: number): string => {
     about it. Leave it room -- the account has to be finished in part ${parts - 1} or
     early in part ${parts}, not on the last line. Everyone who set out comes back.
 `;
+  /**
+   * EVERYONE CROSSES, and every far-side part uses everyone.
+   *
+   * The plan is where casting is decided, and three models planned the same
+   * four-child quest the same way: the lead alone on the far side for the
+   * whole account, the others left in the present day (Lucy: 0, 1 and 4
+   * mentions across Luna, Terra and Astra). The chapter writer is told to use
+   * a companion "only where this chapter's instruction calls for them", so a
+   * plan that never calls for Lucy is a story without her. Said here, to the
+   * plan, and checked afterwards by outlineLeavesOut(). Not for a cast of one.
+   */
+  const names = brief.cast.map((c) => c.name).filter(Boolean);
+  const together =
+    names.length > 1
+      ? `
+    ${nameList(names)} cross together in part 1, and ALL of them are on the far
+    side from part 2 until the way home. In every far-side part, each of them does
+    or says something that matters to that part, and the plan says who does what.
+    Nobody stays behind in the present day and nobody only watches. "No more than
+    three in a scene" is met by moving between them within a part, never by leaving
+    someone at home.
+`
+      : "";
   return `
     This is a quest. Part 1 is the way in and nothing else: the moment in the
     traveller's own life, the shop arriving where it could not be, going inside,
     and stepping through. END part 1 at the crossing over. The account itself begins
     in part 2 -- put none of it in part 1.
-${home}`;
+${together}${home}`;
 };
+
+/**
+ * Who the plan left at home: cast names absent from every far-side part.
+ *
+ * The far side of an n-part quest is parts 2..n-1 (part 1 is the way in, part
+ * n the way home); with fewer than three parts every part counts. Whole-word,
+ * case-insensitive. A name that happens to be in the account (a child called
+ * Paul in a Paul story) passes for free -- this catches absence, not presence.
+ * Only a quest with more than one name is checked; the rule it enforces is
+ * questShape's.
+ */
+export function outlineLeavesOut(outline: string[], names: string[], quest: boolean): string[] {
+  if (!quest || names.length < 2) return [];
+  const farSide = outline.length >= 3 ? outline.slice(1, -1) : outline;
+  const text = farSide.join("\n").toLowerCase();
+  return names.filter((n) => {
+    const needle = n.toLowerCase();
+    let from = 0;
+    for (;;) {
+      const at = text.indexOf(needle, from);
+      if (at < 0) return true;
+      const before = at === 0 ? "" : text[at - 1];
+      const after = text[at + needle.length] ?? "";
+      if (!/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after)) return false;
+      from = at + 1;
+    }
+  });
+}
 
 export const COVER_SHOWS_PEOPLE =
   "The people in it should be recognisable -- show their faces rather than only their backs.";
@@ -774,10 +825,23 @@ ${questShape(ctx.brief, numberOfChapters)}
     // valid JSON, an array of strings, and it made the chapter loop run once,
     // producing a story at a third of the requested length with HTTP 200.
     // The count is what matters here, not just the shape.
-    validate: (value) =>
-      Array.isArray(value?.outline) && value.outline.length === numberOfChapters
-        ? value
-        : undefined,
+    validate: (value) => {
+      if (!Array.isArray(value?.outline) || value.outline.length !== numberOfChapters) return undefined;
+      // The right count of parts that leave a child at home is still the wrong
+      // plan. See outlineLeavesOut(). Recorded, because the retry that follows
+      // is otherwise indistinguishable from a shape failure in the panel.
+      const leftOut = outlineLeavesOut(
+        value.outline,
+        ctx.brief.cast.map((c) => c.name).filter(Boolean),
+        Boolean(ctx.brief.world),
+      );
+      if (leftOut.length) {
+        console.warn(`generateOutline: the plan leaves ${leftOut.join(", ")} out of the far side; retrying.`);
+        debugData.push({ step: "outlineCastCoverage", leftOut });
+        return undefined;
+      }
+      return value;
+    },
   });
   return parsed.outline;
 }
