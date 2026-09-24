@@ -1500,6 +1500,8 @@ export function buildStoryBrief(
   const d = details ? undefined : request.characterDetails;
 
   const name = details?.name || request.childName || "A character";
+  /** Everyone in the cast but the lead, by name. See the companions line below. */
+  const companions = characters.map((c) => c.name).filter((n) => n && n !== name);
   // What they ARE. characterKind() is the one place that knows the widened
   // `kind` and the legacy `gender` are the same fact.
   const kind = characterKind(details) || request.gender;
@@ -1736,6 +1738,28 @@ export function buildStoryBrief(
             `where the world's rules say "the traveller" they mean all of them.`,
         );
       }
+    } else if (role === "travels" && companions.length > 0) {
+      /**
+       * A LEAD WITH COMPANIONS WAS LEFT TO TRAVEL ALONE. The sentence above
+       * existed only for a story with no main character, so a quest with a
+       * lead and three companions had nothing saying the companions cross --
+       * and the canon says "the traveller", singular, throughout. Three models
+       * (Luna, Terra, Astra, 2026-09-24, Esther/Elijah/Lucy/Ellie to the ark)
+       * planned the same story: Esther alone on the far side for the whole
+       * account, the others waiting at the picnic blanket. Lucy appeared 0, 1
+       * and 4 times. Blake: "evening out characters."
+       *
+       * So a quest with companions gets the same answer the shared quest gets,
+       * kept in the lead's shape: it is still Esther's story, and the others
+       * are IN it -- through the lantern with her, not watching her go.
+       */
+      premise.push(
+        `${name} is the traveller the story follows, and ${nameList(companions)} ` +
+          `${companions.length === 1 ? "goes" : "go"} too: they cross together, are ` +
+          `on the far side together, and come home together. Nobody stays behind in ` +
+          `the present day, and where the world's rules say "the traveller" they ` +
+          `mean all of them.`,
+      );
     }
     participationAnchor = p.anchor;
     world = p.world;
@@ -2488,9 +2512,15 @@ export function renderBrief(brief: StoryBrief, purpose: BriefPurpose): string {
     if (purpose === "outline") {
       // The outline is where per-chapter casting is actually decided, so this
       // is the one place the instruction can be acted on rather than admired.
+      // On a quest with companions the PART is not the unit: questShape puts
+      // everyone on the far side in every part, so this line, unqualified,
+      // contradicted it in the same prompt. There the unit is the scene.
       out.push(
-        "Not every part needs everyone. Decide who is in each part and leave " +
-          "the rest out of that part.",
+        brief.world && brief.cast.length > 1
+          ? "Not every scene needs everyone. Decide who is in each scene and leave " +
+              "the rest out of that scene -- but every far-side part has all of them in it somewhere."
+          : "Not every part needs everyone. Decide who is in each part and leave " +
+              "the rest out of that part.",
       );
       // ONLY WHERE THE CAP APPLIES, because the leak is the cap being reasoned
       // about out loud. A real outline wrote "Lucy is elsewhere, so no more

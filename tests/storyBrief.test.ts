@@ -212,6 +212,13 @@ const cases: Record<string, () => ReturnType<typeof buildStoryBrief>> = {
       { ...base, characterIds: ["f1"], characterRole: "travels", biblicalEvent: "noah" } as StoryRequest,
       [lucy],
     ),
+  // A lead WITH companions on a quest: the case every model planned as the lead
+  // alone on the far side, because nothing in the brief said the others cross.
+  "a quest with companions": () =>
+    buildStoryBrief(
+      { ...base, characterIds: ["c1", "c2", "c3"], characterRole: "travels", biblicalEvent: "noah" } as StoryRequest,
+      [mia, ember, bolt],
+    ),
 };
 
 if (process.env.UPDATE_GOLDEN) {

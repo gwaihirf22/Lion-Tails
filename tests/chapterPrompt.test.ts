@@ -5,6 +5,7 @@ import {
   buildChapterPrompt,
   chapterPositionRule,
   questShape,
+  outlineLeavesOut,
 } from "../server/lib/openai-implementation";
 import {
   buildStoryBrief,
@@ -160,6 +161,53 @@ describe("the outline is given room at BOTH ends of a quest", () => {
     const shape = questShape(questBrief({ cliffhanger: true } as Partial<StoryRequest>), 4);
     expect(shape).toContain("END part 1 at the crossing over");
     expect(shape).not.toContain("the way back and the close");
+  });
+
+  it("sends the whole cast across, by name, and only when there is a cast", () => {
+    const shape = questShape(questBrief(), 4);
+    expect(shape).toContain("Mia, Ember, Bolt and Nell cross together in part 1");
+    expect(shape).toContain("ALL of them are on the far");
+    expect(shape).toContain("never by leaving");
+    // A cast of one has nobody to leave behind.
+    const solo = buildStoryBrief(
+      { ...base, characterIds: ["c1"], characterRole: "travels", biblicalEvent: "noah" } as StoryRequest,
+      [mia],
+    );
+    expect(questShape(solo, 4)).not.toContain("cross together");
+    // And the cliffhanger keeps it: leaving the story open is not leaving people home.
+    expect(questShape(questBrief({ cliffhanger: true } as Partial<StoryRequest>), 4)).toContain("cross together");
+  });
+});
+
+describe("who the plan left at home", () => {
+  const names = ["Mia", "Ember", "Bolt", "Nell"];
+  const plan = [
+    "Part 1: Mia, Ember, Bolt and Nell find the shop and step through.",
+    "Part 2: Mia and Ember watch Noah pitch the ark; Bolt counts planks.",
+    "Part 3: Ember and Mia see the dove; Bolt holds the lamp.",
+    "Part 4: everyone comes home and Barnabas asks what they found.",
+  ];
+
+  it("names whoever is missing from every far-side part", () => {
+    expect(outlineLeavesOut(plan, names, true)).toEqual(["Nell"]);
+  });
+
+  it("is satisfied by one far-side appearance", () => {
+    const fixed = [...plan]; fixed[2] += " Nell feeds the doves.";
+    expect(outlineLeavesOut(fixed, names, true)).toEqual([]);
+  });
+
+  it("matches whole words, either case", () => {
+    expect(outlineLeavesOut(["a", "bolted door and nell", "c"], ["Bolt", "Nell"], true)).toEqual(["Bolt"]);
+  });
+
+  it("checks nothing for a story that is not a quest, or a cast of one", () => {
+    expect(outlineLeavesOut(plan, names, false)).toEqual([]);
+    expect(outlineLeavesOut(["x", "y", "z"], ["Mia"], true)).toEqual([]);
+  });
+
+  it("counts every part when there are fewer than three", () => {
+    expect(outlineLeavesOut(["Mia goes", "Mia returns"], ["Mia", "Bolt"], true)).toEqual(["Bolt"]);
   });
 
   it("is nothing at all for a story with no lantern in it", () => {
