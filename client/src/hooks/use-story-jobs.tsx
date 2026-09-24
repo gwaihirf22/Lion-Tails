@@ -178,6 +178,9 @@ export function describeJob(job: StoryJob): string {
   }
   if (job.status === "queued") return "Waiting to start…";
   if (job.status === "running") {
+    // Before the chapter count: every chapter is done by then, and "Writing
+    // part 5 of 5" for another minute reads as stuck.
+    if (job.step === "polishing") return "Reading it through once more…";
     if (job.chapters_total > 0 && job.chapters_done > 0) {
       return `Writing part ${Math.min(job.chapters_done + 1, job.chapters_total)} of ${job.chapters_total}…`;
     }

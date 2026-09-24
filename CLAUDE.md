@@ -591,6 +591,63 @@ email`), so the endpoints answer 200 and look functional while the delivery half
 does not exist. The token is returned in the response body only when
 `NODE_ENV=development`.
 
+## The polish pass
+
+Every story is read once, whole, by the model that wrote it, and given back
+as one story — after the chapters are joined and BEFORE the title, questions
+and cover are asked for, so those describe the text the reader gets.
+`server/lib/storyPolish.ts` is pure (prompt, acceptance check, budgets);
+`polishStory()` in `openai-implementation.ts` is the call. Blake, 2026-09-24:
+*"the problem lies in cohesion... it needs to be a beautiful story afterward
+and less disjointed."*
+
+- **Why a whole-story pass and not a better chapter prompt.** A chapter is
+  written from one outline line and the story so far; it cannot see what comes
+  after it. "Behind the False Wall" wrote the Gestapo raid in chapter one and
+  again, as news, in chapter two; 1942 jumped to 1944 with no join; the prose
+  ran "She could not... She could not... She could not." None of that is
+  visible from inside a chapter.
+- **Same model as the story, included in its price, on every story** — Blake's
+  three choices. It is a FULL rewrite for flow, told to keep every event,
+  name, date, number and quotation, the ending as it ends (a cliffhanger is
+  not resolved; a `consequences` ending is not softened), the reading level,
+  and the length.
+- **A POLISH CAN NEVER FAIL A STORY.** The draft is kept until the polished
+  text passes `acceptPolish()`, and any error from the call keeps the draft
+  too (the `diggingDeeper` rule). What it checks is what a rewrite loses
+  SILENTLY: length outside `POLISH_LENGTH_FLOOR`..`CEILING` of the draft or
+  under the story's own `MINIMUM_LENGTH_RATIO`; a heading, bold heading line
+  or "Chapter N" the draft did not have (the reader turns a bold line into a
+  heading, and a model-written appendix heading would suppress the server's
+  real one through the `content.includes(HEADING)` guards); a cast or pet
+  name the draft used; any 3–4 digit number; a poem no longer in verse.
+- **The editor is shown where the seams are.** The chapters go in as a
+  list, and `markedDraft()` puts `[PART n BEGINS]` at every join. The first
+  real run (Corrie ten Boom, three chapters, Luna) was told only that seams
+  existed and handed back 88% of sentences untouched with the chapter-two
+  recap word for word; told where they are, it has nothing to search for. A
+  marker left in the output is rejected. The story is fenced with
+  `<<< THE STORY >>>` lines, not `---`: the same run ended with the tail of
+  an echoed `---`, which the reader draws as a scene break, and
+  `unwrapPolished()` strips only the OUTERMOST rule lines for that reason.
+- **It reads `renderBrief(brief, "chapter")`**, the compact rules every chapter
+  already gets, not a fifth `BriefPurpose` — that would move all 68 brief
+  goldens for a projection only this call reads. `buildPolishPrompt()` has its
+  own fixture, `tests/fixtures/polish-prompt-golden.json`
+  (`UPDATE_GOLDEN=1 npm test -- storyPolish`), the `buildChapterPrompt` rule:
+  the assembled prompt is what the model reads.
+- **The local tier can skip it.** The window is shared and fixed
+  (`MODEL_CONTEXT_LIMIT`); a story that cannot go in and come out again
+  (`polishContextNeeded()`) is skipped with a `polishSkipped` step rather than
+  sent to be cut off. On OpenAI it always runs.
+- **Evidence is kept.** `draftBeforePolish` holds the whole draft in
+  `debugData`, `polishCheck` carries `accepted` and `reason` (declared on the
+  zod object or stripped), and the ledger purpose is `"polish"` — summed into a
+  story's cost by `costStats.ts` like everything but the cover.
+- The job step is `"polishing"` ("Reading it through once more…"), checked
+  before the chapter count in `describeJob` or it reads "Writing part 5 of 5"
+  for another minute.
+
 ## Story continuity
 
 A story can belong to a series. After a series story, a background job extracts

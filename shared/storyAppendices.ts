@@ -43,7 +43,7 @@ export const DIGGING_DEEPER_HEADING = "**Digging deeper:**";
 /** The two static links every story ends with. */
 export const FURTHER_LEARNING_HEADING = "**For Further Learning:**";
 
-const ALL_HEADINGS = [
+export const ALL_HEADINGS = [
   MEETING_NOTE_HEADING,
   DIGGING_DEEPER_HEADING,
   FURTHER_LEARNING_HEADING,

@@ -2594,6 +2594,10 @@ export const storyResponseSchema = z.object({
     timestamp: z.string().optional(),
     maxTokens: z.union([z.number(), z.string()]).optional(),
     parseError: z.string().optional(),
+    // The polish pass: whether the rewrite was kept, and if not, why. Declared
+    // here or zod strips them and the panel shows a check with no verdict.
+    accepted: z.boolean().optional(),
+    reason: z.string().optional(),
   })).optional(),
 });
 

@@ -418,7 +418,7 @@ export const GUIDE_NODES = [
     title: "A quest needs room",
     why:
       "A quest tells two stories — getting there and what they find — so the shorter lengths are " +
-      "closed off and it starts at Long. It is written a chapter at a time and takes a few minutes.",
+      "closed off and it starts at Long. It is written a chapter at a time, then read through once as a whole, and takes a few minutes.",
     shot: { plate: "origin-tail", emphasise: "story-length" },
   },
   {
@@ -468,7 +468,7 @@ export const GUIDE_NODES = [
     title: "Story Length",
     why:
       "How long it takes to read aloud, from a couple of minutes to half an hour. Anything Long or " +
-      "more is written a chapter at a time, which takes a few minutes and costs more.",
+      "more is written a chapter at a time and then read through once as a whole, which takes a few minutes and costs more.",
     shot: { plate: "origin-tail", emphasise: "story-length" },
   },
   {

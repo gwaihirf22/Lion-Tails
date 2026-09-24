@@ -60,6 +60,13 @@ import {
 } from "@shared/storyAppendices";
 import { generateDiggingDeeper, type DiggingSource } from "./diggingDeeper";
 import {
+  buildPolishPrompt,
+  acceptPolish,
+  polishTokenBudget,
+  polishContextNeeded,
+  type MoralOutcome,
+} from "./storyPolish";
+import {
   generateStoryImage,
   illustrationCast,
   illustrationPlates,
@@ -1092,6 +1099,115 @@ export type GenerationOutcome = "cancelled" | "evicted";
  * One body rather than two: a second copy would drift, and this codebase has
  * produced most of its bugs from parallel definitions of the same thing.
  */
+/**
+ * The polish pass: the whole draft, read once and given back as one story.
+ * See storyPolish.ts for why it exists and what it is allowed to change.
+ *
+ * RETURNS THE DRAFT ON EVERY FAILURE. A skipped, refused, truncated or
+ * rejected polish is recorded in debugData and costs the story nothing --
+ * the draft already exists and has already been paid for, and the second call
+ * must never be the reason the first is thrown away (the diggingDeeper rule).
+ * The one thing it does not catch is a cancellation, which is not a failure.
+ *
+ * Runs BEFORE the title, questions and cover are asked for, so they describe
+ * the story the reader gets; and before the length check, which therefore
+ * measures the polished text -- acceptPolish keeps it above the same floor.
+ */
+async function polishStory(
+  client: OpenAI,
+  request: StoryRequest,
+  parts: string[],
+  debugData: any[],
+  ctx: StoryContext,
+  targetWordCount: number,
+  moralOutcome: MoralOutcome,
+): Promise<string> {
+  const draft = parts.join("\n\n");
+  const draftWords = countWords(draft);
+  // The draft is kept whole, so a polished story can be read against what it
+  // was polished from. requestModelText records only a word count for the
+  // reply, and the reply IS the story, which is stored anyway.
+  debugData.push({ step: "draftBeforePolish", response: draft, wordCount: draftWords });
+
+  // The local deployment's window is shared and fixed (MODEL_CONTEXT_LIMIT);
+  // a story that cannot go in and come out again is skipped, and said so,
+  // rather than sent to be cut off. OpenAI's windows are far larger than the
+  // constant, which exists for Ollama -- see the comment on the constant.
+  if (ctx.resolved.provider === "ollama" && polishContextNeeded(draftWords) > MODEL_CONTEXT_LIMIT) {
+    debugData.push({
+      step: "polishSkipped",
+      reason: `the story does not fit through the local context window: needs about ${polishContextNeeded(draftWords)} of ${MODEL_CONTEXT_LIMIT} tokens`,
+    });
+    return draft;
+  }
+
+  const systemPrompt = `${ctx.systemPrompt} You are now editing a story that has already been written, for flow and cohesion. Reply with the story text and nothing else.`;
+  const userPrompt = buildPolishPrompt({
+    brief: ctx.brief,
+    parts,
+    storyType: request.storyType,
+    moralOutcome,
+  });
+
+  let polished: string;
+  try {
+    polished = await requestModelText({
+      step: "polishStory",
+      model: ctx.resolved.model,
+      ledger: ledgerFor(ctx, "polish"),
+      storyLength: request.storyLength,
+      debugData,
+      maxTokens: polishTokenBudget(draftWords),
+      prompt: userPrompt,
+      call: async (maxTokens) => {
+        const response = await client.chat.completions.create({
+          model: ctx.resolved.model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          ...temperatureFor(ctx.resolved.model, 0.5),
+          ...tokenLimitFor(ctx.resolved.model, maxTokens),
+        });
+        return {
+          content: response.choices[0].message.content || "",
+          finishReason: response.choices[0].finish_reason,
+          usage: response.usage,
+        };
+      },
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.warn(`[polish] call failed; keeping the draft: ${reason}`);
+    debugData.push({ step: "polishSkipped", reason: `call failed: ${reason}` });
+    return draft;
+  }
+
+  const verdict = acceptPolish({
+    draft,
+    polished,
+    storyType: request.storyType,
+    targetWordCount,
+    castNames: [
+      ...ctx.brief.cast.map((c) => c.name),
+      ...(ctx.brief.pets ?? []).map((p) => p.name),
+    ].filter((n): n is string => Boolean(n)),
+    minimumLengthRatio: MINIMUM_LENGTH_RATIO,
+  });
+  if (!verdict.accepted) {
+    console.warn(`[polish] rejected (${ctx.resolved.model}); keeping the draft: ${verdict.reason}`);
+    debugData.push({ step: "polishCheck", accepted: false, reason: verdict.reason, wordCount: countWords(polished) });
+    return draft;
+  }
+  debugData.push({
+    step: "polishCheck",
+    accepted: true,
+    wordCount: countWords(verdict.content),
+    targetWordCount: draftWords,
+  });
+  return verdict.content;
+}
+
 async function runGeneration(
   request: StoryRequest,
   userId: number,
@@ -1143,9 +1259,22 @@ async function runGeneration(
         debugData,
         ctx,
       );
+      if (hooks?.checkpoint && !(await hooks.checkpoint({ step: "polishing" }))) {
+        return "evicted";
+      }
       finalDetails = {
         title: shortStoryResult.title,
-        content: shortStoryResult.content,
+        // The title, questions and picture prompt came from the same reply and
+        // describe events, not wording, so they survive the polish as they are.
+        content: await polishStory(
+          openaiClient,
+          request,
+          [shortStoryResult.content],
+          debugData,
+          ctx,
+          targetWordCount,
+          moralOutcome,
+        ),
         applicationQuestions: shortStoryResult.applicationQuestions,
         imagePrompt: shortStoryResult.imagePrompt,
       };
@@ -1222,7 +1351,28 @@ async function runGeneration(
         }
       }
 
-      // Step 3: Final Details
+      // Step 3: One read of the whole. The chapters were written blind to each
+      // other; this is the first call that sees them together. Before the
+      // title and questions, so those are written from the story as it will
+      // be read. Not checkpointed as content: a lost lease here re-runs one
+      // call against chapters that are already saved.
+      if (hooks?.isCancelled && (await hooks.isCancelled())) return "cancelled";
+      if (hooks?.checkpoint && !(await hooks.checkpoint({ step: "polishing" }))) {
+        return "evicted";
+      }
+      // The CHAPTERS go in, not the joined text, so the editor can be shown
+      // where every seam is. `chapters` is the resumed list plus the new ones.
+      fullStoryContent = await polishStory(
+        openaiClient,
+        request,
+        chapters,
+        debugData,
+        ctx,
+        targetWordCount,
+        moralOutcome,
+      );
+
+      // Step 4: Final Details
       const finalizedParts = await finalizeStoryDetails(
         openaiClient,
         fullStoryContent,

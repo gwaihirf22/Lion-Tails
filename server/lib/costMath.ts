@@ -34,6 +34,7 @@ export const CALL_PURPOSES = [
   "outline",
   "chapter",
   "finalize",
+  "polish",
   "digging",
   "extract",
   "summary",
