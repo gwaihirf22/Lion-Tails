@@ -79,6 +79,15 @@ services:
       - PUBLIC_URL=https://liontails.paul-blake.com
       # EMAIL_* and FRONTEND_URL used to be here. Nothing reads them: there
       # is no mailer (README, "Email"). Mirror this removal on the host's copy.
+    # The image declares this same probe itself now (Dockerfile HEALTHCHECK),
+    # so it is healthy without this entry; kept so the host's copy and the
+    # image agree on the numbers. NOTE that `restart: unless-stopped` does NOT
+    # restart an UNHEALTHY container -- /api/health answering 503 (database
+    # unreachable, schema drifted, in-memory fallback in production) leaves
+    # the container running, red in `docker ps`, and serving writes that go
+    # nowhere until somebody looks. The usual fix is the `autoheal` container
+    # (willfarrell/autoheal) watching for the label `autoheal=true` on this
+    # service: Blake's call, on the host, not something CI can do.
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/api/health"]
       interval: 30s

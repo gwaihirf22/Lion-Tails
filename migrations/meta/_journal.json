@@ -120,6 +120,13 @@
       "when": 1789668933306,
       "tag": "0016_panoramic_kabuki",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790608221856,
+      "tag": "0017_whole_genesis",
+      "breakpoints": true
     }
   ]
 }
