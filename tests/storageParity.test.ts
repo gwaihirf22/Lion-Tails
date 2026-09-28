@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { IStorage, StoryToSave } from "../server/storage";
 import type { StoryRequest } from "../shared/schema";
+import { heroesOfFaithData } from "../server/data/heroes";
 
 /**
  * One suite, two storages.
@@ -18,7 +19,16 @@ import type { StoryRequest } from "../shared/schema";
  * `npm test` on a laptop stays what it was, no network and no database.
  * Rows are written under a throwaway user and removed after; the user's
  * cascade takes the stories, characters and shares with it.
+ *
+ * The hero the first case saves against is upserted first, on the storage
+ * under test, through the boot's own upsert. `user_stories.hero_id` is a
+ * foreign key, and in CI this suite runs before the app boots and seeds --
+ * so Postgres refused the very first save while memory, which holds no
+ * key, had passed it against an id that exists nowhere. A real profile
+ * from the data file, never a hand-typed slug.
  */
+
+const HERO = heroesOfFaithData[0];
 
 const STORY = {
   title: "The Brass Lantern",
@@ -55,6 +65,8 @@ function parity(name: string, make: () => Promise<Fixture>) {
         ).id;
       owner = await mk("owner");
       stranger = await mk("stranger");
+      // Reference data, idempotent, and the boot upserts it again after.
+      await s.upsertHeroOfFaith(HERO);
     }, 30_000);
 
     afterAll(async () => {
@@ -62,13 +74,13 @@ function parity(name: string, make: () => Promise<Fixture>) {
     });
 
     it("saves a story and reads it back, with the hero from the request", async () => {
-      const saved = await s.saveStory(STORY, request({ heroId: "paul" }), owner);
+      const saved = await s.saveStory(STORY, request({ heroId: HERO.id }), owner);
       expect(saved.id).toBeTruthy();
       const read = await s.getStoryById(saved.id, owner);
       expect(read?.story.title).toBe("The Brass Lantern");
       expect(read?.request.childName).toBe("Mia");
       // The divergence this suite was written for.
-      expect(read?.heroId).toBe("paul");
+      expect(read?.heroId).toBe(HERO.id);
       expect(read?.isFavorite).toBe(false);
     });
 
