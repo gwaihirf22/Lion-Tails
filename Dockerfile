@@ -45,7 +45,14 @@ ENV NODE_ENV=production
 ENV PORT=5000
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+# No package manager in the runtime image. Nothing here runs npm or npx
+# (entrypoint.sh runs node directly), and the npm bundled with the base image
+# carries its own node_modules -- the first run of CI's Trivy gate failed on a
+# fixable CRITICAL in npm's copy of `tar`, a package this app does not depend
+# on. Removing npm removes that whole surface, and corepack goes with it.
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+              /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 
 # WORKDIR must stay /app: generated story images are written to
 # process.cwd()/public/images/stories and served from process.cwd()/public.

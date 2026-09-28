@@ -1527,7 +1527,11 @@ it cannot run unless every gate passed.
 the CSS assertions read only the first stylesheet. Each is now the other way
 round: a missing font, a second stylesheet with the rules in it, and a
 fixable CRITICAL all fail. When adding a gate, run it once against a
-deliberately broken input.
+deliberately broken input. The Trivy gate's first real run failed on a
+CRITICAL in the `tar` bundled inside the base image's npm — not a dependency
+of this app — so **the runtime image has no npm or corepack at all**
+(`Dockerfile`, runner stage): nothing at runtime calls either, and a package
+manager that is not there cannot carry an advisory.
 
 **A gate that hardcodes a number will break the deploy for an unrelated
 reason.** The hero-count assertion was `-ne 15`, correct when written and wrong
