@@ -14,6 +14,22 @@ import { ZodError } from "zod";
 // to the bare specifier as part of the zod 4 migration, not before.
 import { fromZodError } from "zod-validation-error/v3";
 import { v4 as uuidv4 } from "uuid";
+import { z } from "zod";
+import { limiter } from "./lib/rateLimit";
+
+/** Twenty songs an hour per account. Nobody at a piano meets it. */
+const chordBurst = limiter({ limit: 20, windowMs: 60 * 60_000 });
+
+/**
+ * What the Music page posts. `lyrics` arrives as one string from the search
+ * box and as lines from the library; a number used to reach `.split` and
+ * become a 500.
+ */
+export const generateChordsBodySchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  lyrics: z.union([z.string().trim().min(1).max(20_000), z.array(z.string().max(500)).min(1).max(400)]),
+  artist: z.string().trim().min(1).max(200).optional(),
+});
 
 export function registerSongRoutes(app: Express) {
   // Get all songs
@@ -100,22 +116,24 @@ export function registerSongRoutes(app: Express) {
   // Update a song by ID
   app.put("/api/songs/:id", requireAdmin, async (req, res) => {
     try {
-      const updates = req.body;
-      const updatedSong = updateSong(req.params.id, updates);
-      
+      // A patch, parsed. The body used to go into updateSong as it arrived,
+      // and the ZodError branch could never run because nothing parsed.
+      const parsed = songSchema
+        .partial()
+        .omit({ id: true, createdAt: true, updatedAt: true })
+        .safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: fromZodError(parsed.error).message });
+      }
+      const updatedSong = updateSong(req.params.id, parsed.data);
+
       if (!updatedSong) {
         return res.status(404).json({ message: "Song not found" });
       }
-      
+
       return res.json(updatedSong);
     } catch (error) {
       console.error("Error updating song:", error);
-      
-      if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ message: validationError.message });
-      }
-      
       return res.status(500).json({ message: "Failed to update song" });
     }
   });
@@ -147,16 +165,28 @@ export function registerSongRoutes(app: Express) {
       }
       const userId = (req.user as any).id;
 
-      const { title, lyrics, artist = "Unknown Artist" } = req.body;
-      
-      if (!title || !lyrics) {
-        return res.status(400).json({ 
-          message: "Title and lyrics are required."
+      // A ceiling behind the login, the story and picture limiters' shape:
+      // chords charge no credits (CLAUDE.md, "Model selection"), so before
+      // this an account in a loop could call the economy model for as long
+      // as it liked. Keyed by account, not address: a family is one address.
+      const burst = chordBurst.check(String(userId));
+      if (!burst.allowed) {
+        res.set("Retry-After", String(burst.retryAfterSeconds));
+        const minutes = Math.max(1, Math.round(burst.retryAfterSeconds / 60));
+        return res.status(429).json({
+          code: "too_many_requests",
+          message: `That is a lot of songs at once. Please wait about ${minutes} minute${minutes === 1 ? "" : "s"}.`,
         });
       }
-      
+
+      const parsed = generateChordsBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Title and lyrics are required." });
+      }
+      const { title, lyrics, artist = "Unknown Artist" } = parsed.data;
+
       console.log(`Generating chords for custom song: ${title}`);
-      
+
       // Convert lyrics to array if it's a string
       const lyricsList = Array.isArray(lyrics) ? lyrics : lyrics.split('\n');
       

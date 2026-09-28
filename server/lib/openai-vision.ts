@@ -1,14 +1,8 @@
 import OpenAI from "openai";
 import fs from "fs";
-import path from "path";
-import { promisify } from "util";
 import { storage } from "../storage";
 import { resolveModel, createClient, tokenLimitFor } from "./modelPolicy";
 import { recordModelCall } from "./modelCalls";
-
-// Promisify fs functions
-const readFile = promisify(fs.readFile);
-const stat = promisify(fs.stat);
 
 /**
  * Image analysis has always required the user's OWN key, with no fallback to
@@ -218,22 +212,6 @@ export function imageFileToBase64(filePath: string): Promise<string> {
   });
 }
 
-/**
- * Load an image from the attached_assets directory
- */
-export async function loadAttachedImage(filename: string): Promise<string | null> {
-  try {
-    // Build the full path to the image
-    const imagePath = path.join(process.cwd(), 'attached_assets', filename);
-    
-    // Check if the file exists
-    await stat(imagePath);
-    
-    // Read the file and convert to base64
-    const imageBuffer = await readFile(imagePath);
-    return imageBuffer.toString('base64');
-  } catch (error) {
-    console.error(`Error loading attached image ${filename}:`, error);
-    return null;
-  }
-}
+// loadAttachedImage() lived here: it joined a caller-supplied filename onto
+// attached_assets/ with no traversal guard. Its only route had no caller and
+// both are gone.

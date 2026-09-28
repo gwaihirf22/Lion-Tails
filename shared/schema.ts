@@ -2603,6 +2603,24 @@ export const storyResponseSchema = z.object({
 
 export type StoryResponse = z.infer<typeof storyResponseSchema>;
 
+/**
+ * What POST /api/story/save accepts: a story the client already holds
+ * (the shape of server/storage.ts's StoryToSave) and the request it was
+ * written from. Both are z.objects, so an unknown key -- one that would
+ * otherwise be spread into a row -- is stripped rather than stored. The
+ * route, not this schema, decides whether `request.universeId` is the
+ * caller's own universe.
+ */
+export const storyToSaveSchema = storyResponseSchema.extend({
+  generationId: z.string().optional(),
+  outline: z.array(z.string()).optional(),
+});
+export const storySaveBodySchema = z.object({
+  story: storyToSaveSchema,
+  request: storyRequestSchema,
+  isFavorite: z.boolean().optional(),
+});
+
 // Schema for saved stories with enhanced search metadata
 export const savedStorySchema = z.object({
   /**

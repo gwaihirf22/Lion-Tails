@@ -1124,6 +1124,52 @@ boolean that is true for everybody is a name that has outlived its fact.
 
 ---
 
+## 32. An async handler that throws takes the process with it
+
+`server/lib/asyncRoute.ts`, `server/index.ts`, `tests/asyncRoutes.test.ts`
+
+Express 4 does nothing with the promise an `async (req, res) => {...}` handler
+returns. A rejection inside one is an unhandled rejection, and Node 20 exits
+on those. Eighteen routes -- the universes, canon, job, pricing and
+picture-settings handlers and the portrait file route, the newer and tidier
+ones that return early rather than nesting a try block -- awaited with no
+catch at all. One Postgres hiccup on
+`GET /api/universes` and the process was gone: every signed-in session, the
+story job that was running, and a container restart to get it back.
+
+Nothing could see it. The route tests this repo has are of pure functions;
+the defect was not in any handler's logic but in the wrapper around it,
+which is the chapter-prompt golden's lesson one layer out. So the fix is in
+two places that are each visible where the routes are listed:
+
+- `asyncRoute()` around any async handler that has no try block of its own,
+  forwarding a rejection to the one error middleware -- which now checks
+  `res.headersSent` first, because a throw after a partial write used to
+  reach `res.status()` on a finished response and crash a second time
+  inside the handler meant to catch the first.
+- `tests/asyncRoutes.test.ts` reads the three route files and fails on any
+  async registration that has neither. Run against the tree before the fix,
+  it named the eighteen -- two more than a hand audit of the same file had
+  found. It also pins a floor on how many routes it found, so a change to
+  the registration style cannot turn it into a test that passes by finding
+  nothing.
+
+And `process.on("unhandledRejection")` logs and stays up, restoring the
+behaviour Node had before 15 for whatever the wrapper still misses. A
+handler that is neither wrapped nor tried is now a log line, not an outage.
+`uncaughtException` is left at Node's default on purpose: after a synchronous
+throw the state is unknown and exiting is right.
+
+The same change gave the process a SIGTERM. Before it, a deploy killed the
+worker mid-chapter and the new container could not claim the job until the
+lease expired -- ninety seconds after the last heartbeat -- so every release
+paused whichever story was being written. `stopStoryWorker()` now expires
+the running job's lease on the way out; the next worker's first poll picks it
+up and resumes from the checkpoint, and the `worker_id = $me` guard on every
+later write is what makes that hand-off safe without any coordination.
+
+---
+
 ## Recurring failure shape
 
 Most incidents here have had the same form: **a check that reported success
