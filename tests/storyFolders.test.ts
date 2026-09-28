@@ -7,7 +7,9 @@ import type { SavedStory } from "../shared/schema";
  * what the counts say, so a folder that lies here lies twice on the page.
  */
 describe("story folders", () => {
-  const story = (o: Partial<SavedStory> & Record<string, unknown> = {}) =>
+  // A sketch of a story, not a valid one: the folder predicates read two or
+  // three fields, and building a whole StoryRequest per case would bury them.
+  const story = (o: Record<string, unknown> = {}) =>
     ({ id: "x", isFavorite: false, request: {}, ...o }) as unknown as SavedStory;
 
   const filterOf = (value: string) => storyFolder(value).filter!;

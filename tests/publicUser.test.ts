@@ -29,6 +29,8 @@ const full: User = {
   updatedAt: new Date("2026-01-02"),
   lastLoginAt: new Date("2026-01-03"),
   signupIp: "203.0.113.7",
+  bannedAt: null,
+  bannedReason: null,
 };
 
 describe("publicUser", () => {

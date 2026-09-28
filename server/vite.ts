@@ -40,6 +40,13 @@ export async function setupVite(app: Express, server: Server) {
   });
 
   app.use(vite.middlewares);
+  // The same JSON 404 production gives for an unmatched /api path
+  // (server/static.ts), so a mistyped route in development does not answer
+  // 200 with index.html and read as success -- which is how a harness once
+  // "registered" a user against a route that never existed.
+  app.use("/api/*", (req, res) => {
+    res.status(404).json({ message: `No such endpoint: ${req.method} ${req.originalUrl}` });
+  });
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 

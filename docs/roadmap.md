@@ -12,8 +12,7 @@ Items are ordered by how much damage they do while unfixed, not by effort.
 Closed since this list was written, recorded so nobody re-finds them:
 `/api/auth/me` now answers `publicUser()` (picked fields, held by
 `tests/publicUser.test.ts`); an unmatched `/api/*` path answers a JSON 404 in
-production (`server/static.ts`) -- the dev server still falls through to Vite's
-catch-all, see the CI-gates item below.
+production (`server/static.ts`) and in development (`server/vite.ts`).
 
 ### Story routes use inline auth checks
 
@@ -38,12 +37,6 @@ and `.env.example` no longer lists them. The alerts channel is Telegram
 (CLAUDE.md, "Running the accounts"). Wiring reset delivery to something --
 Telegram to the owner, or a real mailer -- is the outstanding work; until then
 the reset endpoints are honest 200s that deliver nothing.
-
-### The dev server answers 200 HTML for an unknown `/api/*` path
-
-Production 404s as JSON (`server/static.ts`); `server/vite.ts`'s catch-all
-does not, so a mistyped route in development looks like success. One
-`app.use("/api/*")` before it, the same as production's.
 
 ---
 

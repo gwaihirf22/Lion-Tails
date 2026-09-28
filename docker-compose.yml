@@ -54,7 +54,6 @@ services:
       - NODE_ENV=production
       - PORT=5000
       - DATABASE_URL=postgresql://liontails:${POSTGRES_PASSWORD}@lion-tails-db:5432/liontails
-      - FRONTEND_URL=https://liontails.paul-blake.com
       - OLLAMA_BASE_URL=http://ollama:11434/v1
       - MODEL_CONTEXT_LIMIT=16384
       - SESSION_SECRET=${SESSION_SECRET}
@@ -78,12 +77,8 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       # Only used to put a link in an alert. Not a secret, and optional.
       - PUBLIC_URL=https://liontails.paul-blake.com
-      - EMAIL_HOST=${EMAIL_HOST}
-      - EMAIL_PORT=587
-      - EMAIL_SECURE=false
-      - EMAIL_USER=${EMAIL_USER}
-      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
-      - EMAIL_FROM=Lion Tails <no-reply@paul-blake.com>
+      # EMAIL_* and FRONTEND_URL used to be here. Nothing reads them: there
+      # is no mailer (README, "Email"). Mirror this removal on the host's copy.
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/api/health"]
       interval: 30s
