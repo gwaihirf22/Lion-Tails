@@ -70,11 +70,6 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
   const guide = useGuide();
   const { toast } = useToast();
   const [apiKey, setApiKey] = useState("");
-  // Deliberately empty: the current selection comes from the server. Seeding a
-  // model id here would be a hardcoded model name in the client again, and the
-  // default belongs to MODEL_CATALOG, not to this page.
-  const [selectedModel, setSelectedModel] = useState("");
-  const [hasStoredKey, setHasStoredKey] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   /**
@@ -95,36 +90,81 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
   const queryClient = useQueryClient();
   const refreshUsage = () => queryClient.invalidateQueries({ queryKey: ["/api/story/usage"] });
   const charged = Boolean(storyStats && !storyStats.unlimited);
-  const [models, setModels] = useState<SelectableModel[]>([]);
+
+  /**
+   * The three settings reads, as queries.
+   *
+   * They were one effect that fetched into three pieces of state, which meant
+   * this panel held its own copy of /api/settings/models -- the same answer
+   * four other components (the character form, the reader, the picture
+   * dialog, the story page) read through the query cache under this key. A
+   * key set here reached none of them until they remounted. Now every write
+   * below invalidates the key, and all five readers see the new answer.
+   */
+  const {
+    data: modelData,
+    isLoading: isLoadingModels,
+    isError: modelsFailed,
+  } = useQuery<{ models: SelectableModel[]; pictures?: PictureSettings }>({
+    queryKey: ["/api/settings/models"],
+  });
+  const models = modelData?.models ?? [];
   /** What pictures cost this account, and what draws them. See pictureSettings.ts. */
-  const [pictures, setPictures] = useState<PictureSettings | undefined>();
-  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const pictures = modelData?.pictures;
+  const { data: keyStatus, isError: keyFailed } = useQuery<{ hasKey: boolean }>({
+    queryKey: ["/api/settings/openai-key-status"],
+  });
+  const hasStoredKey = keyStatus?.hasKey ?? false;
+  const { data: modelChoice, isError: choiceFailed } = useQuery<{ model: string }>({
+    queryKey: ["/api/settings/openai-model"],
+  });
+  // The selection comes from the server, never seeded here: a model id in
+  // this file would be a hardcoded model name in the client again, and the
+  // default belongs to MODEL_CATALOG. `pending` is the optimistic value while
+  // a change is saving, so the dropdown moves at once and moves back if the
+  // server refuses.
+  const [pendingModel, setPendingModel] = useState<string | null>(null);
+  const selectedModel = pendingModel ?? modelChoice?.model ?? "";
+
+  const settingsFailed = modelsFailed || keyFailed || choiceFailed;
+  useEffect(() => {
+    if (settingsFailed) {
+      toast({
+        title: "Error",
+        description: "Failed to load settings. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [settingsFailed, toast]);
+
+  // Which models this account may select depends on whether it holds its own
+  // key, and what a picture costs depends on the choice just made, so every
+  // write refreshes the models answer (and, through refreshUsage, the price
+  // of the next story).
+  const refreshModels = () => queryClient.invalidateQueries({ queryKey: ["/api/settings/models"] });
+  const refreshKeyStatus = () =>
+    queryClient.invalidateQueries({ queryKey: ["/api/settings/openai-key-status"] });
 
   // Quality caveat for the currently selected model, e.g. the local tier.
   const selectedModelWarning = models.find((m) => m.id === selectedModel)?.warning;
 
-  // Which models this user may select depends on whether they hold their own
-  // API key, so this is refetched whenever that changes rather than only on
-  // mount.
   /**
    * Save a picture setting and show what was actually stored.
    *
    * The server answers with the resolved choice -- read back through the same
    * function every picture uses -- so a value it decided not to honour never
-   * sits on screen looking chosen. The balance is refetched with it, because
-   * the price of the next story has just changed.
+   * sits on screen looking chosen; the refetch is what puts it on screen. The
+   * balance is refetched with it, because the price of the next story has
+   * just changed.
    */
   const savePictures = async (patch: { model?: string; quality?: PictureTier }) => {
-    const before = pictures;
-    setPictures(pictures ? { ...pictures, ...patch, tier: patch.quality ?? pictures.tier } : pictures);
     try {
       // apiRequest throws on any non-2xx, so nothing checks response.ok here.
       await apiRequest("POST", "/api/settings/pictures", patch);
-      await loadModels();
+      await refreshModels();
       refreshUsage();
       toast({ title: "Saved", description: "Your picture settings were updated." });
     } catch {
-      setPictures(before);
       toast({
         title: "Could not save",
         description: "Your picture settings were not changed.",
@@ -132,49 +172,6 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
       });
     }
   };
-
-  const loadModels = async () => {
-    setIsLoadingModels(true);
-    try {
-      const response = await apiRequest("GET", "/api/settings/models");
-      const data = await response.json();
-      setModels(data.models ?? []);
-      setPictures(data.pictures);
-    } catch (error) {
-      console.error("Error loading available models:", error);
-    } finally {
-      setIsLoadingModels(false);
-    }
-  };
-
-  // Fetch initial data
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        // Check if user has stored an API key
-        const keyResponse = await apiRequest("GET", "/api/settings/openai-key-status");
-        const keyData = await keyResponse.json();
-        setHasStoredKey(keyData.hasKey);
-
-        // Get current model selection
-        const modelResponse = await apiRequest("GET", "/api/settings/openai-model");
-        const modelData = await modelResponse.json();
-        setSelectedModel(modelData.model);
-
-        await loadModels();
-
-      } catch (error) {
-        console.error("Error fetching settings:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load settings. Please try again.",
-          variant: "destructive",
-        });
-      }
-    }
-
-    fetchData();
-  }, [toast]);
 
   // Handle API key submission
   const handleSubmitApiKey = async () => {
@@ -201,9 +198,8 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
     try {
       // apiRequest throws on any non-2xx; the catch below is the error path.
       await apiRequest("POST", "/api/settings/openai-key", { key: apiKey });
-      setHasStoredKey(true);
       // Adding a key unlocks the premium tier.
-      await loadModels();
+      await Promise.all([refreshKeyStatus(), refreshModels()]);
       refreshUsage();
       setApiKey(""); // Clear the input for security
       toast({
@@ -228,10 +224,9 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
 
     try {
       await apiRequest("DELETE", "/api/settings/openai-key");
-      setHasStoredKey(false);
       // Removing a key revokes the premium tier; the server will downgrade a
       // stored premium selection at generation time regardless.
-      await loadModels();
+      await Promise.all([refreshKeyStatus(), refreshModels()]);
       refreshUsage();
       toast({
         title: "API Key Removed",
@@ -251,13 +246,13 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
 
   // Handle model selection
   const handleModelChange = async (value: string) => {
-    const previous = selectedModel;
-    setSelectedModel(value);
+    setPendingModel(value);
 
     try {
       // apiRequest throws on a non-2xx response, so there is no falsy branch to
       // handle here.
       await apiRequest("POST", "/api/settings/openai-model", { model: value });
+      await queryClient.invalidateQueries({ queryKey: ["/api/settings/openai-model"] });
       refreshUsage();
 
       const chosen = models.find((m) => m.id === value);
@@ -267,10 +262,9 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
         description: chosen ? `Stories will now use ${chosen.label}.${price}` : `Model set to ${value}.`,
       });
     } catch (error) {
-      // The server rejects a model the account is not entitled to. Put the
-      // selection back rather than leaving the dropdown showing a value that
-      // was not saved.
-      setSelectedModel(previous);
+      // The server rejects a model the account is not entitled to. Dropping
+      // the pending value puts the dropdown back on what is stored rather
+      // than leaving it showing a value that was not saved.
       console.error("Error updating model:", error);
       toast({
         title: "Could not change model",
@@ -280,6 +274,8 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
             : "Failed to update model selection. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setPendingModel(null);
     }
   };
 

@@ -178,13 +178,13 @@ export default function CharacterCard({
         
         <div className="flex gap-2">
           {onEdit && (
-            <Button onClick={onEdit} variant="outline" size="icon">
-              <PencilIcon className="h-4 w-4" />
+            <Button onClick={onEdit} variant="outline" size="icon" title="Edit" aria-label={`Edit ${character.name}`}>
+              <PencilIcon className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
           {onDelete && (
-            <Button onClick={onDelete} variant="destructive" size="icon">
-              <TrashIcon className="h-4 w-4" />
+            <Button onClick={onDelete} variant="destructive" size="icon" title="Delete" aria-label={`Delete ${character.name}`}>
+              <TrashIcon className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
         </div>
