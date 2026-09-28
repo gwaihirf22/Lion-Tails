@@ -9,41 +9,41 @@ Items are ordered by how much damage they do while unfixed, not by effort.
 
 ## Correctness and security
 
-### `/api/auth/me` returns password-reset and verification tokens to the browser
-
-The handler serialises the whole user row. A reset token in a response body is a
-credential sitting in the browser's memory, in any logging proxy, and in the
-network tab of a shared family computer. Fix: pick the fields explicitly rather
-than deleting the bad ones, so a future column is excluded by default.
-
-### Mistyped `/api/` paths return 200 and HTML
-
-A POST to a route that does not exist falls through to the SPA catch-all in
-`server/static.ts` and returns **200 with index.html**. A client reads that as
-success and only discovers otherwise several requests later. Found by a harness
-that "successfully registered" a user against a route that has never existed.
-Fix: 404 as JSON for unmatched `/api/*` before the SPA fallback is reached.
-See `decisions.md`, "Known open instance".
+Closed since this list was written, recorded so nobody re-finds them:
+`/api/auth/me` now answers `publicUser()` (picked fields, held by
+`tests/publicUser.test.ts`); an unmatched `/api/*` path answers a JSON 404 in
+production (`server/static.ts`) -- the dev server still falls through to Vite's
+catch-all, see the CI-gates item below.
 
 ### Story routes use inline auth checks
 
-Every story route does its own `if (!req.user)` rather than taking
-`requireAuth` in the signature. There are 29 of these, and it is how eight
-unguarded write routes once shipped: a missing check is invisible when it is
-supposed to be in the body, and obvious when it is supposed to be in the
-signature. Fix is mechanical but touches many routes, so it wants its own PR.
+Twenty routes in `server/routes.ts` (and `/api/generate-chords`) still do
+their own `if (!req.user)` rather than taking `requireAuth` in the signature,
+which is how eight unguarded write routes once shipped: a missing check is
+invisible when it is supposed to be in the body, and obvious when it is
+supposed to be in the signature. Fix is mechanical but touches many routes,
+so it wants its own PR -- after the route-auth test suite (Testing gaps,
+below) exists to prove nothing lost its guard.
 
 The five character routes were converted when the character model widened,
-since that change rewrote those handlers anyway. The rest are untouched.
+since that change rewrote those handlers anyway. The universe, job, pricing
+and settings routes take guards already.
 
 ### Email is wired to nothing
 
-Password reset generates a valid token and discards it (`server/auth.ts:185`,
+Password reset generates a valid token and discards it (`server/auth.ts`,
 `// TODO: Send password reset email`), so the endpoints answer 200 and look
-functional. `server/lib/auth.ts` has a working nodemailer transport and is
-imported by nothing. Setting `EMAIL_*` changes nothing. Either wire the live
-path to a mailer or remove the dead module and the config that implies it works
-— the current state is the worst of both.
+functional. There is no mailer: the nodemailer module and `EMAIL_*` are gone,
+and `.env.example` no longer lists them. The alerts channel is Telegram
+(CLAUDE.md, "Running the accounts"). Wiring reset delivery to something --
+Telegram to the owner, or a real mailer -- is the outstanding work; until then
+the reset endpoints are honest 200s that deliver nothing.
+
+### The dev server answers 200 HTML for an unknown `/api/*` path
+
+Production 404s as JSON (`server/static.ts`); `server/vite.ts`'s catch-all
+does not, so a mistyped route in development looks like success. One
+`app.use("/api/*")` before it, the same as production's.
 
 ---
 
@@ -158,25 +158,23 @@ quota charge, and be readable by one `isEntitled()` helper — so the three
 existing restatements of "own key or admin" (`isModelAllowedFor`,
 `concurrencyLimitFor`, `shouldChargeQuota`) do not become six.
 
-It also needs somewhere to be toggled from. The only admin route today is
-`GET /api/admin/generation-stats`; there is no user list, so this currently means
-hand-written SQL against production. A `PATCH /api/admin/users/:id` guarded by
-`requireAdmin` **in the signature** is the minimum.
+It has somewhere to be toggled from now: `/admin/accounts` lists every
+account and already promotes, bans and unbans through `requireAdmin` routes
+(`POST /api/admin/accounts/:id/admin` and friends). An "upgraded" switch is
+one more button on that page and one more column.
 
 Deliberately not a subscription system. Blake: "I won't want to depart that
 until/when we actually do want to create a subscribe function."
 
-### `canonicalLook` is stored and rendered nowhere
+### `canonicalLook` reaches pictures only, never the story -- DONE
 
-The character sheet collects "how they look, for pictures" and saves it. Nothing
-reads it yet, and a test asserts it appears in none of the four brief
-projections.
-
-That is deliberate rather than unfinished: keeping appearance out of the story
-prompt is what lets it be as detailed as anyone likes without competing for the
-few facts per character the brief rations. The avatar work will use it for image
-prompts only — and will want to store the exact prompt an avatar was generated
-from, or story illustrations will not match the portrait.
+The character sheet's "how they look, for pictures" leads the avatar prompt
+(`server/lib/avatar.ts`, `buildAvatarPrompt`) and a test still asserts it
+appears in none of the four brief projections. Keeping appearance out of the
+story prompt is what lets it be as detailed as anyone likes without competing
+for the few facts per character the brief rations. The exact prompt each
+portrait was generated from is stored beside it (`avatarPrompt`), which is
+what lets a story illustration match the portrait.
 
 ### Promote an invented character
 
@@ -234,8 +232,7 @@ charges nobody. What is left:
 | Stray `CREATE TABLE IF NOT EXISTS` inside `db-storage.ts` `toggleFavorite` | leftover from the pre-migration era |
 | Two endpoints exist for story-favourite | `POST /api/story/favorite/:id` is called only from the unreachable branch of `GenerateStory.tsx`, which is kept on purpose (`decisions.md` §12) |
 | Interrupted attempts write no `generation_record` | biases the stats toward failures |
-| `GenerateStory.tsx:293`'s `StoryDisplay` is unreachable | `setGeneratedStory` is only ever called with `null`. Verified — but see `decisions.md` §12 before deleting it |
-| The settings UI carries its own hardcoded model list | `GET /api/settings/models` exists precisely so it does not have to |
+| `GenerateStory.tsx`'s inline `StoryDisplay` (the branch under the "unreachable" comment) is unreachable | `setGeneratedStory` is only ever called with `null`. Verified — but see `decisions.md` §12 before deleting it |
 | zod 3 → 4 migration | blocks `drizzle-zod` 0.8 only, which is the sole failure in the 54-package `production-minor` PR. Ignored in `dependabot.yml` until the migration happens |
 | `@vitejs/plugin-react` 6 | needs Vite 5 → 8 plus three new peer deps. Not a bump; a build-system migration, and `@replit/vite-plugin-shadcn-theme-json` has to be replaced first |
 | `characters` and `stories` tables | may still exist on old databases; never read, safe to drop |

@@ -96,7 +96,6 @@ async function initializeDatabase() {
     pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
     // node-postgres emits "error" on the pool when an IDLE client's backend
-    // fails. Load-bearing: see docs/decisions.md §7.
     // fails -- e.g. the Postgres container restarting underneath us. With no
     // listener, Node treats it as an uncaught exception and kills the process,
     // which under restart:unless-stopped turns a brief blip into a restart

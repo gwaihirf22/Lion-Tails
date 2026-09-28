@@ -107,8 +107,9 @@ export async function deleteAccount(userId: number): Promise<DeleteOutcome> {
     removed.stories = Number(counts.rows[0]?.stories ?? 0);
     removed.characters = Number(counts.rows[0]?.characters ?? 0);
 
-    // No foreign key at all on this one, so a cascade never reaches it and
-    // the rows would outlive the account for ever.
+    // verification_tokens cascades from users since migration 0015, so this
+    // delete is redundant with the one below; it stays because the count is
+    // reported to the admin, and a cascade reports nothing.
     const tokens = await client.query("DELETE FROM verification_tokens WHERE user_id = $1", [userId]);
     removed.tokens = tokens.rowCount ?? 0;
 

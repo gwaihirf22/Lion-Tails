@@ -10,10 +10,11 @@ So the stories are personalised — the reader picks the characters, and can put
 themselves or their children in — but the accounts underneath are real, anchored
 to written source material rather than to whatever the model recalls. Alongside
 them: profiles of eighty people that can be read with the AI switched off, a
-song/chord library, character management, and image analysis.
+song/chord library, and character management.
 
 Stories are generated with an OpenAI or self-hosted model depending on the
-user's tier (see [Model tiers](#model-tiers)); illustrations with `gpt-image-2`.
+user's tier (see [Model tiers](#model-tiers)); pictures with the `gpt-image-2.5`
+models (`gpt-image-2` is kept as a legacy choice).
 
 ## Stack
 
@@ -128,11 +129,16 @@ See `.env.example`. Summary:
 |---|---|---|
 | `DATABASE_URL` | recommended | Postgres connection string. Unset ⇒ in-memory storage, no persistence. |
 | `PORT` | no | Defaults to `5000`. |
-| `FRONTEND_URL` | production | Base URL used in verification / password-reset email links. |
 | `SESSION_SECRET` | **yes in prod** | App refuses to start without it when `NODE_ENV=production`. |
 | `OPENAI_API_KEY` | for AI features | Users can also supply their own key in app settings. |
 | `OLLAMA_BASE_URL` | no | Self-hosted Ollama endpoint for the free local tier. Defaults to `http://ollama:11434/v1`. Use the container name, not an IP. |
-| `EMAIL_*` | no | **Currently unused.** See [Email](#email) — the live auth path sends no mail, so setting these changes nothing today. |
+| `MODEL_CONTEXT_LIMIT` | no | The local model's context window (default 16384); must match Ollama's `OLLAMA_CONTEXT_LENGTH`. |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET` (or `TURNSTILE_SECRET_FILE`) | **yes in prod** | The sign-up challenge. Production refuses sign-ups without the secret rather than reopening the hole. Blank on a dev box ⇒ no challenge. |
+| `TELEGRAM_BOT_TOKEN` (or `_FILE`), `TELEGRAM_CHAT_ID` | no | Where the accounts watch sends its alerts. Both blank ⇒ off, and `/admin/accounts` says so. |
+| `PUBLIC_URL` | no | Only used to put a link at the bottom of an alert. |
+| `COSTS_ADMIN_KEY` (or `COSTS_ADMIN_KEY_FILE`), `COSTS_PROJECT_ID` | no | The OpenAI organisation Admin key and project for the bill check on `/admin/costs`. Never named `OPENAI_*`: the SDK would send it. |
+| `APP_VERSION` | no | Set by the Docker build; shown on `/api/health`. |
+| `EMAIL_*` | — | Read by nothing. There is no mailer. See [Email](#email). |
 
 ## Schema and migrations
 
@@ -160,7 +166,7 @@ gate is about **who pays** rather than about roles:
 |---|---|---|
 | local | `gpt-oss:20b`, `nemotron-3-nano:4b` | everyone — free, runs on the self-hosted Ollama, needs no key |
 | economy | `gpt-5.6-luna` (default), `gpt-4o-mini` | everyone — billed to the server owner's key |
-| premium | `gpt-5.6-terra`, `gpt-6-astra`, `gpt-4o`, `gpt-image-2` | admins, or **any user who has supplied their own API key** |
+| premium | `gpt-5.6-terra`, `gpt-6-astra`, `gpt-4o`; pictures `gpt-image-2.5-flare` (default), `gpt-image-2.5-sunburst`, `gpt-image-2` (legacy) | admins, or **any user who has supplied their own API key** — except Terra for stories and pictures, which a free account buys with credits (`CLAUDE.md`, "Model selection") |
 
 That last rule needs no role check: you may use expensive models if you are
 paying for them.
@@ -473,12 +479,10 @@ the app is self-hosted specifically so a household on a flaky link still works.
 
 ## Email
 
-**No email is sent, by any path.** This is worth stating plainly because the
-code looks like it should work:
+**No email is sent, by any path, and there is no mailer in the codebase.**
+The nodemailer module that once lived at `server/lib/auth.ts` was deleted
+along with its dependency, and nothing reads `EMAIL_*`.
 
-- `server/auth.ts` is the live authentication path and contains no mail code.
-- `server/lib/auth.ts` contains `sendVerificationEmail`, `isEmailConfigured` and
-  a nodemailer transport — and is imported by nothing.
 - `POST /api/auth/reset-password-request` generates a valid reset token, then
   drops it: the handler carries a literal `// TODO: Send password reset email`
   and returns the token in the response body **only** when
@@ -486,11 +490,11 @@ code looks like it should work:
 - `POST /api/auth/reset-password` works correctly — it is the delivery of the
   token that is missing, not the consumption of it.
 
-Consequences: account verification email is never sent, and email verification
-is not enforced anywhere (`requireVerified` is applied to zero routes), so this
-does not block signup. Password reset is unreachable in production. Setting the
-`EMAIL_*` variables changes none of this; wiring the live path to a mailer is
-the outstanding work.
+Consequences: email verification is not enforced anywhere (there is no
+`requireVerified` guard), so this does not block signup. Password reset is
+unreachable in production. The app's one outbound channel is Telegram, for the
+owner's account alerts (see `CLAUDE.md`, "Running the accounts"); delivering a
+reset token to a user is the outstanding work.
 
 ## Deployment
 
@@ -572,7 +576,7 @@ defines* — rather than a number that has to be maintained in two places.
 | `POSTGRES_PASSWORD` | `openssl rand -hex 32` |
 | `SESSION_SECRET` | `openssl rand -hex 32` |
 | `OPENAI_API_KEY` | |
-| `EMAIL_HOST` / `EMAIL_USER` / `EMAIL_PASSWORD` | Optional; leave unset to disable email |
+| `EMAIL_HOST` / `EMAIL_USER` / `EMAIL_PASSWORD` | Still written into the remote `.env` by the deploy step, read by nothing (see [Email](#email)) |
 
 ### Server setup
 
@@ -621,19 +625,16 @@ this app has any business reaching it.
 
 ## Known gaps
 
-- **Email does not work, and setting `EMAIL_*` will not make it work.** The live
-  authentication path (`server/auth.ts`) contains no mail code at all. The
-  module that does (`server/lib/auth.ts`) is imported by nothing. See
-  [Email](#email).
+- **Password reset delivers nothing.** There is no mailer; the token is minted
+  and dropped. See [Email](#email).
 
 - `characters` and `stories` tables may still exist on databases created before
   the migration cutover. They were never read by anything and are safe to drop.
 - Test coverage is deliberately narrow — pure functions only. There is no
   component, route or database test. See [Tests](#tests).
-- `/api/auth/me` returns `resetPasswordToken` and `verificationToken` to the
-  browser.
-- Every story route uses an inline auth check rather than `requireAuth` in the
-  signature, which is how eight unguarded write routes once shipped.
+- Twenty routes still use an inline auth check rather than `requireAuth` in the
+  signature, which is how eight unguarded write routes once shipped. The
+  universe, job, pricing, settings and character routes take guards.
 - The zod 3 → 4 migration blocks `drizzle-zod` 0.8, which is the only failure in
   the 54-package Dependabot update. It does **not** block `zod-validation-error`
   5, which needed one import specifier — see `docs/decisions.md`.

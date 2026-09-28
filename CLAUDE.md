@@ -538,8 +538,9 @@ Authorisation is resolved at **use**, not at selection. `grep
 process.env.OPENAI_API_KEY server/` should return nothing outside
 `modelPolicy.ts`.
 
-Extend `MODEL_CATALOG` rather than adding another hardcoded model list — there
-are already six, and the settings UI still uses its own.
+Extend `MODEL_CATALOG` rather than adding another hardcoded model list. It is
+the one list now — there were six, and the settings UI carried its own until
+`GET /api/settings/models` (decisions §11); every reader derives from it.
 
 ## What things cost
 
@@ -624,8 +625,8 @@ production** — `requiredSecret()` throws without it. `JWT_SECRET` was removed
 with the JWT module and is no longer read anywhere; the bundle boots without it.
 
 `EMAIL_*` is unused: no code path sends mail. Password reset generates a valid
-token and then discards it (`server/auth.ts:185`, `// TODO: Send password reset
-email`), so the endpoints answer 200 and look functional while the delivery half
+token and then discards it (`server/auth.ts`, `// TODO: Send password reset
+email` in the reset-password-request handler), so the endpoints answer 200 and look functional while the delivery half
 does not exist. The token is returned in the response body only when
 `NODE_ENV=development`.
 
