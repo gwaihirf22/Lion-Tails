@@ -85,7 +85,7 @@ describe("the guide's table", () => {
 
   it("only claims a requirement it has words for", () => {
     for (const node of GUIDE_NODES) {
-      if (node.needs) expect(NEEDS_LABEL[node.needs], node.id).toBeTruthy();
+      if ("needs" in node && node.needs) expect(NEEDS_LABEL[node.needs], node.id).toBeTruthy();
     }
   });
 
@@ -184,6 +184,7 @@ describe("the guide's screenshots", () => {
     for (const plate of GUIDE_PLATES) {
       const image = GUIDE_PLATE_IMAGES[plate.id];
       expect(image, plate.id).toBeDefined();
+      if (!image) continue;
       expect(image.file, plate.id).toMatch(/^\/public\/images\/guide\/[a-z0-9-]+\.webp$/);
       expect(fs.existsSync(path.join(root, image.file.replace(/^\//, ""))), image.file).toBe(true);
       expect(image.width, plate.id).toBeGreaterThan(0);
@@ -194,7 +195,7 @@ describe("the guide's screenshots", () => {
   it("keeps no orphan images", async () => {
     const { GUIDE_PLATE_IMAGES } = await manifest();
     const onDisk = fs.readdirSync(GUIDE_IMAGE_DIR).filter((f) => !f.startsWith("."));
-    const wanted = GUIDE_PLATES.map((p) => path.basename(GUIDE_PLATE_IMAGES[p.id].file));
+    const wanted = GUIDE_PLATES.map((p) => path.basename(GUIDE_PLATE_IMAGES[p.id]?.file ?? ""));
     expect(onDisk.sort()).toEqual(wanted.sort());
   });
 

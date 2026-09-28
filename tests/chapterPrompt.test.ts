@@ -43,7 +43,7 @@ const mia: Character = {
   createdAt: "2026-01-01",
 };
 const ember: Character = {
-  id: "c2", name: "Ember", kind: "dragon", category: "creature", sex: "she",
+  id: "c2", name: "Ember", kind: "dragon", category: "creature", sex: "female",
   age: 300, hair: "emerald", eyes: "gold", personality: "patient",
   createdAt: "2026-01-01",
 };

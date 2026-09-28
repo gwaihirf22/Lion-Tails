@@ -1513,10 +1513,25 @@ seven call sites are fine centred.
 ## Deployment
 
 Push to `main` runs `.github/workflows/ci.yml` on a self-hosted Unraid
-runner: typecheck, build, tests, lint, the theming and reader-CSS greps, two
-smoke tests, then push to Docker Hub, SSH, `docker compose pull && up -d`, wait
-for the healthcheck. There is no separate `deploy.yml` — the deploy is the last
-job of this one workflow, so it cannot run unless every gate passed.
+runner: typecheck (tests included — `tsconfig.json` no longer excludes
+`*.test.ts`, so a test with a type error is red), build, tests, lint, the
+theming and reader-CSS greps, two smoke tests, a Trivy gate (a fixable
+CRITICAL in the image fails the build; HIGH is reported), then push to Docker
+Hub, SSH, `docker compose pull && up -d`, wait for the healthcheck. There is
+no separate `deploy.yml` — the deploy is the last job of this one workflow, so
+it cannot run unless every gate passed.
+
+**Three of these gates used to be unable to fail**: Trivy ran with
+`exit-code: 0` on an unpinned `@master`, the font budget summed with `awk`
+(which prints a number over no input, so a missing font read "OK 0KB"), and
+the CSS assertions read only the first stylesheet. Each is now the other way
+round: a missing font, a second stylesheet with the rules in it, and a
+fixable CRITICAL all fail. When adding a gate, run it once against a
+deliberately broken input. The Trivy gate's first real run failed on a
+CRITICAL in the `tar` bundled inside the base image's npm — not a dependency
+of this app — so **the runtime image has no npm or corepack at all**
+(`Dockerfile`, runner stage): nothing at runtime calls either, and a package
+manager that is not there cannot carry an advisory.
 
 **A gate that hardcodes a number will break the deploy for an unrelated
 reason.** The hero-count assertion was `-ne 15`, correct when written and wrong

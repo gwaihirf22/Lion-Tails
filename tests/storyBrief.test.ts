@@ -32,7 +32,6 @@ import {
   type BriefPurpose,
   EXPERT_CRAFT,
   TITLE_SHAPE_RULE,
-  buildSystemPrompt,
   questsSince,
   FAR_SIDE_UNKNOWN,
 } from "../server/lib/storyBrief";

@@ -124,10 +124,12 @@ jobs:
       - name: Verify the reader's styles reached the CSS bundle
         run: |
           set -e
-          CSS=$(ls dist/public/assets/*.css | head -1)
+          # EVERY stylesheet, not the first: Vite may split CSS per chunk, and a
+          # rule that landed in the second file used to be invisible here.
+          CSS=$(ls dist/public/assets/*.css)
           test -n "$CSS"
           check () { # description, pattern, minimum
-            n=$(grep -o "$2" "$CSS" | wc -l)
+            n=$(cat $CSS | grep -o "$2" | wc -l)
             if [ "$n" -lt "$3" ]; then
               echo "FAIL: $1 — found $n occurrences of '$2', expected at least $3."
               echo "The rule is in the source but not in the built CSS."
@@ -141,16 +143,27 @@ jobs:
           check "the reading surface" '\.reader-surface' 1
           check "web fonts swap"     'font-display:swap' 1
           # The palette colours themselves, not just the selectors.
-          HEXES=$(grep -o 'fbfaf7\|f4ecd8\|16181c' "$CSS" | sort -u | wc -l)
+          HEXES=$(cat $CSS | grep -o 'fbfaf7\|f4ecd8\|16181c' | sort -u | wc -l)
           if [ "$HEXES" -ne 3 ]; then
             echo "FAIL: expected all 3 palette background colours in the CSS, found $HEXES."
             exit 1
           fi
           echo "OK: all 3 palette backgrounds present."
           # Per-family font budget. Only the latin cut is ever downloaded.
+          #
+          # A MISSING FONT FAILS. The old form summed with awk, which prints a
+          # number even over no input, so `-n "$KB"` was always true and a
+          # family that had dropped out of the bundle reported "OK 0KB" -- the
+          # check that cannot fail (docs/decisions.md, "Recurring failure
+          # shape"). Now the files are listed first and none is a failure.
           for FAM in literata eb-garamond lexend; do
-            KB=$(ls -l dist/public/assets/*"$FAM"*latin-* 2>/dev/null | grep -v latin-ext | awk '{s+=$5} END {print int(s/1024)}')
-            if [ -n "$KB" ] && [ "$KB" -gt 120 ]; then
+            FILES=$(ls dist/public/assets/*"$FAM"*latin-* 2>/dev/null | grep -v latin-ext || true)
+            if [ -z "$FILES" ]; then
+              echo "FAIL: no latin cut of $FAM in the bundle. client/src/fonts.css must still declare it."
+              exit 1
+            fi
+            KB=$(echo "$FILES" | xargs ls -l | awk '{s+=$5} END {print int(s/1024)}')
+            if [ "$KB" -gt 120 ]; then
               echo "FAIL: $FAM is ${KB}KB, over the 120KB per-family budget."
               echo "A non-latin subset has probably crept into client/src/fonts.css."
               exit 1
@@ -421,13 +434,31 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+      # Two passes, one action, pinned. The first is the report Blake reads
+      # (HIGH included); the second is the GATE, and it fails the job on a
+      # CRITICAL with a fix available. It used to run once with exit-code 0 on
+      # @master, which is a scan that cannot fail: it printed a table into a
+      # log nobody opened and the deploy went ahead whatever it said.
+      # ignore-unfixed on the gate, not the report: a CRITICAL in the base
+      # image with no patched package yet would otherwise block every deploy
+      # until Alpine ships one, which is a gate people learn to skip.
+      - name: Trivy report (CRITICAL and HIGH, never fails)
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: lion-tails:ci
           format: 'table'
           severity: 'CRITICAL,HIGH'
           exit-code: '0'
+
+      - name: Trivy gate (fixable CRITICAL fails the build)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: lion-tails:ci
+          format: 'table'
+          severity: 'CRITICAL'
+          ignore-unfixed: true
+          exit-code: '1'
+          skip-setup-trivy: true
 
   audit:
     name: Dependency audit
@@ -523,9 +554,6 @@ jobs:
           TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           UNRAID_HOST: ${{ secrets.UNRAID_HOST }}
           UNRAID_USERNAME: ${{ secrets.UNRAID_USERNAME }}
         run: |
@@ -557,9 +585,8 @@ jobs:
             # /admin/accounts rather than pretending it is watching.
             printf 'TELEGRAM_BOT_TOKEN=%s\n'  "$TELEGRAM_BOT_TOKEN"
             printf 'TELEGRAM_CHAT_ID=%s\n'    "$TELEGRAM_CHAT_ID"
-            printf 'EMAIL_HOST=%s\n'        "$EMAIL_HOST"
-            printf 'EMAIL_USER=%s\n'        "$EMAIL_USER"
-            printf 'EMAIL_PASSWORD=%s\n'    "$EMAIL_PASSWORD"
+            # EMAIL_* is written by nothing and read by nothing: there is no
+            # mailer (README, "Email"). The GitHub secrets can be deleted.
             echo 'ENVEOF'
             cat <<'REMOTE'
           trap 'rm -f /mnt/user/appdata/lion-tails/.env' EXIT

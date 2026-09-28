@@ -1280,6 +1280,6 @@ as success and only discovered otherwise several requests later, when something
 downstream 401'd.
 
 This was found by a benchmark harness that "successfully registered" a user
-against a route that has never existed. Production now answers a JSON 404 for
-any unmatched `/api/*` before the SPA fallback (`server/static.ts`); the dev
-server's Vite catch-all still falls through, and is on the roadmap.
+against a route that has never existed. Both servers now answer a JSON 404 for
+any unmatched `/api/*` before the SPA fallback (`server/static.ts` in
+production, `server/vite.ts` in development).
