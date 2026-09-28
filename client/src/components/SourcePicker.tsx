@@ -74,7 +74,7 @@ export function SourcePicker({
   const { data: events = [] } = useQuery<BiblicalEventOption[]>({
     queryKey: ["/api/biblical-events"],
   });
-  // Shares HeroPicker's cache key, so opening this costs no extra request
+  // Shares the `/api/heroes` cache key with StoryForm, so opening this costs no extra request
   // anywhere the hero list has already been fetched.
   const { data: heroes = [], isLoading } = useQuery<HeroOfFaith[]>({
     queryKey: ["/api/heroes"],

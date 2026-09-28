@@ -181,12 +181,8 @@ export interface IStorage {
     userId: number,
   ): Promise<SavedStory | undefined>;
   
-  // Story search methods
-  searchStories(query: string, userId?: number): Promise<SavedStory[]>;
-  searchStoriesByName(name: string, userId?: number): Promise<SavedStory[]>;
-  searchStoriesByBiblePassage(passage: string, userId?: number): Promise<SavedStory[]>;
-  searchStoriesByTopic(topic: string, userId?: number): Promise<SavedStory[]>;
-  searchStoriesByTags(tags: string[], userId?: number): Promise<SavedStory[]>;
+  // The five search methods (by query, name, passage, topic, tags) are gone
+  // with the routes that called them; no client ever did.
   getStoriesByHeroId(heroId: string, userId?: number): Promise<SavedStory[]>;
 
   // Heroes of the Faith related methods
@@ -644,66 +640,6 @@ export class MemStorage implements IStorage {
     const expiryDate = new Date();
     expiryDate.setFullYear(expiryDate.getFullYear() + 1);
 
-    // Generate search metadata from the story and request
-    const keywords: string[] = [];
-    const tags: string[] = [];
-    const characters: string[] = [];
-    const biblicalReferences: string[] = [];
-    const themes: string[] = [];
-
-    // Extract child's name and gender if present
-    if (request.childName) {
-      characters.push(request.childName);
-      keywords.push(request.childName);
-    }
-    if (request.gender) {
-      tags.push(request.gender);
-    }
-
-    // Add animal if present
-    if (request.animal && request.animal !== "None" && request.useAnimal) {
-      keywords.push(request.animal);
-    }
-
-    // Add theme if present
-    if (request.theme && request.theme !== "None") {
-      themes.push(request.theme);
-      keywords.push(request.theme);
-    }
-
-    // Add biblical event if present
-    if (request.biblicalEvent && request.biblicalEvent !== "None") {
-      tags.push("biblical event");
-      keywords.push(request.biblicalEvent);
-      biblicalReferences.push(request.biblicalEvent);
-    }
-
-    // Add specific Hero of the Faith if present
-    if (request.heroOfFaith && request.heroOfFaith !== "None") {
-      characters.push(request.heroOfFaith);
-      keywords.push(request.heroOfFaith);
-      tags.push("hero of the faith");
-    }
-
-    // Add Bible verse reference
-    if (story.bibleVerse && story.bibleVerse.reference) {
-      biblicalReferences.push(story.bibleVerse.reference);
-    }
-
-    // Add story title to keywords
-    keywords.push(story.title);
-
-    // Add custom prompt if present
-    if (request.customPrompt) {
-      const promptWords = request.customPrompt.split(/\s+/).filter(word => word.length > 4);
-      keywords.push(...promptWords.slice(0, 5)); // Add up to 5 significant words from custom prompt
-    }
-
-    // Add story type
-    if (request.storyType) {
-      tags.push(request.storyType);
-    }
-
     const savedStory: SavedStory = {
       id,
       story,
@@ -716,17 +652,13 @@ export class MemStorage implements IStorage {
       // what says the row is one the unseen bubble knows about.
       seenAt: null,
       // Read off the story object, exactly as DbStorage does, so the two
-      // implementations cannot disagree about where this fact lives. They have
-      // already diverged once -- searchMetadata is populated here and written
-      // as five empty arrays by DbStorage.
+      // implementations cannot disagree about where this fact lives.
       ...(story.outline ? { outline: story.outline } : {}),
-      searchMetadata: {
-        keywords,
-        tags,
-        characters,
-        biblicalReferences,
-        themes
-      }
+      // Five empty arrays, exactly as DbStorage writes. The extraction that
+      // used to fill them here fed search routes nothing called, and was the
+      // one place the two storages disagreed about a row's shape. The field
+      // stays on the schema (with a default) because every stored row has it.
+      searchMetadata: { keywords: [], tags: [], characters: [], biblicalReferences: [], themes: [] },
     };
 
     this.stories.set(id, savedStory);
@@ -931,178 +863,6 @@ export class MemStorage implements IStorage {
     return updatedStory;
   }
 
-  // Search methods implementation
-  async searchStories(query: string, userId?: number): Promise<SavedStory[]> {
-    // Get all stories for this user (or all stories if no userId)
-    const allStories = userId ? await this.getUserStories(userId) : Array.from(this.stories.values());
-    
-    // Normalize query for case-insensitive search
-    const normalizedQuery = query.toLowerCase();
-    
-    // Filter stories based on the query
-    return allStories.filter(story => {
-      // Search in title
-      if (story.story.title.toLowerCase().includes(normalizedQuery)) {
-        return true;
-      }
-      
-      // Search in content
-      if (story.story.content.toLowerCase().includes(normalizedQuery)) {
-        return true;
-      }
-      
-      // Search in metadata
-      if (story.searchMetadata) {
-        // Search in keywords
-        if (story.searchMetadata.keywords?.some(keyword => 
-          keyword.toLowerCase().includes(normalizedQuery)
-        )) {
-          return true;
-        }
-        
-        // Search in tags
-        if (story.searchMetadata.tags?.some(tag => 
-          tag.toLowerCase().includes(normalizedQuery)
-        )) {
-          return true;
-        }
-        
-        // Search in characters
-        if (story.searchMetadata.characters?.some(character => 
-          character.toLowerCase().includes(normalizedQuery)
-        )) {
-          return true;
-        }
-        
-        // Search in biblical references
-        if (story.searchMetadata.biblicalReferences?.some(reference => 
-          reference.toLowerCase().includes(normalizedQuery)
-        )) {
-          return true;
-        }
-        
-        // Search in themes
-        if (story.searchMetadata.themes?.some(theme => 
-          theme.toLowerCase().includes(normalizedQuery)
-        )) {
-          return true;
-        }
-      }
-      
-      return false;
-    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }
-  
-  async searchStoriesByName(name: string, userId?: number): Promise<SavedStory[]> {
-    // Get all stories for this user (or all stories if no userId)
-    const allStories = userId ? await this.getUserStories(userId) : Array.from(this.stories.values());
-    
-    // Normalize name for case-insensitive search
-    const normalizedName = name.toLowerCase();
-    
-    // Filter stories that include the name in their characters or request
-    return allStories.filter(story => {
-      // Check in child name from request
-      if (story.request.childName && 
-          story.request.childName.toLowerCase().includes(normalizedName)) {
-        return true;
-      }
-      
-      // Check in metadata characters list
-      if (story.searchMetadata?.characters?.some(character => 
-        character.toLowerCase().includes(normalizedName)
-      )) {
-        return true;
-      }
-      
-      return false;
-    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }
-  
-  async searchStoriesByBiblePassage(passage: string, userId?: number): Promise<SavedStory[]> {
-    // Get all stories for this user (or all stories if no userId)
-    const allStories = userId ? await this.getUserStories(userId) : Array.from(this.stories.values());
-    
-    // Normalize passage for case-insensitive search
-    const normalizedPassage = passage.toLowerCase();
-    
-    // Filter stories with matching Bible passages
-    return allStories.filter(story => {
-      // Check in the bibleVerse reference
-      if (story.story.bibleVerse?.reference &&
-          story.story.bibleVerse.reference.toLowerCase().includes(normalizedPassage)) {
-        return true;
-      }
-      
-      // Check in metadata biblical references
-      if (story.searchMetadata?.biblicalReferences?.some(reference => 
-        reference.toLowerCase().includes(normalizedPassage)
-      )) {
-        return true;
-      }
-      
-      // Check in story content (might contain Bible references)
-      if (story.story.content.toLowerCase().includes(normalizedPassage)) {
-        return true;
-      }
-      
-      return false;
-    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }
-  
-  async searchStoriesByTopic(topic: string, userId?: number): Promise<SavedStory[]> {
-    // Get all stories for this user (or all stories if no userId)
-    const allStories = userId ? await this.getUserStories(userId) : Array.from(this.stories.values());
-    
-    // Normalize topic for case-insensitive search
-    const normalizedTopic = topic.toLowerCase();
-    
-    // Filter stories with matching topics/themes
-    return allStories.filter(story => {
-      // Check in story theme
-      if (story.request.theme && 
-          story.request.theme.toLowerCase().includes(normalizedTopic)) {
-        return true;
-      }
-      
-      // Check in metadata themes
-      if (story.searchMetadata?.themes?.some(theme => 
-        theme.toLowerCase().includes(normalizedTopic)
-      )) {
-        return true;
-      }
-      
-      // Check in metadata keywords
-      if (story.searchMetadata?.keywords?.some(keyword => 
-        keyword.toLowerCase().includes(normalizedTopic)
-      )) {
-        return true;
-      }
-      
-      return false;
-    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }
-  
-  async searchStoriesByTags(tags: string[], userId?: number): Promise<SavedStory[]> {
-    // Get all stories for this user (or all stories if no userId)
-    const allStories = userId ? await this.getUserStories(userId) : Array.from(this.stories.values());
-    
-    // Normalize tags for case-insensitive search
-    const normalizedTags = tags.map(tag => tag.toLowerCase());
-    
-    // Filter stories with matching tags
-    return allStories.filter(story => {
-      // If the story has no tags, it doesn't match
-      if (!story.searchMetadata?.tags || story.searchMetadata.tags.length === 0) {
-        return false;
-      }
-      
-      // Check if any of the story's tags match any of the search tags
-      const storyTags = story.searchMetadata.tags.map(tag => tag.toLowerCase());
-      return normalizedTags.some(tag => storyTags.includes(tag));
-    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }
-  
   async getStoriesByHeroId(heroId: string, userId?: number): Promise<SavedStory[]> {
     // Get all stories for this user (or all stories if no userId)
     const allStories = userId ? await this.getUserStories(userId) : Array.from(this.stories.values());

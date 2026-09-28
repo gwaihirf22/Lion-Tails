@@ -15,7 +15,7 @@ import { searchGuide } from "@shared/guideSearch";
  * tab, opened, with its screenshot. It never restates the guide's words, which
  * would be a second copy of the content to keep true.
  *
- * The shape is the house pattern for a search (HeroPicker, SourcePicker): a
+ * The shape is the house pattern for a search (SourcePicker, CharacterPicker): a
  * `Search` icon over an `Input`, then plain buttons. The keys come from
  * `AnimalAutocomplete`, the one keyboard list in this app: Down and Up move,
  * Enter opens, Escape clears. With the box empty, Escape belongs to the dialog

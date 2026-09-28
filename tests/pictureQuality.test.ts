@@ -116,9 +116,6 @@ describe("every image call asks for a quality", () => {
   it("spreads qualityFor rather than naming a tier in the request", () => {
     for (const file of callers) {
       const src = fs.readFileSync(file, "utf8");
-      // openai-vision.ts is deliberately outside the shared policy
-      // (decisions.md 2) and draws nothing a reader pays for.
-      if (file.endsWith("openai-vision.ts")) continue;
       expect(src, `${path.basename(file)} calls images.* without qualityFor`).toMatch(/qualityFor\(/);
       expect(src, `${path.basename(file)} names a quality literally`).not.toMatch(
         /quality:\s*"(low|medium|high|xhigh|max|auto)"/,

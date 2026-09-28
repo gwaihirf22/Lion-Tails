@@ -16,10 +16,9 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-// Get auth token from localStorage
-function getAuthToken(): string | null {
-  return localStorage.getItem("authToken");
-}
+// There is no Authorization header. Auth is the passport session cookie,
+// sent by `credentials: "include"`; a Bearer token used to be read from
+// localStorage here that nothing wrote and nothing on the server read.
 
 /**
  * Fetch wrapper that THROWS on any non-2xx response.
@@ -44,12 +43,6 @@ async function sendRequest(
   // Add content-type for JSON requests
   if (data) {
     headers["Content-Type"] = "application/json";
-  }
-
-  // Add auth token if available
-  const token = getAuthToken();
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
   }
 
   return fetch(url, {
@@ -91,35 +84,17 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const headers: Record<string, string> = {};
-    
-    // Add auth token if available
-    const token = getAuthToken();
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-    
-    const res = await fetch(queryKey[0] as string, {
-      headers,
-      credentials: "include",
-    });
+    const res = await fetch(queryKey[0] as string, { credentials: "include" });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
     }
 
-    try {
-      // Clone the response before checking and reading
-      const resForCheck = res.clone();
-      await throwIfResNotOk(resForCheck);
-      
-      // Use another clone for reading the body
-      const resForReading = res.clone();
-      return await resForReading.json();
-    } catch (error) {
-      console.error("Error in queryFn:", error);
-      throw error;
-    }
+    // throwIfResNotOk reads a clone of the body on the error path only, so
+    // the original is still unread here. It used to clone twice more and
+    // read the third copy, buffering every response three times for nothing.
+    await throwIfResNotOk(res);
+    return await res.json();
   };
 
 export const queryClient = new QueryClient({

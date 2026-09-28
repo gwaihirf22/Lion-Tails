@@ -5,7 +5,7 @@ import type { ChipSources } from "@/lib/storyChips";
 /**
  * The three lists storyChips() resolves ids against, from the query cache.
  *
- * The same keys HeroPicker, SourcePicker and CharacterPicker already use, so a
+ * The same keys SourcePicker, StoryForm and CharacterPicker already use, so a
  * page that lists stories costs no request that the app has not already
  * made -- and the card itself never fetches.
  */

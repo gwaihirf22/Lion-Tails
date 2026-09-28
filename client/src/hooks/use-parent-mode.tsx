@@ -39,8 +39,8 @@ export function ParentModeProvider({ children }: { children: ReactNode }) {
   const { data: statusData, isLoading } = useQuery<Status>({
     queryKey: ["/api/auth/parent-mode-status"],
     queryFn: async () => {
+      // apiRequest throws on any non-2xx, so there is no response.ok to check.
       const response = await apiRequest("GET", "/api/auth/parent-mode-status");
-      if (!response.ok) throw new Error("Failed to check parent mode status");
       return await response.json();
     },
     refetchInterval: 5 * 60 * 1000, // Check every 5 minutes
@@ -57,11 +57,11 @@ export function ParentModeProvider({ children }: { children: ReactNode }) {
 
   const verifyPasswordMutation = useMutation({
     mutationFn: async ({ password, keep }: { password: string; keep: boolean }) => {
+      // A wrong password is a 401 and apiRequest throws an ApiError carrying
+      // the server's own sentence ("Invalid password", or the rate limit's
+      // "Too many tries..."), which the dialog shows. The `if (!response.ok)`
+      // that used to follow could never run.
       const response = await apiRequest("POST", "/api/auth/verify-password", { password, keep });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Password verification failed");
-      }
       return (await response.json()) as { expiresAt: number | null; indefinite: boolean };
     },
     onSuccess: (data) => {

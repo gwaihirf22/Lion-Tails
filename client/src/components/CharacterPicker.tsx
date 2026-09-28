@@ -25,7 +25,7 @@ import {
 /**
  * Choose the cast of a story, in order.
  *
- * Built on HeroPicker's shape -- searchable popover, check-mark selection, a
+ * Built on the hero search's shape (HeroPicker then, SourcePicker now) -- searchable popover, check-mark selection, a
  * count in the footer -- because that component already solved
  * search-instead-of-scroll for a list that outgrew a <Select>. Three things
  * differ, and each is a consequence of picking several rather than one:
