@@ -1886,15 +1886,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // The form's select value is hero.id, so matching on name alone never
     // succeeded and heroId stayed undefined on every story ever saved.
-    // resolveHeroOfFaith accepts either shape. Stamped on the request: the
-    // fourth argument to saveStory exists on IStorage but DbStorage does not
-    // accept it, so on Postgres it is silently dropped. The request is the
-    // path that actually persists.
+    // resolveHeroOfFaith accepts either shape. Stamped on the request, which
+    // is the one place both storages read it from (IStorage.saveStory).
     const resolvedHero = await resolveHeroOfFaith(request);
-    const heroId = resolvedHero?.id;
-    if (heroId) request.heroId = heroId;
+    if (resolvedHero) request.heroId = resolvedHero.id;
 
-    const savedStory = await storage.saveStory(story, request, userId, heroId);
+    const savedStory = await storage.saveStory(story, request, userId);
     if (isFavorite) {
       await storage.toggleFavorite(savedStory.id, true, userId);
       savedStory.isFavorite = true;
@@ -1944,13 +1941,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // API endpoint to toggle favorite status of a story
-  app.post("/api/story/favorite/:id", async (req, res) => {
+  app.post("/api/story/favorite/:id", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to modify stories" });
-      }
-      
       const { isFavorite } = req.body;
       
       if (typeof isFavorite !== 'boolean') {
@@ -2475,14 +2467,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/stories/:id/associate-hero", async (req, res) => {
+  app.post("/api/stories/:id/associate-hero", requireAuth, async (req, res) => {
     try {
       if (refuseBuiltIn(req, res)) return;
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to modify stories" });
-      }
-      
       const { heroId } = req.body;
       
       if (!heroId || typeof heroId !== 'string') {
@@ -2521,13 +2508,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Get all saved stories - requires authentication
-  app.get("/api/stories", async (req, res) => {
+  app.get("/api/stories", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to view stories" });
-      }
-      
       // Get only the stories belonging to the authenticated user
       const userId = (req.user as any).id;
       const stories = await storage.getUserStories(userId);
@@ -2540,13 +2522,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Get a specific story - requires authentication
-  app.get("/api/stories/:id", async (req, res) => {
+  app.get("/api/stories/:id", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to view stories" });
-      }
-      
       // A built-in story has no row and belongs to everyone.
       const builtIn = builtInStoryById(req.params.id);
       if (builtIn) return res.json({ ...builtIn, furtherReading: await furtherReadingForRequest(builtIn.request) });
@@ -2700,14 +2677,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Toggle a story as favorite - requires authentication
-  app.put("/api/stories/:id/favorite", async (req, res) => {
+  app.put("/api/stories/:id/favorite", requireAuth, async (req, res) => {
     try {
       if (refuseBuiltIn(req, res)) return;
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to modify stories" });
-      }
-      
       const { isFavorite } = req.body;
       
       if (typeof isFavorite !== 'boolean') {
@@ -2768,14 +2740,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete a story - requires authentication
-  app.delete("/api/stories/:id", async (req, res) => {
+  app.delete("/api/stories/:id", requireAuth, async (req, res) => {
     try {
       if (refuseBuiltIn(req, res)) return;
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to delete stories" });
-      }
-      
       // Get the user ID from the authenticated user
       const userId = (req.user as any).id;
       const success = await storage.deleteStory(req.params.id, userId);
@@ -2796,13 +2763,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // API routes for OpenAI settings - all require authentication
   
   // Get user's OpenAI API key (note: we never return the actual key for security, just if it exists)
-  app.get("/api/settings/openai-key-status", async (req, res) => {
+  app.get("/api/settings/openai-key-status", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to access settings" });
-      }
-      
       const userId = (req.user as any).id;
       const key = await storage.getUserOpenAIKey(userId);
       res.json({ hasKey: !!key });
@@ -2813,13 +2775,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Set user's OpenAI API key
-  app.post("/api/settings/openai-key", async (req, res) => {
+  app.post("/api/settings/openai-key", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to update settings" });
-      }
-      
       const userId = (req.user as any).id;
       const { key } = req.body;
       
@@ -2836,13 +2793,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Delete user's OpenAI API key
-  app.delete("/api/settings/openai-key", async (req, res) => {
+  app.delete("/api/settings/openai-key", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to update settings" });
-      }
-      
       const userId = (req.user as any).id;
       await storage.setUserOpenAIKey(userId, '');
       res.json({ success: true });
@@ -2853,13 +2805,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Get user's OpenAI model
-  app.get("/api/settings/openai-model", async (req, res) => {
+  app.get("/api/settings/openai-model", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to access settings" });
-      }
-      
       const userId = (req.user as any).id;
       // The policy's default, not a literal of this route's own. Reporting
       // a model the user is not entitled to would make the settings page and
@@ -2884,11 +2831,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Models this user may select, with tier and quality warnings, so the UI can
   // present the local option honestly rather than offering models that will be
   // rejected or silently downgraded.
-  app.get("/api/settings/models", async (req, res) => {
+  app.get("/api/settings/models", requireAuth, async (req, res) => {
     try {
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const userId = (req.user as any).id;
       const ownKey = await storage.getUserOpenAIKey(userId);
       const isAdmin = Boolean((req.user as any).isAdmin);
@@ -2972,13 +2916,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
 
   // Set user's OpenAI model
-  app.post("/api/settings/openai-model", async (req, res) => {
+  app.post("/api/settings/openai-model", requireAuth, async (req, res) => {
     try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to update settings" });
-      }
-      
       const userId = (req.user as any).id;
       const { model } = req.body;
       

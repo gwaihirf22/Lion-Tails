@@ -317,6 +317,13 @@ jobs:
           fi
           echo "universe constraints ok: one-active-summary index present, universe_id is SET NULL"
 
+          # Storage parity against the real database. The same suite runs
+          # against MemStorage in `npm test`; this is the half only a database
+          # can answer (tests/storageParity.test.ts). It writes under a
+          # throwaway user and removes it, before the app boots and seeds.
+          echo "--- storage parity against Postgres ---"
+          npx vitest run tests/storageParity.test.ts
+
           node dist/prod.js > /tmp/app-db.log 2>&1 &
           APP_PID=$!
           trap 'kill "$APP_PID" 2>/dev/null || true' EXIT

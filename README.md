@@ -632,9 +632,8 @@ this app has any business reaching it.
   the migration cutover. They were never read by anything and are safe to drop.
 - Test coverage is deliberately narrow — pure functions only. There is no
   component, route or database test. See [Tests](#tests).
-- Twenty routes still use an inline auth check rather than `requireAuth` in the
-  signature, which is how eight unguarded write routes once shipped. The
-  universe, job, pricing, settings and character routes take guards.
+- Every route takes its guard in the signature, and `tests/routeAuth.test.ts`
+  holds every non-public route to a 401 with no session.
 - The zod 3 → 4 migration blocks `drizzle-zod` 0.8, which is the only failure in
   the 54-package Dependabot update. It does **not** block `zod-validation-error`
   5, which needed one import specifier — see `docs/decisions.md`.

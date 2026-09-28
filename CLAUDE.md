@@ -37,11 +37,18 @@ npm run lint           # React Rules of Hooks only
 npx tsx scripts/verify-heroes.ts [name]   # hero facts vs Wikipedia/Wikidata/bible-api. NEEDS NETWORK
 ```
 
-Tests cover **pure functions only** — the story parser, per-model request shape
-and entitlement, and the hero data. There is no component, route or database
-test, and no headless browser here. `verify-heroes.ts` is deliberately not in
-CI: it depends on two free APIs that throttle, and a gate that fails for
-reasons unrelated to the change is a gate people learn to ignore.
+Tests are mostly **pure functions** — the story parser, per-model request
+shape and entitlement, the hero data, the prompt goldens — plus three that
+read the real thing: `tests/routeAuth.test.ts` boots `createApp()` in memory
+mode on an ephemeral port and holds every route not on its public allowlist
+to a 401 with no cookie (the routes are read from the source, so a new one
+is covered the moment it is registered); `tests/storageParity.test.ts` runs
+one suite against `MemStorage` always and against `DbStorage` in CI's
+Postgres job; `tests/asyncRoutes.test.ts` scans the route files. There is no
+component test and no headless browser here. `verify-heroes.ts` is
+deliberately not in CI: it depends on two free APIs that throttle, and a
+gate that fails for reasons unrelated to the change is a gate people learn
+to ignore.
 
 ## The dev server
 
@@ -178,7 +185,10 @@ store. There is **no JWT**: the bcrypt/JWT module that once lived at
 Guards live in `server/lib/requireAuth.ts` and are applied **per route in the
 signature**, not via `app.use()`, so a missing guard is visible where the routes
 are listed together. Writes to shared reference data (heroes, hero-stories,
-songs) are admin-only; user content requires a session.
+songs) are admin-only; user content requires a session. **No handler checks
+the session inline any more** (the last thirteen were converted once
+`tests/routeAuth.test.ts` existed to prove none lost its guard), so `if
+(!req.user` in a handler body is a regression, not a style.
 
 ### Signing up is challenged, and the challenge is checked HERE
 
@@ -1532,8 +1542,10 @@ seven call sites are fine centred.
 ## Deployment
 
 Push to `main` runs `.github/workflows/ci.yml` on a self-hosted Unraid
-runner: typecheck (tests included — `tsconfig.json` no longer excludes
-`*.test.ts`, so a test with a type error is red), build, tests, lint, the
+runner: typecheck (tests included — `tsconfig.json`'s `include` lists
+`tests/**/*`; removing the old `exclude` alone put zero test files in the
+program, which `npx tsc --listFiles | grep tests/` is the check for), build,
+tests, lint, the
 theming and reader-CSS greps, two smoke tests, a Trivy gate (a fixable
 CRITICAL in the image fails the build; HIGH is reported), then push to Docker
 Hub, SSH, `docker compose pull && up -d`, wait for the healthcheck. There is

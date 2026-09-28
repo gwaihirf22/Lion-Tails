@@ -125,7 +125,16 @@ export interface IStorage {
   // Story related methods
   getAllStories(userId?: number): Promise<SavedStory[]>;
   getStoryById(id: string, userId?: number): Promise<SavedStory | undefined>;
-  saveStory(story: StoryToSave, request: StoryRequest, userId: number, heroId?: string): Promise<SavedStory>;
+  /**
+   * The hero is READ OFF THE REQUEST (`request.heroId`), never passed.
+   *
+   * There used to be an optional fourth parameter. DbStorage silently
+   * ignored it and MemStorage honoured it, which is how hero_id was NULL on
+   * nearly every Postgres row while every test against memory passed. One
+   * source for the fact, and tests/storageParity.test.ts holds both
+   * implementations to it.
+   */
+  saveStory(story: StoryToSave, request: StoryRequest, userId: number): Promise<SavedStory>;
   toggleFavorite(id: string, isFavorite: boolean, userId: number): Promise<SavedStory | undefined>;
   deleteStory(id: string, userId: number): Promise<boolean>;
   /**
@@ -632,7 +641,7 @@ export class MemStorage implements IStorage {
     return story;
   }
 
-  async saveStory(story: StoryToSave, request: StoryRequest, userId: number, heroId?: string): Promise<SavedStory> {
+  async saveStory(story: StoryToSave, request: StoryRequest, userId: number): Promise<SavedStory> {
     const id = uuidv4();
     const now = new Date();
 
@@ -647,7 +656,8 @@ export class MemStorage implements IStorage {
       createdAt: now.toISOString(),
       isFavorite: false,
       expiresAt: expiryDate.toISOString(),
-      heroId, // Link to Hero of the Faith if provided
+      // Off the request, exactly as DbStorage reads it (see IStorage).
+      heroId: request.heroId ?? undefined,
       // Written explicitly, as DbStorage does: the PRESENCE of this key is
       // what says the row is one the unseen bubble knows about.
       seenAt: null,
