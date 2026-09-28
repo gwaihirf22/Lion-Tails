@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,8 +16,12 @@ import { Textarea } from "@/components/ui/textarea";
 import SongDisplay from './SongDisplay';
 
 const SongLibrary: React.FC = () => {
-  const [songs, setSongs] = useState<Song[]>([]);
-  const [popularSongs, setPopularSongs] = useState<Song[]>([]);
+  // Queries, not effects into state: the list refreshes through one
+  // invalidation when a song is added, and the popular strip is fetched once
+  // per session rather than on every mount of this component.
+  const queryClient = useQueryClient();
+  const { data: songs = [], isError: songsFailed } = useQuery<Song[]>({ queryKey: ["/api/songs"] });
+  const { data: popularSongs = [] } = useQuery<Song[]>({ queryKey: ["/api/songs/popular?limit=6"] });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
@@ -28,38 +34,15 @@ const SongLibrary: React.FC = () => {
   const { toast } = useToast();
   
   useEffect(() => {
-    // Fetch all songs when component mounts
-    fetchSongs();
-    fetchPopularSongs();
-  }, []);
-  
-  const fetchSongs = async () => {
-    try {
-      const response = await fetch('/api/songs');
-      if (!response.ok) throw new Error('Failed to fetch songs');
-      const data = await response.json();
-      setSongs(data);
-    } catch (error) {
-      console.error('Error fetching songs:', error);
+    if (songsFailed) {
       toast({
         title: "Error",
         description: "Failed to load songs. Please try again later.",
         variant: "destructive"
       });
     }
-  };
-  
-  const fetchPopularSongs = async () => {
-    try {
-      const response = await fetch('/api/songs/popular?limit=6');
-      if (!response.ok) throw new Error('Failed to fetch popular songs');
-      const data = await response.json();
-      setPopularSongs(data);
-    } catch (error) {
-      console.error('Error fetching popular songs:', error);
-    }
-  };
-  
+  }, [songsFailed, toast]);
+
   const handleSearch = async () => {
     if (searchQuery.trim().length < 2) {
       toast({
@@ -67,10 +50,9 @@ const SongLibrary: React.FC = () => {
       });
       return;
     }
-    
+
     try {
-      const response = await fetch(`/api/songs/search?q=${encodeURIComponent(searchQuery)}`);
-      if (!response.ok) throw new Error('Search failed');
+      const response = await apiRequest("GET", `/api/songs/search?q=${encodeURIComponent(searchQuery)}`);
       const data = await response.json();
       setSearchResults(data);
     } catch (error) {
@@ -95,42 +77,40 @@ const SongLibrary: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-      const response = await fetch('/api/generate-chords', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: newSongTitle,
-          lyrics: newSongLyrics,
-          artist: newSongArtist || 'Unknown Artist'
-        }),
+      // apiRequest throws on a non-2xx with the server's own sentence, so the
+      // rate limit's "That is a lot of songs at once..." reaches the toast
+      // rather than a generic failure.
+      const response = await apiRequest("POST", "/api/generate-chords", {
+        title: newSongTitle,
+        lyrics: newSongLyrics,
+        artist: newSongArtist || 'Unknown Artist',
       });
-      
-      if (!response.ok) throw new Error('Failed to generate chords');
-      
       const song = await response.json();
-      
+
       toast({
         title: "Success!",
         description: "Song created with chord suggestions",
       });
-      
+
       setIsNewSongDialogOpen(false);
       setNewSongTitle('');
       setNewSongLyrics('');
       setNewSongArtist('');
-      
+
       // Refresh the song list and show the newly created song
-      await fetchSongs();
+      await queryClient.invalidateQueries({ queryKey: ["/api/songs"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/songs/popular?limit=6"] });
       setSelectedSong(song);
       setIsSongDialogOpen(true);
-      
+
     } catch (error) {
       console.error('Error generating chords:', error);
       toast({
         title: "Generation Failed",
-        description: "Could not generate chord suggestions. Please try again or use simpler lyrics.",
+        description:
+          error instanceof Error && error.message
+            ? error.message
+            : "Could not generate chord suggestions. Please try again or use simpler lyrics.",
         variant: "destructive"
       });
     } finally {

@@ -1,4 +1,6 @@
+import { Suspense, lazy } from "react";
 import { Switch, Route, useLocation } from "wouter";
+import { Loader2 } from "lucide-react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -9,17 +11,24 @@ import Music from "@/pages/Music";
 import SavedStories from "@/pages/SavedStories";
 import UniversePage from "@/pages/Universe";
 import Settings from "@/pages/Settings";
-import AdminStats from "@/pages/AdminStats";
-import AdminCosts from "@/pages/AdminCosts";
-import AdminAccounts from "@/pages/AdminAccounts";
 import Characters from "@/pages/Characters";
-import HeroesOfFaith from "@/pages/HeroesOfFaith";
 import GenerateStory from "@/pages/GenerateStory";
 import AuthPage from "@/pages/auth-page";
 import SharedStory from "@/pages/SharedStory";
 
+// Loaded when first visited, not with the app. The three admin pages are for
+// one person, and Heroes of the Faith carries eighty profiles' worth of UI;
+// none of them belongs in the bundle a child's phone downloads to read a
+// story. Everything else -- the reader, the forms, the library -- IS the app
+// and stays eager. Vite splits on the dynamic import; no manualChunks needed.
+const AdminStats = lazy(() => import("@/pages/AdminStats"));
+const AdminCosts = lazy(() => import("@/pages/AdminCosts"));
+const AdminAccounts = lazy(() => import("@/pages/AdminAccounts"));
+const HeroesOfFaith = lazy(() => import("@/pages/HeroesOfFaith"));
+
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ParentModeProvider } from "@/hooks/use-parent-mode";
@@ -27,7 +36,14 @@ import { ReadingPrefsProvider } from "@/hooks/use-reading-prefs";
 import { GuideProvider } from "@/hooks/use-guide";
 import { StoryJobsProvider } from "@/hooks/use-story-jobs";
 
-// Import the background image
+/** What a lazy page shows for the moment its chunk is on the wire. */
+function PageLoading() {
+  return (
+    <div className="flex justify-center py-16">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Loading" />
+    </div>
+  );
+}
 
 function Router() {
   return (
@@ -118,7 +134,13 @@ function App() {
                       "content-container rounded-2xl shadow-sm p-3 sm:p-4 md:p-6 border border-border"
                 }
               >
-                <Router />
+                {/* Keyed on the location so a page that threw is forgotten
+                    the moment the reader navigates away from it. */}
+                <ErrorBoundary key={location}>
+                  <Suspense fallback={<PageLoading />}>
+                    <Router />
+                  </Suspense>
+                </ErrorBoundary>
               </div>
             </main>
             <Footer />

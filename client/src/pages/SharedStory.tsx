@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import { Loader2 } from "lucide-react";
 import StoryDisplay from "@/components/StoryDisplay";
@@ -18,28 +19,30 @@ import { isShareTarget, type SharedStoryView } from "@shared/sharedStory";
  * controls. Not a second reader that would drift from the first: text size,
  * palette and focus mode all work here, from the reader's own browser.
  *
- * A plain fetch, not the app's query helpers: there may be no session, and
- * nothing here should behave differently if there is one.
+ * A query, so a link opened twice is fetched once and an unmount cancels
+ * nothing by hand -- but with its OWN queryFn: a plain fetch with no cookie,
+ * because there may be no session and nothing here should behave
+ * differently if there is one. (A multi-segment key needs its own queryFn
+ * anyway; the default fetcher reads queryKey[0] and nothing else.)
  */
 export default function SharedStoryPage() {
   const { token } = useParams<{ token: string }>();
-  const [view, setView] = useState<SharedStoryView | null>(null);
-  const [gone, setGone] = useState(false);
+  const shareable = Boolean(token && isShareTarget(token));
+  const { data: view, isError } = useQuery<SharedStoryView>({
+    queryKey: ["/api/shared", token],
+    enabled: shareable,
+    queryFn: async () => {
+      const r = await fetch(`/api/shared/${token}`, { credentials: "omit" });
+      // One 404 for every way of not being readable (routes.ts); any
+      // non-2xx here means "not shared", never a retry.
+      if (!r.ok) throw new Error(`not shared (${r.status})`);
+      return (await r.json()) as SharedStoryView;
+    },
+  });
+  const gone = !shareable || isError;
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
-    if (!token || !isShareTarget(token)) {
-      setGone(true);
-      return;
-    }
-    let cancelled = false;
-    fetch(`/api/shared/${token}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((v: SharedStoryView) => !cancelled && setView(v))
-      .catch(() => !cancelled && setGone(true));
-    return () => {
-      cancelled = true;
-    };
   }, [token]);
 
   // The tab title. The server sets it for crawlers on the first load (see

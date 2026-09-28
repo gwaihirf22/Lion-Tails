@@ -328,14 +328,16 @@ export default function Header() {
                 </button>
               )}
               {user && (
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={() => logoutMutation.mutate()} 
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => logoutMutation.mutate()}
                   className="text-header-foreground hover:bg-header-foreground/15 hover:text-header-foreground"
                   disabled={logoutMutation.isPending}
+                  title="Sign out"
+                  aria-label="Sign out"
                 >
-                  <LogOut size={20} />
+                  <LogOut size={20} aria-hidden="true" />
                 </Button>
               )}
               <button 
