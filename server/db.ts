@@ -93,7 +93,19 @@ async function initializeDatabase() {
       return false;
     }
 
-    pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      // Bounded waits. Without these, acquiring a connection waited for ever
+      // when Postgres was up but not answering, and a statement that hung
+      // (a lock, a runaway plan) held its client for the life of the process.
+      // Nothing here legitimately runs a minute: the longest statements are
+      // the summary window's story reads and the account delete, both well
+      // under it. The migrator has its own connection (scripts/migrate.js)
+      // and is not bound by this.
+      connectionTimeoutMillis: 10_000,
+      statement_timeout: 60_000,
+      idle_in_transaction_session_timeout: 60_000,
+    });
 
     // node-postgres emits "error" on the pool when an IDLE client's backend
     // fails -- e.g. the Postgres container restarting underneath us. With no

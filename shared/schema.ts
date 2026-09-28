@@ -74,25 +74,33 @@ export const users = pgTable("users", {
 });
 
 // Verification tokens
-export const verificationTokens = pgTable("verification_tokens", {
-  id: serial("id").primaryKey(),
-  /**
-   * THE ONE USER-SCOPED TABLE THAT HAD NO FOREIGN KEY, until now.
-   *
-   * Every other table hanging off a user says what happens when that user
-   * goes -- cascade for their own things, set null for the ledger. This one
-   * said nothing, so deleting an account left its password-reset tokens
-   * behind, pointing at an id that no longer existed. Harmless while nothing
-   * can deliver a token; not harmless once a delete is a button.
-   */
-  userId: integer("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  token: text("token").notNull(),
-  type: text("type").notNull(), // 'email' or 'password'
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const verificationTokens = pgTable(
+  "verification_tokens",
+  {
+    id: serial("id").primaryKey(),
+    /**
+     * THE ONE USER-SCOPED TABLE THAT HAD NO FOREIGN KEY, until now.
+     *
+     * Every other table hanging off a user says what happens when that user
+     * goes -- cascade for their own things, set null for the ledger. This one
+     * said nothing, so deleting an account left its password-reset tokens
+     * behind, pointing at an id that no longer existed. Harmless while nothing
+     * can deliver a token; not harmless once a delete is a button.
+     */
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    type: text("type").notNull(), // 'email' or 'password'
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    // Looked up by token on every reset and verify; scanned by user on delete.
+    tokenIdx: index("idx_verification_tokens_token").on(table.token),
+    userIdx: index("idx_verification_tokens_user_id").on(table.userId),
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // Every table the application touches is declared here.
@@ -286,6 +294,7 @@ export const storyShares = pgTable(
   },
   (table) => ({
     storyIdx: uniqueIndex("idx_story_shares_story_id").on(table.storyId),
+    userIdx: index("idx_story_shares_user_id").on(table.userId),
   }),
 );
 
@@ -303,6 +312,9 @@ export const heroStories = pgTable(
   },
   (table) => ({
     heroIdx: index("idx_hero_stories_hero_id").on(table.heroId),
+    // Account deletion filters on it (accountDelete.ts); SET NULL on the FK
+    // walks it too.
+    userIdx: index("idx_hero_stories_user_id").on(table.userId),
   }),
 );
 
@@ -656,6 +668,9 @@ export const generationRecords = pgTable(
     createdIdx: index("idx_generation_records_created_at").on(table.createdAt),
     modelIdx: index("idx_generation_records_model").on(table.model),
     outcomeIdx: index("idx_generation_records_outcome").on(table.outcome),
+    // The FK to story_jobs is SET NULL, which walks this column on every
+    // job delete; the stats page joins on it.
+    jobIdx: index("idx_generation_records_job_id").on(table.jobId),
   }),
 );
 

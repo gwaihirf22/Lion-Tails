@@ -125,6 +125,25 @@ exist in `node_modules` at runtime — and the runtime image installs production
 dependencies only. A Vite import would drag in the whole devDependency tree and
 crash at startup. CI greps `dist/prod.js` and then boots it.
 
+### The pool has timeouts, the image has a healthcheck
+
+`server/db.ts` builds the one `Pool` with `connectionTimeoutMillis` (10s),
+`statement_timeout` and `idle_in_transaction_session_timeout` (60s each).
+Without them, acquiring a connection waited for ever when Postgres was up
+but not answering, and a hung statement held its client for the life of the
+process. Nothing here legitimately runs a minute; the migrator
+(`scripts/migrate.js`) has its own connection and is not bound. The
+`Dockerfile` declares the same `HEALTHCHECK` the compose file does, so the
+image is healthy on its own -- and note that `restart: unless-stopped` never
+restarts an *unhealthy* container; the compose reference copy says what
+would (`autoheal`), which is a host decision.
+
+Every user-scoped foreign key is indexed (migration 0017 added
+`verification_tokens.token`/`user_id`, `story_shares.user_id`,
+`hero_stories.user_id`, `generation_records.job_id`): a SET NULL or CASCADE
+walks the child column on every parent delete, and account deletion filters
+on two of them.
+
 ### Storage has an in-memory fallback
 
 If the database is unavailable the app still starts and serves, using

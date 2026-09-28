@@ -72,5 +72,13 @@ USER liontails
 
 EXPOSE 5000
 
+# The same probe the compose file declares, so the image is healthy on its
+# own and the deploy's health poll does not depend on the hand-synced compose
+# copy on the host carrying the entry. /api/health answers 503 when a
+# configured database is unreachable or its schema has drifted (decisions §6),
+# which is what makes this a real check rather than "the port is open".
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:5000/api/health || exit 1
+
 ENTRYPOINT ["./entrypoint.sh"]
 CMD ["node", "dist/prod.js"]
