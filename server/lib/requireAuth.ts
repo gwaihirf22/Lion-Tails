@@ -65,10 +65,11 @@ export function denyBannedAccounts(req: Request, res: Response, next: NextFuncti
  *
  * Used for writes to shared reference data -- Heroes of the Faith, songs, and the
  * hero-story curation routes. These are seeded content, not user content: the
- * client only ever reads them, and the user-facing paths that legitimately
- * create hero_stories rows (POST /api/story/save and
- * POST /api/stories/:id/associate-hero) are separate routes with their own
- * checks. So restricting these to admin costs a normal user nothing.
+ * client only ever reads them, and no user-facing path creates a hero_stories
+ * row any more (POST /api/story/save used to copy a family's story into that
+ * public table; POST /api/stories/:id/associate-hero only stamps hero_id on
+ * the user's own row). So restricting these to admin costs a normal user
+ * nothing.
  *
  * Returns 401 when unauthenticated and 403 when authenticated-but-not-admin, so
  * the two cases stay distinguishable in logs.

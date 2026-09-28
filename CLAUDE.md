@@ -248,15 +248,21 @@ about **$1.40 a signup** and ~$0.20 a month after.
   installed: on one container express-rate-limit's store is the same in-memory
   map, and a decision inside a dependency cannot be unit tested. `hit()` is a
   pure fixed-window rule; `limiter()` wraps it with `peek` (ask without
-  counting) and `forget` (a correct answer clears the slate). Four guards:
+  counting) and `forget` (a correct answer clears the slate). Six guards:
   login 20 an address / 8 a username per 15 minutes, register and
-  reset-password 5 an address an hour, stories 30 and pictures 40 an hour per
-  ACCOUNT. All 429 with `Retry-After`.
+  reset-password 5 an address an hour, stories 30, pictures 40 and chords 20
+  an hour per ACCOUNT, and the Parent Mode password 8 wrong answers per
+  account per 15 minutes. All 429 with `Retry-After`.
   - **Login counts failures, and only the ADDRESS is checked before the
     password.** Refusing on the username first means anyone who knows a name
     can lock its owner out by getting it wrong eight times — measured on dev,
     it refused the real password for fifteen minutes. The username allowance
     is spent only after a wrong answer.
+  - **The Parent Mode password is keyed by ACCOUNT and counts failures only**,
+    the login rule: the caller is signed in already, the address is the
+    family's own router, and the thing being guessed is the parent's password
+    by someone holding the parent's session. Chords are keyed by account
+    because they charge no credits, so nothing else bounded them.
   - **These are a ceiling behind the credits, not instead of them.** Credits
     limit a family; these catch a loop, which matters most for the admin and
     own-key accounts credits never touch.
@@ -271,6 +277,38 @@ about **$1.40 a signup** and ~$0.20 a month after.
 Admin status is `users.is_admin`. Never key authorisation off a username —
 nothing reserves usernames, so a string comparison grants the privilege to
 anyone who registers that name.
+
+### Async handlers, and what a throw in one costs
+
+**Express 4 drops the promise an `async` handler returns.** A rejection in
+one is an unhandled rejection, and Node 20 exits on those — eighteen routes
+(universes, canon, jobs, pricing, picture settings, the portrait file)
+awaited with no try/catch, so one Postgres hiccup took every session and the
+running story with it. `server/lib/asyncRoute.ts` is the fix, and it is visible where the
+routes are listed, like the guards: **wrap any async handler that has no try
+block of its own in `asyncRoute(...)`**, which forwards the rejection to the
+one `errorHandler` (which checks `res.headersSent` first).
+`tests/asyncRoutes.test.ts` reads the three route files and fails on an
+async registration that has neither; `process.on("unhandledRejection")` in
+`startServer` logs and stays up for whatever it still misses. See
+`docs/decisions.md` §32.
+
+**The process takes SIGTERM.** `startServer` stops the worker, hands back the
+running story job by expiring its lease (`stopStoryWorker`, so the next
+container resumes it on its first poll rather than 90 seconds later), lets
+in-flight requests finish, and exits — with a five-second fallback under
+Docker's ten.
+
+**No route opens a pool.** `GET /api/system/db-status` used to `new Pool()`
+on every unauthenticated request and never end it; `/api/health` is the one
+probe, and the same test holds that `new Pool(` appears in `server/` only in
+`db.ts` and the startup check.
+
+**`POST /api/story/save` publishes nothing.** It used to copy a hero story's
+title and text into `hero_stories`, the shared table two routes serve with
+no login. Its body is parsed (`storySaveBodySchema`), a `universeId` on the
+request must be the caller's own, and the only caller is the branch
+`GenerateStory.tsx` keeps against a synchronous flow returning.
 
 ## Running the accounts
 

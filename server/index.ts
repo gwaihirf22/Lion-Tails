@@ -1,7 +1,8 @@
-import express, { type Request, Response, NextFunction } from "express";
+import express from "express";
 import { registerRoutes } from "./routes";
 import { seedReferenceData } from "./seed";
-import { startStoryWorker } from "./lib/storyWorker";
+import { startStoryWorker, stopStoryWorker } from "./lib/storyWorker";
+import { errorHandler } from "./lib/asyncRoute";
 import { startPriceWatch } from "./lib/priceWatch";
 import { startAbuseWatch } from "./lib/abuseAlerts";
 import { log } from "./static";
@@ -138,21 +139,56 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
   // watcher nobody knows is absent.
   startAbuseWatch();
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    console.error(err);
-  });
+  // The one error middleware. Every async handler either has its own try
+  // block or is wrapped in asyncRoute() so a rejection lands here rather
+  // than as an unhandled rejection; tests/asyncRoutes.test.ts holds that.
+  app.use(errorHandler);
 
   return { app, server };
 }
 
-/** Starts listening. Port is configurable so the container can be remapped. */
+let processHooksInstalled = false;
+
+/**
+ * Starts listening, and takes the process's two lifecycle events.
+ *
+ * UNHANDLED REJECTION: log and stay up. Node 20 exits on one by default, and
+ * before asyncRoute() existed eighteen route handlers could produce one from a
+ * single database hiccup -- every session and the running story gone. The
+ * wrapper is the fix; this is what keeps the next miss a log line instead of
+ * an outage. uncaughtException is left at Node's default: after a
+ * synchronous throw the state is unknown and exiting is right.
+ *
+ * SIGTERM / SIGINT: stop taking work, hand the running story job back so the
+ * next container resumes it on its first poll (see stopStoryWorker), let
+ * in-flight requests finish, then exit. Docker gives ten seconds; the
+ * fallback exits at five so a keep-alive that never closes cannot use them
+ * all. The price and abuse watches are unref'd timers and need nothing.
+ */
 export function startServer(server: Server) {
   const port = Number(process.env.PORT) || 5000;
   server.listen({ port, host: "0.0.0.0" }, () => {
     log(`serving on port ${port}`);
   });
+
+  if (processHooksInstalled) return;
+  processHooksInstalled = true;
+
+  process.on("unhandledRejection", (reason) => {
+    console.error("[unhandled rejection]", reason);
+  });
+
+  let shuttingDown = false;
+  const shutdown = (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    log(`${signal} received, shutting down`);
+    const fallback = setTimeout(() => process.exit(0), 5_000);
+    fallback.unref();
+    void stopStoryWorker()
+      .catch(() => undefined)
+      .then(() => server.close(() => process.exit(0)));
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }

@@ -55,7 +55,9 @@ import {
 } from "./worldState";
 
 /**
- * Lease 90s, heartbeat 20s, reaper 60s.
+ * Lease 90s, heartbeat 20s. There is no separate reaper: the claim query
+ * treats a running job whose lease has expired as claimable, which is the
+ * whole of how a crashed worker's job is recovered.
  *
  * The heartbeat runs on its own timer rather than at step boundaries, because a
  * single chapter can take 90+ seconds on a local model -- a heartbeat that only
@@ -76,6 +78,8 @@ const WORKER_ID = `${process.pid}-${randomUUID().slice(0, 8)}`;
 let running = false;
 let stopped = false;
 let timer: NodeJS.Timeout | undefined;
+/** The job this process is inside, so a shutdown can hand it back. */
+let currentJobId: string | null = null;
 
 export type JobRow = {
   job_id: string;
@@ -715,6 +719,7 @@ async function runJob(job: JobRow): Promise<void> {
   }, HEARTBEAT_MS);
   // Do not hold the event loop open for a heartbeat.
   hb.unref?.();
+  currentJobId = job.job_id;
 
   try {
     if (await isCancelled(job.job_id)) {
@@ -920,6 +925,7 @@ async function runJob(job: JobRow): Promise<void> {
     );
   } finally {
     clearInterval(hb);
+    currentJobId = null;
   }
 }
 
@@ -983,10 +989,34 @@ export function startStoryWorker(): void {
     });
 }
 
-export function stopStoryWorker(): void {
+/**
+ * Stop polling and hand back the job this process is inside.
+ *
+ * Called on SIGTERM. Without it a deploy left the running job to age out:
+ * the new container could not claim it until LEASE_MS after this one's last
+ * heartbeat, so a story paused for a minute and a half at every release.
+ * Expiring the lease now lets the next worker's first poll pick it up and
+ * resume from the checkpoint. Every later write from this process is already
+ * guarded by `worker_id = $me`, so the hand-off cannot be raced; the chapter
+ * that was in flight is paid for twice, which is the existing crash
+ * behaviour and the price of a resume that needs no coordination.
+ */
+export async function stopStoryWorker(): Promise<void> {
   stopped = true;
   running = false;
   if (timer) clearTimeout(timer);
+  const jobId = currentJobId;
+  if (!jobId || !pool) return;
+  try {
+    await pool.query(
+      `UPDATE story_jobs SET lease_expires_at = now()
+        WHERE job_id = $1 AND worker_id = $2 AND status = 'running'`,
+      [jobId, WORKER_ID],
+    );
+    console.log(`[worker] released ${jobId} for the next worker`);
+  } catch (e) {
+    console.error(`[worker] could not release ${jobId}:`, e);
+  }
 }
 
 export { WORKER_ID, LEASE_MS };

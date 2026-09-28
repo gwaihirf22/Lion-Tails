@@ -110,7 +110,7 @@ import {
   pictureNoteSchema, type PriceList, characterIdsOf, characterRoleOf,
   type SavedStory, type Character, type StoryUsage, creditsLabel, publicUser, adminCreateAccountSchema,
   PICTURE_CREDITS, PICTURE_TIERS, PICTURE_TIER_LABELS, picturePrefsSchema, type PictureTier,
-  storyRequestSchema, savedStorySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
+  storyRequestSchema, storySaveBodySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { withPictureNote } from "@shared/pictureNote";
 import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
 import { getBibleVerseByTheme } from "./data/bibleVerses";
@@ -143,6 +143,7 @@ import { v4 as uuidv4 } from "uuid";
 import { setupAuth } from "./auth";
 import { registerSongRoutes } from "./songs";
 import { requireAdmin } from "./lib/requireAuth";
+import { asyncRoute } from "./lib/asyncRoute";
 import { costsReport, publishSuggestedPrices, publishedPriceList, writeMarginPct } from "./lib/costStats";
 import { pictureListPrice } from "./lib/costReport";
 import { decideProposal, runBillCheck, runPriceCheck } from "./lib/priceWatch";
@@ -899,11 +900,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * `private` on the cache header is not decoration. SWAG proxies this, and a
    * shared cache holding one family's portrait is the thing being prevented.
    */
-  app.get("/public/images/stories/avatars/:file", requireAuth, async (req, res) => {
+  app.get("/public/images/stories/avatars/:file", requireAuth, asyncRoute(async (req, res) => {
     const data = await readAvatarFile(req.params.file);
     if (!data) return res.status(404).end();
     res.type("png").set("Cache-Control", "private, max-age=86400").send(data);
-  });
+  }));
 
   /**
    * Mark this character's virtues as looked at.
@@ -1239,42 +1240,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // request.universeId is client-supplied, and without that scoping a user
   // could attach a story to someone else's universe and read its summary.
   // ---------------------------------------------------------------------
-  app.get("/api/universes", requireAuth, async (req, res) => {
+  //
+  // asyncRoute on every handler here that has no try block of its own: these
+  // are the newer, flatter handlers, and Express 4 turns a rejection in one
+  // into an unhandled rejection that exits the process. See lib/asyncRoute.ts.
+  app.get("/api/universes", requireAuth, asyncRoute(async (req, res) => {
     res.json(await listUniverses((req.user as any).id));
-  });
+  }));
 
-  app.post("/api/universes", requireAuth, async (req, res) => {
+  app.post("/api/universes", requireAuth, asyncRoute(async (req, res) => {
     const result = await createUniverse((req.user as any).id, String(req.body?.name ?? ""));
     if ("error" in result) return res.status(400).json({ message: result.error });
     res.status(201).json(result);
-  });
+  }));
 
   // Renaming is Parent-Mode work like editing the summary: it changes what
   // every reader sees the world called. The outcome is a word, not a boolean,
   // so an empty name and a taken name stop being "No such universe".
-  app.patch("/api/universes/:id", requireAuth, requireParentMode, async (req, res) => {
+  app.patch("/api/universes/:id", requireAuth, requireParentMode, asyncRoute(async (req, res) => {
     const outcome = await renameUniverse((req.user as any).id, req.params.id, String(req.body?.name ?? ""));
     if (outcome === "empty") return res.status(400).json({ message: "A universe needs a name." });
     if (outcome === "taken") return res.status(409).json({ message: "You already have a universe with that name." });
     if (outcome === "missing") return res.status(404).json({ message: "No such universe" });
     res.json({ renamed: true });
-  });
+  }));
 
   // The stories survive: universe_id is ON DELETE SET NULL, so they return to
   // Unassigned rather than being deleted with the folder they were in.
-  app.delete("/api/universes/:id", requireAuth, async (req, res) => {
+  app.delete("/api/universes/:id", requireAuth, asyncRoute(async (req, res) => {
     const ok = await deleteUniverse((req.user as any).id, req.params.id);
     if (!ok) return res.status(404).json({ message: "No such universe" });
     res.json({ deleted: true, storiesKept: true });
-  });
+  }));
 
-  app.put("/api/stories/:id/universe", requireAuth, async (req, res) => {
+  app.put("/api/stories/:id/universe", requireAuth, asyncRoute(async (req, res) => {
     if (refuseBuiltIn(req, res)) return;
     const target = req.body?.universeId ?? null;
     const ok = await setStoryUniverse((req.user as any).id, req.params.id, target);
     if (!ok) return res.status(404).json({ message: "No such story or universe" });
     res.json({ universeId: target });
-  });
+  }));
 
   /**
    * Enqueue a summary.
@@ -1286,7 +1291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * canMakeSummary is computed server-side and enforced here as well as
    * displayed -- the client must not hold a second definition of "current".
    */
-  app.post("/api/universes/:id/summary", requireAuth, async (req, res) => {
+  app.post("/api/universes/:id/summary", requireAuth, asyncRoute(async (req, res) => {
     const userId = (req.user as any).id;
     const universe = await getUniverse(userId, req.params.id);
     if (!universe) return res.status(404).json({ message: "No such universe" });
@@ -1367,38 +1372,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       coveredCount: window.coveredCount,
       droppedCount: window.droppedCount,
     });
-  });
+  }));
 
   // Editing the summary and pinning canon change what EVERY future story in
   // the universe is written against, so they are the first operations where
   // Parent Mode is enforced on the server rather than only hidden in the UI.
-  app.put("/api/universes/:id/summary", requireParentMode, async (req, res) => {
+  app.put("/api/universes/:id/summary", requireParentMode, asyncRoute(async (req, res) => {
     const ok = await editSummary((req.user as any).id, req.params.id, String(req.body?.summary ?? ""));
     if (!ok) return res.status(404).json({ message: "No such universe" });
     res.json({ saved: true });
-  });
+  }));
 
-  app.post("/api/universes/:id/canon", requireParentMode, async (req, res) => {
-    const result = await addCanon(
-      (req.user as any).id,
-      req.params.id,
-      String(req.body?.text ?? ""),
-      req.body?.sourceStoryId,
-    );
+  app.post("/api/universes/:id/canon", requireParentMode, asyncRoute(async (req, res) => {
+    const userId = (req.user as any).id;
+    // The source is a story id the client names. It is stored on the canon
+    // entry verbatim, so it has to be a string and it has to be one of this
+    // account's own stories -- getStoryById scopes by user.
+    const sourceStoryId = req.body?.sourceStoryId;
+    if (sourceStoryId !== undefined && typeof sourceStoryId !== "string") {
+      return res.status(400).json({ message: "sourceStoryId must be a story id" });
+    }
+    if (sourceStoryId && !(await storage.getStoryById(sourceStoryId, userId))) {
+      return res.status(400).json({ message: "No such story" });
+    }
+    const result = await addCanon(userId, req.params.id, String(req.body?.text ?? ""), sourceStoryId);
     if (!result.ok) return res.status(400).json({ message: result.error });
     res.status(201).json({ added: true });
-  });
+  }));
 
-  app.delete("/api/universes/:id/canon/:canonId", requireParentMode, async (req, res) => {
+  app.delete("/api/universes/:id/canon/:canonId", requireParentMode, asyncRoute(async (req, res) => {
     const ok = await removeCanon((req.user as any).id, req.params.id, req.params.canonId);
     if (!ok) return res.status(404).json({ message: "No such universe" });
     res.json({ removed: true });
-  });
+  }));
 
   // Poll one job. 404 rather than 403 for someone else's job, so ids are not
   // enumerable. The full story is returned inline on success -- the poller is
   // already asking, so make the answer complete.
-  app.get("/api/story/jobs/:jobId", requireAuth, async (req, res) => {
+  app.get("/api/story/jobs/:jobId", requireAuth, asyncRoute(async (req, res) => {
     const userId = (req.user as any).id;
     const job = await getStoryJob(req.params.jobId, userId);
     if (!job) return res.status(404).json({ message: "Job not found" });
@@ -1407,7 +1418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       story = await storage.getStoryById(job.story_id, userId).catch(() => undefined);
     }
     res.json({ ...job, story });
-  });
+  }));
 
   // Admin-only stats over generation_records. requireAdmin is the same guard
   // the hero/song write routes use -- deliberately not a second notion of who
@@ -1708,21 +1719,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/admin/prices/:versionId/:decision", requireAdmin, async (req, res) => {
+  app.post("/api/admin/prices/:versionId/:decision", requireAdmin, asyncRoute(async (req, res) => {
     const id = Number(req.params.versionId);
     const decision = req.params.decision === "approve" ? "approved" : req.params.decision === "dismiss" ? "dismissed" : null;
     if (!Number.isInteger(id) || !decision) return res.status(404).json({ message: "Not found" });
     const ok = await decideProposal(id, decision, (req.user as any).id);
     if (!ok) return res.status(409).json({ message: "That proposal has already been decided" });
     res.json({ id, status: decision });
-  });
+  }));
 
-  app.put("/api/admin/pricing/margin", requireAdmin, async (req, res) => {
+  app.put("/api/admin/pricing/margin", requireAdmin, asyncRoute(async (req, res) => {
     const parsed = z.object({ marginPct: z.number().min(0).max(200) }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Margin must be between 0 and 200 percent" });
     await writeMarginPct(parsed.data.marginPct);
     res.json({ marginPct: parsed.data.marginPct });
-  });
+  }));
 
   app.post("/api/admin/pricing/publish", requireAdmin, async (req, res) => {
     try {
@@ -1737,7 +1748,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * no costs, no margin, no samples -- what things cost the owner is not what
    * a family needs to see.
    */
-  app.get("/api/pricing", requireAuth, async (req, res) => {
+  app.get("/api/pricing", requireAuth, asyncRoute(async (req, res) => {
     const list = await publishedPriceList().catch(() => undefined);
     const items = (list?.items ?? []).map((i) => ({ item: i.item, priceCents: i.priceCents }));
     /**
@@ -1770,25 +1781,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : null,
     };
     res.json(answer);
-  });
+  }));
 
   // In-flight jobs plus anything finished in the last hour. That window is how
   // a reloaded page rediscovers a job it was not watching, with no
   // localStorage involved.
-  app.get("/api/story/jobs", requireAuth, async (req, res) => {
+  app.get("/api/story/jobs", requireAuth, asyncRoute(async (req, res) => {
     const userId = (req.user as any).id;
     res.json(await listActiveStoryJobs(userId));
-  });
+  }));
 
   // Cooperative cancel, checked at step boundaries. Cancelling during chapter 4
   // still pays for chapter 4 -- a completion already in flight cannot be
   // recalled, and the UI should say so rather than implying otherwise.
-  app.post("/api/story/jobs/:jobId/cancel", requireAuth, async (req, res) => {
+  app.post("/api/story/jobs/:jobId/cancel", requireAuth, asyncRoute(async (req, res) => {
     const userId = (req.user as any).id;
     const ok = await cancelStoryJob(req.params.jobId, userId);
     if (!ok) return res.status(404).json({ message: "No cancellable job with that id" });
     res.json({ cancelled: true });
-  });
+  }));
   
   /**
    * The ONE place the free story allowance is reported.
@@ -1842,80 +1853,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // API endpoint to save a story after generation
-  app.post("/api/story/save", async (req, res) => {
-    try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to save stories" });
-      }
-      
-      const { story, request, isFavorite } = req.body;
-      
-      if (!story || !request) {
-        return res.status(400).json({ message: "Story and request data are required" });
-      }
-      
-      // Get user ID from authenticated user
-      const userId = (req.user as any).id;
-      
-      // Check if the story is about a Hero of the Faith and get the ID
-      let heroId: string | undefined = undefined;
-      
-      // The form's select value is hero.id, so matching on name alone never
-      // succeeded and heroId stayed undefined on every story ever saved.
-      // resolveHeroOfFaith accepts either shape.
-      const resolvedHero = await resolveHeroOfFaith(request);
-      if (resolvedHero) {
-        heroId = resolvedHero.id;
-        // Stamped on the request as well: the fourth argument below exists on
-        // IStorage but DbStorage does not accept it, so on Postgres it is
-        // silently dropped. The request is the path that actually persists.
-        request.heroId = resolvedHero.id;
-        console.log(`Found Hero of the Faith ID ${heroId} for ${resolvedHero.name}`);
-      }
-      
-      // Save the story with associated hero if applicable
-      const savedStory = await storage.saveStory(story, request, userId, heroId);
-      
-      // If isFavorite is specified, set favorite status
-      if (typeof isFavorite === 'boolean' && isFavorite) {
-        await storage.toggleFavorite(savedStory.id, true, userId);
-        savedStory.isFavorite = true;
-      }
-      
-      // If this is a Hero of the Faith story, also save it to the hero stories collection
-      if (heroId && story.bibleVerse) {
-        try {
-          // Create a hero story entry
-          await storage.createHeroStory({
-            heroId,
-            title: story.title,
-            content: story.content,
-            isHistoricallyAccurate: true,
-            bibleVerse: story.bibleVerse,
-            isFeatured: false,
-            sources: [
-              {
-                title: "User Generated Story",
-                author: "AI Story Generator",
-                url: `/stories/${savedStory.id}`
-              }
-            ]
-          }, userId);
-          console.log(`Created hero story for hero ${heroId}`);
-        } catch (heroStoryError) {
-          console.error("Error creating hero story:", heroStoryError);
-          // Don't fail the entire request if this part fails
-        }
-      }
-      
-      res.status(201).json(savedStory);
-    } catch (error) {
-      console.error("Error saving story:", error);
-      res.status(500).json({ message: "Failed to save story" });
+  /**
+   * Save a story the client already holds.
+   *
+   * The worker saves every generated story itself, so the only caller left
+   * is the branch GenerateStory.tsx keeps against the day a synchronous flow
+   * returns (decisions §12). It stays, and it is held to the same rules as
+   * every other write:
+   *
+   * - THE BODY IS PARSED. It used to be spread straight into saveStory, and
+   *   `storyRequestSchema` is a z.object, so this is also what strips a key
+   *   that would otherwise try to become a column.
+   * - A UNIVERSE MUST BE THE CALLER'S. DbStorage.saveStory writes
+   *   request.universeId to the row on trust; the check belongs here.
+   * - NOTHING IS PUBLISHED. This route used to copy the title and text of a
+   *   hero story into hero_stories -- the shared, admin-curated table that
+   *   GET /api/hero-stories and GET /api/heroes/:id/stories serve WITHOUT a
+   *   login, and that the hero dialog shows to everyone. A family's story
+   *   left their account the moment it was saved. The sharing rule is that
+   *   /s/:token is public and nothing else about a story is; the owner's own
+   *   hero stories still reach the dialog through getStoriesByHeroId.
+   */
+  app.post("/api/story/save", requireAuth, asyncRoute(async (req, res) => {
+    const parsed = storySaveBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: fromZodError(parsed.error).message });
     }
-  });
+    const { story, request, isFavorite } = parsed.data;
+    const userId = (req.user as any).id;
+
+    if (request.universeId && !(await getUniverse(userId, request.universeId))) {
+      return res.status(404).json({ message: "No such universe" });
+    }
+
+    // The form's select value is hero.id, so matching on name alone never
+    // succeeded and heroId stayed undefined on every story ever saved.
+    // resolveHeroOfFaith accepts either shape. Stamped on the request: the
+    // fourth argument to saveStory exists on IStorage but DbStorage does not
+    // accept it, so on Postgres it is silently dropped. The request is the
+    // path that actually persists.
+    const resolvedHero = await resolveHeroOfFaith(request);
+    const heroId = resolvedHero?.id;
+    if (heroId) request.heroId = heroId;
+
+    const savedStory = await storage.saveStory(story, request, userId, heroId);
+    if (isFavorite) {
+      await storage.toggleFavorite(savedStory.id, true, userId);
+      savedStory.isFavorite = true;
+    }
+    res.status(201).json(savedStory);
+  }));
   
   // Search for stories - general search query
   app.get("/api/stories/search", async (req, res) => {
@@ -3060,13 +3047,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * openai-model pair below checks inside the handler, which is the older
    * shape and not the one to copy.
    */
-  app.get("/api/settings/pictures", requireAuth, async (req, res) => {
+  app.get("/api/settings/pictures", requireAuth, asyncRoute(async (req, res) => {
     const userId = (req.user as any).id;
     const choice = await pictureChoiceFor(userId);
     res.json({ model: choice.model, quality: choice.tier, credits: choice.credits, free: choice.unlimited });
-  });
+  }));
 
-  app.post("/api/settings/pictures", requireAuth, async (req, res) => {
+  app.post("/api/settings/pictures", requireAuth, asyncRoute(async (req, res) => {
     const userId = (req.user as any).id;
     const parsed = picturePrefsSchema.partial().safeParse(req.body ?? {});
     if (!parsed.success) {
@@ -3089,7 +3076,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // shows what will actually happen rather than what was sent.
     const choice = await pictureChoiceFor(userId);
     res.json({ model: choice.model, quality: choice.tier, credits: choice.credits, free: choice.unlimited });
-  });
+  }));
 
   // Set user's OpenAI model
   app.post("/api/settings/openai-model", async (req, res) => {
@@ -3268,23 +3255,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update a hero of the faith
   app.put("/api/heroes/:id", requireAdmin, async (req, res) => {
     try {
-      const { id: bodyId, createdAt, ...updates } = req.body;
-      
-      const hero = await storage.updateHeroOfFaith(req.params.id, updates);
-      
+      // A patch, parsed. The body used to be spread into storage with only
+      // id and createdAt picked off, and the ZodError branch below could
+      // never run because nothing parsed. .partial() wraps every field in
+      // .optional(), so a defaulted field such as `tags` stays untouched
+      // when absent rather than resetting to [].
+      const parsed = heroOfFaithSchema.partial().omit({ id: true, createdAt: true }).safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: fromZodError(parsed.error).message });
+      }
+
+      const hero = await storage.updateHeroOfFaith(req.params.id, parsed.data);
+
       if (!hero) {
         return res.status(404).json({ message: "Hero of the faith not found" });
       }
-      
+
       res.json(hero);
     } catch (error) {
       console.error("Error updating hero of the faith:", error);
-      
-      if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ message: validationError.message });
-      }
-      
       res.status(500).json({ message: "Failed to update hero of the faith" });
     }
   });
@@ -3400,49 +3389,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Analyze an attached asset image - requires authentication
-  app.post("/api/analyze-attached-image", async (req, res) => {
-    try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to analyze images" });
-      }
-      
-      const { filename } = req.body;
-      
-      if (!filename || typeof filename !== 'string') {
-        return res.status(400).json({ message: "Valid filename is required" });
-      }
-      
-      // Get the user ID to check for API key
-      const userId = (req.user as any).id;
-      
-      // Check if user has their own OpenAI API key
-      const userOpenAIKey = await storage.getUserOpenAIKey(userId);
-      
-      if (!userOpenAIKey) {
-        return res.status(403).json({ 
-          message: "Image analysis requires your own OpenAI API key. Please add your API key in Settings."
-        });
-      }
-      
-      // Load the image from the attached_assets directory
-      const { loadAttachedImage } = await import('./lib/openai-vision');
-      const imageBase64 = await loadAttachedImage(filename);
-      
-      if (!imageBase64) {
-        return res.status(404).json({ message: `Image file ${filename} not found` });
-      }
-      
-      // Analyze the image with OpenAI
-      const analysis = await analyzeImageWithOpenAI(imageBase64, userId);
-      
-      res.json({ analysis });
-    } catch (error) {
-      console.error("Error analyzing attached image:", error);
-      res.status(500).json({ message: "Failed to analyze image" });
-    }
-  });
+  // POST /api/analyze-attached-image is gone. It joined a client-supplied
+  // filename onto attached_assets/ with no traversal guard, and nothing in
+  // client/, scripts/ or CI ever called it.
 
   // Hero Stories Library API Routes
   // Get all hero stories
@@ -3499,23 +3448,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update a hero story
   app.put("/api/hero-stories/:id", requireAdmin, async (req, res) => {
     try {
-      const { id: bodyId, createdAt, ...updates } = req.body;
-      
-      const story = await storage.updateHeroStory(req.params.id, updates);
-      
+      // Parsed, as PUT /api/heroes/:id is. createdBy is server-owned too.
+      const parsed = heroStorySchema
+        .partial()
+        .omit({ id: true, createdAt: true, createdBy: true })
+        .safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: fromZodError(parsed.error).message });
+      }
+
+      const story = await storage.updateHeroStory(req.params.id, parsed.data);
+
       if (!story) {
         return res.status(404).json({ message: "Hero story not found" });
       }
-      
+
       res.json(story);
     } catch (error) {
       console.error("Error updating hero story:", error);
-      
-      if (error instanceof ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ message: validationError.message });
-      }
-      
       res.status(500).json({ message: "Failed to update hero story" });
     }
   });
@@ -3618,62 +3568,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Database status endpoint - useful for monitoring
-  app.get("/api/system/db-status", async (req, res) => {
-    try {
-      // Check if DATABASE_URL is even set
-      if (!process.env.DATABASE_URL) {
-        return res.json({
-          status: "not_configured",
-          message: "Database connection not configured. Using in-memory storage.",
-          persistence: false
-        });
-      }
-
-      // We'll use the Pool class directly to test the connection
-      import('pg').then(async ({ default: pgModule }) => {
-        const { Pool } = pgModule;
-        try {
-          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-          
-          // Test a simple query to verify connection
-          const client = await pool.connect();
-          await client.query('SELECT NOW() as time');
-          client.release();
-          
-          return res.json({
-            status: "connected",
-            message: "Database connection successful. Data will persist across deployments.",
-            persistence: true
-          });
-        } catch (dbError: any) {
-          console.error("Database check failed:", dbError);
-          return res.json({
-            status: "error",
-            message: "Database connection failed. Using in-memory storage as fallback.",
-            persistence: false,
-            error: dbError?.message || String(dbError)
-          });
-        }
-      }).catch(importError => {
-        console.error("Error importing database module:", importError);
-        return res.json({
-          status: "error",
-          message: "Error importing database module. Using in-memory storage as fallback.",
-          persistence: false,
-          error: importError?.message || String(importError)
-        });
-      });
-    } catch (error: any) {
-      console.error("Database check failed:", error);
-      return res.json({
-        status: "error",
-        message: "Database check failed. Using in-memory storage as fallback.",
-        persistence: false,
-        error: error?.message || String(error)
-      });
-    }
-  });
+  // GET /api/system/db-status is gone. It answered without a session, opened
+  // a NEW pg.Pool on every request and never ended it, and handed the raw
+  // Postgres error message to whoever asked. /api/health is the one probe:
+  // it reports the real storage mode and schema state through the app's own
+  // pool, and tests/asyncRoutes.test.ts holds that no route file constructs
+  // a pool of its own.
 
   const httpServer = createServer(app);
 

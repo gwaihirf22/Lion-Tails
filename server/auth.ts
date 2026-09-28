@@ -104,6 +104,13 @@ const loginByAddress = limiter({ limit: 20, windowMs: 15 * 60_000 });
 const loginByName = limiter({ limit: 8, windowMs: 15 * 60_000 });
 const registerByAddress = limiter({ limit: 5, windowMs: 60 * 60_000 });
 const resetByAddress = limiter({ limit: 5, windowMs: 60 * 60_000 });
+/**
+ * Parent Mode's password prompt, keyed by ACCOUNT: the caller is already
+ * signed in, so the address is the family's own router and the thing being
+ * guessed is the parent's password by someone using the parent's session.
+ * Counts failures only, the login rule -- a right answer clears it.
+ */
+const parentModeByAccount = limiter({ limit: 8, windowMs: 15 * 60_000 });
 
 /** One shape for every refusal, so the client has one thing to recognise. */
 function tooMany(res: import("express").Response, seconds: number) {
@@ -505,10 +512,16 @@ export function setupAuth(app: Express) {
         return res.status(401).json({ error: "Authentication required" });
       }
 
-      const { password } = req.body;
-      if (!password) {
+      const { password } = req.body ?? {};
+      if (!password || typeof password !== "string") {
         return res.status(400).json({ error: "Password is required" });
       }
+
+      // Refuse before the scrypt check when this account is already over;
+      // spend the allowance only on a wrong answer, below.
+      const accountKey = String((req.user as any).id);
+      const already = parentModeByAccount.peek(accountKey);
+      if (!already.allowed) return tooMany(res, already.retryAfterSeconds);
 
       const user = await storage.getUserByUsername((req.user as any).username);
       if (!user) {
@@ -516,8 +529,9 @@ export function setupAuth(app: Express) {
       }
 
       const isValid = await comparePasswords(password, user.password);
-      
+
       if (isValid) {
+        parentModeByAccount.forget(accountKey);
         // Two ways on, chosen at the prompt each time: the window, or until
         // turned off / signed out. Both are session fields, so logging out
         // ends either, and the login cookie's own lifetime bounds "indefinite"
@@ -533,6 +547,8 @@ export function setupAuth(app: Express) {
           indefinite: keep,
         });
       } else {
+        const spent = parentModeByAccount.check(accountKey);
+        if (!spent.allowed) return tooMany(res, spent.retryAfterSeconds);
         res.status(401).json({ error: "Invalid password" });
       }
     } catch (error) {

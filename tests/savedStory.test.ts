@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { savedStorySchema } from "../shared/schema";
+import { savedStorySchema, storySaveBodySchema } from "../shared/schema";
 
 /**
  * The saved-story contract, around the outline added for continuations.
@@ -51,6 +51,44 @@ describe("savedStorySchema.outline", () => {
     const withOutline = { ...base, outline: ["Ch 1", "Ch 2"] };
     const parsed = savedStorySchema.parse(JSON.parse(JSON.stringify(withOutline)));
     expect(parsed.outline).toHaveLength(2);
+  });
+});
+
+/**
+ * POST /api/story/save used to take `story` and `request` off the raw body and
+ * hand them to storage. This schema is the whole of what stands between a
+ * request and a row now, so what it strips and what it keeps are pinned.
+ */
+describe("storySaveBodySchema", () => {
+  const body = { story: base.story, request: base.request, isFavorite: false };
+
+  it("accepts what the client posts, with generationId and outline optional", () => {
+    expect(storySaveBodySchema.safeParse(body).success).toBe(true);
+    const parsed = storySaveBodySchema.parse({
+      ...body,
+      story: { ...base.story, generationId: "g1", outline: ["Ch 1"] },
+    });
+    expect(parsed.story.generationId).toBe("g1");
+    expect(parsed.story.outline).toEqual(["Ch 1"]);
+  });
+
+  it("refuses a body with no request, which used to reach storage as undefined", () => {
+    expect(storySaveBodySchema.safeParse({ story: base.story }).success).toBe(false);
+    expect(storySaveBodySchema.safeParse({ story: "yes", request: base.request }).success).toBe(false);
+  });
+
+  it("strips a key that is not a story field", () => {
+    const parsed = storySaveBodySchema.parse({
+      ...body,
+      story: { ...base.story, userId: 1, isAdmin: true },
+    });
+    expect(parsed.story).not.toHaveProperty("userId");
+    expect(parsed.story).not.toHaveProperty("isAdmin");
+  });
+
+  it("keeps universeId on the request; the route decides whether it is the caller's", () => {
+    const parsed = storySaveBodySchema.parse({ ...body, request: { ...base.request, universeId: "u1" } });
+    expect(parsed.request.universeId).toBe("u1");
   });
 });
 
