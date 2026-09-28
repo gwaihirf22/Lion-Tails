@@ -184,7 +184,6 @@ export default function Header() {
     { href: "/music", text: "Music" },
     { href: "/characters", text: "Characters" },
     { href: "/heroes-of-faith", text: "Heroes" },
-    { href: "/image-analysis", text: "Image Analysis" },
     // Hiding the link is convenience, not security: requireAdmin on
     // /api/admin/generation-stats is what actually protects the data, and the
     // page renders the server 403 for anyone who navigates here directly.

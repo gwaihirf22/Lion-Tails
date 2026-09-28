@@ -315,7 +315,7 @@ export default function StoryForm({
     enabled: true,
   });
   
-  // HeroPicker owns the SEARCH over heroes; this reads the same cached list
+  // SourcePicker owns the SEARCH over heroes; this reads the same cached list
   // (same query key, so no second request) purely to offer the selected hero's
   // key events as focus options.
   
@@ -424,7 +424,7 @@ export default function StoryForm({
   /**
    * The chosen hero's key events, which are the focus options.
    *
-   * Shares HeroPicker's query key, so the list is fetched once and this costs
+   * Shares SourcePicker's query key, so the list is fetched once and this costs
    * nothing. heroOfFaith holds an id, but resolveHeroOfFaith accepts an id OR a
    * name, and a story loaded from localStorage can carry either -- so match on
    * both rather than assume.

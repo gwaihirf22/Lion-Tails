@@ -118,8 +118,8 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
     const before = pictures;
     setPictures(pictures ? { ...pictures, ...patch, tier: patch.quality ?? pictures.tier } : pictures);
     try {
-      const response = await apiRequest("POST", "/api/settings/pictures", patch);
-      if (!response.ok) throw new Error("save failed");
+      // apiRequest throws on any non-2xx, so nothing checks response.ok here.
+      await apiRequest("POST", "/api/settings/pictures", patch);
       await loadModels();
       refreshUsage();
       toast({ title: "Saved", description: "Your picture settings were updated." });
@@ -137,11 +137,9 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
     setIsLoadingModels(true);
     try {
       const response = await apiRequest("GET", "/api/settings/models");
-      if (response.ok) {
-        const data = await response.json();
-        setModels(data.models ?? []);
-        setPictures(data.pictures);
-      }
+      const data = await response.json();
+      setModels(data.models ?? []);
+      setPictures(data.pictures);
     } catch (error) {
       console.error("Error loading available models:", error);
     } finally {
@@ -201,25 +199,17 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
     setIsSubmitting(true);
 
     try {
-      const response = await apiRequest("POST", "/api/settings/openai-key", { key: apiKey });
-      
-      if (response.ok) {
-        setHasStoredKey(true);
-        // Adding a key unlocks the premium tier.
-        await loadModels();
-        refreshUsage();
-        setApiKey(""); // Clear the input for security
-        toast({
-          title: "API Key Saved",
-          description: "Your OpenAI API key has been saved successfully.",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to save API key. Please try again.",
-          variant: "destructive",
-        });
-      }
+      // apiRequest throws on any non-2xx; the catch below is the error path.
+      await apiRequest("POST", "/api/settings/openai-key", { key: apiKey });
+      setHasStoredKey(true);
+      // Adding a key unlocks the premium tier.
+      await loadModels();
+      refreshUsage();
+      setApiKey(""); // Clear the input for security
+      toast({
+        title: "API Key Saved",
+        description: "Your OpenAI API key has been saved successfully.",
+      });
     } catch (error) {
       console.error("Error saving API key:", error);
       toast({
@@ -237,25 +227,16 @@ export function SettingsPanel({ onClose }: { onClose?: () => void } = {}) {
     setIsDeleting(true);
 
     try {
-      const response = await apiRequest("DELETE", "/api/settings/openai-key");
-      
-      if (response.ok) {
-        setHasStoredKey(false);
-        // Removing a key revokes the premium tier; the server will downgrade a
-        // stored premium selection at generation time regardless.
-        await loadModels();
-        refreshUsage();
-        toast({
-          title: "API Key Removed",
-          description: "Your OpenAI API key has been removed.",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to remove API key. Please try again.",
-          variant: "destructive",
-        });
-      }
+      await apiRequest("DELETE", "/api/settings/openai-key");
+      setHasStoredKey(false);
+      // Removing a key revokes the premium tier; the server will downgrade a
+      // stored premium selection at generation time regardless.
+      await loadModels();
+      refreshUsage();
+      toast({
+        title: "API Key Removed",
+        description: "Your OpenAI API key has been removed.",
+      });
     } catch (error) {
       console.error("Error deleting API key:", error);
       toast({

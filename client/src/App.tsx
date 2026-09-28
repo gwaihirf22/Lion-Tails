@@ -14,7 +14,6 @@ import AdminCosts from "@/pages/AdminCosts";
 import AdminAccounts from "@/pages/AdminAccounts";
 import Characters from "@/pages/Characters";
 import HeroesOfFaith from "@/pages/HeroesOfFaith";
-import ImageAnalysis from "@/pages/ImageAnalysis";
 import GenerateStory from "@/pages/GenerateStory";
 import AuthPage from "@/pages/auth-page";
 import SharedStory from "@/pages/SharedStory";
@@ -53,7 +52,6 @@ function Router() {
       <ProtectedRoute path="/admin/accounts" component={AdminAccounts} />
       <ProtectedRoute path="/characters" component={Characters} />
       <Route path="/heroes-of-faith" component={HeroesOfFaith} />
-      <Route path="/image-analysis" component={ImageAnalysis} />
       <Route component={NotFound} />
     </Switch>
   );

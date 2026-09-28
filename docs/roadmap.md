@@ -230,11 +230,9 @@ charges nobody. What is left:
 
 | | |
 |---|---|
-| `searchMetadata` is always five empty arrays in production | the extraction logic exists only in `MemStorage`, so the Postgres path stores nothing |
-| `searchStoriesByTags` matches `request.theme` and has no route | dead as written |
-| `HeroesOfFaith.tsx:65` tests a tag nothing ever writes | always false |
+| `searchMetadata` is five empty arrays everywhere | the search routes and both storages' search methods were removed (nothing called them); the field stays on the schema because every stored row carries it, and `updateStoryHeroId` still appends a tag to it |
 | Stray `CREATE TABLE IF NOT EXISTS` inside `db-storage.ts` `toggleFavorite` | leftover from the pre-migration era |
-| Two endpoints exist for story-favourite | one is unused |
+| Two endpoints exist for story-favourite | `POST /api/story/favorite/:id` is called only from the unreachable branch of `GenerateStory.tsx`, which is kept on purpose (`decisions.md` §12) |
 | Interrupted attempts write no `generation_record` | biases the stats toward failures |
 | `GenerateStory.tsx:293`'s `StoryDisplay` is unreachable | `setGeneratedStory` is only ever called with `null`. Verified — but see `decisions.md` §12 before deleting it |
 | The settings UI carries its own hardcoded model list | `GET /api/settings/models` exists precisely so it does not have to |
@@ -257,8 +255,9 @@ Worth adding, roughly in order of value:
    sort of thing a test catches once and forever: for every write route, assert
    an unauthenticated request gets 401.
 2. **Storage parity.** `MemStorage` and `DbStorage` implement one interface and
-   have already diverged (`searchMetadata`). One suite run against both would
-   have caught it.
+   have diverged more than once (`searchMetadata` was filled by one and left
+   empty by the other for months; `saveStory` still ignores its `heroId`
+   argument on Postgres). One suite run against both would catch the next.
 3. **A schema round-trip test** — insert, read back, compare — for the tables
    with JSON columns, where a serialisation change is silent.
 

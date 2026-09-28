@@ -115,7 +115,7 @@ const SelectContent = React.forwardRef<
           // is stock shadcn, and it was wrong for all thirteen dropdowns here,
           // not only the 31-item skill list that made it obvious.
           //
-          // This is the idiom HeroPicker, CharacterPicker and AnimalAutocomplete
+          // This is the idiom SourcePicker, CharacterPicker and AnimalAutocomplete
           // already use for their own scrolling lists.
           "max-h-72 overflow-y-auto p-1",
           position === "popper" && "w-full min-w-[var(--radix-select-trigger-width)]"

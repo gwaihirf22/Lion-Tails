@@ -630,8 +630,6 @@ this app has any business reaching it.
   the migration cutover. They were never read by anything and are safe to drop.
 - Test coverage is deliberately narrow — pure functions only. There is no
   component, route or database test. See [Tests](#tests).
-- `searchMetadata` is always five empty arrays in production: the extraction
-  logic exists only in `MemStorage`, so the Postgres path stores nothing.
 - `/api/auth/me` returns `resetPasswordToken` and `verificationToken` to the
   browser.
 - Every story route uses an inline auth check rather than `requireAuth` in the

@@ -112,8 +112,6 @@ import {
   PICTURE_CREDITS, PICTURE_TIERS, PICTURE_TIER_LABELS, picturePrefsSchema, type PictureTier,
   storyRequestSchema, storySaveBodySchema, storyEditSchema, songSchema, characterSchema, heroOfFaithSchema, heroStorySchema, readingPrefsSchema, READING_PREFS_DEFAULTS } from "@shared/schema";
 import { withPictureNote } from "@shared/pictureNote";
-import { analyzeImageWithOpenAI } from "./lib/openai-implementation";
-import { getBibleVerseByTheme } from "./data/bibleVerses";
 import { categoryOf, vocabularyErrors } from "@shared/characterVocab";
 import { randomUUID } from "crypto";
 import { promises as fsp } from "fs";
@@ -712,10 +710,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * A photograph becomes a portrait -- drawn from, or kept as it is.
    *
-   * RAW BYTES, NOT BASE64 IN JSON. `pages/ImageAnalysis.tsx` does the latter
-   * through `express.json()`, whose default limit is 100kb, so it cannot have
-   * worked on a photograph from a real camera since the day it was written.
-   * The body parser is attached to this route alone: raising the global JSON
+   * RAW BYTES, NOT BASE64 IN JSON. The old Image Analysis page did the latter
+   * through `express.json()`, whose default limit is 100kb, so it could not
+   * have worked on a photograph from a real camera; it is gone for that
+   * reason. The body parser is attached to this route alone: raising the global JSON
    * limit to fit an image would raise it for all fifty-odd other routes.
    *
    * `image/png` only, and the client converts before sending (`croppedPng`).
@@ -1904,114 +1902,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(savedStory);
   }));
   
-  // Search for stories - general search query
-  app.get("/api/stories/search", async (req, res) => {
-    try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to search stories" });
-      }
-      
-      const query = req.query.q as string;
-      
-      if (!query) {
-        return res.status(400).json({ message: "Search query is required" });
-      }
-      
-      // Get user ID from authenticated user
-      const userId = (req.user as any).id;
-      
-      // Search stories with the query
-      const stories = await storage.searchStories(query, userId);
-      
-      res.status(200).json(stories);
-    } catch (error) {
-      console.error("Error searching stories:", error);
-      res.status(500).json({ message: "Failed to search stories" });
-    }
-  });
-  
-  // Search for stories by name
-  app.get("/api/stories/search/name/:name", async (req, res) => {
-    try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to search stories" });
-      }
-      
-      const name = req.params.name;
-      
-      if (!name) {
-        return res.status(400).json({ message: "Name parameter is required" });
-      }
-      
-      // Get user ID from authenticated user
-      const userId = (req.user as any).id;
-      
-      // Search stories with the name
-      const stories = await storage.searchStoriesByName(name, userId);
-      
-      res.status(200).json(stories);
-    } catch (error) {
-      console.error("Error searching stories by name:", error);
-      res.status(500).json({ message: "Failed to search stories by name" });
-    }
-  });
-  
-  // Search for stories by Bible passage
-  app.get("/api/stories/search/passage/:passage", async (req, res) => {
-    try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to search stories" });
-      }
-      
-      const passage = req.params.passage;
-      
-      if (!passage) {
-        return res.status(400).json({ message: "Bible passage parameter is required" });
-      }
-      
-      // Get user ID from authenticated user
-      const userId = (req.user as any).id;
-      
-      // Search stories with the Bible passage
-      const stories = await storage.searchStoriesByBiblePassage(passage, userId);
-      
-      res.status(200).json(stories);
-    } catch (error) {
-      console.error("Error searching stories by Bible passage:", error);
-      res.status(500).json({ message: "Failed to search stories by Bible passage" });
-    }
-  });
-  
-  // Search for stories by topic
-  app.get("/api/stories/search/topic/:topic", async (req, res) => {
-    try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to search stories" });
-      }
-      
-      const topic = req.params.topic;
-      
-      if (!topic) {
-        return res.status(400).json({ message: "Topic parameter is required" });
-      }
-      
-      // Get user ID from authenticated user
-      const userId = (req.user as any).id;
-      
-      // Search stories with the topic
-      const stories = await storage.searchStoriesByTopic(topic, userId);
-      
-      res.status(200).json(stories);
-    } catch (error) {
-      console.error("Error searching stories by topic:", error);
-      res.status(500).json({ message: "Failed to search stories by topic" });
-    }
-  });
-  
+  // The four /api/stories/search routes are gone: no client ever called
+  // them, and on Postgres the metadata they searched was never written.
+
   // Get stories for a specific Hero of the Faith
   app.get("/api/heroes/:heroId/stories", async (req, res) => {
     try {
@@ -3294,104 +3187,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Analyze an image with OpenAI Vision API - requires authentication
-  app.post("/api/analyze-image", async (req, res) => {
-    try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to analyze images" });
-      }
-      
-      const { imageBase64 } = req.body;
-      
-      if (!imageBase64 || typeof imageBase64 !== 'string') {
-        return res.status(400).json({ message: "Valid image data is required" });
-      }
-      
-      // Get the user ID to check for API key
-      const userId = (req.user as any).id;
-      
-      // Check if user has their own OpenAI API key
-      const userOpenAIKey = await storage.getUserOpenAIKey(userId);
-      
-      if (!userOpenAIKey) {
-        return res.status(403).json({ 
-          message: "Image analysis requires your own OpenAI API key. Please add your API key in Settings."
-        });
-      }
-      
-      // Analyze the image with OpenAI using user's API key and userId
-      const analysis = await analyzeImageWithOpenAI(imageBase64, userId);
-      
-      res.json({ analysis });
-    } catch (error) {
-      console.error("Error analyzing image:", error);
-      res.status(500).json({ message: "Failed to analyze image" });
-    }
-  });
-  
-  // Generate a story based on an image - requires authentication
-  app.post("/api/generate-story-from-image", async (req, res) => {
-    try {
-      // Check if user is authenticated
-      if (!req.user || !req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required to generate stories from images" });
-      }
-      
-      const { imageBase64, childName, gender, theme } = req.body;
-      
-      if (!imageBase64 || typeof imageBase64 !== 'string') {
-        return res.status(400).json({ message: "Valid image data is required" });
-      }
-      
-      if (!childName || !gender) {
-        return res.status(400).json({ message: "Child's name and gender are required" });
-      }
-      
-      // Get the user ID to check for API key
-      const userId = (req.user as any).id;
-      
-      // Check if user has their own OpenAI API key
-      const userOpenAIKey = await storage.getUserOpenAIKey(userId);
-      
-      if (!userOpenAIKey) {
-        return res.status(403).json({ 
-          message: "Generating stories from images requires your own OpenAI API key. Please add your API key in Settings."
-        });
-      }
-      
-      // Generate a story based on the image
-      const { generateStoryFromImage } = await import('./lib/openai-vision');
-      const story = await generateStoryFromImage(imageBase64, childName, gender, theme || 'faith', userId);
-      
-      // Generate a Bible verse related to the theme
-      const bibleVerse = getBibleVerseByTheme(theme || 'faith');
-      
-      // Create the full story response
-      const storyResponse = {
-        title: story.title,
-        content: story.content,
-        bibleVerse,
-        imageUrl: undefined // No image URL since we're using the uploaded image
-      };
-      
-      res.json(storyResponse);
-    } catch (error) {
-      console.error("Error generating story from image:", error);
-      res.status(500).json({ 
-        title: "Story Generation Error",
-        content: "There was an error generating your story from the image. Please check your API key and try again.",
-        bibleVerse: {
-          text: "Trust in the LORD with all your heart and lean not on your own understanding.",
-          reference: "Proverbs 3:5"
-        }
-      });
-    }
-  });
-  
-  // POST /api/analyze-attached-image is gone. It joined a client-supplied
-  // filename onto attached_assets/ with no traversal guard, and nothing in
-  // client/, scripts/ or CI ever called it.
+  // The Image Analysis routes are gone with the page: /api/analyze-image and
+  // /api/generate-story-from-image posted a photograph as base64 inside JSON,
+  // which express.json()'s 100kb limit refused for anything from a real
+  // camera, and /api/analyze-attached-image joined a client-supplied filename
+  // onto attached_assets/ with no traversal guard and had no caller at all.
 
   // Hero Stories Library API Routes
   // Get all hero stories

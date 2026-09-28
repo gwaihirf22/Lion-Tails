@@ -12,9 +12,9 @@ known-but-unfixed items — check it before reporting something as a new find.
 ## Project Overview
 
 Lion Tails generates personalised Christian bedtime stories for children, with a
-song/chord library, "Heroes of the Faith" content, character management and image
-analysis. It is an Express 4 + TypeScript (ESM) server that also serves a React
-18 / Vite SPA — one process, one port.
+song/chord library, "Heroes of the Faith" content and character management. It
+is an Express 4 + TypeScript (ESM) server that also serves a React 18 / Vite
+SPA — one process, one port.
 
 Deployed as a Docker container on an Unraid server, behind SWAG at
 `liontails.paul-blake.com`.
@@ -997,9 +997,10 @@ is**. One route, `POST /api/characters/:id/avatar/photo?mode=drawing|photo`.
   1024, re-encoded) so there is no `sharp` in the build and ONE format in
   `AVATAR_DIR` — `readAvatarFile` only reads `avatar_<uuid>.png`, and
   `illustration.ts` sends these declaring `image/png`. `isPngImage` checks the
-  magic bytes, never the header. **Do not copy `pages/ImageAnalysis.tsx`**: it
-  posts base64 through `express.json()`'s 100kb default and cannot have worked
-  on a real photo.
+  magic bytes, never the header. **Never post an image as base64 in JSON**:
+  the old Image Analysis page did, through `express.json()`'s 100kb default,
+  and could not have worked on a real photo. It was deleted for that reason
+  (page, nav link, its two routes and `openai-vision.ts`).
 - **Every photo is framed before it is sent** (`PhotoCropper.tsx`). Blake:
   "needs a crop or zoom out option so that the file can fit where it needs to
   in the window." Every portrait is shown square and `object-cover`, so a
@@ -1060,9 +1061,10 @@ inside it. **Moving that line back above `registerRoutes` is silent**: nothing
 errors, no test fails, and every portrait answers 200 without a session again.
 Check with `curl` — an avatar url with no cookie must be 401.
 
-This is possible at all because **the client's Bearer header is vestigial**:
-nothing in `server/` reads `Authorization`, auth is the passport session
-cookie, and an `<img>` sends that on a same-origin request.
+This is possible at all because **there is no Bearer header**: nothing in
+`server/` reads `Authorization` (the client used to send a token nothing
+wrote; that is gone), auth is the passport session cookie, and an `<img>`
+sends that on a same-origin request.
 
 ## The picture at the end of a story
 
