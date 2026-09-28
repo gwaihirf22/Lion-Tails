@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync, readdirSync, statSync } from "fs";
 import path from "path";
 import { asyncRoute, errorHandler } from "../server/lib/asyncRoute";
+import { ROOT, allRouteRegistrations, type Registration } from "./helpers/routeFiles";
 
 /**
  * Express 4 drops the promise an async handler returns, so a rejection in one
@@ -13,30 +14,10 @@ import { asyncRoute, errorHandler } from "../server/lib/asyncRoute";
  * try block before the first await.
  *
  * Run against the tree before the fix, it named eighteen routes.
+ *
+ * The scanner lives in tests/helpers/routeFiles.ts, shared with
+ * routeAuth.test.ts, which holds every non-public route to a 401.
  */
-const ROOT = path.resolve(__dirname, "..");
-const ROUTE_FILES = ["server/routes.ts", "server/auth.ts", "server/songs.ts"];
-
-type Registration = { file: string; method: string; route: string; signature: string; body: string };
-
-function registrations(file: string): Registration[] {
-  const text = readFileSync(path.join(ROOT, file), "utf8");
-  // A registration runs from `app.<verb>("...` to the `=> {` that opens the
-  // handler. Guards and the handler's parameter list sit in between and may
-  // wrap onto a second line.
-  const re = /\bapp\.(get|post|put|patch|delete)\(\s*"([^"]+)"[\s\S]*?=>\s*\{/g;
-  const found: Array<{ method: string; route: string; signature: string; start: number; end: number }> = [];
-  for (let m = re.exec(text); m; m = re.exec(text)) {
-    found.push({ method: m[1], route: m[2], signature: m[0], start: m.index, end: m.index + m[0].length });
-  }
-  return found.map((f, i) => ({
-    file,
-    method: f.method,
-    route: f.route,
-    signature: f.signature,
-    body: text.slice(f.end, i + 1 < found.length ? found[i + 1].start : undefined),
-  }));
-}
 
 /** Async, and neither wrapped nor guarded by its own try before the first await. */
 function unprotected(r: Registration): boolean {
@@ -49,7 +30,7 @@ function unprotected(r: Registration): boolean {
 }
 
 describe("every async route reaches the error middleware", () => {
-  const all = ROUTE_FILES.flatMap(registrations);
+  const all = allRouteRegistrations();
 
   it("finds the routes at all", () => {
     // If the pattern stops matching the registration style, this test would

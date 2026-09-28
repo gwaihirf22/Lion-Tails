@@ -14,19 +14,14 @@ Closed since this list was written, recorded so nobody re-finds them:
 `tests/publicUser.test.ts`); an unmatched `/api/*` path answers a JSON 404 in
 production (`server/static.ts`) and in development (`server/vite.ts`).
 
-### Story routes use inline auth checks
+### Story routes use inline auth checks -- DONE
 
-Twenty routes in `server/routes.ts` (and `/api/generate-chords`) still do
-their own `if (!req.user)` rather than taking `requireAuth` in the signature,
-which is how eight unguarded write routes once shipped: a missing check is
-invisible when it is supposed to be in the body, and obvious when it is
-supposed to be in the signature. Fix is mechanical but touches many routes,
-so it wants its own PR -- after the route-auth test suite (Testing gaps,
-below) exists to prove nothing lost its guard.
-
-The five character routes were converted when the character model widened,
-since that change rewrote those handlers anyway. The universe, job, pricing
-and settings routes take guards already.
+Every route takes its guard in the signature now. The last thirteen inline
+`if (!req.user)` checks were converted in one pass once
+`tests/routeAuth.test.ts` existed to prove none of them lost its guard; that
+suite reads the routes from the source, so a route added tomorrow is held to
+a 401 the moment it is registered, and `if (!req.user` in a handler body is
+a regression rather than a style.
 
 ### Email is wired to nothing
 
@@ -236,20 +231,29 @@ charges nobody. What is left:
 
 ## Testing gaps
 
-Current coverage is pure functions only: the story parser, per-model request
-shape and entitlement, and hero data structure. Deliberate, and narrow.
+Coverage is pure functions plus three suites that read the real thing:
+`tests/routeAuth.test.ts` boots `createApp()` in memory mode and holds
+every route not on its public allowlist to a 401 with no cookie;
+`tests/storageParity.test.ts` runs one suite against `MemStorage` always and
+against `DbStorage` in CI's Postgres job; `tests/asyncRoutes.test.ts` scans
+the route files. Deliberate, and still narrow.
 
-Worth adding, roughly in order of value:
+Done since this list was written:
 
-1. **Route-level auth tests.** The inline-check problem above is exactly the
-   sort of thing a test catches once and forever: for every write route, assert
-   an unauthenticated request gets 401.
-2. **Storage parity.** `MemStorage` and `DbStorage` implement one interface and
-   have diverged more than once (`searchMetadata` was filled by one and left
-   empty by the other for months; `saveStory` still ignores its `heroId`
-   argument on Postgres). One suite run against both would catch the next.
-3. **A schema round-trip test** — insert, read back, compare — for the tables
-   with JSON columns, where a serialisation change is silent.
+1. **Route-level auth tests** -- DONE. The suite reads the registrations
+   from the source, so a route added tomorrow is covered the moment it is
+   registered.
+2. **Storage parity** -- DONE. Its first case pins the divergence that
+   prompted it: `saveStory` used to read `heroId` from an argument in memory
+   and from the request on Postgres; both read the request now.
+
+Still worth adding:
+
+3. **A schema round-trip test** -- insert, read back, compare -- for the
+   tables with JSON columns, where a serialisation change is silent. The
+   parity suite covers `user_stories`, `user_characters` and `story_shares`
+   on that path; universes, `story_jobs` and `user_settings` are not yet
+   exercised against Postgres.
 
 Not worth adding here: component tests and anything needing a headless browser.
 There is no browser in the deployment container, the reader's visual behaviour

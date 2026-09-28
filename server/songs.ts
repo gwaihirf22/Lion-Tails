@@ -3,7 +3,7 @@ import { Express } from "express";
 import { getAllSongs, getSongById, searchSongs, getPopularSongs, addSong, updateSong, deleteSong } from './data/songDatabase';
 import { generateSongChords } from "./lib/songGenerator";
 import { StoryGenerationError } from "./lib/storyErrors";
-import { requireAdmin } from "./lib/requireAuth";
+import { requireAdmin, requireAuth } from "./lib/requireAuth";
 import { Song, songSchema } from "@shared/schema";
 import { ZodError } from "zod";
 // The /v3 entry point, deliberately. zod-validation-error 5 defaults to
@@ -155,14 +155,11 @@ export function registerSongRoutes(app: Express) {
   });
   
   // Generate chords for a song
-  app.post("/api/generate-chords", async (req, res) => {
+  app.post("/api/generate-chords", requireAuth, async (req, res) => {
     try {
       // This route was completely unauthenticated while calling a paid model on
       // the server owner's API key -- anyone who could reach the site could
       // spend his OpenAI credits in a loop.
-      if (!req.user || !req.isAuthenticated?.()) {
-        return res.status(401).json({ message: "Authentication required to generate chords" });
-      }
       const userId = (req.user as any).id;
 
       // A ceiling behind the login, the story and picture limiters' shape:
