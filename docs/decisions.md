@@ -1271,15 +1271,15 @@ it. The only defence is to change one thing at a time and watch what breaks,
 which is what caught this: the faults were traceable to a single config change
 made 31 minutes earlier.
 
-### Known open instance: mistyped API paths return 200 and HTML
+### A closed instance: mistyped API paths returned 200 and HTML
 
 A POST to an `/api/` path that does not exist — `/api/login` rather than
-`/api/auth/login`, say — falls through to the SPA catch-all in
-`server/static.ts` and returns **HTTP 200 with index.html**. A client reads that
-as success and only discovers otherwise several requests later, when something
-downstream 401s.
+`/api/auth/login`, say — fell through to the SPA catch-all in
+`server/static.ts` and returned **HTTP 200 with index.html**. A client read that
+as success and only discovered otherwise several requests later, when something
+downstream 401'd.
 
 This was found by a benchmark harness that "successfully registered" a user
-against a route that has never existed. Unfixed at the time of writing; the
-remedy is for unmatched `/api/*` requests to 404 as JSON before the SPA
-fallback is reached.
+against a route that has never existed. Production now answers a JSON 404 for
+any unmatched `/api/*` before the SPA fallback (`server/static.ts`); the dev
+server's Vite catch-all still falls through, and is on the roadmap.

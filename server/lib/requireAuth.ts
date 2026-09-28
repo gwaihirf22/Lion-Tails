@@ -38,9 +38,9 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
  *
  * Everything else in this file goes in a route's signature, so a missing guard
  * is visible where the routes are listed. This one cannot: a ban has to reach
- * the twenty-nine routes that check `if (!req.user)` inline rather than taking
- * a guard, and adding it to each of them by hand is the arrangement this file
- * exists to avoid.
+ * the twenty-odd routes that still check `if (!req.user)` inline rather than
+ * taking a guard (twenty-nine when this was written), and adding it to each
+ * of them by hand is the arrangement this file exists to avoid.
  *
  * It is safe as a global precisely because it acts on almost nothing. It fires
  * only when deserializeUser has just refused a session for a banned row and

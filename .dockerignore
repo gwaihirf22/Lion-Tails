@@ -29,5 +29,6 @@ npm-debug.log*
 
 # NOTE: public/ is deliberately NOT ignored — it ships static assets and is the
 # runtime write target for generated story images.
-# NOTE: attached_assets/ is deliberately NOT ignored — client/src/App.tsx
-# imports "@assets/Lion tails.jpg" at build time.
+# NOTE: attached_assets/ is deliberately NOT ignored — the client resolves
+# "@assets/..." imports from it at build time (vite.config.ts), and the
+# source PNGs for the shipped webp artwork live there.
