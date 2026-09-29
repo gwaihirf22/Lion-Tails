@@ -138,7 +138,7 @@ See `.env.example`. Summary:
 | `PUBLIC_URL` | no | Only used to put a link at the bottom of an alert. |
 | `COSTS_ADMIN_KEY` (or `COSTS_ADMIN_KEY_FILE`), `COSTS_PROJECT_ID` | no | The OpenAI organisation Admin key and project for the bill check on `/admin/costs`. Never named `OPENAI_*`: the SDK would send it. |
 | `APP_VERSION` | no | Set by the Docker build; shown on `/api/health`. |
-| `EMAIL_*` | — | Read by nothing. There is no mailer. See [Email](#email). |
+| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` (or `SMTP_PASSWORD_FILE`), `MAIL_FROM`, `SMTP_PORT` | no | The password-reset email. All blank ⇒ production answers reset requests with a 503 rather than promising an email nobody can send; a dev box logs the link instead. See [Email](#email). |
 
 ## Schema and migrations
 
@@ -479,22 +479,30 @@ the app is self-hosted specifically so a household on a flaky link still works.
 
 ## Email
 
-**No email is sent, by any path, and there is no mailer in the codebase.**
-The nodemailer module that once lived at `server/lib/auth.ts` was deleted
-along with its dependency, and nothing reads `EMAIL_*`.
+**One email is sent, by one path: the password-reset link.** `server/lib/mailer.ts`
+is the only sender, over SMTP with `nodemailer` (no dependencies of its own),
+configured in production for a dedicated Gmail account with an app password
+that sends as a verified alias on the app's own domain -- so the From line
+reads as Lion Tails, and nothing lapses for disuse the way a transactional
+free tier does.
 
-- `POST /api/auth/reset-password-request` generates a valid reset token, then
-  drops it: the handler carries a literal `// TODO: Send password reset email`
-  and returns the token in the response body **only** when
-  `NODE_ENV=development`. In production the token is created and discarded.
-- `POST /api/auth/reset-password` works correctly — it is the delivery of the
-  token that is missing, not the consumption of it.
-
-Consequences: email verification is not enforced anywhere (there is no
-`requireVerified` guard), so this does not block signup. Password reset is
-unreachable in production. The app's one outbound channel is Telegram, for the
-owner's account alerts (see `CLAUDE.md`, "Running the accounts"); delivering a
-reset token to a user is the outstanding work.
+- `POST /api/auth/reset-password-request` (rate-limited, Turnstile-checked)
+  mints a CSPRNG token and emails a link to `/reset-password/<token>`, built
+  on the request's own scheme and host. **In production with no mailer it
+  answers 503** ("not available just now") before looking the address up,
+  rather than a 200 that promises an email nobody can send; on a dev box
+  with no mailer it returns the token and logs the link so the flow can be
+  exercised without a mailbox.
+- `POST /api/auth/reset-password` consumes the token and holds the new
+  password to the sign-up rule. The page for it is `/reset-password/:token`,
+  public, and "Forgot your password?" on the sign-in page is where a reset
+  is asked for.
+- `/admin/accounts` has **"Send a test email"**, which sends to the admin's
+  own address and shows the mail server's answer, so a wrong app password
+  is found the day it is set.
+- Sign-up does not verify an address (accounts are marked verified at
+  creation; `POST /api/auth/verify-email` exists and nothing depends on it),
+  and alerts stay on Telegram. Adding either is a decision, not a switch.
 
 ## Deployment
 
@@ -576,7 +584,7 @@ defines* — rather than a number that has to be maintained in two places.
 | `POSTGRES_PASSWORD` | `openssl rand -hex 32` |
 | `SESSION_SECRET` | `openssl rand -hex 32` |
 | `OPENAI_API_KEY` | |
-| `EMAIL_HOST` / `EMAIL_USER` / `EMAIL_PASSWORD` | Still written into the remote `.env` by the deploy step, read by nothing (see [Email](#email)) |
+| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASSWORD` / `MAIL_FROM` | The reset mailer: a Gmail account's SMTP host, address and app password, and the alias it sends as (see [Email](#email)) |
 
 ### Server setup
 
@@ -624,9 +632,6 @@ this app has any business reaching it.
 - `CLAUDE.md` — orientation for AI agents working in this codebase.
 
 ## Known gaps
-
-- **Password reset delivers nothing.** There is no mailer; the token is minted
-  and dropped. See [Email](#email).
 
 - `characters` and `stories` tables may still exist on databases created before
   the migration cutover. They were never read by anything and are safe to drop.

@@ -11,6 +11,7 @@ import { ACCOUNT_SUSPENDED_CODE, ACCOUNT_SUSPENDED_MESSAGE, isBanned } from "@sh
 import { requiredSecret } from "./config";
 import { denyBannedAccounts } from "./lib/requireAuth";
 import { limiter } from "./lib/rateLimit";
+import { mailConfigured, resetMessage, sendMail } from "./lib/mailer";
 import { CREDENTIAL_RULES, TURNSTILE_FIELD } from "@shared/challenge";
 import {
   challengeMisconfigured,
@@ -434,29 +435,62 @@ export function setupAuth(app: Express) {
       // into verification_tokens for any address anybody cares to name.
       if (!(await personChecked(req, res))) return;
 
+      // FAIL CLOSED, before the lookup. In production with no mailer this
+      // used to answer the 200 below and deliver nothing -- a parent waiting
+      // for an email nobody could send. A 503 says what is true, and saying
+      // it before the address is looked up means it reveals nothing about
+      // who has an account. `challengeMisconfigured()`'s precedent.
+      // Development keeps its shortcut: the token comes back in the body so
+      // the dev stack and the reset page work with no mailbox in sight.
+      const development = process.env.NODE_ENV === "development";
+      if (!mailConfigured() && !development) {
+        console.error("[mail] not set up -- refusing password resets. SMTP_HOST, SMTP_USER and SMTP_PASSWORD (or _FILE) are needed.");
+        return res.status(503).json({
+          error: "Password reset is not available just now. Please try again later.",
+        });
+      }
+
       const { email } = req.body;
-      if (!email) {
+      if (!email || typeof email !== "string") {
         return res.status(400).json({ error: "Email is required" });
       }
 
+      // One sentence whether or not the address is known, so this route is
+      // not a way to find out who has an account.
+      const sent = "If your email is registered, you will receive a password reset link";
+
       const user = await storage.getUserByEmail(email);
       if (!user) {
-        // For security reasons, don't reveal if email exists
-        return res.status(200).json({ message: "If your email is registered, you will receive a password reset link" });
+        return res.status(200).json({ message: sent });
       }
 
-      // Generate a password reset token
+      // A credential from the CSPRNG (server/lib/tokens.ts), 24 hours.
       const token = await storage.createVerificationToken(user.id, 'password');
 
-      // TODO: Send password reset email
-      // This would typically involve sending an email with a link containing the token
-      // For now, we'll just return the token in the response for testing purposes
-      // In a real app, you would never return the token in the response
+      // The link points at whatever address the parent used to reach the
+      // app: the request's own scheme and host, static.ts's rule. `trust
+      // proxy` is on, so behind SWAG that is https and the public name.
+      const origin = `${req.protocol}://${req.get("host")}`;
+      const message = resetMessage(origin, user.username, token);
 
-      res.status(200).json({ 
-        message: "If your email is registered, you will receive a password reset link",
-        token: process.env.NODE_ENV === 'development' ? token : undefined, // Only return token in development
-      });
+      if (!mailConfigured()) {
+        // Development only (the production case answered 503 above).
+        console.log(`[mail] not set up; the reset link for ${user.username} is ${origin}/reset-password/${token}`);
+        return res.status(200).json({ message: sent, token });
+      }
+
+      const result = await sendMail({ to: user.email, ...message });
+      if (!result.ok) {
+        // The minted row is harmless: it expires in a day and was never
+        // delivered. What matters is that the parent is not told to check an
+        // inbox that has nothing in it.
+        console.error(`[mail] reset email for ${user.username} did not go: ${result.error}`);
+        return res.status(503).json({
+          error: "We could not send the email just now. Please try again later.",
+        });
+      }
+
+      res.status(200).json({ message: sent });
     } catch (error) {
       next(error);
     }

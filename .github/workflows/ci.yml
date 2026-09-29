@@ -561,6 +561,10 @@ jobs:
           TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
           UNRAID_HOST: ${{ secrets.UNRAID_HOST }}
           UNRAID_USERNAME: ${{ secrets.UNRAID_USERNAME }}
         run: |
@@ -592,8 +596,14 @@ jobs:
             # /admin/accounts rather than pretending it is watching.
             printf 'TELEGRAM_BOT_TOKEN=%s\n'  "$TELEGRAM_BOT_TOKEN"
             printf 'TELEGRAM_CHAT_ID=%s\n'    "$TELEGRAM_CHAT_ID"
-            # EMAIL_* is written by nothing and read by nothing: there is no
-            # mailer (README, "Email"). The GitHub secrets can be deleted.
+            # Password-reset email, over SMTP (a Gmail account with an app
+            # password, sending as the domain alias in MAIL_FROM). All blank
+            # means production REFUSES reset requests with a 503 rather than
+            # promising an email nobody can send -- see server/lib/mailer.ts.
+            printf 'SMTP_HOST=%s\n'     "$SMTP_HOST"
+            printf 'SMTP_USER=%s\n'     "$SMTP_USER"
+            printf 'SMTP_PASSWORD=%s\n' "$SMTP_PASSWORD"
+            printf 'MAIL_FROM=%s\n'     "$MAIL_FROM"
             echo 'ENVEOF'
             cat <<'REMOTE'
           trap 'rm -f /mnt/user/appdata/lion-tails/.env' EXIT

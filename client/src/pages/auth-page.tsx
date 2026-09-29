@@ -14,7 +14,8 @@ import { Loader2 } from "lucide-react";
 import lantern from "@/assets/lantern.webp";
 import { useQuery } from "@tanstack/react-query";
 import TurnstileGate, { type TurnstileHandle } from "@/components/TurnstileGate";
-import { CREDENTIAL_RULES } from "@shared/challenge";
+import { CREDENTIAL_RULES, TURNSTILE_FIELD } from "@shared/challenge";
+import { apiRequestAllowingErrors } from "@/lib/queryClient";
 
 // Extend the schemas from shared/schema.ts
 const loginSchema = z.object({
@@ -40,8 +41,12 @@ const registerSchema = z.object({
   path: ["confirmPassword"],
 });
 
+/** "Forgot your password?" asks for one thing, held to the sign-up rule. */
+const forgotSchema = z.object({ email: CREDENTIAL_RULES.email });
+
 type LoginFormValues = z.infer<typeof loginSchema>;
 type RegisterFormValues = z.infer<typeof registerSchema>;
+type ForgotFormValues = z.infer<typeof forgotSchema>;
 
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
@@ -82,6 +87,22 @@ export default function AuthPage() {
   const gate = useRef<TurnstileHandle | null>(null);
   const [checking, setChecking] = useState(false);
   const [challengeError, setChallengeError] = useState<string | null>(null);
+
+  /**
+   * The reset request, in place of the sign-in form when asked for. Its own
+   * widget and ref: the register form's gate lives in the other tab, and a
+   * token is single-use anyway. The server challenges this route too --
+   * one unthrottled POST used to write a token row for any address.
+   */
+  const [forgot, setForgot] = useState(false);
+  const resetGate = useRef<TurnstileHandle | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [resetSent, setResetSent] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const forgotForm = useForm<ForgotFormValues>({
+    resolver: zodResolver(forgotSchema),
+    defaultValues: { email: "" },
+  });
 
   /**
    * Whether this server demands a Turnstile check, and the public site key.
@@ -130,6 +151,43 @@ export default function AuthPage() {
     registerMutation.mutate({ ...credentials, turnstileToken });
   };
 
+  const onForgotSubmit = async (values: ForgotFormValues) => {
+    setResetError(null);
+    setResetSent(null);
+    let turnstileToken = "";
+    if (needsWidget) {
+      setResetting(true);
+      try {
+        turnstileToken = await (resetGate.current?.execute() ??
+          Promise.reject(new Error("The check is not ready yet. Please try again in a moment.")));
+      } catch (error) {
+        setResetError(error instanceof Error ? error.message : String(error));
+        setResetting(false);
+        return;
+      }
+    }
+    setResetting(true);
+    const res = await apiRequestAllowingErrors("POST", "/api/auth/reset-password-request", {
+      email: values.email,
+      [TURNSTILE_FIELD]: turnstileToken,
+    });
+    const body = await res.json().catch(() => ({}));
+    setResetting(false);
+    if (res.ok) {
+      setResetSent(body.message ?? "If your email is registered, you will receive a password reset link.");
+    } else {
+      // 503 (no mailer, or it refused), 429 (too many) and 400 (the check)
+      // each come with a sentence a parent can act on.
+      setResetError(body.error ?? body.message ?? "It did not go. Please try again.");
+    }
+  };
+
+  const leaveForgot = () => {
+    setForgot(false);
+    setResetSent(null);
+    setResetError(null);
+  };
+
   // Redirect if already logged in
   if (user) {
     return <Redirect to="/" />;
@@ -155,6 +213,52 @@ export default function AuthPage() {
 
               {/* Login Form */}
               <TabsContent value="login">
+                {forgot ? (
+                <Form {...forgotForm}>
+                  <form onSubmit={forgotForm.handleSubmit(onForgotSubmit)} className="space-y-4 pt-4">
+                    <p className="m-0 text-sm text-muted-foreground">
+                      Tell us the email on your account and we will send a link for choosing a new password.
+                    </p>
+                    <FormField
+                      control={forgotForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input placeholder="you@example.com" autoComplete="email" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {needsWidget && challenge?.siteKey && (
+                      <TurnstileGate ref={resetGate} siteKey={challenge.siteKey} action="reset" />
+                    )}
+
+                    {resetError && <p className="m-0 text-sm text-destructive">{resetError}</p>}
+
+                    {resetSent ? (
+                      <p className="m-0 text-sm">{resetSent}</p>
+                    ) : (
+                      <Button type="submit" className="w-full" disabled={resetting || challengeLoading}>
+                        {resetting ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Sending...
+                          </>
+                        ) : (
+                          "Send me a link"
+                        )}
+                      </Button>
+                    )}
+                    <Button type="button" variant="link" className="w-full" onClick={leaveForgot}>
+                      Back to sign in
+                    </Button>
+                  </form>
+                </Form>
+                ) : (
                 <Form {...loginForm}>
                   <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4 pt-4">
                     <FormField
@@ -197,8 +301,12 @@ export default function AuthPage() {
                         "Log In"
                       )}
                     </Button>
+                    <Button type="button" variant="link" className="w-full" onClick={() => setForgot(true)}>
+                      Forgot your password?
+                    </Button>
                   </form>
                 </Form>
+                )}
               </TabsContent>
 
               {/* Register Form */}

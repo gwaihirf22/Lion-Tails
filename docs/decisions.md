@@ -1168,6 +1168,50 @@ the running job's lease on the way out; the next worker's first poll picks it
 up and resumes from the checkpoint, and the `worker_id = $me` guard on every
 later write is what makes that hand-off safe without any coordination.
 
+## 33. One email, over SMTP, from a Gmail account that will not be switched off
+
+`server/lib/mailer.ts`, `server/auth.ts` (reset-password-request),
+`client/src/pages/ResetPassword.tsx`, `tests/mailer.test.ts`
+
+The mailer that once lived beside the JWT code was deleted with it, and for
+a long time that was right: nothing sent mail, `EMAIL_*` was read by
+nothing, and password reset minted a token and dropped it behind a 200.
+Blake, once the assessment PRs were in: "We will want email again", with
+the reason it had never worked -- a provider "will probably time out
+because it is practically never used ... they see it is not being used and
+then deactivate it." Three decisions follow from that sentence.
+
+**A Gmail account with an app password, sending as the domain alias.** A
+transactional provider's free tier is exactly the thing that lapses when a
+family app sends a handful of resets a year. A Gmail account does not: its
+inactivity rule is two years and a send counts. Gmail's "Send mail as"
+verifies `no-reply@paul-blake.com` (Cloudflare routes it into the account),
+so the From line reads as the app and nobody sees a gmail address unless
+they read the headers. The account is named after the app and holds
+nothing else, because an app password is full access to the mailbox.
+
+**SMTP, so a library, and the one-fetch rule stands where it applies.**
+`turnstile.ts`, `telegram.ts` and `priceWatch.ts` are one `fetch` each
+because they talk to HTTP APIs. SMTP is STARTTLS, AUTH PLAIN, dot-stuffing
+and a line-oriented reply grammar; writing that to avoid a dependency would
+be the dependency, badly. `nodemailer` has no dependencies of its own, so
+the audit and Trivy gates have nothing to argue with, and a source test
+holds that it is imported in `mailer.ts` and nowhere else.
+
+**503, never a false 200.** The old handler answered "you will receive a
+link" whether or not anything could send one. Now, in production with no
+mailer, the route refuses with 503 before it looks the address up -- the
+`challengeMisconfigured()` precedent, and the ordering is what keeps it
+from being an enumeration oracle. A send the server refuses is a 503 too.
+Development keeps the shortcut it always had (the token in the body, the
+link in the log), because the dev stack and the reset page have to work
+with no mailbox in sight.
+
+What this did NOT do, deliberately: sign-up verification. Registration
+marks every account verified at creation and nothing depends on
+`verify-email`; turning that into a gate is a change to who can use the
+app on day one, and it is Blake's to make.
+
 ---
 
 ## Recurring failure shape
