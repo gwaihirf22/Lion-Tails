@@ -23,15 +23,16 @@ suite reads the routes from the source, so a route added tomorrow is held to
 a 401 the moment it is registered, and `if (!req.user` in a handler body is
 a regression rather than a style.
 
-### Email is wired to nothing
+### Email is wired to nothing -- DONE, for the reset link
 
-Password reset generates a valid token and discards it (`server/auth.ts`,
-`// TODO: Send password reset email`), so the endpoints answer 200 and look
-functional. There is no mailer: the nodemailer module and `EMAIL_*` are gone,
-and `.env.example` no longer lists them. The alerts channel is Telegram
-(CLAUDE.md, "Running the accounts"). Wiring reset delivery to something --
-Telegram to the owner, or a real mailer -- is the outstanding work; until then
-the reset endpoints are honest 200s that deliver nothing.
+`server/lib/mailer.ts` sends the password-reset link over SMTP (a Gmail
+account with an app password, sending as the domain alias), and production
+fails closed with a 503 when it is not configured rather than promising an
+email nobody can send. The sign-in page asks for a reset and
+`/reset-password/:token` takes the new password. Still deliberately absent:
+sign-up verification (accounts are marked verified at creation and nothing
+depends on `POST /api/auth/verify-email`) and an email mirror of the
+Telegram alerts. Either is a decision, not a switch.
 
 ---
 

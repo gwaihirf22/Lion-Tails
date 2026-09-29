@@ -77,8 +77,16 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       # Only used to put a link in an alert. Not a secret, and optional.
       - PUBLIC_URL=https://liontails.paul-blake.com
-      # EMAIL_* and FRONTEND_URL used to be here. Nothing reads them: there
-      # is no mailer (README, "Email"). Mirror this removal on the host's copy.
+      # Password-reset email, over SMTP. In production this is a dedicated
+      # Gmail account with an APP PASSWORD (a credential: full access to that
+      # mailbox), sending as the domain alias in MAIL_FROM. SMTP_PASSWORD_FILE
+      # pointing at a root-only file is the other accepted form, like
+      # COSTS_ADMIN_KEY_FILE. All blank means reset requests answer 503 in
+      # production rather than promising an email nobody can send.
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - MAIL_FROM=${MAIL_FROM}
     # The image declares this same probe itself now (Dockerfile HEALTHCHECK),
     # so it is healthy without this entry; kept so the host's copy and the
     # image agree on the numbers. NOTE that `restart: unless-stopped` does NOT

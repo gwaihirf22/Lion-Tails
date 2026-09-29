@@ -56,7 +56,7 @@ type Watch = {
   thresholds: Record<string, number>;
 } | null;
 
-type AccountList = { windowDays: number; accounts: Account[]; watch: Watch; telegram: boolean };
+type AccountList = { windowDays: number; accounts: Account[]; watch: Watch; telegram: boolean; mail: boolean };
 
 type Detail = {
   account?: Account;
@@ -77,9 +77,11 @@ const money = (micros: number | null) => {
 /**
  * `busy` holds the id of the account being worked on. These two are the
  * actions that belong to no account: -1 is creating one, -2 is the Telegram
- * test. Named, because a bare -2 in a disabled prop is unreadable.
+ * test, -3 the email test. Named, because a bare -2 in a disabled prop is
+ * unreadable.
  */
 const TESTING = -2;
+const MAIL_TESTING = -3;
 
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "never";
@@ -101,6 +103,8 @@ export default function AdminAccounts() {
   const [minted, setMinted] = useState<{ username: string; passphrase: string } | null>(null);
   /** Telegram's own answer to the test, in words, beside the button. */
   const [tested, setTested] = useState<string | null>(null);
+  /** And the mail server's, beside its own. */
+  const [mailTested, setMailTested] = useState<string | null>(null);
 
   const sendTest = async () => {
     setTested(null);
@@ -112,6 +116,15 @@ export default function AdminAccounts() {
     // news about the test, and blanking the accounts list over it would be a
     // worse answer than the one it is giving.
     setTested(res.ok ? "Sent — check Telegram." : body.message || "It did not go.");
+  };
+
+  const sendMailTest = async () => {
+    setMailTested(null);
+    setBusy(MAIL_TESTING);
+    const res = await apiRequestAllowingErrors("POST", "/api/admin/mail/test");
+    const body = await res.json().catch(() => ({}));
+    setBusy(null);
+    setMailTested(res.ok ? `Sent to ${body.to} — check that inbox.` : body.message || "It did not go.");
   };
 
   const setAdmin = async (account: Account, isAdmin: boolean) => {
@@ -328,6 +341,22 @@ export default function AdminAccounts() {
               </>
             ) : (
               <span>Telegram is not set up, so these are only on this page.</span>
+            )}
+          </div>
+          {/* THE MAILER, PROVEN THE SAME WAY. The first person to find a
+              wrong app password would otherwise be a parent who cannot sign
+              in. */}
+          <div className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
+            {list.mail ? (
+              <>
+                <span>Password-reset emails are switched on.</span>
+                <Button size="sm" variant="outline" disabled={busy === MAIL_TESTING} onClick={sendMailTest}>
+                  {busy === MAIL_TESTING ? "Sending…" : "Send a test email"}
+                </Button>
+                {mailTested && <span>{mailTested}</span>}
+              </>
+            ) : (
+              <span>Email is not set up, so password reset is switched off.</span>
             )}
           </div>
         </CardContent>

@@ -59,6 +59,7 @@ import { questLengthAllowed, QUEST_SHORTEST_LENGTH } from "@shared/quests";
 import { accountDetail, accountList } from "./lib/accountStats";
 import { abuseReport } from "./lib/abuseWatch";
 import { sendTelegram, telegramConfigured } from "./lib/telegram";
+import { mailConfigured, sendMail } from "./lib/mailer";
 import { cancelAllStoryJobsFor } from "./lib/storyJobs";
 import { deleteAccount, typedNameMatches } from "./lib/accountDelete";
 import { limiter } from "./lib/rateLimit";
@@ -1479,7 +1480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ]);
       // Whether the alerting half is wired, so the page can say so rather
       // than showing a button that quietly does nothing.
-      res.json({ ...list, watch, telegram: telegramConfigured() });
+      res.json({ ...list, watch, telegram: telegramConfigured(), mail: mailConfigured() });
     } catch (error) {
       console.error("Error listing accounts:", error);
       res.status(500).json({ message: "Could not list accounts" });
@@ -1511,6 +1512,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error sending a test message:", error);
       res.status(500).json({ message: "Could not send a test message" });
+    }
+  });
+
+  /**
+   * The same button for the mailer. An app password in a file is wrong for
+   * weeks with nothing to say so, and the first person to find out would be
+   * a parent who cannot sign in. Sends to the calling admin's own address
+   * and reports SMTP's own answer, scrubbed of the password by `sendMail`.
+   */
+  app.post("/api/admin/mail/test", requireAdmin, async (req, res) => {
+    try {
+      if (!mailConfigured()) {
+        return res.status(400).json({
+          message: "Email is not set up. SMTP_HOST, SMTP_USER and SMTP_PASSWORD (or _FILE) are all needed.",
+        });
+      }
+      const admin = req.user as { username?: string; email?: string };
+      if (!admin.email) return res.status(400).json({ message: "Your account has no email address to send to." });
+      const result = await sendMail({
+        to: admin.email,
+        subject: "Lion Tails — test email",
+        text: `Sent by ${admin.username ?? "an admin"} from /admin/accounts. Password-reset emails will arrive like this one.`,
+      });
+      if (!result.ok) return res.status(502).json({ message: `The mail server refused it: ${result.error}` });
+      res.json({ sent: true, to: admin.email });
+    } catch (error) {
+      console.error("Error sending a test email:", error);
+      res.status(500).json({ message: "Could not send a test email" });
     }
   });
 

@@ -179,8 +179,9 @@ At startup `verifyOrmSchema()` checks every declared table against
 
 Passport local strategy (scrypt) with `express-session` and a Postgres-backed
 store. There is **no JWT**: the bcrypt/JWT module that once lived at
-`server/lib/auth.ts` was deleted, along with `jsonwebtoken`, `bcryptjs` and
-`nodemailer`. `grep -r jsonwebtoken server/` returns nothing.
+`server/lib/auth.ts` was deleted, along with `jsonwebtoken` and `bcryptjs`
+(and `nodemailer`, which came back alone, for one email — below). `grep -r
+jsonwebtoken server/` returns nothing.
 
 Guards live in `server/lib/requireAuth.ts` and are applied **per route in the
 signature**, not via `app.use()`, so a missing guard is visible where the routes
@@ -268,11 +269,10 @@ about **$1.40 a signup** and ~$0.20 a month after.
 - **Reset tokens come from the CSPRNG** (`server/lib/tokens.ts`).
   `createVerificationToken` built them from `Math.random()` in both storages —
   xorshift128+, whose state is recoverable from a handful of outputs, minting a
-  password-reset credential. Harmless only because no token is ever delivered;
-  account takeover the day a mailer exists. **Tokens written before that fix
-  are still weak** — they expire in 24 hours and nothing can deliver them, so
-  they were left to age out rather than purged; read the claim as "made from
-  here on", not "every row".
+  password-reset credential. Harmless only while no token was delivered;
+  account takeover once one is, which is now. **Tokens written before that fix
+  were weak** — they expired in 24 hours, before the mailer existed to deliver
+  one, so they were left to age out rather than purged.
 - **Rate limiting is `server/lib/rateLimit.ts`**, written rather than
   installed: on one container express-rate-limit's store is the same in-memory
   map, and a decision inside a dependency cannot be unit tested. `hit()` is a
@@ -302,6 +302,44 @@ about **$1.40 a signup** and ~$0.20 a month after.
   already exists" and "Email already in use" distinctly, which is an
   enumeration oracle and a decision — telling a parent which field clashed is
   worth more here.
+
+### Password reset arrives by email
+
+Blake, after the assessment PRs: *"We will want email again."* The problem he
+named was that a provider unused for months gets switched off, so the answer
+is a **dedicated Gmail account with an app password**, sending as
+`no-reply@paul-blake.com` through a verified "Send mail as" alias — nothing
+lapses for disuse, and the From line reads as the app. Scope is the reset
+link only; sign-up still marks every account verified at creation.
+
+- **`server/lib/mailer.ts` is the one sender**, `telegram.ts`'s shape:
+  settings read on every use (`_FILE` form included), never throws, the app
+  password scrubbed out of any error text, plain text only. It is SMTP, so
+  `nodemailer` is back — the one-`fetch` rule is for HTTP APIs, and writing
+  STARTTLS and AUTH PLAIN to keep it would be the wrong trade. Zero
+  dependencies, so nothing for the audit gate to argue with.
+- **FAIL CLOSED, before the lookup.** In production with no mailer the
+  request route answers 503 ("not available just now"), the
+  `challengeMisconfigured()` precedent, and it says so before the address is
+  looked up so it leaks nothing. A send that fails is a 503 too — the minted
+  row is harmless (24 hours, undelivered), and what matters is that a parent
+  is not told to check an inbox with nothing in it. **Development keeps its
+  shortcut**: no mailer means the token in the body and the link in the log,
+  which is what lets the dev stack and the reset page work with no mailbox.
+- **The link is built on the request's own scheme and host**, `static.ts`'s
+  rule (`trust proxy` is on), so it points at whatever address the parent
+  used. `FRONTEND_URL` did not come back.
+- **The client had no forgot-password form and no page for the link to land
+  on**; both exist now. "Forgot your password?" swaps the sign-in form for
+  one field with its own `TurnstileGate` (the route is challenged), and
+  `/reset-password/:token` is a public `Route` that holds the new password to
+  `CREDENTIAL_RULES` before the server does. Neither page is in the guide,
+  which covers the four tabs and the reader.
+- **"Send a test email" on `/admin/accounts`**, the Telegram button's twin:
+  to the admin's own address, showing the server's answer. Getting it to
+  production is the same three edits in lockstep as Telegram: the GitHub
+  secrets into the deploy step's `env`, four `printf` lines in the heredoc,
+  and a hand edit of the host's compose copy.
 
 Admin status is `users.is_admin`. Never key authorisation off a username —
 nothing reserves usernames, so a string comparison grants the privilege to
@@ -387,7 +425,8 @@ render.
   the moment to stop.
 
 **The alerts are Telegram**, because Blake already reads it for Sonarr and the
-server, and this app has no mailer at all — `EMAIL_*` is read by nothing.
+server; the app's only email is the password-reset link, and alerts are not
+it.
 `server/lib/telegram.ts` is one `fetch` against one documented URL, no library,
 and `server/lib/abuseAlerts.ts` decides what is worth sending.
 
@@ -653,11 +692,14 @@ See `.env.example`. **`SESSION_SECRET` is the only secret required in
 production** — `requiredSecret()` throws without it. `JWT_SECRET` was removed
 with the JWT module and is no longer read anywhere; the bundle boots without it.
 
-`EMAIL_*` is unused: no code path sends mail. Password reset generates a valid
-token and then discards it (`server/auth.ts`, `// TODO: Send password reset
-email` in the reset-password-request handler), so the endpoints answer 200 and look functional while the delivery half
-does not exist. The token is returned in the response body only when
-`NODE_ENV=development`.
+**The one email is the password-reset link** (`server/lib/mailer.ts`, the
+only importer of `nodemailer`; a test holds that). Settings are `SMTP_HOST`,
+`SMTP_USER`, `SMTP_PASSWORD` or `SMTP_PASSWORD_FILE`, `MAIL_FROM`, `SMTP_PORT`
+(587), read on every use like `telegramToken()`. **Production fails closed**:
+with no mailer, `POST /api/auth/reset-password-request` answers 503 before
+the address is looked up, never a 200 that promises an email nobody can send.
+A dev box with no mailer returns the token and logs the link. See "Password
+reset arrives by email" under Authentication, and `docs/decisions.md` §33.
 
 ## The polish pass
 

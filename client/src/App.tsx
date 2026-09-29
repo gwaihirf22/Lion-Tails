@@ -15,6 +15,7 @@ import Characters from "@/pages/Characters";
 import GenerateStory from "@/pages/GenerateStory";
 import AuthPage from "@/pages/auth-page";
 import SharedStory from "@/pages/SharedStory";
+import ResetPassword from "@/pages/ResetPassword";
 
 // Loaded when first visited, not with the app. The three admin pages are for
 // one person, and Heroes of the Faith carries eighty profiles' worth of UI;
@@ -53,6 +54,8 @@ function Router() {
       <ProtectedRoute path="/generate-story" component={GenerateStory} />
       <Route path="/music" component={Music} />
       <Route path="/auth" component={AuthPage} />
+      {/* Where the email's link lands. The token is the credential, so no session. */}
+      <Route path="/reset-password/:token" component={ResetPassword} />
       {/* PUBLIC, on purpose: a shared story is for someone with no account.
           What it may show is decided on the server (shared/sharedStory.ts). */}
       <Route path="/s/:token" component={SharedStory} />
